@@ -26,7 +26,7 @@ export function Cadastros() {
   );
 }
 
-function EditFab({ id }: { id: string | null }) {
+export function EditFab({ id }: { id: string | null }) {
   const { st, executar, setModal, toast } = useApp();
   const f = id ? st.fabricas.find(x => x.id === id) : { nome: "", emails: "", repId: "" };
   const [nome, setNome] = useState(f.nome); const [emails, setEmails] = useState(f.emails || ""); const [rep, setRep] = useState(f.repId || "");

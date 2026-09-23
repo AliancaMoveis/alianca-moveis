@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, comprimir, enviarFotos } from "../lib/acoes";
 import { fmtDateTime, inicial, mesmaPessoa, soDigitos } from "../lib/regras";
+import { EditFab } from "./Cadastros";
 
 const VAZIO = { pvOrigem: "cliente", pvPeca: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
 type NovoAnexo = { tipo: "img" | "link"; nome: string; url: string; blob?: Blob };
 
 export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
-  const { R, st, toast, recarregar, irPara, abrirDetalhe } = useApp();
+  const { R, st, toast, recarregar, irPara, abrirDetalhe, setModal } = useApp() as any;
   const inicialF = () => ({ ...VAZIO, tipo: escopo === "pv" ? "posvenda" : "" });
   const [f, setF] = useState<any>(inicialF);
   const [anexos, setAnexos] = useState<NovoAnexo[]>([]);
@@ -124,7 +125,9 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
           <div className="field full"><label id="lblProduto">{presale ? "Ambiente de interesse " : "Produto "}<span className="req-star">*</span></label>
             <input name="produto" required placeholder={presale ? "Ex.: Cozinha planejada (projeto de interesse)" : "Ex.: Guarda-roupa 6 portas Verona — Nogueira"} value={f.produto} onChange={set("produto")} /></div>
           {!presale && <div className="field" id="fieldFabrica"><label>Fábrica / fornecedor <span className="req-star">*</span></label>
-            <select name="fabrica" required value={f.fabrica} onChange={set("fabrica")}><option value="">Selecione…</option>{st.fabricas.map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>}
+            <select name="fabrica" required value={f.fabrica} onChange={set("fabrica")}><option value="">Selecione…</option>{st.fabricas.map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select>
+            {R.temCadastros() ? <button type="button" className="btn ghost sm" style={{ marginTop: 6, alignSelf: "flex-start" }} onClick={() => setModal(<EditFab id={null} />)}>+ Cadastrar fábrica que não está na lista</button>
+              : <span className="hint" style={{ marginTop: 4 }}>Fábrica não está na lista? Peça à Supervisão para cadastrar.</span>}</div>}
           {!presale && <div className="field" id="fieldPrazoTatico"><label>Prazo de entrega no Tático <span className="hint">(prazo original)</span></label><input name="prazoTatico" type="date" value={f.prazoTatico} onChange={set("prazoTatico")} /></div>}
           <div className="field"><label>Prazo para responder <span className="hint">(vazio = 2 dias úteis)</span></label><input name="slaManual" type="date" value={f.slaManual} onChange={set("slaManual")} /></div>
           {ehPv && <div className="field"><label>Quem acionou <span className="req-star">*</span></label><select value={f.pvOrigem} onChange={set("pvOrigem")}><option value="cliente">Cliente reclamou</option><option value="montador">Montador pediu suporte na obra</option></select></div>}
