@@ -59,6 +59,15 @@ export const A = {
   posvendaRelato: (id: string, origem: string, peca: string) => rpc("posvenda_relato", { p_id: id, p_origem: origem, p_peca: peca }),
   salvarPosvenda: (id: string, p: any) => rpc("salvar_posvenda", { p_id: id, p }),
   posvendaEncaminhar: (id: string, tipo: string, motivo: string) => rpc<string>("posvenda_encaminhar", { p_id: id, p_tipo: tipo, p_motivo: motivo }),
+  listarRoteiros: async () => {
+    if ((import.meta as any).env?.VITE_MOCK) return ((window as any).__roteirosMock || []) as any[];
+    const { data, error } = await sb.from("roteiros").select("*").order("categoria").order("situacao");
+    if (error) throw new Error(error.message);
+    return (data || []) as any[];
+  },
+  salvarRoteiro: (id: string | null, p: any) => rpc<string>("salvar_roteiro", { p_id: id, p }),
+  aprovarRoteiro: (id: string) => rpc("aprovar_roteiro", { p_id: id }),
+  removerRoteiro: (id: string) => rpc("remover_roteiro", { p_id: id }),
   agendaLoja: (dia: string) => rpc<any[]>("agenda_loja", { p_dia: dia }),
   adminUsuarios: async (corpo: any) => {
     // falhas passageiras do servidor de funções (502/503, queda de rede) são tentadas de novo — só no modo de teste, que não grava nada

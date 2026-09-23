@@ -161,6 +161,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     return mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
   }
   const ehCallcenter = () => mySetores().includes("callcenter");
+  // treinamento: call center e Supervisão (call center); a Gestão também, por administrar o sistema
+  const podeTreinamento = () => ehGestao() || mySetores().some((x: string) => ["callcenter", "supervisao"].includes(x));
   // call center acompanha qualquer solicitação de pós-venda: anota novo contato e marca urgente (quem trata fala com o cliente e conclui)
   const podeAcompanhar = (c: Chamado) => podeTratar(c) || (ehCallcenter() && !domMarketing(c));
   function podeTratar(c: Chamado) {
@@ -392,7 +394,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const cc: string[][] = [];
     if (podeCriarCC()) cc.push(["nova", "Nova solicitação"]);
     if (verTudo()) cc.push(["fila", "Acompanhamento"]); else if (temCC) cc.push(["fila", "Minha fila"]);
-    if (cc.length) { cc.push(["consulta", "Consulta"]); G.push({ g: "Call center", ic: "☎", itens: cc }); }
+    if (cc.length) { cc.push(["consulta", "Consulta"]); if (podeTreinamento()) cc.push(["treino", "Treinamento"]); G.push({ g: "Call center", ic: "☎", itens: cc }); }
     const mk: string[][] = [];
     if (podeCriarMkt()) mk.push(["novocli", "Novo cliente"]);
     if (temMarketing() || ehGestao()) {
@@ -421,7 +423,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   return {
     state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
-    verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
+    verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
