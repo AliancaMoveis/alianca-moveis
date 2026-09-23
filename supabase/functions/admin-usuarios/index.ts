@@ -7,6 +7,12 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+// assinatura HMAC (com a service role) do "passe de volta" do modo de teste
+async function assinar(msg: string, chave: string) {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(chave), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg));
+  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/[+/=]/g, c => (c === "+" ? "-" : c === "/" ? "_" : ""));
+}
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
@@ -17,14 +23,27 @@ Deno.serve(async (req) => {
     const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
     const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const auth = req.headers.get("Authorization") ?? "";
+    const admin = createClient(url, service, { auth: { persistSession: false } });
+    const body = await req.json();
+
+    // modo de teste: voltar para a Gestão (quem chama está logado como outro usuário, mas tem o passe assinado)
+    if (body.acao === "voltar") {
+      const [gid, exp, sig] = String(body.passe ?? "").split(".");
+      if (!gid || !exp || !sig || Number(exp) < Date.now() || sig !== await assinar(gid + "." + exp, service)) return json({ erro: "Passe de volta inválido ou vencido. Entre de novo com seu e-mail e senha." }, 403);
+      const { data: cfgV } = await admin.from("config").select("modo_teste").eq("id", 1).single();
+      if (!cfgV?.modo_teste) return json({ erro: "O modo de teste está desligado. Entre de novo com seu e-mail e senha." }, 403);
+      const { data: g } = await admin.from("usuarios").select("email, ativo").eq("id", gid).single();
+      const { data: sg } = await admin.from("usuario_setores").select("setor_id").eq("usuario_id", gid).eq("setor_id", "gestao");
+      if (!g || !g.ativo || !g.email || !sg?.length) return json({ erro: "Usuário de Gestão inválido" }, 403);
+      const { data: link, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: g.email });
+      if (error || !link?.properties?.hashed_token) return json({ erro: error?.message ?? "Não foi possível voltar" }, 400);
+      return json({ token_hash: link.properties.hashed_token });
+    }
 
     // quem chamou precisa ser Gestão (checado no banco com o token dele)
     const comoUsuario = createClient(url, anon, { global: { headers: { Authorization: auth } } });
     const { data: ehGestao, error: eG } = await comoUsuario.rpc("eh_gestao");
     if (eG || ehGestao !== true) return json({ erro: "Acesso restrito à Administração" }, 403);
-
-    const admin = createClient(url, service, { auth: { persistSession: false } });
-    const body = await req.json();
 
     if (body.acao === "criar") {
       const nome = String(body.nome ?? "").trim();
@@ -71,8 +90,12 @@ Deno.serve(async (req) => {
       if (!alvo || !alvo.ativo || !alvo.email) return json({ erro: "Usuário inválido" }, 400);
       const { data: link, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: alvo.email });
       if (error || !link?.properties?.hashed_token) return json({ erro: error?.message ?? "Não foi possível entrar como este usuário" }, 400);
+      const { data: quem } = await comoUsuario.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
+      if (!quem?.user) return json({ erro: "Sessão inválida" }, 401);
+      const exp = String(Date.now() + 12 * 3600 * 1000);
+      const passe = quem.user.id + "." + exp + "." + await assinar(quem.user.id + "." + exp, service);
       console.log("entrar_como", alvo.nome);
-      return json({ token_hash: link.properties.hashed_token, email: alvo.email });
+      return json({ token_hash: link.properties.hashed_token, email: alvo.email, passe });
     }
 
     return json({ erro: "Ação inválida" }, 400);
