@@ -29,9 +29,13 @@ export const COR_SETOR: Record<string, string> = {
   atendente_cliente: "#3f8f4f", posvenda: "#c06a2b", supervisao: "#5a6270", gestao: "#1a1d21",
 };
 // Pós-venda Projetados
-export const PV_CATEGORIAS: Record<string, string> = {
-  montagem: "Problema de montagem", avaria_montador: "Avaria causada pelo montador", avaria_transporte: "Avaria no transporte/entrega",
-  erro_projeto: "Erro de projeto", medida: "Medida errada", peca_fabrica: "Peça faltante ou com defeito de fábrica", outro: "Outro",
+export const PV_TIPOS: Record<string, string> = {
+  avaria: "Avaria / dano", peca_faltante: "Peça faltante", peca_defeito: "Peça com defeito", medida: "Medida / peça não encaixa",
+  montagem: "Montagem mal feita", acabamento: "Acabamento", outro: "Outro",
+};
+export const PV_RESP: Record<string, string> = {
+  analise: "Em análise", montador: "Montador", medida: "Projeto — erro de medição", checklist: "Projeto — falha no checklist",
+  fabrica: "Fábrica", transporte: "Transporte / entrega", cliente: "Cliente (mau uso)", nenhum: "Sem responsável",
 };
 export const PV_ORIGEM: Record<string, string> = { cliente: "Cliente reclamou", montador: "Montador pediu suporte na obra" };
 export const PV_ENCAMINHAR: Record<string, string> = { vistoria: "Solicitar vistoria", assistencia: "Solicitar assistência (peça + montador)", montagem: "Nova montagem / retorno do montador", medidas: "Conferir medidas", checklist: "Revisar projeto (checklist)", prazo_fabrica: "Cobrar fábrica (prazo)" };
@@ -194,6 +198,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeVerPosvenda = () => ehGestao() || ehPosvenda();
   const podeMontadores = () => temCadastros() || ehPosvenda();
   const responsaveisChecklist = () => state.usuarios.filter(u => (u.setores || []).includes("checklist"));
+  const medidores = () => state.usuarios.filter(u => (u.setores || []).includes("medidas"));
   const nomeMontador = (id: string) => ((state.montadores || []).find(m => m.id === id) || ({} as any)).nome || "—";
   const podeEditarAgenda = () => ehGestao() || temMarketing() || mySetores().includes("suporte_consultores");
   const podeMudarDataLoja = (c: Chamado) => podeEditarAgenda() || (c.consultorId && c.consultorId === currentUserId);
@@ -400,6 +405,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (mk.length) { if (!cc.length) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
     const ge: string[][] = [];
     if (ehGestao()) ge.push(["aprovacoes", "Aprovações"]);
+    if (ehPosvenda()) ge.push(["novopv", "Novo atendimento"]);
     if (podeVerPosvenda()) ge.push(["posvenda", "Pós-venda — números"]);
     const ehProjetista = mySetores().includes("atendente_cliente");
     if (ehConsultorExterno() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : "Vendas e comissão"]);
@@ -417,7 +423,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
-    podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
+    podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };
 }

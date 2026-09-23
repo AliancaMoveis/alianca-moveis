@@ -77,9 +77,10 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
   ]);
   const pvDe: Record<string, any> = {};
   posvenda.forEach((p: any) => (pvDe[p.chamado_id] = {
-    origem: p.origem, categoria: p.categoria, montadorId: p.montador_id || "", checklistResp: p.checklist_resp || "",
-    erroChecklist: p.erro_checklist === true ? "sim" : p.erro_checklist === false ? "nao" : "", ocorrido: p.ocorrido, solucao: p.solucao,
-    custo: Number(p.custo) || 0, custoDesc: p.custo_desc, descontoMontador: Number(p.desconto_montador) || 0, atualizadoEm: p.atualizado_em,
+    origem: p.origem, categoria: p.categoria, responsabilidade: p.responsabilidade || "analise", pecaAfetada: p.peca_afetada || "",
+    montadorId: p.montador_id || "", medidorResp: p.medidor_resp || "", checklistResp: p.checklist_resp || "",
+    ocorrido: p.ocorrido, solucao: p.solucao, custo: Number(p.custo) || 0, custoDesc: p.custo_desc, descontoMontador: Number(p.desconto_montador) || 0,
+    atualizadoEm: p.atualizado_em, atualizadoPor: p.atualizado_por,
   }));
 
   const paths = anexos.filter((a: any) => a.tipo === "img" && a.storage_path).map((a: any) => a.storage_path);

@@ -56,6 +56,7 @@ export const A = {
   salvarModoTeste: (ligado: boolean) => rpc("salvar_modo_teste", { p_ligado: ligado }),
   salvarMontador: (id: string | null, nome: string, telefone: string) => rpc("salvar_montador", { p_id: id, p_nome: nome, p_telefone: telefone }),
   ativarMontador: (id: string, ativo: boolean) => rpc("ativar_montador", { p_id: id, p_ativo: ativo }),
+  posvendaRelato: (id: string, origem: string, peca: string) => rpc("posvenda_relato", { p_id: id, p_origem: origem, p_peca: peca }),
   salvarPosvenda: (id: string, p: any) => rpc("salvar_posvenda", { p_id: id, p }),
   posvendaEncaminhar: (id: string, tipo: string, motivo: string) => rpc<string>("posvenda_encaminhar", { p_id: id, p_tipo: tipo, p_motivo: motivo }),
   agendaLoja: (dia: string) => rpc<any[]>("agenda_loja", { p_dia: dia }),

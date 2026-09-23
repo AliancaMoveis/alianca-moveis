@@ -3,12 +3,13 @@ import { useApp } from "../estado";
 import { A, comprimir, enviarFotos } from "../lib/acoes";
 import { fmtDateTime, inicial, mesmaPessoa, soDigitos } from "../lib/regras";
 
-const VAZIO = { tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
+const VAZIO = { pvOrigem: "cliente", pvPeca: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
 type NovoAnexo = { tipo: "img" | "link"; nome: string; url: string; blob?: Blob };
 
-export default function Nova({ escopo }: { escopo: "cc" | "mkt" }) {
+export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
   const { R, st, toast, recarregar, irPara, abrirDetalhe } = useApp();
-  const [f, setF] = useState<any>({ ...VAZIO });
+  const inicialF = () => ({ ...VAZIO, tipo: escopo === "pv" ? "posvenda" : "" });
+  const [f, setF] = useState<any>(inicialF);
   const [anexos, setAnexos] = useState<NovoAnexo[]>([]);
   const [link, setLink] = useState("");
   const [dups, setDups] = useState<any[]>([]);
@@ -16,7 +17,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" }) {
   const tDup = useRef<any>();
   const set = (k: string) => (e: any) => setF((x: any) => ({ ...x, [k]: e.target.value }));
 
-  const tipos = Object.entries(R.TIPOS).filter(([k, t]: any) => R.podeCriarTipo(k) && (escopo === "mkt" ? !!t.presale : !t.presale)).sort((a: any, b: any) => 0);
+  const tipos = Object.entries(R.TIPOS).filter(([k, t]: any) => R.podeCriarTipo(k) && (escopo === "pv" ? k === "posvenda" : escopo === "mkt" ? !!t.presale : !t.presale)).sort((a: any, b: any) => 0);
   const t = f.tipo ? R.TIPOS[f.tipo] : null;
   const ehMkt = t ? !!t.presale : escopo === "mkt";
   const presale = !!(t && t.presale), direto = !!(t && t.direto);
@@ -44,7 +45,8 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" }) {
     for (const file of Array.from(files)) { const b = await comprimir(file); if (b) novos.push({ tipo: "img", nome: file.name, url: URL.createObjectURL(b), blob: b }); }
     setAnexos(a => [...a, ...novos]);
   }
-  function limpar() { setF({ ...VAZIO }); setAnexos([]); setLink(""); setDups([]); }
+  const ehPv = f.tipo === "posvenda";
+  function limpar() { setF(inicialF()); setAnexos([]); setLink(""); setDups([]); }
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -54,6 +56,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" }) {
     try {
       const vinc = dups.length ? dups[0].c.id : null;
       const id = await A.criarChamado({ ...f, vinculadoA: vinc });
+      if (ehPv) await A.posvendaRelato(id, f.pvOrigem, f.pvPeca).catch(() => null);
       const fotos = anexos.filter(a => a.tipo === "img");
       const itens = fotos.length ? await enviarFotos(id, fotos.map(a => ({ nome: a.nome, blob: a.blob! }))) : [];
       anexos.filter(a => a.tipo === "link").forEach(a => itens.push({ tipo: "link", url: a.url }));
@@ -63,6 +66,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" }) {
       toast("Solicitação " + id + " aberta");
       const menu = R.menuPerfil().flatMap((g: any) => g.itens.map((i: string[]) => i[0]));
       irPara(menu.includes("fila") && !presale ? "fila" : menu.includes("acompmkt") && presale ? "acompmkt" : "dashboard");
+      if (escopo === "pv") abrirDetalhe(id);
     } catch (err: any) { toast(err.message || "Não foi possível abrir"); }
     finally { setEnviando(false); }
   }
@@ -70,8 +74,8 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" }) {
   return (
     <section className="view active" id="view-nova">
       <div className="view-head"><div>
-        <h2 id="novaTitulo">{ehMkt ? "Novo cliente" : "Nova solicitação"}</h2>
-        <p id="novaSub">{ehMkt ? "Cadastro de cliente do marketing. Não se mistura com as solicitações do call center." : "Escolha o motivo do contato — ele define para qual setor a tratativa é encaminhada."}</p>
+        <h2 id="novaTitulo">{escopo === "pv" ? "Novo atendimento de pós-venda" : ehMkt ? "Novo cliente" : "Nova solicitação"}</h2>
+        <p id="novaSub">{escopo === "pv" ? "Registre o cliente e o relato do problema como foi contado. A análise (responsabilidade, custo) você completa depois, na ficha." : ehMkt ? "Cadastro de cliente do marketing. Não se mistura com as solicitações do call center." : "Escolha o motivo do contato — ele define para qual setor a tratativa é encaminhada."}</p>
       </div></div>
       {dups.length > 0 && (
         <div id="alertaDuplicado"><div className="dup">
@@ -123,7 +127,9 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" }) {
             <select name="fabrica" required value={f.fabrica} onChange={set("fabrica")}><option value="">Selecione…</option>{st.fabricas.map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>}
           {!presale && <div className="field" id="fieldPrazoTatico"><label>Prazo de entrega no Tático <span className="hint">(prazo original)</span></label><input name="prazoTatico" type="date" value={f.prazoTatico} onChange={set("prazoTatico")} /></div>}
           <div className="field"><label>Prazo para responder <span className="hint">(vazio = 2 dias úteis)</span></label><input name="slaManual" type="date" value={f.slaManual} onChange={set("slaManual")} /></div>
-          <div className="field full"><label>Detalhe do atendimento <span className="req-star">*</span></label><textarea name="motivo" required placeholder="O que o cliente precisa / relatou." value={f.motivo} onChange={set("motivo")}></textarea></div>
+          {ehPv && <div className="field"><label>Quem acionou <span className="req-star">*</span></label><select value={f.pvOrigem} onChange={set("pvOrigem")}><option value="cliente">Cliente reclamou</option><option value="montador">Montador pediu suporte na obra</option></select></div>}
+          {ehPv && <div className="field"><label>Ambiente / peça afetada</label><input placeholder="Ex.: Cozinha — porta do aéreo" value={f.pvPeca} onChange={set("pvPeca")} /></div>}
+          <div className="field full"><label>{ehPv ? "Relato do problema" : "Detalhe do atendimento"} <span className="req-star">*</span></label><textarea name="motivo" required placeholder={ehPv ? "Como o cliente/montador contou: o que aconteceu, quando, o que está afetado." : "O que o cliente precisa / relatou."} value={f.motivo} onChange={set("motivo")}></textarea></div>
         </div>
         {presale && (
           <div id="blocoVisita">
@@ -157,7 +163,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" }) {
           </div>
         )}
         <div className="form-foot">
-          <button type="submit" className="btn primary" disabled={enviando}>{enviando ? "Abrindo…" : "Abrir solicitação"}</button>
+          <button type="submit" className="btn primary" disabled={enviando}>{enviando ? "Abrindo…" : ehPv ? "Abrir atendimento de pós-venda" : "Abrir solicitação"}</button>
           <button type="reset" className="btn ghost">Limpar</button>
           <span className="sla-note">Prazo automático: <b>2 dias úteis</b></span>
         </div>

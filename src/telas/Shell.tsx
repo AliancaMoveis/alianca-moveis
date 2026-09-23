@@ -116,7 +116,7 @@ export default function Shell() {
             </div>
           </div>
           <main>
-            {(atual === "nova" || atual === "novocli") && <Nova key={atual} escopo={atual === "novocli" ? "mkt" : "cc"} />}
+            {(atual === "nova" || atual === "novocli" || atual === "novopv") && <Nova key={atual} escopo={atual === "novocli" ? "mkt" : atual === "novopv" ? "pv" : "cc"} />}
             {atual === "fila" && <Fila />}
             {atual === "acompmkt" && <AcompMkt />}
             {atual === "direcionamento" && <Direcionamento />}

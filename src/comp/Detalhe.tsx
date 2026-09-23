@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, comprimir, enviarFotos } from "../lib/acoes";
 import {
-  PV_CATEGORIAS, PV_ENCAMINHAR, PV_ORIGEM, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 
@@ -526,13 +526,13 @@ function Vinculados({ c }: any) {
   );
 }
 
-// Pós-venda Projetados: registro do atendimento (depois de falar com o cliente/montador) + encaminhamentos
+// Pós-venda Projetados: Relato (fato, como foi contado) · Análise (tipo + responsabilidade) · Custo e solução · Encaminhar
 function TratPosvenda({ c }: any) {
-  const { R, st, executar: ex, toast, recarregar, abrirDetalhe } = useApp() as any;
+  const { R, st, executar: ex, toast, recarregar } = useApp() as any;
   const p = c.posvenda || {};
   const ini = () => ({
-    origem: p.origem || "cliente", categoria: p.categoria || "", montadorId: p.montadorId || "", checklistResp: p.checklistResp || "",
-    erroChecklist: p.erroChecklist || "", ocorrido: p.ocorrido || "", solucao: p.solucao || "",
+    categoria: p.categoria || "", responsabilidade: p.responsabilidade || "analise", montadorId: p.montadorId || "", medidorResp: p.medidorResp || "",
+    checklistResp: p.checklistResp || "", ocorrido: p.ocorrido || "", solucao: p.solucao || "",
     custo: p.custo ? String(p.custo).replace(".", ",") : "", custoDesc: p.custoDesc || "", descontoMontador: p.descontoMontador ? String(p.descontoMontador).replace(".", ",") : "",
   });
   const [v, setV] = useState<any>(ini);
@@ -540,45 +540,55 @@ function TratPosvenda({ c }: any) {
   const [encTipo, setEncTipo] = useState("vistoria");
   const [encTxt, setEncTxt] = useState("");
   const s = (k: string) => (e: any) => setV((x: any) => ({ ...x, [k]: e.target.value }));
-  const num = (t: string) => { const n = parseMoeda(t); return n; };
   const montadores = (st.montadores || []).filter((m: any) => m.ativo || m.id === v.montadorId);
-  const podeValores = R.podeVerPosvenda();
-  if (!podeValores) return <div className="resp-box"><h4>Pós-venda Projetados</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>O registro deste atendimento (montador, custos e checklist) é visto só pelo Pós-venda e pela Gestão.</div></div>;
+  if (!R.podeVerPosvenda()) return <div className="resp-box"><h4>Pós-venda Projetados</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>A análise deste atendimento (responsabilidade, montador e custos) é vista só pelo Pós-venda e pela Gestão.</div></div>;
+  const r = v.responsabilidade;
   const salvar = () => {
-    if (!v.categoria) { toast("Escolha o tipo de ocorrência"); return; }
-    if (!v.ocorrido.trim()) { toast("Descreva o ocorrido"); return; }
-    if (num(v.descontoMontador) > 0 && !v.montadorId) { toast("Informe o montador para registrar o desconto"); return; }
-    ex(() => A.salvarPosvenda(c.id, { ...v, custo: num(v.custo), descontoMontador: num(v.descontoMontador) }), "Registro do pós-venda salvo");
+    if (r === "montador" && !v.montadorId) { toast("Informe o montador responsável"); return; }
+    if (r === "medida" && !v.medidorResp) { toast("Informe quem fez a medição"); return; }
+    if (r === "checklist" && !v.checklistResp) { toast("Informe quem fez o checklist"); return; }
+    const desc = r === "montador" ? parseMoeda(v.descontoMontador) : 0;
+    ex(() => A.salvarPosvenda(c.id, { ...v, custo: parseMoeda(v.custo), descontoMontador: desc }), "Análise salva");
   };
   const encaminhar = async () => {
     if (!encTxt.trim()) { toast("Descreva o que precisa ser feito"); return; }
     try { const novo = await A.posvendaEncaminhar(c.id, encTipo, encTxt.trim()); setEncTxt(""); await recarregar(); toast("Atendimento " + novo + " aberto"); }
     catch (e: any) { toast(e.message); }
   };
+  const Sel = ({ k, label, req, children }: any) => <div className="field"><label>{label}{req && <span className="req-star"> *</span>}</label><select value={v[k]} onChange={s(k)}>{children}</select></div>;
   return (
     <>
-      <div className="resp-box"><h4>Registro do atendimento — Pós-venda Projetados</h4>
+      <div className="resp-box"><h4>1 · Relato do problema</h4>
+        <RowSb k="Quem acionou">{PV_ORIGEM[p.origem || "cliente"]}</RowSb>
+        {p.pecaAfetada && <RowSb k="Ambiente / peça">{p.pecaAfetada}</RowSb>}
+        <RowSb k="Relato">{c.motivo}</RowSb>
+        <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>O relato fica como foi registrado na abertura. Fotos e vídeos do cliente: bloco “Comprovações / anexos”, abaixo.</div>
+      </div>
+      <div className="resp-box"><h4>2 · Análise {r !== "analise" ? <span className="badge b-concluida" style={{ marginLeft: 8 }}>{PV_RESP[r]}</span> : <span className="badge b-tratativa" style={{ marginLeft: 8 }}>em análise</span>}</h4>
         <div className="grid">
-          <div className="field"><label>Quem acionou</label><select value={v.origem} onChange={s("origem")}>{Object.entries(PV_ORIGEM).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
-          <div className="field"><label>Tipo de ocorrência <span className="req-star">*</span></label><select value={v.categoria} onChange={s("categoria")}><option value="">Selecione…</option>{Object.entries(PV_CATEGORIAS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
-          <div className="field"><label>Montador</label><select value={v.montadorId} onChange={s("montadorId")}><option value="">Não se aplica / não informado</option>{montadores.map((m: any) => <option key={m.id} value={m.id}>{m.nome}{m.ativo ? "" : " (inativo)"}</option>)}</select>
-            {!montadores.length && <span className="hint">Cadastre os montadores em Pós-venda — números → Montadores.</span>}</div>
-          <div className="field"><label>Quem fez o checklist</label><select value={v.checklistResp} onChange={s("checklistResp")}><option value="">Não informado</option>{R.responsaveisChecklist().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
-          <div className="field"><label>O checklist tem relação com o problema?</label><select value={v.erroChecklist} onChange={s("erroChecklist")}><option value="">Ainda não avaliado</option><option value="sim">Sim — falha no checklist</option><option value="nao">Não — checklist estava correto</option></select></div>
-          <div className="field full"><label>Ocorrido <span className="req-star">*</span></label><textarea value={v.ocorrido} onChange={s("ocorrido")} placeholder="O que o cliente/montador relatou e o que foi constatado"></textarea></div>
+          <Sel k="categoria" label="Tipo de problema"><option value="">Selecione…</option>{Object.entries(PV_TIPOS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel>
+          <Sel k="responsabilidade" label="De quem é a responsabilidade">{Object.entries(PV_RESP).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel>
+          <Sel k="montadorId" label={r === "montador" ? "Montador responsável" : "Montador que montou"} req={r === "montador"}><option value="">Não informado</option>{montadores.map((m: any) => <option key={m.id} value={m.id}>{m.nome}{m.ativo ? "" : " (inativo)"}</option>)}</Sel>
+          {(r === "medida" || v.medidorResp) && <Sel k="medidorResp" label="Quem fez a medição" req={r === "medida"}><option value="">Não informado</option>{R.medidores().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</Sel>}
+          <Sel k="checklistResp" label="Quem fez o checklist" req={r === "checklist"}><option value="">Não informado</option>{R.responsaveisChecklist().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</Sel>
+          <div className="field full"><label>O que foi constatado</label><textarea value={v.ocorrido} onChange={s("ocorrido")} placeholder="Depois de falar com o cliente/montador ou da vistoria: o que de fato aconteceu e por quê"></textarea></div>
+        </div>
+        {!montadores.length && <div className="hint" style={{ marginTop: 6 }}>Cadastre os montadores em Pós-venda — números → Montadores.</div>}
+      </div>
+      <div className="resp-box"><h4>3 · Custo e solução</h4>
+        <div className="grid">
           <div className="field full"><label>Solução / o que será feito</label><textarea value={v.solucao} onChange={s("solucao")} placeholder="Ex.: troca da porta, retorno do montador, peça pedida à fábrica"></textarea></div>
           <div className="field"><label>Custo para a loja (R$)</label><input inputMode="decimal" value={v.custo} onChange={s("custo")} placeholder="0,00" /></div>
           <div className="field"><label>Do que é o custo</label><input value={v.custoDesc} onChange={s("custoDesc")} placeholder="Ex.: peça, frete, retorno do montador" /></div>
-          <div className="field"><label>Desconto do montador (R$)</label><input inputMode="decimal" value={v.descontoMontador} onChange={s("descontoMontador")} placeholder="0,00" />
-            <span className="hint">Avarias causadas pelo montador — vai para desconto dele.</span></div>
+          {r === "montador" && <div className="field"><label>Desconto do montador (R$)</label><input inputMode="decimal" value={v.descontoMontador} onChange={s("descontoMontador")} placeholder="0,00" /><span className="hint">Vai para desconto do montador.</span></div>}
         </div>
         <div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
-          <button className="btn primary sm" onClick={salvar}>Salvar registro</button>
-          {p.atualizadoEm && <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>Salvo em {fmtDateTime(p.atualizadoEm)}{p.custo ? " · custo " + fmtMoeda(p.custo) : ""}{p.descontoMontador ? " · desconto " + fmtMoeda(p.descontoMontador) : ""}</span>}
+          <button className="btn primary sm" onClick={salvar}>Salvar análise</button>
+          {p.atualizadoPor && <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>Salvo em {fmtDateTime(p.atualizadoEm)}{p.custo ? " · custo " + fmtMoeda(p.custo) : ""}{p.descontoMontador ? " · desconto " + fmtMoeda(p.descontoMontador) : ""}</span>}
         </div>
       </div>
       <div className="resp-box"><h4>Encaminhar para outro setor</h4>
-        <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 10px" }}>Abre um novo atendimento com os dados deste cliente, ligado a este. Você acompanha o andamento aqui na ficha.</p>
+        <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 10px" }}>Abre um novo atendimento com os dados deste cliente, ligado a este. Você acompanha o andamento aqui na ficha, em “Atendimentos ligados a este”.</p>
         <div className="grid">
           <div className="field"><label>O que pedir</label><select value={encTipo} onChange={e => setEncTipo(e.target.value)}>{Object.entries(PV_ENCAMINHAR).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
           <div className="field full"><label>O que precisa ser feito</label><textarea value={encTxt} onChange={e => setEncTxt(e.target.value)} placeholder="Ex.: vistoria da porta do armário riscada; fotos anexadas no pós-venda"></textarea></div>

@@ -34,9 +34,10 @@ const svg = "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns
 const POSVENDA = [
   { id: "ALM-0090", tipo: "posvenda", sd: "posvenda", st: "tratativa", cr: -30, sla: 18, sol: U(1), soln: "Rafaela Lima", sols: "Call center", cli: "Helena Duarte", doc: "111.222.333-44", tel: "41988887777", em: "", ped: "VP-100", pf: "", pr: "Cozinha planejada", fab: "00000000-0000-4000-c000-000000000001", mo: "Porta do armário riscada na montagem", urg: false, tr: {},
     h: [[-30, "Rafaela Lima", "Solicitação aberta (Pós-venda projetados) → Pós-venda Projetados"]],
-    pv: { origem: "cliente", categoria: "avaria_montador", montadorId: "m1", checklistResp: U(8), erroChecklist: "nao", ocorrido: "Montador riscou a porta", solucao: "Troca da porta", custo: 350, custoDesc: "Porta nova", descontoMontador: 150 } },
+    pv: { origem: "cliente", categoria: "avaria", responsabilidade: "montador", pecaAfetada: "Cozinha — porta do aéreo", montadorId: "m1", medidorResp: "", checklistResp: U(8), ocorrido: "Montador riscou a porta", solucao: "Troca da porta", custo: 350, custoDesc: "Porta nova", descontoMontador: 150, atualizadoPor: U(17), atualizadoEm: new Date().toISOString() } },
   { id: "ALM-0091", tipo: "posvenda", sd: "posvenda", st: "aberta", cr: -5, sla: 40, sol: U(17), soln: "Vânia", sols: "Pós-venda Projetados", cli: "Marcos Lima", doc: "222.333.444-55", tel: "41977776666", em: "", ped: "VP-101", pf: "", pr: "Dormitório", fab: "00000000-0000-4000-c000-000000000002", mo: "Montador ligou: vão menor que o projeto", urg: false, tr: {},
-    h: [[-5, "Vânia", "Solicitação aberta (Pós-venda projetados) → Pós-venda Projetados"]] },
+    h: [[-5, "Vânia", "Solicitação aberta (Pós-venda projetados) → Pós-venda Projetados"]],
+    pv: { origem: "montador", categoria: "", responsabilidade: "analise", pecaAfetada: "Dormitório — nicho da cama", montadorId: "", medidorResp: "", checklistResp: "", ocorrido: "", solucao: "", custo: 0, custoDesc: "", descontoMontador: 0 } },
 ];
 export function estadoMock(): Estado {
   return {
