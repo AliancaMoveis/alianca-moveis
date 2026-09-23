@@ -44,7 +44,18 @@ async function assinar(paths: string[]) {
   }
 }
 
-export async function carregarEstado(): Promise<Estado> {
+// logo após o login o token pode chegar alguns segundos "no futuro" para o banco (relógios); tenta de novo
+export async function carregarEstado(tentativa = 0): Promise<Estado> {
+  try { return await carregarEstadoUmaVez(); }
+  catch (e: any) {
+    if (tentativa < 4 && /issued at future|JWT|fetch/i.test(String(e?.message || e))) {
+      await new Promise(r => setTimeout(r, 1500 * (tentativa + 1)));
+      return carregarEstado(tentativa + 1);
+    }
+    throw e;
+  }
+}
+async function carregarEstadoUmaVez(): Promise<Estado> {
   const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
