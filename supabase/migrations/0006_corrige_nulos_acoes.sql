@@ -1,0 +1,1 @@
+-- (já incorporado em 0003_acoes.sql: reagendar_loja e cancelar_transferencia usam "is not distinct from auth.uid()")
