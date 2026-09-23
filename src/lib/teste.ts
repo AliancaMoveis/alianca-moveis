@@ -13,7 +13,13 @@ export async function voltarGestao() {
   const s = simulacao();
   try { localStorage.removeItem(KEY); } catch { /* */ }
   if (!s) return;
-  const falhou = async () => { await sb.auth.signOut({ scope: "local" }); throw new Error("Não foi possível voltar para a Gestão. Entre de novo com seu e-mail e senha."); };
+  const falhou = async () => {
+    // se a sessão atual já é da Gestão (marcação antiga esquecida no navegador), só segue
+    const { data: jaGestao } = await sb.rpc("eh_gestao");
+    if (jaGestao === true) return;
+    await sb.auth.signOut({ scope: "local" });
+    throw new Error("Não foi possível voltar para a Gestão. Entre de novo com seu e-mail e senha.");
+  };
   if (!s.passe) return falhou();
   let r: any;
   try { r = await A.adminUsuarios({ acao: "voltar", passe: s.passe }); } catch { return falhou(); }

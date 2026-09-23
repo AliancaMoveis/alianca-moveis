@@ -60,7 +60,16 @@ export const A = {
   posvendaEncaminhar: (id: string, tipo: string, motivo: string) => rpc<string>("posvenda_encaminhar", { p_id: id, p_tipo: tipo, p_motivo: motivo }),
   agendaLoja: (dia: string) => rpc<any[]>("agenda_loja", { p_dia: dia }),
   adminUsuarios: async (corpo: any) => {
-    const { data, error } = await sb.functions.invoke("admin-usuarios", { body: corpo });
+    // falhas passageiras do servidor de funções (502/503, queda de rede) são tentadas de novo — só no modo de teste, que não grava nada
+    let data: any, error: any;
+    const tentativas = ["entrar_como", "voltar"].includes(corpo?.acao) ? 4 : 1;
+    for (let t = 0; t < tentativas; t++) {
+      ({ data, error } = await sb.functions.invoke("admin-usuarios", { body: corpo }));
+      const st = error?.context?.status;
+      const passageiro = error && (error.name === "FunctionsFetchError" || error.name === "FunctionsRelayError" || st === 502 || st === 503 || st === 504);
+      if (!passageiro) break;
+      await new Promise(r => setTimeout(r, 800 * (t + 1)));
+    }
     if (error) {
       let msg = error.message;
       try { const j = await (error as any).context?.json?.(); if (j?.erro) msg = j.erro; } catch { /* */ }
