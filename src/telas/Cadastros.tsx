@@ -75,7 +75,7 @@ export function Admin() {
   return (
     <section className="view active" id="view-admin">
       <div className="view-head"><div><h2>Administração</h2><p>Usuários, setores e roteamento. Acesso restrito a quem tem a liberação de Administração.</p></div></div>
-      <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
+      <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
       {sub === "usuarios" && <div id="subUsuarios"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditUser id={null} />)}>Adicionar usuário</button></div>
         <div id="listaUser">{ativos.length ? ativos.map(linhaUser) : <div className="empty">Ninguém cadastrado.</div>}{inativos.length > 0 && <><div className="sec-label" style={{ marginTop: 18 }}>Desativados</div>{inativos.map(linhaUser)}</>}</div></div>}
       {sub === "setores" && <div id="subSetores"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditSetor id={null} />)}>Adicionar setor</button></div>
@@ -94,7 +94,12 @@ export function Admin() {
       {sub === "comissoes" && <div id="subComissoes"><div className="card" style={{ padding: "18px 20px", maxWidth: 480 }}><div className="grid">
         <div className="field"><label>Comissão do consultor sobre a venda</label><div className="inline-2"><input type="number" step="0.1" style={{ maxWidth: 100 }} value={pct} onChange={e => setPct(e.target.value)} /><span>%</span></div></div>
         <div className="field"><label>Pagamento fixo por visita realizada + agendada</label><div className="inline-2"><span>R$</span><input type="number" step="1" style={{ maxWidth: 120 }} value={pag} onChange={e => setPag(e.target.value)} /></div></div>
-      </div><div style={{ marginTop: 14 }}><button className="btn primary sm" onClick={() => { const a = parseFloat(pct), b = parseFloat(pag); if (isNaN(a) || isNaN(b)) { toast("Informe valores válidos"); return; } executar(() => A.salvarConfig(a, b), "Configuração salva"); }}>Salvar</button></div></div></div>}
+      </div><div style={{ marginTop: 14 }}><button className="btn primary sm" onClick={() => { const a = parseFloat(pct), b = parseFloat(pag); if (isNaN(a) || isNaN(b)) { toast("Informe valores válidos"); return; } executar(() => A.salvarConfig(a, b), "Configuração salva"); }}>Salvar</button></div></div>
+        <div className="card" style={{ padding: "18px 20px", maxWidth: 480, marginTop: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Modo de teste</div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 12 }}>Com o modo de teste ligado, a Gestão pode usar “Entrar como… (teste)” no menu lateral para ver o sistema exatamente como cada usuário vê. Desligue quando o sistema entrar em uso real.</div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" style={{ width: "auto" }} checked={st.config.modoTeste !== false} onChange={e => { const v = e.target.checked; executar(() => A.salvarModoTeste(v), v ? "Modo de teste ligado" : "Modo de teste desligado"); }} /> Modo de teste ligado</label>
+        </div></div>}
     </section>
   );
 }

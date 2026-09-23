@@ -9,7 +9,7 @@ import { Overlays } from "./comp/Overlays";
 
 export default function App() {
   const [sessao, setSessao] = useState<Session | null | undefined>(undefined);
-  const [estado, setEstado] = useState<Estado | null>(null);
+  const [carga, setCarga] = useState<{ uid: string; e: Estado } | null>(null);
   const [erro, setErro] = useState("");
   const [recuperando, setRecuperando] = useState(false);
 
@@ -23,11 +23,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!sessao) { setEstado(null); return; }
+    setCarga(null);
+    if (!sessao) return;
+    const uid = sessao.user.id;
     let vivo = true;
     setErro("");
     carregarEstado()
-      .then(e => { if (!vivo) return; setEstado(e); })
+      .then(e => { if (!vivo) return; setCarga({ uid, e }); })
       .catch(e => vivo && setErro(e?.message || "Erro ao carregar"));
     return () => { vivo = false; };
   }, [sessao?.user?.id]);
@@ -36,6 +38,7 @@ export default function App() {
   if (recuperando && sessao) return <NovaSenha aoConcluir={() => setRecuperando(false)} />;
   if (!sessao) return <Login />;
   if (erro) return <Login aviso={"Não foi possível carregar o sistema: " + erro} />;
+  const estado = carga && carga.uid === sessao.user.id ? carga.e : null;
   if (!estado) return <Login carregando />;
 
   const eu = estado.usuarios.find(u => u.id === sessao.user.id);
@@ -43,7 +46,7 @@ export default function App() {
     return <Login aviso="Seu usuário ainda não tem acesso ao ALIANÇA 360. Fale com a Gestão." sairAntes />;
   }
   return (
-    <AppProvider uid={eu.id} inicial={estado} overlays={(o) => <Overlays {...o} />}>
+    <AppProvider key={eu.id} uid={eu.id} inicial={estado} overlays={(o) => <Overlays {...o} />}>
       <Shell />
     </AppProvider>
   );

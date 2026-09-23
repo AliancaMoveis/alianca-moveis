@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { inicial } from "../lib/regras";
-import { sb } from "../lib/supabase";
+import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Nova from "./Nova";
 import { Fila, AcompMkt, Direcionamento, Consulta } from "./Listas";
 import Dashboard from "./Dashboard";
@@ -18,7 +18,18 @@ import { AlterarSenha } from "../comp/Modal";
 const DOTS: Record<string, string> = { fila: "dotFila", direcionamento: "dotDirecionamento", aprovacoes: "dotAprovacoes", pendencias: "dotPendencias" };
 
 export default function Shell() {
-  const { R, view, irPara, detalheId, modal, setModal } = useApp();
+  const { R, st, view, irPara, detalheId, modal, setModal, toast } = useApp();
+  const sim = simulacao();
+  const podeTestar = (R.ehGestao() || !!sim) && st.config.modoTeste !== false;
+  const [trocando, setTrocando] = useState(false);
+  async function trocar(id: string) {
+    if (!id) return;
+    const alvo = st.usuarios.find(u => u.id === id);
+    setTrocando(true);
+    try { await entrarComo(id, alvo?.nome || "", R.me()?.nome || ""); }
+    catch (e: any) { toast(e.message); setTrocando(false); }
+  }
+  async function voltar() { setTrocando(true); try { await voltarGestao(); } catch (e: any) { toast(e.message); setTrocando(false); } }
   const G = R.menuPerfil();
   const existe = G.some((gr: any) => gr.itens.some(([v]: string[]) => v === view));
   const atual = existe ? view : "dashboard";
@@ -82,7 +93,14 @@ export default function Shell() {
             <div className="side-txt" style={{ flex: 1, minWidth: 0 }}>
               <b id="sideNome">{u.nome}</b><span id="sideSetor">{R.setoresLabel(u)}</span>
               <button id="btSair" onClick={() => setModal(<AlterarSenha />)} style={estiloBtSide}>Alterar minha senha</button>
-              <button id="btSair2" className="btSair" onClick={() => sb.auth.signOut()} style={estiloBtSide}>← Sair</button>
+              {podeTestar && (
+                <select value="" disabled={trocando} onChange={e => trocar(e.target.value)} style={{ ...estiloBtSide, appearance: "auto" }} title="Modo de teste: entrar como outro usuário">
+                  <option value="">{trocando ? "Trocando…" : "Entrar como… (teste)"}</option>
+                  {st.usuarios.filter(x => x.ativo && x.id !== R.currentUserId).map(x => <option key={x.id} value={x.id}>{x.nome} · {R.setoresLabel(x)}</option>)}
+                </select>
+              )}
+              {sim && <button onClick={voltar} disabled={trocando} style={{ ...estiloBtSide, color: "#f5d67a", borderColor: "rgba(245,214,122,.4)" }}>← Voltar para {sim.nome}</button>}
+              <button id="btSair2" className="btSair" onClick={() => sair()} style={estiloBtSide}>← Sair</button>
             </div>
           </div>
         </aside>
@@ -90,6 +108,7 @@ export default function Shell() {
           <div className="barra-topo">
             <button className="hb" id="btMenu" title="Recolher menu" onClick={() => { if (window.innerWidth <= 900) setMob(m => !m); else setMini(m => !m); }}>☰</button>
             <div className="trilha"><span id="trGrupo">{itemAtual ? itemAtual.g : "Pessoal"}</span><b id="trItem">{itemAtual ? itemAtual.l : "Dashboard"}</b></div>
+            {sim && <div style={{ marginLeft: 16, fontSize: 12, background: "var(--warn-bg)", color: "var(--warn)", border: "1px solid var(--warn)", borderRadius: 8, padding: "4px 10px" }}>Modo de teste: você está como <b>{R.me()?.nome}</b> · <a href="#" onClick={e => { e.preventDefault(); voltar(); }} style={{ color: "inherit" }}>voltar para {sim.nome}</a></div>}
             <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-faint)", display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#5fb87a", display: "inline-block", animation: "pulse2 2s infinite" }}></span>
               ALIANÇA 360

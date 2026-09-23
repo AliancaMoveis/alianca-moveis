@@ -53,6 +53,8 @@ export const A = {
   salvarUsuario: (id: string, nome: string, setores: string[], somente: boolean) => rpc("salvar_usuario", { p_id: id, p_nome: nome, p_setores: setores, p_somente: somente }),
   desativarUsuario: (id: string) => rpc("desativar_usuario", { p_id: id }),
   reativarUsuario: (id: string) => rpc("reativar_usuario", { p_id: id }),
+  salvarModoTeste: (ligado: boolean) => rpc("salvar_modo_teste", { p_ligado: ligado }),
+  agendaLoja: (dia: string) => rpc<any[]>("agenda_loja", { p_dia: dia }),
   adminUsuarios: async (corpo: any) => {
     const { data, error } = await sb.functions.invoke("admin-usuarios", { body: corpo });
     if (error) {

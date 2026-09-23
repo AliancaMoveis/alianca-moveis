@@ -63,6 +63,18 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // modo de teste: a Gestão entra como outro usuário para validar permissões
+    if (body.acao === "entrar_como") {
+      const { data: cfg } = await admin.from("config").select("modo_teste").eq("id", 1).single();
+      if (!cfg?.modo_teste) return json({ erro: "O modo de teste está desligado (Administração → Comissões e testes)" }, 403);
+      const { data: alvo } = await admin.from("usuarios").select("email, ativo, nome").eq("id", String(body.id)).single();
+      if (!alvo || !alvo.ativo || !alvo.email) return json({ erro: "Usuário inválido" }, 400);
+      const { data: link, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: alvo.email });
+      if (error || !link?.properties?.hashed_token) return json({ erro: error?.message ?? "Não foi possível entrar como este usuário" }, 400);
+      console.log("entrar_como", alvo.nome);
+      return json({ token_hash: link.properties.hashed_token, email: alvo.email });
+    }
+
     return json({ erro: "Ação inválida" }, 400);
   } catch (e) {
     return json({ erro: String(e) }, 500);

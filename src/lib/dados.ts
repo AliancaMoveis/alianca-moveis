@@ -13,7 +13,7 @@ export type Estado = {
   fabricas: any[];
   chamados: Chamado[];
   tipos: Record<string, any>;
-  config: { comissaoPct: number; pagamentoVisita: number };
+  config: { comissaoPct: number; pagamentoVisita: number; modoTeste?: boolean };
 };
 
 async function todos<T = any>(tabela: string, colunas = "*", ordem?: string): Promise<T[]> {
@@ -104,7 +104,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     representantes: reps.map((r: any) => ({ id: r.id, nome: r.nome, whats: r.whats, email: r.email })),
     fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })),
     tipos: tiposMap,
-    config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita) } : { comissaoPct: 1.5, pagamentoVisita: 40 },
+    config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), modoTeste: !!cfg.data.modo_teste } : { comissaoPct: 1.5, pagamentoVisita: 40 },
     chamados: chamados.map((c: any) => {
       const v = vendaDe[c.id];
       const t = trDe[c.id];
