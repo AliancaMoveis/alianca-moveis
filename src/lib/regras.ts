@@ -26,7 +26,7 @@ export const statusFinalCliente = ["vendido", "vendido_promissoria", "venda_canc
 export const COR_SETOR: Record<string, string> = {
   callcenter: "#4b6bd6", prazo_fabrica: "#b8802a", montagem: "#2f8fa8", assistencia: "#c23b3b", checklist: "#7a5bb5", medidas: "#1f9c7a",
   marketing_operadora: "#d1478f", marketing_supervisao: "#8e44ad", consultor_externo: "#b8802a", suporte_consultores: "#0f8a8a",
-  atendente_cliente: "#3f8f4f", posvenda: "#c06a2b", supervisao: "#5a6270", gestao: "#1a1d21",
+  atendente_cliente: "#3f8f4f", posvenda: "#c06a2b", juridico: "#6b4e2e", supervisao: "#5a6270", gestao: "#1a1d21",
 };
 // Pós-venda Projetados
 export const PV_TIPOS: Record<string, string> = {
@@ -197,7 +197,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeVerValor = (c: Chamado) => ehGestao() || temMarketing() || (c.atendenteId && c.atendenteId === currentUserId) || (c.consultorId && c.consultorId === currentUserId);
   const ehConsultorExterno = () => mySetores().includes("consultor_externo");
   const ehPosvenda = () => mySetores().includes("posvenda");
-  const podeVerPosvenda = () => ehGestao() || ehPosvenda();
+  const ehJuridico = () => mySetores().includes("juridico");
+  const podeVerPosvenda = () => ehGestao() || ehPosvenda() || ehJuridico();
   const podeMontadores = () => temCadastros() || ehPosvenda();
   const responsaveisChecklist = () => state.usuarios.filter(u => (u.setores || []).includes("checklist"));
   const medidores = () => state.usuarios.filter(u => (u.setores || []).includes("medidas"));

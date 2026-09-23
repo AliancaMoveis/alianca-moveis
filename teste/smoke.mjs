@@ -2,7 +2,7 @@
 import { chromium } from "playwright";
 const BASE = "http://localhost:5199/mock.html";
 const U = n => `00000000-0000-4000-a000-${String(n).padStart(12, "0")}`;
-const perfis = [7, 6, 13, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 14, 15, 16, 17];
+const perfis = [7, 6, 13, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18];
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 let falhas = 0;
 for (const n of perfis) {
