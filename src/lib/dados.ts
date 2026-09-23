@@ -14,7 +14,9 @@ export type Estado = {
   chamados: Chamado[];
   tipos: Record<string, any>;
   config: { comissaoPct: number; pagamentoVisita: number; modoTeste?: boolean };
+  montadores: Montador[];
 };
+export type Montador = { id: string; nome: string; telefone: string; ativo: boolean };
 
 async function todos<T = any>(tabela: string, colunas = "*", ordem?: string): Promise<T[]> {
   const out: T[] = [];
@@ -56,7 +58,7 @@ export async function carregarEstado(tentativa = 0): Promise<Estado> {
   }
 }
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em", "criado_em"),
@@ -70,7 +72,15 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("transferencias", "*", "quando"),
     todos("historico", "chamado_id,quando,quem_nome,texto,id", "id"),
     todos("anexos", "id,chamado_id,tipo,nome,url,storage_path,criado_em", "criado_em"),
+    todos("montadores", "*", "nome"),
+    todos("posvenda", "*"), // só o setor Pós-venda e a Gestão recebem linhas (RLS)
   ]);
+  const pvDe: Record<string, any> = {};
+  posvenda.forEach((p: any) => (pvDe[p.chamado_id] = {
+    origem: p.origem, categoria: p.categoria, montadorId: p.montador_id || "", checklistResp: p.checklist_resp || "",
+    erroChecklist: p.erro_checklist === true ? "sim" : p.erro_checklist === false ? "nao" : "", ocorrido: p.ocorrido, solucao: p.solucao,
+    custo: Number(p.custo) || 0, custoDesc: p.custo_desc, descontoMontador: Number(p.desconto_montador) || 0, atualizadoEm: p.atualizado_em,
+  }));
 
   const paths = anexos.filter((a: any) => a.tipo === "img" && a.storage_path).map((a: any) => a.storage_path);
   if (paths.length) await assinar(paths);
@@ -104,6 +114,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     representantes: reps.map((r: any) => ({ id: r.id, nome: r.nome, whats: r.whats, email: r.email })),
     fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })),
     tipos: tiposMap,
+    montadores: montadores.map((m: any) => ({ id: m.id, nome: m.nome, telefone: m.telefone || "", ativo: m.ativo })),
     config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), modoTeste: !!cfg.data.modo_teste } : { comissaoPct: 1.5, pagamentoVisita: 40 },
     chamados: chamados.map((c: any) => {
       const v = vendaDe[c.id];
@@ -124,6 +135,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
         } : null,
         transferencia: t ? { de: t.de_usuario, para: t.para_usuario, solicitadoPor: t.solicitado_por, quando: t.quando, status: "pendente" } : null,
         anexos: anxDe[c.id] || [],
+        posvenda: pvDe[c.id] || null,
         historico: histDe[c.id] || [],
       };
     }).sort((a: any, b: any) => +new Date(b.criadoEm) - +new Date(a.criadoEm)),

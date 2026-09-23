@@ -11,6 +11,7 @@ import { Pessoas, Carteira, Clientes } from "./Pessoas";
 import Financeiro from "./Financeiro";
 import Atividades from "./Atividades";
 import Relatorios from "./Relatorios";
+import PosVenda from "./PosVenda";
 import { Cadastros, Admin } from "./Cadastros";
 import Detalhe from "../comp/Detalhe";
 import { AlterarSenha } from "../comp/Modal";
@@ -133,6 +134,7 @@ export default function Shell() {
             {atual === "cadastros" && <Cadastros />}
             {atual === "admin" && <Admin />}
             {atual === "relatorios" && <Relatorios />}
+            {atual === "posvenda" && <PosVenda />}
           </main>
         </div>
       </div>

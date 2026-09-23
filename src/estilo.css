@@ -306,9 +306,9 @@ html,body{height:100%}
   .panel{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:18px 20px;box-shadow:var(--shadow)}
   .panel h3{font-size:14px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
   .bar-row{display:flex;align-items:center;gap:12px;margin-bottom:11px;font-size:13px}
-  .bar-row .nm{width:140px;flex:none;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar-row .nm{width:180px;max-width:40%;flex:none;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .bar-row .track{flex:1;height:22px;background:var(--surface-2);border-radius:6px;overflow:hidden}
-  .bar-row .fill{height:100%;background:var(--primary);border-radius:6px;min-width:2px;transition:width .5s ease}
+  .bar-row .fill{display:block;height:100%;background:var(--primary);border-radius:6px;min-width:2px;transition:width .5s ease}
   .bar-row .fill.late{background:var(--danger)}
   .bar-row .v{width:26px;text-align:right;font-weight:600;flex:none}
   .acao-list{display:flex;flex-direction:column;gap:8px}

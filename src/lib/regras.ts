@@ -26,8 +26,15 @@ export const statusFinalCliente = ["vendido", "vendido_promissoria", "venda_canc
 export const COR_SETOR: Record<string, string> = {
   callcenter: "#4b6bd6", prazo_fabrica: "#b8802a", montagem: "#2f8fa8", assistencia: "#c23b3b", checklist: "#7a5bb5", medidas: "#1f9c7a",
   marketing_operadora: "#d1478f", marketing_supervisao: "#8e44ad", consultor_externo: "#b8802a", suporte_consultores: "#0f8a8a",
-  atendente_cliente: "#3f8f4f", supervisao: "#5a6270", gestao: "#1a1d21",
+  atendente_cliente: "#3f8f4f", posvenda: "#c06a2b", supervisao: "#5a6270", gestao: "#1a1d21",
 };
+// Pós-venda Projetados
+export const PV_CATEGORIAS: Record<string, string> = {
+  montagem: "Problema de montagem", avaria_montador: "Avaria causada pelo montador", avaria_transporte: "Avaria no transporte/entrega",
+  erro_projeto: "Erro de projeto", medida: "Medida errada", peca_fabrica: "Peça faltante ou com defeito de fábrica", outro: "Outro",
+};
+export const PV_ORIGEM: Record<string, string> = { cliente: "Cliente reclamou", montador: "Montador pediu suporte na obra" };
+export const PV_ENCAMINHAR: Record<string, string> = { vistoria: "Solicitar vistoria", assistencia: "Solicitar assistência (peça + montador)", montagem: "Nova montagem / retorno do montador", medidas: "Conferir medidas", checklist: "Revisar projeto (checklist)", prazo_fabrica: "Cobrar fábrica (prazo)" };
 export const corDoSetor = (id: string) => COR_SETOR[id] || "#8b94a3";
 export const vendaContaVolume = (v: any) => !!v && ["promissoria", "efetivada"].includes(v.status);
 export const vendaContaComissao = (v: any) => !!v && v.status === "efetivada";
@@ -183,6 +190,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const setoresVisiveis = () => operacionais().filter(s => !ehSetorMarketing(s.id) || temMarketing() || ehGestao());
   const podeVerValor = (c: Chamado) => ehGestao() || temMarketing() || (c.atendenteId && c.atendenteId === currentUserId) || (c.consultorId && c.consultorId === currentUserId);
   const ehConsultorExterno = () => mySetores().includes("consultor_externo");
+  const ehPosvenda = () => mySetores().includes("posvenda");
+  const podeVerPosvenda = () => ehGestao() || ehPosvenda();
+  const podeMontadores = () => temCadastros() || ehPosvenda();
+  const responsaveisChecklist = () => state.usuarios.filter(u => (u.setores || []).includes("checklist"));
+  const nomeMontador = (id: string) => ((state.montadores || []).find(m => m.id === id) || ({} as any)).nome || "—";
   const podeEditarAgenda = () => ehGestao() || temMarketing() || mySetores().includes("suporte_consultores");
   const podeMudarDataLoja = (c: Chamado) => podeEditarAgenda() || (c.consultorId && c.consultorId === currentUserId);
 
@@ -388,11 +400,12 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (mk.length) { if (!cc.length) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
     const ge: string[][] = [];
     if (ehGestao()) ge.push(["aprovacoes", "Aprovações"]);
+    if (podeVerPosvenda()) ge.push(["posvenda", "Pós-venda — números"]);
     const ehProjetista = mySetores().includes("atendente_cliente");
     if (ehConsultorExterno() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : "Vendas e comissão"]);
     if (verTudo()) ge.push(["relatorios", "Relatórios"]);
     if (verTudo() || temMarketing()) ge.push(["atividades", "Controle de atividades"]);
-    if (ge.length) G.push({ g: ehConsultorExterno() && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
+    if (ge.length) G.push({ g: ehConsultorExterno() && !ehGestao() ? "Meu financeiro" : ehPosvenda() && !ehGestao() ? "Pós-venda" : "Gestão", ic: "▣", itens: ge });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
     if (ehGestao()) cd.push(["admin", "Administração"]);
@@ -404,7 +417,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
-    podeVerValor, ehConsultorExterno, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
+    podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };
 }

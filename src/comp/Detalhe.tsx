@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, comprimir, enviarFotos } from "../lib/acoes";
 import {
-  ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  PV_CATEGORIAS, PV_ENCAMINHAR, PV_ORIGEM, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 
@@ -87,6 +87,7 @@ export default function Detalhe({ id }: { id: string }) {
             : R.podeAcompanhar(c) ? <AcompanhamentoCC c={c} link={link} notaRef={notaRef} foco={focoDetalhe} />
             : <div className="ro-note">Você tem acesso de leitura a este chamado. Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>.{anexar ? " Você pode anexar comprovações acima." : ""}</div>}
           <div className="hist"><h4>Histórico</h4>{c.historico.slice().reverse().map((x: any, i: number) => <div className="h" key={i}><b>{fmtDateTime(x.quando)}</b> · {x.quem} — {x.texto}</div>)}</div>
+          <Vinculados c={c} />
           {c.vinculadoA && <div className="ro-note" style={{ marginTop: 10 }}>Vinculado ao atendimento <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.vinculadoA); }}>{c.vinculadoA}</a>.</div>}
         </div>
       </div>
@@ -119,7 +120,7 @@ function ClienteCard({ c }: any) {
 }
 
 function tratativaExiste(c: any, R: any) {
-  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "medidas"].includes(c.tipo)) return true;
+  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "medidas", "posvenda"].includes(c.tipo)) return true;
   if (!R.domMarketing(c)) return false;
   return ["marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente"].includes(c.setorDestino);
 }
@@ -139,6 +140,7 @@ function Tratativa({ c }: any) {
   const marcar = (campo: string) => ex(() => A.alternarMarcacao(c.id, campo), "Atualizado");
   const Btn = ({ on, ids, lOn, lOff, campo }: any) => <button className={"btn " + (on ? "" : "primary") + " sm"} id={ids} onClick={() => marcar(campo)}>{on ? lOn : lOff}</button>;
 
+  if (c.tipo === "posvenda") return <TratPosvenda c={c} />;
   if (c.tipo === "montagem") return <div className="resp-box"><h4>Tratativa — Montagem (Exact)</h4><div className="grid"><div className="field"><label>Data agendada</label><input type="date" value={v.agenda} onChange={s("agenda")} /></div><div className="field"><label>Montador</label><input value={v.montador} onChange={s("montador")} placeholder="Nome do montador" /></div></div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => salvar(["agenda", "montador"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "assistencia") return <div className="resp-box"><h4>Tratativa — Assistência (peça + montador)</h4><div className="grid"><div className="field"><label>Peça solicitada</label><input value={v.peca} onChange={s("peca")} placeholder="Ex.: puxador, dobradiça…" /></div><div className="field"><label>Montador designado</label><input value={v.montador} onChange={s("montador")} /></div></div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => salvar(["peca", "montador"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "vistoria") return <div className="resp-box"><h4>Tratativa — Vistoria (aprovar e designar)</h4><div className="grid"><div className="field"><label>Montador de vistoria</label><input value={v.montador} onChange={s("montador")} /></div><div className="field"><label>Data da vistoria</label><input type="date" value={v.data} onChange={s("data")} /></div></div><div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.aprovada} campo="aprovada" lOn="Vistoria aprovada ✓" lOff="Aprovar vistoria" /><button className="btn primary sm" onClick={() => salvar(["montador", "data"])}>Salvar tratativa</button></div></div>;
@@ -505,4 +507,84 @@ function AcompanhamentoCC({ c, link, notaRef, foco }: any) {
     <div className="resp-box"><h4>Anotação interna</h4><div className="inline-2"><div className="field"><input ref={notaRef} placeholder={foco === "nota" ? "Cliente ligou de novo — descreva o que ele pediu agora" : "Ex.: Cliente ligou perguntando da previsão."} value={nota} onChange={e => setNota(e.target.value)} /></div>
       <button className="btn sm" onClick={async () => { const v = nota.trim(); if (!v) return; if (await ex(() => A.adicionarNota(c.id, v), "Anotação adicionada")) setNota(""); }}>Adicionar</button></div></div>
   </>;
+}
+
+// atendimentos abertos a partir deste (ex.: vistoria pedida pelo pós-venda) — para acompanhar tudo do cliente num lugar
+function Vinculados({ c }: any) {
+  const { R, st, abrirDetalhe } = useApp();
+  const filhos = st.chamados.filter((x: any) => x.vinculadoA === c.id && R.podeVer(x));
+  if (!filhos.length) return null;
+  return (
+    <div className="resp-box" style={{ marginTop: 14 }}><h4>Atendimentos ligados a este</h4>
+      {filhos.map((x: any) => (
+        <div key={x.id} className="detail-row" style={{ cursor: "pointer" }} onClick={() => abrirDetalhe(x.id)}>
+          <span className="k">{x.id}</span>
+          <span className="v">{R.tipoNome(x.tipo)} · {R.setorNome(x.setorDestino)} · <span className={"badge " + STATUS[x.status].cls}>{STATUS[x.status].label}</span>{x.resposta && x.resposta.previsao ? " · previsão " + fmtDate(x.resposta.previsao) : ""}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Pós-venda Projetados: registro do atendimento (depois de falar com o cliente/montador) + encaminhamentos
+function TratPosvenda({ c }: any) {
+  const { R, st, executar: ex, toast, recarregar, abrirDetalhe } = useApp() as any;
+  const p = c.posvenda || {};
+  const ini = () => ({
+    origem: p.origem || "cliente", categoria: p.categoria || "", montadorId: p.montadorId || "", checklistResp: p.checklistResp || "",
+    erroChecklist: p.erroChecklist || "", ocorrido: p.ocorrido || "", solucao: p.solucao || "",
+    custo: p.custo ? String(p.custo).replace(".", ",") : "", custoDesc: p.custoDesc || "", descontoMontador: p.descontoMontador ? String(p.descontoMontador).replace(".", ",") : "",
+  });
+  const [v, setV] = useState<any>(ini);
+  useEffect(() => { setV(ini()); }, [c.id, JSON.stringify(p)]);
+  const [encTipo, setEncTipo] = useState("vistoria");
+  const [encTxt, setEncTxt] = useState("");
+  const s = (k: string) => (e: any) => setV((x: any) => ({ ...x, [k]: e.target.value }));
+  const num = (t: string) => { const n = parseMoeda(t); return n; };
+  const montadores = (st.montadores || []).filter((m: any) => m.ativo || m.id === v.montadorId);
+  const podeValores = R.podeVerPosvenda();
+  if (!podeValores) return <div className="resp-box"><h4>Pós-venda Projetados</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>O registro deste atendimento (montador, custos e checklist) é visto só pelo Pós-venda e pela Gestão.</div></div>;
+  const salvar = () => {
+    if (!v.categoria) { toast("Escolha o tipo de ocorrência"); return; }
+    if (!v.ocorrido.trim()) { toast("Descreva o ocorrido"); return; }
+    if (num(v.descontoMontador) > 0 && !v.montadorId) { toast("Informe o montador para registrar o desconto"); return; }
+    ex(() => A.salvarPosvenda(c.id, { ...v, custo: num(v.custo), descontoMontador: num(v.descontoMontador) }), "Registro do pós-venda salvo");
+  };
+  const encaminhar = async () => {
+    if (!encTxt.trim()) { toast("Descreva o que precisa ser feito"); return; }
+    try { const novo = await A.posvendaEncaminhar(c.id, encTipo, encTxt.trim()); setEncTxt(""); await recarregar(); toast("Atendimento " + novo + " aberto"); }
+    catch (e: any) { toast(e.message); }
+  };
+  return (
+    <>
+      <div className="resp-box"><h4>Registro do atendimento — Pós-venda Projetados</h4>
+        <div className="grid">
+          <div className="field"><label>Quem acionou</label><select value={v.origem} onChange={s("origem")}>{Object.entries(PV_ORIGEM).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+          <div className="field"><label>Tipo de ocorrência <span className="req-star">*</span></label><select value={v.categoria} onChange={s("categoria")}><option value="">Selecione…</option>{Object.entries(PV_CATEGORIAS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+          <div className="field"><label>Montador</label><select value={v.montadorId} onChange={s("montadorId")}><option value="">Não se aplica / não informado</option>{montadores.map((m: any) => <option key={m.id} value={m.id}>{m.nome}{m.ativo ? "" : " (inativo)"}</option>)}</select>
+            {!montadores.length && <span className="hint">Cadastre os montadores em Pós-venda — números → Montadores.</span>}</div>
+          <div className="field"><label>Quem fez o checklist</label><select value={v.checklistResp} onChange={s("checklistResp")}><option value="">Não informado</option>{R.responsaveisChecklist().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
+          <div className="field"><label>O checklist tem relação com o problema?</label><select value={v.erroChecklist} onChange={s("erroChecklist")}><option value="">Ainda não avaliado</option><option value="sim">Sim — falha no checklist</option><option value="nao">Não — checklist estava correto</option></select></div>
+          <div className="field full"><label>Ocorrido <span className="req-star">*</span></label><textarea value={v.ocorrido} onChange={s("ocorrido")} placeholder="O que o cliente/montador relatou e o que foi constatado"></textarea></div>
+          <div className="field full"><label>Solução / o que será feito</label><textarea value={v.solucao} onChange={s("solucao")} placeholder="Ex.: troca da porta, retorno do montador, peça pedida à fábrica"></textarea></div>
+          <div className="field"><label>Custo para a loja (R$)</label><input inputMode="decimal" value={v.custo} onChange={s("custo")} placeholder="0,00" /></div>
+          <div className="field"><label>Do que é o custo</label><input value={v.custoDesc} onChange={s("custoDesc")} placeholder="Ex.: peça, frete, retorno do montador" /></div>
+          <div className="field"><label>Desconto do montador (R$)</label><input inputMode="decimal" value={v.descontoMontador} onChange={s("descontoMontador")} placeholder="0,00" />
+            <span className="hint">Avarias causadas pelo montador — vai para desconto dele.</span></div>
+        </div>
+        <div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
+          <button className="btn primary sm" onClick={salvar}>Salvar registro</button>
+          {p.atualizadoEm && <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>Salvo em {fmtDateTime(p.atualizadoEm)}{p.custo ? " · custo " + fmtMoeda(p.custo) : ""}{p.descontoMontador ? " · desconto " + fmtMoeda(p.descontoMontador) : ""}</span>}
+        </div>
+      </div>
+      <div className="resp-box"><h4>Encaminhar para outro setor</h4>
+        <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 10px" }}>Abre um novo atendimento com os dados deste cliente, ligado a este. Você acompanha o andamento aqui na ficha.</p>
+        <div className="grid">
+          <div className="field"><label>O que pedir</label><select value={encTipo} onChange={e => setEncTipo(e.target.value)}>{Object.entries(PV_ENCAMINHAR).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+          <div className="field full"><label>O que precisa ser feito</label><textarea value={encTxt} onChange={e => setEncTxt(e.target.value)} placeholder="Ex.: vistoria da porta do armário riscada; fotos anexadas no pós-venda"></textarea></div>
+        </div>
+        <div style={{ marginTop: 12 }}><button className="btn sm" onClick={encaminhar}>Abrir {R.tipoNome(encTipo).toLowerCase()}</button></div>
+      </div>
+    </>
+  );
 }
