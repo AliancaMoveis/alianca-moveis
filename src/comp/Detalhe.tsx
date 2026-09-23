@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, comprimir, enviarFotos } from "../lib/acoes";
 import {
-  ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, mesmaPessoa, parseMoeda, situacaoPrazo,
+  ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 
@@ -83,6 +83,7 @@ export default function Detalhe({ id }: { id: string }) {
           ))}
           {!presale && <Anexos c={c} editavel={anexar} />}
           {tratar ? <AcoesGerais c={c} link={link} presale={presale} notaRef={notaRef} foco={focoDetalhe} />
+            : R.podeAcompanhar(c) ? <AcompanhamentoCC c={c} link={link} notaRef={notaRef} foco={focoDetalhe} />
             : <div className="ro-note">Você tem acesso de leitura a este chamado. Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>.{anexar ? " Você pode anexar comprovações acima." : ""}</div>}
           <div className="hist"><h4>Histórico</h4>{c.historico.slice().reverse().map((x: any, i: number) => <div className="h" key={i}><b>{fmtDateTime(x.quando)}</b> · {x.quem} — {x.texto}</div>)}</div>
           {c.vinculadoA && <div className="ro-note" style={{ marginTop: 10 }}>Vinculado ao atendimento <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.vinculadoA); }}>{c.vinculadoA}</a>.</div>}
@@ -463,7 +464,7 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
   const [prev, setPrev] = useState(c.resposta?.previsao || "");
   const [quem, setQuem] = useState(c.resposta ? (c.resposta.quem || u?.nome || "") : (u?.nome || ""));
   const [texto, setTexto] = useState(c.resposta?.texto || "");
-  const [sla, setSla] = useState(c.slaResposta ? new Date(c.slaResposta).toISOString().slice(0, 10) : "");
+  const [sla, setSla] = useState(c.slaResposta ? isoLocal(new Date(c.slaResposta)) : "");
   const [enc, setEnc] = useState(c.setorDestino);
   const [nota, setNota] = useState("");
   useEffect(() => { setEnc(c.setorDestino); }, [c.setorDestino]);
@@ -485,6 +486,22 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
     {!presale && <div className="resp-box"><h4>Prazo para responder</h4><div className="inline-2"><div className="field"><label>Data limite</label><input type="date" value={sla} onChange={e => setSla(e.target.value)} /></div>
       <button className="btn sm" onClick={() => { if (!sla) return; ex(() => A.alterarPrazo(c.id, sla), "Prazo alterado"); }}>Alterar prazo</button></div></div>}
     <div className="resp-box"><h4>Anotação interna</h4><div className="inline-2"><div className="field"><input ref={notaRef} placeholder={foco === "nota" ? "Cliente ligou de novo — descreva o que ele pediu agora" : "Ex.: Liguei 10h, sem retorno."} value={nota} onChange={e => setNota(e.target.value)} /></div>
+      <button className="btn sm" onClick={async () => { const v = nota.trim(); if (!v) return; if (await ex(() => A.adicionarNota(c.id, v), "Anotação adicionada")) setNota(""); }}>Adicionar</button></div></div>
+  </>;
+}
+
+// call center acompanhando uma solicitação que está com outro setor
+function AcompanhamentoCC({ c, link, notaRef, foco }: any) {
+  const { R, executar: ex } = useApp();
+  const [nota, setNota] = useState("");
+  return <>
+    <div className="ro-note" style={{ marginTop: 12 }}>Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>. Pelo call center você pode registrar um novo contato do cliente, marcar urgente{c.status === "respondida" ? " e concluir depois de avisar o cliente" : ""}.</div>
+    <div style={{ margin: "12px 0 6px", display: "flex", gap: 9, flexWrap: "wrap" }}>
+      {link && <a className="btn wa" href={link} target="_blank" rel="noopener">WhatsApp do representante</a>}
+      <button className={"btn " + (c.urgente ? "danger" : "")} onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button>
+      {c.status === "respondida" && <button className="btn primary" onClick={() => ex(() => A.mudarStatus(c.id, "concluida"), "Atendimento concluído")}>Cliente avisado — concluir</button>}
+    </div>
+    <div className="resp-box"><h4>Anotação interna</h4><div className="inline-2"><div className="field"><input ref={notaRef} placeholder={foco === "nota" ? "Cliente ligou de novo — descreva o que ele pediu agora" : "Ex.: Cliente ligou perguntando da previsão."} value={nota} onChange={e => setNota(e.target.value)} /></div>
       <button className="btn sm" onClick={async () => { const v = nota.trim(); if (!v) return; if (await ex(() => A.adicionarNota(c.id, v), "Anotação adicionada")) setNota(""); }}>Adicionar</button></div></div>
   </>;
 }

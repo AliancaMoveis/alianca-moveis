@@ -17,29 +17,35 @@ export function Fila() {
   const [q, setQ] = useState("");
   useEffect(() => { if (preset?.setor) { setFSetor(preset.setor); setFiltro("todos"); setFTipo(""); } }, [preset]);
   const vt = R.verTudo();
-  const base = st.chamados.filter(c => !R.domMarketing(c) && R.podeVer(c));
+  const ccTudo = !vt && R.ehCallcenter();
+  const [escopo, setEscopo] = useState<"minha" | "todos">("minha");
+  const base = st.chamados.filter(c => !R.domMarketing(c) && R.podeVer(c) && (!ccTudo || escopo === "todos" || R.naMinhaFila(c)));
   const cont: Record<string, number> = { todos: base.length, urgentes: base.filter(c => c.urgente && c.status !== "concluida").length, atrasados: base.filter(estaAtrasado).length };
   ORDEM.forEach(s => (cont[s] = base.filter(c => c.status === s).length));
   const chips = [["todos", "Todos"], ["urgentes", "Urgentes"], ["atrasados", "Atrasados"], ["aberta", "Abertas"], ["tratativa", "Em tratativa"], ["respondida", "Respondidas"], ["concluida", "Concluídas"]];
   let arr = base.slice();
   if (filtro === "atrasados") arr = arr.filter(estaAtrasado); else if (filtro === "urgentes") arr = arr.filter(c => c.urgente && c.status !== "concluida"); else if (filtro !== "todos") arr = arr.filter(c => c.status === filtro);
   if (fTipo) arr = arr.filter(c => c.tipo === fTipo);
-  if (vt && fSetor) arr = arr.filter(c => c.setorDestino === fSetor);
+  if ((vt || (ccTudo && escopo === "todos")) && fSetor) arr = arr.filter(c => c.setorDestino === fSetor);
   if (q) arr = arr.filter(c => (c.cliente + " " + c.pedido + " " + c.produto).toLowerCase().includes(q.toLowerCase()));
   arr = R.ordenar(arr);
   return (
     <section className="view active" id="view-fila">
       <div className="view-head"><div>
         <h2 id="filaTitulo">{vt ? "Acompanhamento Call center" : "Minha fila — " + (R.mySetores().map(R.setorNome).join(", ") || "—")}</h2>
-        <p id="filaSub">{vt ? "Solicitações de pós-venda: entrega, fábrica, montagem, assistência, checklist e medidas. Marketing tem aba própria." : "Sua fila de trabalho de hoje. Ordenada por prioridade — urgentes e atrasados no topo."}</p>
+        <p id="filaSub">{ccTudo && escopo === "todos" ? "Todas as solicitações de pós-venda da loja. Você pode anotar um novo contato do cliente e marcar urgente; quem trata é o setor de destino." : vt ? "Solicitações de pós-venda: entrega, fábrica, montagem, assistência, checklist e medidas. Marketing tem aba própria." : "Sua fila de trabalho de hoje. Ordenada por prioridade — urgentes e atrasados no topo."}</p>
       </div></div>
+      {ccTudo && <div className="subnav" style={{ marginBottom: 12 }}>
+        <button className={escopo === "minha" ? "on" : ""} onClick={() => setEscopo("minha")}>Minha fila</button>
+        <button className={escopo === "todos" ? "on" : ""} onClick={() => setEscopo("todos")}>Todo o call center</button>
+      </div>}
       <div className="toolbar">
         <Busca id="busca" ph="Buscar cliente, pedido, produto" v={q} set={setQ} />
         <select id="fTipo" value={fTipo} onChange={e => setFTipo(e.target.value)}>
           <option value="">Todos os motivos</option>
           {Object.entries(R.TIPOS).filter(([, t]: any) => !t.presale).map(([k, t]: any) => <option key={k} value={k}>{t.nome}</option>)}
         </select>
-        {vt && <select id="fSetor" value={fSetor} onChange={e => setFSetor(e.target.value)}>
+        {(vt || (ccTudo && escopo === "todos")) && <select id="fSetor" value={fSetor} onChange={e => setFSetor(e.target.value)}>
           <option value="">Todos os setores</option>
           {R.setoresVisiveis().filter(x => !R.ehSetorMarketing(x.id)).map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
         </select>}

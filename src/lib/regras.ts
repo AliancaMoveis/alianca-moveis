@@ -139,8 +139,19 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ehGestao()) return true;
     if (domMarketing(c)) return temMarketing() || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
     if (verTudo()) return true;
+    if (mySetores().includes("callcenter")) return true;
     return mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
   }
+  // fila de trabalho: o que é do meu setor ou o que eu abri (o call center vê tudo, mas a fila dele é esta)
+  function naMinhaFila(c: Chamado) {
+    const u = me();
+    if (u && u.somenteAtribuidos) return podeVer(c);
+    if (ehGestao() || verTudo()) return true;
+    return mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
+  }
+  const ehCallcenter = () => mySetores().includes("callcenter");
+  // call center acompanha qualquer solicitação de pós-venda: anota novo contato, marca urgente, conclui após avisar o cliente
+  const podeAcompanhar = (c: Chamado) => podeTratar(c) || (ehCallcenter() && !domMarketing(c));
   function podeTratar(c: Chamado) {
     const u = me();
     if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || trPendPara(c);
@@ -368,7 +379,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   return {
     state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
-    verTudo, ehGestao, temCadastros, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
+    verTudo, ehGestao, temCadastros, naMinhaFila, ehCallcenter, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     podeVerValor, ehConsultorExterno, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
