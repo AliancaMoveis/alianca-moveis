@@ -210,6 +210,21 @@ export function criarRegras(state: Estado, currentUserId: string) {
     return { visitas, vendas, pagamentoVisitas, totalVendido, comissao, total: pagamentoVisitas + comissao };
   }
 
+  // ---------- prioridade única por chamado (cada chamado cai em UMA faixa, sem duplicidade) ----------
+  // call center: crítico (+24h vencido) > atrasado (vencido até 24h) > urgente (marcado, ainda no prazo) > perto (vence em 24h) > ok > respondida > concluída
+  function prioridade(c: Chamado): string {
+    if (domMarketing(c)) {
+      const sc = statusClienteDe(c);
+      if (statusFinalCliente.includes(sc)) return "concluida";
+      return clienteCriticoInatividade(c) ? "critico" : "ok";
+    }
+    const sp = situacaoPrazo(c); // critico | atrasado | perto | ok | respondida | concluida
+    if (sp === "critico" || sp === "atrasado" || sp === "respondida" || sp === "concluida") return sp;
+    if (c.urgente) return "urgente";
+    return sp;
+  }
+  const RANK: Record<string, number> = { critico: 0, atrasado: 1, urgente: 2, perto: 3, ok: 4, respondida: 5, concluida: 6 };
+  const emAberto = (c: Chamado) => prioridade(c) !== "concluida";
   function ordenar(arr: Chamado[]) {
     if (ehConsultorExterno() && !ehGestao()) {
       return arr.sort((a, b) => {
@@ -221,11 +236,13 @@ export function criarRegras(state: Estado, currentUserId: string) {
       });
     }
     return arr.sort((a, b) => {
-      const ua = a.urgente && a.status !== "concluida" ? 0 : 1, ub = b.urgente && b.status !== "concluida" ? 0 : 1;
-      if (ua !== ub) return ua - ub;
-      const pa = pesoPrazo[situacaoPrazo(a)], pb = pesoPrazo[situacaoPrazo(b)];
+      const pa = RANK[prioridade(a)], pb = RANK[prioridade(b)];
       if (pa !== pb) return pa - pb;
-      return +new Date(b.criadoEm) - +new Date(a.criadoEm);
+      if (pa === RANK.concluida) return +new Date(b.criadoEm) - +new Date(a.criadoEm); // encerrados: mais recentes primeiro
+      if (domMarketing(a) && domMarketing(b)) return +ultimaAtividade(a) - +ultimaAtividade(b); // mais tempo parado primeiro
+      const sa = +new Date(a.slaResposta || a.criadoEm), sb = +new Date(b.slaResposta || b.criadoEm);
+      if (sa !== sb) return sa - sb; // prazo que vence antes primeiro
+      return +new Date(a.criadoEm) - +new Date(b.criadoEm);
     });
   }
 
@@ -327,11 +344,17 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     if (temMarketing()) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores")) add("designar", "Clientes sem projetista", "Já têm data na loja, mas ninguém foi designado para atender.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId), "var(--warn)");
-    add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
-    add("responder", "Respondidos — avise o cliente", "O setor respondeu. Retorne ao cliente e conclua o atendimento.", ch.filter(c => c.solicitanteId === eu && c.status === "respondida"), "var(--st-respondida)");
     add("criticos", "Críticos no seu setor", "Mais de 24h sem resposta — precisam de ação imediata.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && situacaoPrazo(c) === "critico"), "var(--critico)");
-    const total = G.reduce((s, g) => s + g.itens.length, 0);
-    return { grupos: G, total };
+    add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => !domMarketing(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
+    add("responder", "Respondidos — avise o cliente", "O setor respondeu. Retorne ao cliente e conclua o atendimento.", ch.filter(c => !domMarketing(c) && c.solicitanteId === eu && c.status === "respondida"), "var(--st-respondida)");
+    // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
+    const PRIORIDADE = ["aceite", "apvendas", "aptransf", "appromis", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
+    const dono: Record<string, string> = {};
+    [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
+      .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));
+    const grupos = G.map(g => ({ ...g, itens: g.itens.filter((c: Chamado) => dono[c.id] === g.chave) })).filter(g => g.itens.length);
+    const total = grupos.reduce((s, g) => s + g.itens.length, 0);
+    return { grupos, total };
   }
 
   function statsPessoa(uid: string, ehVend: boolean) {
@@ -379,7 +402,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   return {
     state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
-    verTudo, ehGestao, temCadastros, naMinhaFila, ehCallcenter, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
+    verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     podeVerValor, ehConsultorExterno, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,

@@ -28,6 +28,7 @@ export default function Detalhe({ id }: { id: string }) {
   const st_ = STATUS[c.status], late = estaAtrasado(c), rep = R.getRep(c), fab = R.getFab(c), link = R.waLink(c), tratar = R.podeTratar(c), anexar = R.podeAnexar(c);
   const presale = R.domMarketing(c);
   const prazoSit = situacaoPrazo(c);
+  const prio = R.prioridade(c);
   const semResp = c.status === "aberta" || c.status === "tratativa";
   const t = c.tratativa || {};
   const tratResumo = [t.montador ? "Responsável: " + t.montador : "", t.peca ? "Peça: " + t.peca : "", t.agenda ? "Agenda: " + fmtDate(t.agenda) : "", t.data ? "Vistoria: " + fmtDate(t.data) : "", t.aprovada ? "Vistoria aprovada" : "", t.entregaTatico ? "No Tático" : "", t.medidas ? "Medidas: " + t.medidas : "", t.confirmado ? "Confirmado com cliente" : "", t.obs ? "Obs.: " + t.obs : "", t.realizada ? "Visita realizada" : "", c.dataLoja ? "Vinda à loja: " + fmtDateTime(c.dataLoja) : "", t.vendedor ? "Vendedor: " + t.vendedor : ""].filter(Boolean).join(" · ");
@@ -42,7 +43,7 @@ export default function Detalhe({ id }: { id: string }) {
           <div><span className="tid">{c.id}</span>{" "}
             {presale ? <span style={{ marginLeft: 8 }}><ScBadge c={c} /></span> : <span className={"badge " + st_.cls} style={{ marginLeft: 8 }}>{st_.label}</span>}{" "}
             {presale ? (R.clienteCriticoInatividade(c) ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico — sem atualização</span> : null)
-              : (prazoSit === "critico" ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico</span> : (c.urgente && c.status !== "concluida" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⚠ Urgente</span> : null))}
+              : (prio === "critico" ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico</span> : prio === "atrasado" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⏰ Atrasado</span> : prio === "urgente" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⚠ Urgente</span> : null)}
           </div>
           <button className="x" id="fechar" onClick={fecharDetalhe}>&times;</button>
         </div>

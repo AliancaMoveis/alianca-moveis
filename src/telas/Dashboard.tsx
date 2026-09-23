@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../estado";
-import { ORDEM, STATUS, estaAtrasado, fmtMoeda, situacaoPrazo, tempoRel, vendaContaVolume } from "../lib/regras";
+import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtMoeda, tempoRel, vendaContaVolume } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
   <div className="bar-row"><span className="nm">{nm}</span><span className="track"><span className="fill" style={{ width: pct + "%", ...(cor ? { background: cor } : {}) }}></span></span><span className="v">{v}</span>{extra}</div>
@@ -18,8 +18,12 @@ export default function Dashboard() {
   if (ate) vis = vis.filter((c: any) => new Date(c.criadoEm) <= new Date(ate + "T23:59:59"));
   const periodoTxt = (de || ate) ? " · período filtrado" : "";
   const sub = (R.verTudo() ? (R.ehGestao() ? "Visão consolidada de todos os setores, em tempo real." : "Visão consolidada dos setores do call center, em tempo real. Marketing e Consultoria externa têm supervisão própria.") : "Visão do seu setor (" + (R.mySetores().map(R.setorNome).join(", ") || "—") + "), em tempo real.") + periodoTxt;
-  const abertas = vis.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length, atras = vis.filter(estaAtrasado).length,
-    crit = vis.filter((c: any) => situacaoPrazo(c) === "critico").length, urg = vis.filter((c: any) => c.urgente && c.status !== "concluida").length, conc = vis.filter((c: any) => c.status === "concluida").length;
+  // indicadores do call center (pós-venda). Marketing não tem prazo de resposta e fica fora destes números.
+  const cc = vis.filter((c: any) => !R.domMarketing(c));
+  const pr = (c: any) => R.prioridade(c);
+  const abertas = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length, atras = cc.filter((c: any) => pr(c) === "atrasado").length,
+    crit = cc.filter((c: any) => pr(c) === "critico").length, urg = cc.filter((c: any) => pr(c) === "urgente").length, resp = cc.filter((c: any) => c.status === "respondida").length,
+    conc = cc.filter((c: any) => c.status === "concluida").length;
 
   const vejaMkt = R.temMarketing() || R.ehGestao();
   const mktTix = vis.filter(R.domMarketing);
@@ -42,10 +46,11 @@ export default function Dashboard() {
   ccTix.forEach((c: any) => { const k = c.solicitanteId; porAt[k] = porAt[k] || { ab: 0, rv: 0 }; porAt[k].ab++; if (c.status === "concluida") porAt[k].rv++; });
   const rowsAt = Object.entries(porAt).map(([uid, v]) => [R.nomeUser(uid), v] as [string, any]).sort((a, b) => b[1].ab - a[1].ab);
 
-  const srows = ORDEM.map(s => [STATUS[s].label, vis.filter((c: any) => c.status === s).length, s] as [string, number, string]);
+  const srows = ORDEM.map(s => [STATUS[s].label, cc.filter((c: any) => c.status === s).length, s] as [string, number, string]);
   const smx = Math.max(1, ...srows.map(x => x[1]));
-  const acao = R.ordenar(vis.filter((c: any) => (estaAtrasado(c) || c.urgente) && c.status !== "concluida" && c.status !== "respondida"));
-  const ab = vis.filter((c: any) => c.status === "aberta" || c.status === "tratativa");
+  // uma linha por chamado, com a faixa de prioridade dele (crítico, atrasado ou urgente); marketing entra só se parado +24h
+  const acao = R.ordenar(vis.filter((c: any) => ["critico", "atrasado", "urgente"].includes(pr(c))));
+  const ab = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa");
   const pf: Record<string, number> = {}; ab.forEach((c: any) => { if (c.fabrica) pf[c.fabrica] = (pf[c.fabrica] || 0) + 1; });
   const fr = Object.entries(pf).sort((a, b) => b[1] - a[1]); const mxf = Math.max(1, ...fr.map(x => x[1]));
   const evs: any[] = []; vis.forEach((c: any) => (c.historico || []).forEach((h: any) => evs.push({ id: c.id, quando: h.quando, quem: h.quem, texto: h.texto })));
@@ -63,24 +68,27 @@ export default function Dashboard() {
         </div>
       </div>
       <div className="kpis" id="kpis">
-        <Kpi n={abertas} l="Em aberto" />
-        <Kpi n={atras} l="Atrasados" cls={atras ? "alert" : ""} />
+        <Kpi n={abertas} l="Em aberto (sem resposta)" />
         <Kpi n={crit} l="Críticos (+24h)" cls={crit ? "alert" : ""} cor={crit ? "var(--critico)" : undefined} />
-        <Kpi n={urg} l="Urgentes" cls={urg ? "urg" : ""} />
+        <Kpi n={atras} l="Atrasados (até 24h)" cls={atras ? "alert" : ""} />
+        <Kpi n={urg} l="Urgentes no prazo" cls={urg ? "urg" : ""} />
+        <Kpi n={resp} l="Respondidos — avisar cliente" />
         <Kpi n={conc} l="Concluídos" />
       </div>
       {R.verTudo() && (
         <div className="setores" id="setoresWrap">
           {R.setoresVisiveis().map((s: any) => {
+            const mkt = R.ehSetorMarketing(s.id);
             const arr = vis.filter((c: any) => c.setorDestino === s.id);
-            const aberto = arr.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length;
-            const at = arr.filter(estaAtrasado).length, ug = arr.filter((c: any) => c.urgente && c.status !== "concluida").length, cc = arr.filter((c: any) => c.status === "concluida").length;
+            const aberto = mkt ? arr.filter((c: any) => R.emAberto(c)).length : arr.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length;
+            const at = arr.filter((c: any) => pr(c) === "critico" || pr(c) === "atrasado").length, ug = arr.filter((c: any) => pr(c) === "urgente").length, cc = arr.filter((c: any) => mkt ? !R.emAberto(c) : c.status === "concluida").length;
             const total = arr.length;
             return (
               <div className="setorc" key={s.id} data-s={s.id} onClick={() => irPara(R.ehSetorMarketing(s.id) ? "acompmkt" : "fila", { setor: s.id })}>
                 <div className="hd"><div><div className="nm">{s.nome}</div><div className="subl">em aberto</div></div><div className="ab">{aberto}</div></div>
                 <div className="mini">{ORDEM.map(x => { const n = arr.filter((c: any) => c.status === x).length; return n ? <i key={x} style={{ width: n / total * 100 + "%", background: `var(--st-${x})` }} title={STATUS[x].label + ": " + n}></i> : null; })}</div>
-                <div className="row"><span className={"st" + (at ? " al" : "")}><b>{at}</b> atrasados</span><span className="st"><b>{ug}</b> urgentes</span><span className="st"><b>{cc}</b> concluídos</span></div>
+                <div className="row">{mkt ? <><span className={"st" + (at ? " al" : "")}><b>{at}</b> sem atualização +{LIMITE_INATIVIDADE_H}h</span><span className="st"><b>{cc}</b> encerrados</span></>
+                  : <><span className={"st" + (at ? " al" : "")}><b>{at}</b> atrasados</span><span className="st"><b>{ug}</b> urgentes</span><span className="st"><b>{cc}</b> concluídos</span></>}</div>
               </div>
             );
           })}
@@ -123,7 +131,7 @@ export default function Dashboard() {
       <div className="panel-grid">
         <div className="panel"><h3 id="tPanel1">Situação da fila</h3><div id="bars1">{srows.map(([nm, n, s]) => <BarRow key={s} nm={nm} pct={n / smx * 100} v={n} cor={`var(--st-${s})`} />)}</div></div>
         <div className="panel"><h3>Precisam de ação agora</h3><div className="acao-list" id="acaoList">
-          {acao.length ? acao.map((c: any) => { const sp = situacaoPrazo(c); const lbl = sp === "critico" ? "Crítico" : c.urgente ? "Urgente" : "Atrasado"; const cor = sp === "critico" ? "var(--critico)" : "var(--danger)";
+          {acao.length ? acao.map((c: any) => { const sp = pr(c); const lbl = R.domMarketing(c) ? "Sem atualização" : sp === "critico" ? "Crítico" : sp === "atrasado" ? "Atrasado" : "Urgente"; const cor = sp === "critico" ? "var(--critico)" : "var(--danger)";
             return <div className="acao" key={c.id} style={{ borderLeftColor: cor }} onClick={() => abrirDetalhe(c.id)}><span>{c.id} · {c.cliente} · <b>{R.setorNome(c.setorDestino)}</b></span><span className="g" style={{ color: cor }}>{lbl}</span></div>; })
             : <Nada t="Tudo sob controle." />}
         </div></div>
