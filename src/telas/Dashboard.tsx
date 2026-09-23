@@ -72,7 +72,7 @@ export default function Dashboard() {
         <Kpi n={crit} l="Críticos (+24h)" cls={crit ? "alert" : ""} cor={crit ? "var(--critico)" : undefined} />
         <Kpi n={atras} l="Atrasados (até 24h)" cls={atras ? "alert" : ""} />
         <Kpi n={urg} l="Urgentes no prazo" cls={urg ? "urg" : ""} />
-        <Kpi n={resp} l="Respondidos — avisar cliente" />
+        <Kpi n={resp} l="Respondidos — falta concluir" />
         <Kpi n={conc} l="Concluídos" />
       </div>
       {R.verTudo() && (

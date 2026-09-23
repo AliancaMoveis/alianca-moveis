@@ -479,10 +479,10 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
     </div>
     {!presale && <><div className="sec-label" style={{ marginTop: 16 }}>Mudar status</div>
       <div className="status-flow" id="flow">{ORDEM.map(s => <button key={s} className={c.status === s ? "cur" : ""} onClick={() => { if (s !== c.status) ex(() => A.mudarStatus(c.id, s), "Status atualizado"); }}>{STATUS[s].label}</button>)}</div></>}
-    {!presale && <div className="resp-box"><h4>Registrar retorno / previsão</h4><div className="grid">
+    {!presale && <div className="resp-box"><h4>Registrar solução / previsão</h4><div className="grid">
       <div className="field"><label>Previsão</label><input type="date" value={prev} onChange={e => setPrev(e.target.value)} /></div>
       <div className="field"><label>Quem respondeu</label><input value={quem} onChange={e => setQuem(e.target.value)} /></div>
-      <div className="field full"><label>Observação</label><textarea placeholder="O que a fábrica/setor informou" value={texto} onChange={e => setTexto(e.target.value)}></textarea></div>
+      <div className="field full"><label>Observação</label><textarea placeholder="A solução ou resposta passada ao cliente (o setor fala direto com o cliente)" value={texto} onChange={e => setTexto(e.target.value)}></textarea></div>
     </div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => { if (!prev && !texto.trim()) { toast("Preencha previsão ou observação"); return; } ex(() => A.registrarRetorno(c.id, prev, quem.trim(), texto.trim()), "Retorno salvo"); }}>Salvar retorno</button></div></div>}
     {podeEncaminhar && <div className="resp-box"><h4>Encaminhar para outro setor</h4><div className="inline-2"><div className="field"><select value={enc} onChange={e => setEnc(e.target.value)}>{R.setoresVisiveis().map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}</select></div>
       <button className="btn sm" onClick={() => { if (enc === c.setorDestino) { toast("Já está neste setor"); return; } ex(() => A.encaminharSetor(c.id, enc), "Encaminhado"); }}>Encaminhar</button></div></div>}
@@ -498,11 +498,10 @@ function AcompanhamentoCC({ c, link, notaRef, foco }: any) {
   const { R, executar: ex } = useApp();
   const [nota, setNota] = useState("");
   return <>
-    <div className="ro-note" style={{ marginTop: 12 }}>Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>. Pelo call center você pode registrar um novo contato do cliente, marcar urgente{c.status === "respondida" ? " e concluir depois de avisar o cliente" : ""}.</div>
+    <div className="ro-note" style={{ marginTop: 12 }}>Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>, que fala direto com o cliente e conclui. Pelo call center você pode registrar um novo contato do cliente e marcar urgente.</div>
     <div style={{ margin: "12px 0 6px", display: "flex", gap: 9, flexWrap: "wrap" }}>
       {link && <a className="btn wa" href={link} target="_blank" rel="noopener">WhatsApp do representante</a>}
       <button className={"btn " + (c.urgente ? "danger" : "")} onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button>
-      {c.status === "respondida" && <button className="btn primary" onClick={() => ex(() => A.mudarStatus(c.id, "concluida"), "Atendimento concluído")}>Cliente avisado — concluir</button>}
     </div>
     <div className="resp-box"><h4>Anotação interna</h4><div className="inline-2"><div className="field"><input ref={notaRef} placeholder={foco === "nota" ? "Cliente ligou de novo — descreva o que ele pediu agora" : "Ex.: Cliente ligou perguntando da previsão."} value={nota} onChange={e => setNota(e.target.value)} /></div>
       <button className="btn sm" onClick={async () => { const v = nota.trim(); if (!v) return; if (await ex(() => A.adicionarNota(c.id, v), "Anotação adicionada")) setNota(""); }}>Adicionar</button></div></div>

@@ -161,7 +161,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     return mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
   }
   const ehCallcenter = () => mySetores().includes("callcenter");
-  // call center acompanha qualquer solicitação de pós-venda: anota novo contato, marca urgente, conclui após avisar o cliente
+  // call center acompanha qualquer solicitação de pós-venda: anota novo contato e marca urgente (quem trata fala com o cliente e conclui)
   const podeAcompanhar = (c: Chamado) => podeTratar(c) || (ehCallcenter() && !domMarketing(c));
   function podeTratar(c: Chamado) {
     const u = me();
@@ -363,7 +363,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (mySetores().includes("suporte_consultores")) add("designar", "Clientes sem projetista", "Já têm data na loja, mas ninguém foi designado para atender.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId), "var(--warn)");
     add("criticos", "Críticos no seu setor", "Mais de 24h sem resposta — precisam de ação imediata.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && situacaoPrazo(c) === "critico"), "var(--critico)");
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => !domMarketing(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
-    add("responder", "Respondidos — avise o cliente", "O setor respondeu. Retorne ao cliente e conclua o atendimento.", ch.filter(c => !domMarketing(c) && c.solicitanteId === eu && c.status === "respondida"), "var(--st-respondida)");
+    add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
     const PRIORIDADE = ["aceite", "apvendas", "aptransf", "appromis", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
     const dono: Record<string, string> = {};

@@ -61,7 +61,7 @@ export function Fila() {
         </select>}
       </div>
       <div className="chips" id="filtros">{chips.map(([k, l]) => <button key={k} className={"chip" + (filtro === k ? " on" : "")} onClick={() => setFiltro(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
-      <div className="legenda"><span><i style={{ background: "var(--st-aberta)" }}></i>Dentro do prazo</span><span><i style={{ background: "var(--warn)" }}></i>Perto de vencer (24h)</span><span><i style={{ background: "var(--danger)" }}></i>Atrasado ou urgente</span><span><i style={{ background: "var(--critico)" }}></i>Crítico (+24h sem resposta)</span><span><i style={{ background: "var(--st-respondida)" }}></i>Respondido — avisar cliente</span></div>
+      <div className="legenda"><span><i style={{ background: "var(--st-aberta)" }}></i>Dentro do prazo</span><span><i style={{ background: "var(--warn)" }}></i>Perto de vencer (24h)</span><span><i style={{ background: "var(--danger)" }}></i>Atrasado ou urgente</span><span><i style={{ background: "var(--critico)" }}></i>Crítico (+24h sem resposta)</span><span><i style={{ background: "var(--st-respondida)" }}></i>Respondido — falta concluir</span></div>
       <div className="list" id="listaFila">{arr.length ? arr.map(c => <Ticket key={c.id} c={c} />) : <Vazio big="Nenhum chamado aqui">Nada pendente para este filtro.</Vazio>}</div>
     </section>
   );

@@ -11,7 +11,7 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
   const { R, abrirDetalhe } = useApp();
   const presale = R.domMarketing(c);
   const pr = R.prioridade(c), st = STATUS[c.status], dr = diasRestantes(c);
-  const slaTxt = pr === "respondida" ? "Respondido — avisar cliente" : pr === "concluida" ? "Concluído" : pr === "critico" ? "Crítico — sem resposta há +24h" : pr === "atrasado" ? "Atrasado" : (dr <= 0 ? "Vence hoje" : `Responder em ${dr} ${dr === 1 ? "dia" : "dias"}`);
+  const slaTxt = pr === "respondida" ? "Respondido — falta concluir" : pr === "concluida" ? "Concluído" : pr === "critico" ? "Crítico — sem resposta há +24h" : pr === "atrasado" ? "Atrasado" : (dr <= 0 ? "Vence hoje" : `Responder em ${dr} ${dr === 1 ? "dia" : "dias"}`);
   const slaCls = pr === "critico" ? "critico" : pr === "atrasado" ? "late" : pr === "perto" ? "warn" : "";
   // um único selo por chamado, conforme a faixa de prioridade
   const urg = presale
