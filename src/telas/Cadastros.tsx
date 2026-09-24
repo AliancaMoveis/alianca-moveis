@@ -59,7 +59,7 @@ function EditRep({ id }: { id: string | null }) {
 export function Admin() {
   const { R, st, executar, setModal, toast } = useApp();
   const [sub, setSub] = useState("usuarios");
-  const [pct, setPct] = useState(String(st.config.comissaoPct)); const [pag, setPag] = useState(String(st.config.pagamentoVisita));
+  const [pct, setPct] = useState(String(st.config.comissaoPct)); const [pag, setPag] = useState(String(st.config.pagamentoVisita)); const [vmk, setVmk] = useState(String((st.config as any).valorVendaMkt ?? 10));
   const ativos = st.usuarios.filter(u => u.ativo), inativos = st.usuarios.filter(u => !u.ativo);
   const linhaUser = (u: any) => (
     <div className="fab" key={u.id} style={u.ativo ? undefined : { opacity: .6 }}><div className="fi">{inicial(u.nome)}</div>
@@ -94,7 +94,8 @@ export function Admin() {
       {sub === "comissoes" && <div id="subComissoes"><div className="card" style={{ padding: "18px 20px", maxWidth: 480 }}><div className="grid">
         <div className="field"><label>Comissão do consultor sobre a venda</label><div className="inline-2"><input type="number" step="0.1" style={{ maxWidth: 100 }} value={pct} onChange={e => setPct(e.target.value)} /><span>%</span></div></div>
         <div className="field"><label>Pagamento fixo por visita realizada + agendada</label><div className="inline-2"><span>R$</span><input type="number" step="1" style={{ maxWidth: 120 }} value={pag} onChange={e => setPag(e.target.value)} /></div></div>
-      </div><div style={{ marginTop: 14 }}><button className="btn primary sm" onClick={() => { const a = parseFloat(pct), b = parseFloat(pag); if (isNaN(a) || isNaN(b)) { toast("Informe valores válidos"); return; } executar(() => A.salvarConfig(a, b), "Configuração salva"); }}>Salvar</button></div></div>
+        <div className="field"><label>Marketing: valor por venda fechada de cliente agendado</label><div className="inline-2"><span>R$</span><input type="number" step="1" style={{ maxWidth: 120 }} value={vmk} onChange={e => setVmk(e.target.value)} /></div></div>
+      </div><div style={{ marginTop: 14 }}><button className="btn primary sm" onClick={() => { const a = parseFloat(pct), b = parseFloat(pag), c = parseFloat(vmk); if (isNaN(a) || isNaN(b) || isNaN(c)) { toast("Informe valores válidos"); return; } executar(() => A.salvarConfig(a, b, c), "Configuração salva"); }}>Salvar</button></div></div>
         <div className="card" style={{ padding: "18px 20px", maxWidth: 480, marginTop: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Modo de teste</div>
           <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 12 }}>Com o modo de teste ligado, a Gestão pode usar “Entrar como… (teste)” no menu lateral para ver o sistema exatamente como cada usuário vê. Desligue quando o sistema entrar em uso real.</div>

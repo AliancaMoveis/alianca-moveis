@@ -2,7 +2,7 @@
 // o mesmo formato de `state` do protótipo, para que as regras portadas funcionem igual.
 import { sb } from "./supabase";
 
-export type Anexo = { id?: string; tipo: "img" | "link"; nome: string; url: string; path?: string | null };
+export type Anexo = { id?: string; tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; path?: string | null };
 export type Chamado = any;
 export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean };
 export type Setor = { id: string; nome: string; liberacoes: Record<string, boolean> };
@@ -13,7 +13,7 @@ export type Estado = {
   fabricas: any[];
   chamados: Chamado[];
   tipos: Record<string, any>;
-  config: { comissaoPct: number; pagamentoVisita: number; modoTeste?: boolean };
+  config: { comissaoPct: number; pagamentoVisita: number; valorVendaMkt?: number; modoTeste?: boolean };
   montadores: Montador[];
 };
 export type Montador = { id: string; nome: string; telefone: string; ativo: boolean };
@@ -83,7 +83,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     atualizadoEm: p.atualizado_em, atualizadoPor: p.atualizado_por,
   }));
 
-  const paths = anexos.filter((a: any) => a.tipo === "img" && a.storage_path).map((a: any) => a.storage_path);
+  const paths = anexos.filter((a: any) => a.storage_path).map((a: any) => a.storage_path);
   if (paths.length) await assinar(paths);
 
   const setoresDe: Record<string, string[]> = {};
@@ -116,7 +116,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })),
     tipos: tiposMap,
     montadores: montadores.map((m: any) => ({ id: m.id, nome: m.nome, telefone: m.telefone || "", ativo: m.ativo })),
-    config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), modoTeste: !!cfg.data.modo_teste } : { comissaoPct: 1.5, pagamentoVisita: 40 },
+    config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), valorVendaMkt: cfg.data.valor_venda_mkt != null ? Number(cfg.data.valor_venda_mkt) : 10, modoTeste: !!cfg.data.modo_teste } : { comissaoPct: 1.5, pagamentoVisita: 40 },
     chamados: chamados.map((c: any) => {
       const v = vendaDe[c.id];
       const t = trDe[c.id];

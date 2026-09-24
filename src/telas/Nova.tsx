@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
-import { A, comprimir, enviarFotos } from "../lib/acoes";
+import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import { fmtDateTime, inicial, mesmaPessoa, soDigitos } from "../lib/regras";
 import { EditFab } from "./Cadastros";
 
 const VAZIO = { pvOrigem: "cliente", pvPeca: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
-type NovoAnexo = { tipo: "img" | "link"; nome: string; url: string; blob?: Blob };
+type NovoAnexo = { tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; blob?: Blob };
 
 export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
   const { R, st, toast, recarregar, irPara, abrirDetalhe, setModal, preset } = useApp() as any;
@@ -43,11 +43,17 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
   };
   useEffect(() => { clearTimeout(tDup.current); tDup.current = setTimeout(() => setDups(buscaDuplicados()), 350); }, [f.cliente, f.clienteDoc, f.telefone, f.pedido, f.tipo]);
 
+  const [preparando, setPreparando] = useState("");
   async function addFotos(files: FileList | null) {
-    if (!files) return;
-    const novos: NovoAnexo[] = [];
-    for (const file of Array.from(files)) { const b = await comprimir(file); if (b) novos.push({ tipo: "img", nome: file.name, url: URL.createObjectURL(b), blob: b }); }
-    setAnexos(a => [...a, ...novos]);
+    if (!files || !files.length) return;
+    setPreparando("Preparando…");
+    try {
+      const { fotos, outros, recusados } = await prepararArquivos(Array.from(files), t => setPreparando(t));
+      if (recusados.length) toast("Não anexado: " + recusados.join(", "));
+      const novos: NovoAnexo[] = [...fotos.map(x => ({ tipo: "img" as const, nome: x.nome, url: URL.createObjectURL(x.blob), blob: x.blob })),
+        ...outros.map(x => ({ tipo: x.tipo, nome: x.nome, url: URL.createObjectURL(x.blob), blob: x.blob }))];
+      setAnexos(a => [...a, ...novos]);
+    } finally { setPreparando(""); }
   }
   const ehPv = f.tipo === "posvenda";
   function limpar() { setF({ ...VAZIO, tipo: escopo === "pv" ? "posvenda" : "" }); setOrigem(null); setAnexos([]); setLink(""); setDups([]); }
@@ -65,6 +71,8 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
       if (ehPv) await A.posvendaRelato(id, f.pvOrigem, f.pvPeca).catch(() => null);
       const fotos = anexos.filter(a => a.tipo === "img");
       const itens = fotos.length ? await enviarFotos(id, fotos.map(a => ({ nome: a.nome, blob: a.blob! }))) : [];
+      const outros = anexos.filter(a => a.tipo === "video" || a.tipo === "pdf");
+      if (outros.length) itens.push(...await enviarArquivos(id, outros.map(a => ({ nome: a.nome, blob: a.blob!, tipo: a.tipo as "video" | "pdf" }))));
       anexos.filter(a => a.tipo === "link").forEach(a => itens.push({ tipo: "link", url: a.url }));
       if (itens.length) await A.adicionarAnexos(id, itens, false);
       limpar();
@@ -155,16 +163,16 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
         )}
         {t && t.anexos && (
           <div id="blocoAnexos">
-            <div className="sec-label">Comprovações do cliente <span className="hint" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}> (fotos e vídeos para a assistência avaliar)</span></div>
+            <div className="sec-label">Comprovações do cliente <span className="hint" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}> (fotos, vídeos e plantas em PDF)</span></div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <label className="btn sm" style={{ cursor: "pointer" }}>Anexar fotos<input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => { addFotos(e.target.files); e.target.value = ""; }} /></label>
+              <label className="btn sm" style={{ cursor: preparando ? "wait" : "pointer" }}>{preparando || "Anexar foto, vídeo ou PDF"}<input type="file" accept={ACEITA_ANEXO} disabled={!!preparando} multiple style={{ display: "none" }} onChange={e => { addFotos(e.target.files); e.target.value = ""; }} /></label>
               <input id="linkAnexo" placeholder="Colar link de vídeo (WhatsApp, Drive, YouTube…)" style={{ flex: 1, minWidth: 200 }} value={link} onChange={e => setLink(e.target.value)} />
               <button type="button" className="btn sm" onClick={() => { const v = link.trim(); if (!v) return; setAnexos(a => [...a, { tipo: "link", nome: v, url: v }]); setLink(""); }}>Adicionar link</button>
             </div>
             <div className="thumbs" id="thumbsNovo">
               {anexos.map((a, i) => (
                 <div className="thumb-wrap" key={i}>
-                  {a.tipo === "img" ? <img className="thumb" src={a.url} /> : <a className="att-link" href={a.url} target="_blank" rel="noopener">🔗 link</a>}
+                  {a.tipo === "img" ? <img className="thumb" src={a.url} /> : <a className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{a.tipo === "pdf" ? "📄 " + a.nome.slice(0, 20) : a.tipo === "video" ? "🎬 " + a.nome.slice(0, 20) : "🔗 link"}</a>}
                   <button type="button" className="rm" onClick={() => setAnexos(x => x.filter((_, j) => j !== i))}>×</button>
                 </div>
               ))}
@@ -172,7 +180,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
           </div>
         )}
         <div className="form-foot">
-          <button type="submit" className="btn primary" disabled={enviando}>{enviando ? "Abrindo…" : ehPv ? "Abrir atendimento de pós-venda" : ehMkt ? "Cadastrar cliente" : "Abrir solicitação"}</button>
+          <button type="submit" className="btn primary" disabled={enviando || !!preparando}>{enviando ? "Abrindo…" : ehPv ? "Abrir atendimento de pós-venda" : ehMkt ? "Cadastrar cliente" : "Abrir solicitação"}</button>
           <button type="reset" className="btn ghost">Limpar</button>
           {!ehMkt && <span className="sla-note">Prazo automático: <b>2 dias úteis</b></span>}
         </div>

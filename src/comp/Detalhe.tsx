@@ -1,7 +1,7 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
-import { A, comprimir, enviarFotos } from "../lib/acoes";
+import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import {
   EM_ATENDIMENTO, PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
@@ -111,6 +111,7 @@ function ClienteCard({ c }: any) {
   const itens: [string, string][] = [["Telefone", c.telefone || "—"], ["E-mail", c.email || "—"], [direto ? "Data na loja" : "Data da visita", dataChave ? fmtDT(dataChave) : "—"], ["Ambiente de interesse", c.produto || "—"]];
   if (!direto) itens.splice(2, 0, ["Consultor", consultor ? consultor.nome : "—"], ["Endereço", c.endereco || "—"]);
   if (c.atendenteId) itens.push(["Vendedor", R.nomeUser(c.atendenteId)]);
+  itens.push(["Agendado por (marketing)", c.solicitante || "—"]);
   const wa = R.waLinkCliente(c), maps = R.mapsLink(c), waze = R.wazeLink(c);
   return (
     <div className="cli-card">
@@ -441,7 +442,7 @@ function Destaque({ c, anexar }: any) {
   else if (VENDA_SC.includes(sc)) { const v = c.venda || {}; titulo = "Venda nº " + (v.numero || "—"); valor = R.podeVerValor(c) && v.valor ? "R$ " + v.valor : "valor restrito"; extra = (VENDA_STATUS[v.status] || "") + (v.dataVenda ? " · " + fmtDate(v.dataVenda) : ""); cor = corVenda(v.status); }
   else if (sc === "nao_compareceu") { titulo = "Cliente não compareceu"; valor = fmtDT(c.dataLoja); cor = "var(--danger)"; }
   if (!titulo) return null;
-  const imgs = (c.anexos || []).filter((a: any) => a.tipo === "img"), links = (c.anexos || []).filter((a: any) => a.tipo === "link");
+  const imgs = (c.anexos || []).filter((a: any) => a.tipo === "img"), links = (c.anexos || []).filter((a: any) => a.tipo !== "img");
   return (
     <div style={{ border: `2px solid ${cor}`, borderRadius: 13, padding: "14px 16px", margin: "0 0 18px", background: "var(--surface)" }}>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: cor }}>{titulo}</div>
@@ -451,11 +452,11 @@ function Destaque({ c, anexar }: any) {
       {(imgs.length || links.length) ? (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)" }}>Planta baixa e fotos do consultor ({imgs.length + links.length})</div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)" }}>Planta, fotos e vídeos do consultor ({imgs.length + links.length})</div>
             {imgs.length > 0 && <button className="btn sm" onClick={() => abrirGaleria(c.id, anexar)}>Ver e baixar</button>}
           </div>
           <div className="thumbs">{imgs.map((a: any, i: number) => <img key={a.id || i} className="thumb" src={a.url} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />)}
-            {links.map((a: any, i: number) => <a key={"l" + i} className="att-link" href={a.url} target="_blank" rel="noopener">🔗 link</a>)}</div>
+            {links.map((a: any, i: number) => <a key={"l" + i} className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{a.tipo === "pdf" ? "📄 " + (a.nome.length > 22 ? "PDF" : a.nome) : a.tipo === "video" ? "🎬 vídeo" : "🔗 link"}</a>)}</div>
         </div>
       ) : R.semAnexo(c) ? <div className="aviso-anexo" style={{ marginTop: 12 }}>⚠️ <b>Sem anexo.</b> Nenhuma planta ou foto do cliente — {c.consultorId ? "o consultor precisa anexar" : "anexe a planta ou fotos"} antes do atendimento na loja.</div>
         : <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-faint)" }}>Nenhuma planta ou foto anexada ainda.</div>}
@@ -479,36 +480,42 @@ export function MarcasLoja({ c }: any) {
 
 function Anexos({ c, editavel }: any) {
   const { R, executar: ex, toast, openImg, abrirGaleria } = useApp();
-  const [link, setLink] = useState(""); const [enviando, setEnviando] = useState(false);
+  const [link, setLink] = useState(""); const [enviando, setEnviando] = useState(""); 
   const presale = R.domMarketing(c);
   const anexos = c.anexos || [];
-  const links = anexos.filter((a: any) => a.tipo !== "img");
   const imgs = anexos.filter((a: any) => a.tipo === "img");
+  const arquivos = anexos.filter((a: any) => a.tipo === "video" || a.tipo === "pdf");
+  const links = anexos.filter((a: any) => a.tipo === "link");
   // no call center não existe o quadro de destaque: as fotos aparecem aqui (uma única vez)
   const mostrarFotos = !presale;
-  if (!editavel && !links.length && !(mostrarFotos && imgs.length)) return null;
-  async function addFotos(files: FileList | null) {
+  if (!editavel && !links.length && !arquivos.length && !(mostrarFotos && imgs.length)) return null;
+  async function addArquivos(files: FileList | null) {
     if (!files || !files.length) return;
-    setEnviando(true);
+    setEnviando("Preparando…");
     try {
-      const blobs: any[] = [];
-      for (const f of Array.from(files)) { const b = await comprimir(f); if (b) blobs.push({ nome: f.name, blob: b }); }
-      await ex(async () => { const itens = await enviarFotos(c.id, blobs); await A.adicionarAnexos(c.id, itens, true); });
-    } finally { setEnviando(false); }
+      const { fotos, outros, recusados } = await prepararArquivos(Array.from(files), t => setEnviando(t || "Enviando…"));
+      if (recusados.length) toast("Não anexado: " + recusados.join(", "));
+      if (!fotos.length && !outros.length) return;
+      setEnviando("Enviando…");
+      await ex(async () => { const itens = [...await enviarFotos(c.id, fotos), ...await enviarArquivos(c.id, outros)]; await A.adicionarAnexos(c.id, itens, true); }, "Anexo(s) enviado(s)");
+    } finally { setEnviando(""); }
   }
+  const icone = (a: any) => a.tipo === "pdf" ? "📄" : a.tipo === "video" ? "🎬" : "🔗";
+  const lista = [...arquivos, ...links];
   return (
-    <div className="resp-box"><h4>Anexos{links.length ? " — links (" + links.length + ")" : ""}</h4>
+    <div className="resp-box"><h4>Anexos{lista.length ? " — planta, vídeos e links (" + lista.length + ")" : ""}</h4>
       {mostrarFotos && imgs.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
         <div className="thumbs" style={{ flex: 1 }}>{imgs.map((a: any, i: number) => <img key={a.id || i} className="thumb" src={a.url} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />)}</div>
         <button className="btn sm" onClick={() => abrirGaleria(c.id, editavel)}>Ver e baixar</button></div>}
-      {links.length ? <div className="thumbs" id="dThumbs">{links.map((a: any) => (
-        <div className="thumb-wrap" key={a.id}><a className="att-link" href={a.url} target="_blank" rel="noopener">🔗 {a.nome.length > 22 ? "link" : a.nome}</a>{editavel && <button className="rm" onClick={() => ex(() => A.removerAnexo(a.id))}>×</button>}</div>
-      ))}</div> : (presale ? <span style={{ color: "var(--ink-faint)", fontSize: 12.5 }}>As fotos aparecem no quadro acima. Use aqui só para links de vídeo.</span> : (!imgs.length ? <span style={{ color: "var(--ink-faint)", fontSize: 12.5 }}>Nenhum anexo ainda.</span> : null))}
+      {lista.length ? <div className="thumbs" id="dThumbs">{lista.map((a: any) => (
+        <div className="thumb-wrap" key={a.id}><a className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{icone(a)} {a.tipo === "link" ? (a.nome.length > 22 ? "link" : a.nome) : (a.nome.length > 26 ? a.nome.slice(0, 24) + "…" : a.nome)}</a>{editavel && <button className="rm" onClick={() => ex(() => A.removerAnexo(a.id))}>×</button>}</div>
+      ))}</div> : (presale ? <span style={{ color: "var(--ink-faint)", fontSize: 12.5 }}>As fotos aparecem no quadro acima. Aqui ficam plantas em PDF, vídeos e links.</span> : (!imgs.length ? <span style={{ color: "var(--ink-faint)", fontSize: 12.5 }}>Nenhum anexo ainda.</span> : null))}
       {editavel && <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <label className="btn sm" style={{ cursor: "pointer" }}>{enviando ? "Enviando…" : "Anexar foto"}<input type="file" accept="image/*" multiple style={{ display: "none" }} disabled={enviando} onChange={e => { addFotos(e.target.files); e.target.value = ""; }} /></label>
-        <input placeholder="Colar link de vídeo" style={{ flex: 1, minWidth: 180 }} value={link} onChange={e => setLink(e.target.value)} />
+        <label className="btn sm" style={{ cursor: enviando ? "wait" : "pointer" }}>{enviando || "Anexar foto, vídeo ou PDF"}<input type="file" accept={ACEITA_ANEXO} multiple style={{ display: "none" }} disabled={!!enviando} onChange={e => { addArquivos(e.target.files); e.target.value = ""; }} /></label>
+        <input placeholder="Colar link (Drive, YouTube…)" style={{ flex: 1, minWidth: 180 }} value={link} onChange={e => setLink(e.target.value)} />
         <button className="btn sm" onClick={async () => { const v = link.trim(); if (!v) return; if (await ex(() => A.adicionarAnexos(c.id, [{ tipo: "link", url: v }], true))) setLink(""); else toast("Não foi possível anexar"); }}>Add link</button>
       </div>}
+      {editavel && <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 6 }}>Fotos são reduzidas; vídeos grandes são convertidos para uma versão leve (leva o tempo do vídeo — mantenha a tela aberta). Máx. 30 MB por arquivo.</div>}
     </div>
   );
 }

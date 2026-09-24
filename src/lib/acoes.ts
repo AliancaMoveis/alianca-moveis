@@ -52,7 +52,7 @@ export const A = {
   salvarSetor: (id: string | null, nome: string, libs: any) => rpc("salvar_setor", { p_id: id, p_nome: nome, p_libs: libs }),
   removerSetor: (id: string) => rpc("remover_setor", { p_id: id }),
   salvarRoteamento: (tipo: string, setor: string) => rpc("salvar_roteamento", { p_tipo: tipo, p_setor: setor }),
-  salvarConfig: (pct: number, pag: number) => rpc("salvar_config", { p_pct: pct, p_pagamento: pag }),
+  salvarConfig: (pct: number, pag: number, valorMkt?: number) => rpc("salvar_config", { p_pct: pct, p_pagamento: pag, p_valor_mkt: valorMkt ?? null }),
   salvarUsuario: (id: string, nome: string, setores: string[], somente: boolean) => rpc("salvar_usuario", { p_id: id, p_nome: nome, p_setores: setores, p_somente: somente }),
   desativarUsuario: (id: string) => rpc("desativar_usuario", { p_id: id }),
   reativarUsuario: (id: string) => rpc("reativar_usuario", { p_id: id }),
@@ -62,6 +62,22 @@ export const A = {
   posvendaRelato: (id: string, origem: string, peca: string) => rpc("posvenda_relato", { p_id: id, p_origem: origem, p_peca: peca }),
   salvarPosvenda: (id: string, p: any) => rpc("salvar_posvenda", { p_id: id, p }),
   posvendaEncaminhar: (id: string, tipo: string, motivo: string) => rpc<string>("posvenda_encaminhar", { p_id: id, p_tipo: tipo, p_motivo: motivo }),
+  listarMetasMkt: async (de: string, ate: string) => {
+    if ((import.meta as any).env?.VITE_MOCK) return ((window as any).__metasMock || []) as any[];
+    const { data, error } = await sb.from("mkt_metas").select("*").gte("dia", de).lte("dia", ate).order("dia");
+    if (error) throw new Error(error.message);
+    return (data || []) as any[];
+  },
+  listarPagamentosMkt: async (de: string, ate: string) => {
+    if ((import.meta as any).env?.VITE_MOCK) return [] as any[];
+    const { data, error } = await sb.from("mkt_pagamentos").select("*").eq("de", de).eq("ate", ate);
+    if (error) throw new Error(error.message);
+    return (data || []) as any[];
+  },
+  salvarMetaMkt: (dia: string, meta: number, valor: number, obs: string) => rpc("salvar_meta_mkt", { p_dia: dia, p_meta: meta, p_valor: valor, p_obs: obs || "" }),
+  removerMetaMkt: (dia: string) => rpc("remover_meta_mkt", { p_dia: dia }),
+  aprovarPagamentoMkt: (op: string, de: string, ate: string) => rpc("aprovar_pagamento_mkt", { p_op: op, p_de: de, p_ate: ate }),
+  cancelarAprovacaoMkt: (id: string) => rpc("cancelar_aprovacao_mkt", { p_id: id }),
   listarRoteiros: async () => {
     if ((import.meta as any).env?.VITE_MOCK) return ((window as any).__roteirosMock || []) as any[];
     const { data, error } = await sb.from("roteiros").select("*").order("categoria").order("situacao");
@@ -105,6 +121,75 @@ export async function comprimir(file: File): Promise<Blob | null> {
     return await new Promise<Blob | null>(res => cv.toBlob(b => res(b), "image/jpeg", 0.55));
   } finally { URL.revokeObjectURL(url); }
 }
+// ---------- vídeos e PDFs ----------
+export const LIMITE_ARQUIVO = 30 * 1024 * 1024; // igual ao limite do armazenamento
+const tipoArquivo = (f: File) => f.type.startsWith("image/") ? "img" : f.type.startsWith("video/") ? "video" : (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) ? "pdf" : null;
+export { tipoArquivo };
+// vídeo: reduz para ~640px e ~0,8 Mbps (gravando o vídeo num canvas). Leva o tempo do vídeo. Se o navegador não suportar, envia o original (até 30 MB).
+export async function comprimirVideo(file: File, progresso?: (pct: number) => void): Promise<Blob> {
+  const leve = file.size <= 6 * 1024 * 1024;
+  const MR: any = (window as any).MediaRecorder;
+  if (leve || !MR) { if (file.size > LIMITE_ARQUIVO) throw new Error("Vídeo muito grande (máx. 30 MB). Grave um vídeo mais curto."); return file; }
+  const url = URL.createObjectURL(file);
+  try {
+    const v = document.createElement("video");
+    v.src = url; v.muted = true; v.playsInline = true; (v as any).preload = "auto";
+    await new Promise<void>((res, rej) => { v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error("Não consegui ler este vídeo")); });
+    const max = 640; let w = v.videoWidth || 640, h = v.videoHeight || 360;
+    if (w > max || h > max) { const r = Math.min(max / w, max / h); w = Math.round(w * r / 2) * 2; h = Math.round(h * r / 2) * 2; }
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const ctx = cv.getContext("2d")!;
+    const stream: MediaStream = (cv as any).captureStream(24);
+    try { const src: MediaStream = (v as any).captureStream ? (v as any).captureStream() : (v as any).mozCaptureStream(); src.getAudioTracks().forEach(t => stream.addTrack(t)); v.muted = false; v.volume = 0; } catch { /* sem áudio */ }
+    const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find(t => MR.isTypeSupported && MR.isTypeSupported(t)) || "";
+    const rec = new MR(stream, { mimeType: mime || undefined, videoBitsPerSecond: 800_000, audioBitsPerSecond: 64_000 });
+    const partes: Blob[] = [];
+    rec.ondataavailable = (e: any) => { if (e.data && e.data.size) partes.push(e.data); };
+    const fim = new Promise<void>(res => { rec.onstop = () => res(); });
+    let ativo = true;
+    const desenhar = () => { if (!ativo) return; ctx.drawImage(v, 0, 0, w, h); if (progresso && v.duration) progresso(Math.min(99, Math.round(v.currentTime / v.duration * 100))); requestAnimationFrame(desenhar); };
+    rec.start(1000); await v.play(); desenhar();
+    await new Promise<void>(res => { v.onended = () => res(); });
+    ativo = false; rec.stop(); await fim;
+    const out = new Blob(partes, { type: (mime || "video/webm").split(";")[0] });
+    if (!out.size || out.size >= file.size) { if (file.size > LIMITE_ARQUIVO) throw new Error("Vídeo muito grande (máx. 30 MB)."); return file; }
+    if (out.size > LIMITE_ARQUIVO) throw new Error("Mesmo reduzido, o vídeo passou de 30 MB. Grave um vídeo mais curto.");
+    progresso && progresso(100);
+    return out;
+  } finally { URL.revokeObjectURL(url); }
+}
+// envia vídeos/PDFs já preparados para o armazenamento
+export async function enviarArquivos(chamadoId: string, arquivos: { nome: string; blob: Blob; tipo: "video" | "pdf" }[]) {
+  const itens: any[] = [];
+  for (const a of arquivos) {
+    if (a.blob.size > LIMITE_ARQUIVO) throw new Error(a.nome + ": arquivo maior que 30 MB");
+    const ext = a.tipo === "pdf" ? ".pdf" : (a.blob.type.includes("mp4") ? ".mp4" : a.blob.type.includes("quicktime") ? ".mov" : ".webm");
+    const base = (a.nome || a.tipo).replace(/[^\w.\-]+/g, "_").replace(/\.[^.]+$/, "");
+    const path = `${chamadoId}/${crypto.randomUUID()}-${base}${ext}`;
+    const tipo = a.tipo === "pdf" ? "application/pdf" : (a.blob.type || "video/webm");
+    const { error } = await sb.storage.from("anexos").upload(path, a.blob, { contentType: tipo });
+    if (error) throw new Error("Não foi possível enviar " + a.nome + (error.message ? " (" + error.message + ")" : ""));
+    itens.push({ tipo: a.tipo, nome: a.nome || base + ext, storage_path: path });
+  }
+  return itens;
+}
+
+// separa e prepara o que o usuário escolheu: fotos comprimidas, vídeos reduzidos, PDFs como estão
+export async function prepararArquivos(files: File[], status?: (txt: string) => void) {
+  const fotos: { nome: string; blob: Blob }[] = [], outros: { nome: string; blob: Blob; tipo: "video" | "pdf" }[] = [], recusados: string[] = [];
+  for (const f of files) {
+    const tp = tipoArquivo(f);
+    if (tp === "img") { const b = await comprimir(f); if (b) fotos.push({ nome: f.name, blob: b }); else recusados.push(f.name); }
+    else if (tp === "pdf") { if (f.size > LIMITE_ARQUIVO) recusados.push(f.name + " (maior que 30 MB)"); else outros.push({ nome: f.name, blob: f, tipo: "pdf" }); }
+    else if (tp === "video") {
+      try { status && status("Reduzindo o vídeo " + f.name + "…"); const b = await comprimirVideo(f, p => status && status("Reduzindo o vídeo " + f.name + "… " + p + "%")); outros.push({ nome: f.name, blob: b, tipo: "video" }); }
+      catch (e: any) { recusados.push(f.name + " (" + (e.message || "erro no vídeo") + ")"); }
+    } else recusados.push(f.name + " (tipo não aceito)");
+  }
+  status && status("");
+  return { fotos, outros, recusados };
+}
+export const ACEITA_ANEXO = "image/*,video/*,application/pdf,.pdf";
+
 export async function enviarFotos(chamadoId: string, arquivos: { nome: string; blob: Blob }[]) {
   const itens: any[] = [];
   for (const a of arquivos) {
