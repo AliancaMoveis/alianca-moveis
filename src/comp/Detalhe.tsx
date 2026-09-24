@@ -208,6 +208,9 @@ function Tratativa({ c }: any) {
     if (!R.podeEditarAgenda()) return <div className="resp-box"><h4>Aguardando definir o vendedor</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>O Suporte a Consultores, a Supervisão de Marketing ou a Gestão fazem esse direcionamento.</div></div>;
     return (
       <div className="resp-box"><h4>Definir vendedor</h4>
+        {t.pedidoAtend && <div className="dv-pedido" style={{ marginBottom: 12 }}>🙋 <b>{t.pedidoAtendNome || R.nomeUser(t.pedidoAtend)}</b> informou que está atendendo este cliente — aguardando aprovação
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}><button className="btn primary sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, true), "Aprovado — cliente com o vendedor")}>Aprovar</button>
+            <button className="btn ghost sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, false), "Pedido recusado")}>Recusar</button></div></div>}
         {t.medidas && <RowSb k="Medidas">{t.medidas}</RowSb>}
         {t.obs && <RowSb k="Observação">{t.obs}</RowSb>}
         <RowSb k="Vinda à loja" pb="4px 0 12px">{fmtDateTime(c.dataLoja)}</RowSb>

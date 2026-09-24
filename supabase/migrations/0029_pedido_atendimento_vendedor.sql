@@ -1,0 +1,6 @@
+-- Aplicada via MCP (nome: pedido_atendimento_vendedor). Conteúdo:
+--  · solicitar_atendimento(p_id): vendedor informa que está atendendo um cliente da fila (sem vendedor) → tratativa.pedidoAtend
+--  · cancelar_pedido_atendimento(p_id): o próprio vendedor ou quem coordena cancela
+--  · responder_pedido_atendimento(p_id, p_aprovar): Gerente de Loja, Gestão, Supervisão Marketing ou Suporte aprovam (define o vendedor) ou recusam
+--  · designar_projetista: limpa pedido pendente
+--  · agenda_loja: + solicitante_id, pedido_vendedor, sem_anexo; consultor vê os clientes dos outros como "Outro cliente" (sem nome/produto/consultor)

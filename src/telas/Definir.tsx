@@ -138,6 +138,9 @@ function Cartao({ c, vendedores, comVend, abrir, troca }: any) {
         <div className="dv-tags">{R.semAnexo(c) && <span className="badge b-semanexo">⚠️ Sem anexo</span>}{t.querProjeto === "sim" && <span className="marca-loja sim">📐 Quer projeto pronto</span>}{t.querProjeto === "nao" && <span className="marca-loja">Não quer projeto pronto</span>}{imgs > 0 && <span className="pill">planta/fotos ({imgs})</span>}{t.medidas && <span className="pill">medidas</span>}{t.obs && <span className="pill" title={t.obs}>obs. do consultor</span>}{troca && <span className="pill">com {R.nomeUser(c.atendenteId)}</span>}</div>
       </div>
       <div className="dv-acao">
+        {!troca && t.pedidoAtend && <div className="dv-pedido">🙋 <b>{t.pedidoAtendNome || R.nomeUser(t.pedidoAtend)}</b> está atendendo — aguardando aprovação
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}><button className="btn primary sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, true), "Aprovado — cliente com o vendedor")}>Aprovar</button>
+            <button className="btn ghost sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, false), "Pedido recusado")}>Recusar</button></div></div>}
         <select value={v} onChange={e => setV(e.target.value)}>
           <option value="">{troca ? "Trocar para…" : "Escolher vendedor…"}</option>
           {vendedores.map((x: any) => { const n = c.dataLoja ? noDia(x.id).length : 0; return <option key={x.id} value={x.id}>{x.nome}{c.dataLoja ? ` — ${n} no dia` : ""}{sug && sug.id === x.id ? " (sugerido)" : ""}</option>; })}

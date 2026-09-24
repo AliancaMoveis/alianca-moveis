@@ -411,6 +411,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     if (temMarketing()) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores") || temMarketing()) {
+      add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend), "var(--primary)");
       add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c)), "var(--warn)");
       add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c)), "var(--danger)");
     }
@@ -419,7 +420,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => !domMarketing(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
+    const PRIORIDADE = ["cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));
