@@ -60,7 +60,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
     setEnviando(true);
     try {
       const vinc = origem || (dups.length ? dups[0].c.id : null);
-      const base = ehMkt ? { ...f, clienteDoc: "", pedido: "", dataVenda: "", pedidoFabrica: "", fabrica: "", prazoTatico: "", slaManual: "" } : f;
+      const base = ehMkt ? { ...f, ...(R.ehGestao() || R.temMarketing() ? {} : { consultorId: "" }), clienteDoc: "", pedido: "", dataVenda: "", pedidoFabrica: "", fabrica: "", prazoTatico: "", slaManual: "" } : f;
       const id = await A.criarChamado({ ...base, fabrica: ehMkt ? "" : ehFab || ehPv ? f.fabrica : "", pedidoFabrica: ehFab ? f.pedidoFabrica : "", prazoTatico: ehFab || f.tipo === "entrega" ? f.prazoTatico : "", vinculadoA: vinc });
       if (ehPv) await A.posvendaRelato(id, f.pvOrigem, f.pvPeca).catch(() => null);
       const fotos = anexos.filter(a => a.tipo === "img");
@@ -145,7 +145,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
             <div className="sec-label" id="secBlocoVisita">Dados do agendamento <span className="hint" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}> (o que faltar, a Supervisão Marketing completa depois)</span></div>
             <div className="grid">
               <div className="field"><label>E-mail do cliente</label><input name="email" placeholder="cliente@exemplo.com" value={f.email} onChange={set("email")} /></div>
-              {!direto && <div className="field" id="fieldConsultor"><label>Consultor designado <span className="hint">(se já souber)</span></label>
+              {!direto && (R.ehGestao() || R.temMarketing()) && <div className="field" id="fieldConsultor"><label>Consultor designado <span className="hint">(se já souber)</span></label>
                 <select name="consultorId" value={f.consultorId} onChange={set("consultorId")}><option value="">Selecione…</option>{R.consultores().map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>}
               <div className="field"><label id="lblDataAgendamento">{direto ? <>Data/horário na loja <span className="hint">(cliente já vem direto)</span></> : <>Data/horário da visita <span className="hint">(se já souber)</span></>}</label>
                 <input name="dataVisita" type="datetime-local" value={f.dataVisita} onChange={set("dataVisita")} /></div>
