@@ -5,6 +5,7 @@ import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Nova from "./Nova";
 import { Fila, AcompMkt, Direcionamento, Consulta } from "./Listas";
 import Definir from "./Definir";
+import Operadoras from "./Operadoras";
 import Dashboard from "./Dashboard";
 import { Pendencias, Aprovacoes } from "./Pendencias";
 import Agenda from "./Agenda";
@@ -133,6 +134,7 @@ export default function Shell() {
             {atual === "consultores" && <Pessoas key="c" qual="consultores" />}
             {atual === "carteira" && <Carteira />}
             {atual === "clientes" && <Clientes />}
+            {atual === "operadoras" && <Operadoras />}
             {atual === "financeiro" && <Financeiro />}
             {atual === "atividades" && <Atividades />}
             {atual === "cadastros" && <Cadastros />}

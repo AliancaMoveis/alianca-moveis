@@ -454,7 +454,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (temMarketing() || ehGestao()) {
       mk.push(["acompmkt", "Acompanhamento"], ["direcionamento", "Direcionar consultor"]);
       if (!defineVend) mk.push(["definir", "Definir vendedor"]);
-      mk.push(["agenda", "Agendamento loja"], ["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
+      mk.push(["agenda", "Agendamento loja"], ["operadoras", "Controle das operadoras"], ["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
     } else if (temMkt) {
       mk.push(["acompmkt", "Minha fila"], ["carteira", "Minha carteira"], ["agenda", "Agendamento loja"]);
       if (mySetores().includes("suporte_consultores")) mk.push(["vendedores", "Vendedores"]);
