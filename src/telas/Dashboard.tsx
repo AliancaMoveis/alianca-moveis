@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../estado";
-import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtMoeda, tempoRel, vendaContaVolume } from "../lib/regras";
+import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
   <div className="bar-row"><span className="nm">{nm}</span><span className="track"><span className="fill" style={{ width: pct + "%", ...(cor ? { background: cor } : {}) }}></span></span><span className="v">{v}</span>{extra}</div>
@@ -12,18 +12,26 @@ export const Kpi = ({ n, l, cls, cor, fs }: { n: any; l: string; cls?: string; c
 
 export default function Dashboard() {
   const { R, st, irPara, abrirDetalhe, currentUserId } = useApp() as any;
-  const [de, setDe] = useState(""); const [ate, setAte] = useState("");
-  let vis = st.chamados.filter(R.podeVer);
-  if (de) vis = vis.filter((c: any) => new Date(c.criadoEm) >= new Date(de + "T00:00:00"));
-  if (ate) vis = vis.filter((c: any) => new Date(c.criadoEm) <= new Date(ate + "T23:59:59"));
-  const periodoTxt = (de || ate) ? " · período filtrado" : "";
+  // período: padrão = mês atual. O que está em aberto (fila, atrasos, críticos) aparece sempre, de qualquer data;
+  // o período vale para o que aconteceu nele: abertos, concluídos, agendamentos, vendas.
+  const [preset, setPreset] = useState<"mes" | "30" | "90" | "periodo">("mes");
+  const hoje = hojeISO();
+  const menos = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return isoLocal(d); };
+  const [pDe, setPDe] = useState(hoje.slice(0, 8) + "01"); const [pAte, setPAte] = useState(hoje);
+  const de = preset === "mes" ? hoje.slice(0, 8) + "01" : preset === "30" ? menos(29) : preset === "90" ? menos(89) : pDe;
+  const ate = preset === "periodo" ? pAte : hoje;
+  const noPeriodo = (v: any) => { if (!v) return false; const d = new Date(v); return (!de || d >= new Date(de + "T00:00:00")) && (!ate || d <= new Date(ate + "T23:59:59")); };
+  const todos = st.chamados.filter(R.podeVer);
+  const vis = todos.filter((c: any) => noPeriodo(c.criadoEm));
+  const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => String(x.texto).startsWith("Status → Concluída")); return h.length ? h[h.length - 1].quando : c.criadoEm; };
+  const periodoTxt = " · " + fmtDate(de) + " a " + fmtDate(ate);
   const sub = (R.verTudo() ? (R.ehGestao() ? "Visão consolidada de todos os setores, em tempo real." : "Visão consolidada dos setores do call center, em tempo real. Marketing e Consultoria externa têm supervisão própria.") : "Visão do seu setor (" + (R.mySetores().map(R.setorNome).join(", ") || "—") + "), em tempo real.") + periodoTxt;
   // indicadores do call center (pós-venda). Marketing não tem prazo de resposta e fica fora destes números.
-  const cc = vis.filter((c: any) => !R.domMarketing(c));
+  const cc = todos.filter((c: any) => !R.domMarketing(c));
   const pr = (c: any) => R.prioridade(c);
   const abertas = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length, atras = cc.filter((c: any) => pr(c) === "atrasado").length,
     crit = cc.filter((c: any) => pr(c) === "critico").length, urg = cc.filter((c: any) => pr(c) === "urgente").length, resp = cc.filter((c: any) => c.status === "respondida").length,
-    conc = cc.filter((c: any) => c.status === "concluida").length;
+    conc = cc.filter((c: any) => c.status === "concluida" && noPeriodo(concluidoEm(c))).length, novos = vis.filter((c: any) => !R.domMarketing(c)).length;
 
   const vejaMkt = R.temMarketing() || R.ehGestao();
   const mktTix = vis.filter(R.domMarketing);
@@ -46,40 +54,47 @@ export default function Dashboard() {
   ccTix.forEach((c: any) => { const k = c.solicitanteId; porAt[k] = porAt[k] || { ab: 0, rv: 0 }; porAt[k].ab++; if (c.status === "concluida") porAt[k].rv++; });
   const rowsAt = Object.entries(porAt).map(([uid, v]) => [R.nomeUser(uid), v] as [string, any]).sort((a, b) => b[1].ab - a[1].ab);
 
-  const srows = ORDEM.map(s => [STATUS[s].label, cc.filter((c: any) => c.status === s).length, s] as [string, number, string]);
+  const srows = ORDEM.map(s => [STATUS[s].label, cc.filter((c: any) => c.status === s && (s !== "concluida" || noPeriodo(concluidoEm(c)))).length, s] as [string, number, string]);
   const smx = Math.max(1, ...srows.map(x => x[1]));
   // uma linha por chamado, com a faixa de prioridade dele (crítico, atrasado ou urgente); marketing entra só se parado +24h
-  const acao = R.ordenar(vis.filter((c: any) => ["critico", "atrasado", "urgente"].includes(pr(c))));
+  const acao = R.ordenar(todos.filter((c: any) => ["critico", "atrasado", "urgente"].includes(pr(c))));
   const ab = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa");
   const pf: Record<string, number> = {}; ab.forEach((c: any) => { if (c.fabrica) pf[c.fabrica] = (pf[c.fabrica] || 0) + 1; });
   const fr = Object.entries(pf).sort((a, b) => b[1] - a[1]); const mxf = Math.max(1, ...fr.map(x => x[1]));
-  const evs: any[] = []; vis.forEach((c: any) => (c.historico || []).forEach((h: any) => evs.push({ id: c.id, quando: h.quando, quem: h.quem, texto: h.texto })));
+  const evs: any[] = []; todos.forEach((c: any) => (c.historico || []).forEach((h: any) => evs.push({ id: c.id, quando: h.quando, quem: h.quem, texto: h.texto })));
   evs.sort((a, b) => +new Date(b.quando) - +new Date(a.quando));
 
   return (
     <section className="view active" id="view-dashboard">
       <div className="view-head"><div><h2>Dashboard</h2><p id="dashSub">{sub}</p></div></div>
       <div className="card" style={{ padding: "14px 18px", marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div className="field" style={{ flex: 1, minWidth: 140 }}><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
-          <div className="field" style={{ flex: 1, minWidth: 140 }}><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
-          <button className="btn ghost sm" onClick={() => { setDe(""); setAte(""); }}>Limpar</button>
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div className="chips" style={{ margin: 0 }}>
+            {([["mes", "Mês atual"], ["30", "Últimos 30 dias"], ["90", "Últimos 90 dias"], ["periodo", "Escolher período"]] as [any, string][]).map(([k, l]) =>
+              <button key={k} className={"chip" + (preset === k ? " on" : "")} onClick={() => setPreset(k)}>{l}</button>)}
+          </div>
+          {preset === "periodo" && <>
+            <div className="field" style={{ minWidth: 150 }}><label>De</label><input type="date" id="dashDe" value={pDe} max={pAte || undefined} onChange={e => setPDe(e.target.value)} /></div>
+            <div className="field" style={{ minWidth: 150 }}><label>Até</label><input type="date" id="dashAte" value={pAte} min={pDe || undefined} onChange={e => setPAte(e.target.value)} /></div>
+          </>}
           <span className="live" style={{ marginLeft: "auto" }}><i></i>ao vivo</span>
         </div>
+        <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Período {fmtDate(de)} a {fmtDate(ate)}: vale para novos, concluídos, agendamentos e vendas. O que está em aberto aparece sempre, de qualquer data.</div>
       </div>
       <div className="kpis" id="kpis">
+        <Kpi n={novos} l="Novos no período" />
         <Kpi n={abertas} l="Em aberto (sem resposta)" />
         <Kpi n={crit} l="Críticos (+24h)" cls={crit ? "alert" : ""} cor={crit ? "var(--critico)" : undefined} />
         <Kpi n={atras} l="Atrasados (até 24h)" cls={atras ? "alert" : ""} />
         <Kpi n={urg} l="Urgentes no prazo" cls={urg ? "urg" : ""} />
         <Kpi n={resp} l="Respondidos — falta concluir" />
-        <Kpi n={conc} l="Concluídos" />
+        <Kpi n={conc} l="Concluídos no período" />
       </div>
       {R.verTudo() && (
         <div className="setores" id="setoresWrap">
           {R.setoresVisiveis().map((s: any) => {
             const mkt = R.ehSetorMarketing(s.id);
-            const arr = vis.filter((c: any) => c.setorDestino === s.id);
+            const arr = todos.filter((c: any) => c.setorDestino === s.id && (c.status !== "concluida" && R.emAberto(c) || noPeriodo(concluidoEm(c))));
             const aberto = mkt ? arr.filter((c: any) => R.emAberto(c)).length : arr.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length;
             const at = arr.filter((c: any) => pr(c) === "critico" || pr(c) === "atrasado").length, ug = arr.filter((c: any) => pr(c) === "urgente").length, cc = arr.filter((c: any) => mkt ? !R.emAberto(c) : c.status === "concluida").length;
             const total = arr.length;
@@ -87,8 +102,8 @@ export default function Dashboard() {
               <div className="setorc" key={s.id} data-s={s.id} onClick={() => irPara(R.ehSetorMarketing(s.id) ? "acompmkt" : "fila", { setor: s.id })}>
                 <div className="hd"><div><div className="nm">{s.nome}</div><div className="subl">em aberto</div></div><div className="ab">{aberto}</div></div>
                 <div className="mini">{ORDEM.map(x => { const n = arr.filter((c: any) => c.status === x).length; return n ? <i key={x} style={{ width: n / total * 100 + "%", background: `var(--st-${x})` }} title={STATUS[x].label + ": " + n}></i> : null; })}</div>
-                <div className="row">{mkt ? <><span className={"st" + (at ? " al" : "")}><b>{at}</b> sem atualização +{LIMITE_INATIVIDADE_H}h</span><span className="st"><b>{cc}</b> encerrados</span></>
-                  : <><span className={"st" + (at ? " al" : "")}><b>{at}</b> atrasados</span><span className="st"><b>{ug}</b> urgentes</span><span className="st"><b>{cc}</b> concluídos</span></>}</div>
+                <div className="row">{mkt ? <><span className={"st" + (at ? " al" : "")}><b>{at}</b> sem atualização +{LIMITE_INATIVIDADE_H}h</span><span className="st"><b>{cc}</b> encerrados no período</span></>
+                  : <><span className={"st" + (at ? " al" : "")}><b>{at}</b> atrasados</span><span className="st"><b>{ug}</b> urgentes</span><span className="st"><b>{cc}</b> concluídos no período</span></>}</div>
               </div>
             );
           })}
@@ -108,7 +123,7 @@ export default function Dashboard() {
       {ehCons && r && (
         <div id="dashConsultorWrap" style={{ marginBottom: 16 }}>
           <div className="panel">
-            <h3>Minhas vendas e comissão <span className="pill" style={{ marginLeft: 8 }}>{(de || ate) ? "período filtrado" : "acumulado"}</span></h3>
+            <h3>Minhas vendas e comissão <span className="pill" style={{ marginLeft: 8 }}>{fmtDate(de)} a {fmtDate(ate)}</span></h3>
             <div className="kpis" style={{ marginBottom: 0 }}>
               <Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={fmtMoeda(r.pagamentoVisitas)} l="Pagamento por visitas" />
               <Kpi n={r.vendas.length} l="Vendas efetivadas" /><Kpi n={fmtMoeda(r.totalVendido)} l="Valor vendido" />
