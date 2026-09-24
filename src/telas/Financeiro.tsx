@@ -33,7 +33,7 @@ function VendasVendedores() {
   return (
     <section className="view active" id="view-financeiro">
       <div className="view-head"><div><h2>{souVend ? "Minhas vendas" : "Vendas dos vendedores"}</h2><p>Total das vendas vindas dos atendimentos, separado por origem: <b>consultores externos</b> e <b>marketing</b>.</p></div></div>
-      <div className="aviso-anexo" style={{ marginBottom: 14, background: "var(--primary-soft)", borderColor: "var(--primary)", color: "var(--primary)" }}><b>A comissão do vendedor é calculada no Tático, no usuário de cada vendedor</b> — não neste painel. Aqui não há pagamento por visita: só o total vendido.</div>
+      <div className="aviso-anexo" style={{ marginBottom: 14, background: "var(--primary-soft)", borderColor: "var(--primary)", color: "var(--primary)" }}><b>A comissão do vendedor (2%) é calculada no Tático, no usuário de cada vendedor</b> — não neste painel. Aqui não há pagamento por visita: só o total vendido.</div>
       <div className="card" style={{ padding: "16px 18px", marginBottom: 16 }}><div className="grid">
         <div className="field"><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
         <div className="field"><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
