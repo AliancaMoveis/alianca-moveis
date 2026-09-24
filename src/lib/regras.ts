@@ -367,7 +367,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
     if (temMarketing()) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
-    if (mySetores().includes("suporte_consultores")) add("designar", "Clientes sem projetista", "Já têm data na loja, mas ninguém foi designado para atender.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId), "var(--warn)");
+    if (mySetores().includes("suporte_consultores") || temMarketing()) add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId), "var(--warn)");
     add("informar", "Informar o cliente", "O setor registrou a solução mas não fala com o cliente. Avise o cliente e conclua.", ch.filter(c => !domMarketing(c) && c.status === "informar" && (ehCallcenter() || c.solicitanteId === eu)), "var(--st-informar)");
     add("criticos", "Críticos no seu setor", "Mais de 24h sem resposta — precisam de ação imediata.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && situacaoPrazo(c) === "critico"), "var(--critico)");
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => !domMarketing(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
@@ -404,8 +404,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const mk: string[][] = [];
     if (podeCriarMkt()) mk.push(["novocli", "Novo cliente"]);
     if (temMarketing() || ehGestao()) {
-      mk.push(["acompmkt", "Acompanhamento"], ["direcionamento", "Direcionar consultor"], ["agenda", "Agendamento loja"], ["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
+      mk.push(["acompmkt", "Acompanhamento"], ["direcionamento", "Direcionar consultor"], ["definir", "Definir vendedor"], ["agenda", "Agendamento loja"], ["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
     } else if (temMkt) {
+      if (mySetores().includes("suporte_consultores")) mk.push(["definir", "Definir vendedor"]);
       mk.push(["acompmkt", "Minha fila"], ["carteira", "Minha carteira"], ["agenda", "Agendamento loja"]);
       if (mySetores().includes("suporte_consultores")) mk.push(["vendedores", "Vendedores"]);
       mk.push(["clientes", "Clientes"]);

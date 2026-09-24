@@ -4,6 +4,7 @@ import { inicial } from "../lib/regras";
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Nova from "./Nova";
 import { Fila, AcompMkt, Direcionamento, Consulta } from "./Listas";
+import Definir from "./Definir";
 import Dashboard from "./Dashboard";
 import { Pendencias, Aprovacoes } from "./Pendencias";
 import Agenda from "./Agenda";
@@ -17,7 +18,7 @@ import { Cadastros, Admin } from "./Cadastros";
 import Detalhe from "../comp/Detalhe";
 import { AlterarSenha } from "../comp/Modal";
 
-const DOTS: Record<string, string> = { fila: "dotFila", direcionamento: "dotDirecionamento", aprovacoes: "dotAprovacoes", pendencias: "dotPendencias" };
+const DOTS: Record<string, string> = { definir: "dotDefinir", fila: "dotFila", direcionamento: "dotDirecionamento", aprovacoes: "dotAprovacoes", pendencias: "dotPendencias" };
 
 export default function Shell() {
   const { R, st, view, irPara, detalheId, modal, setModal, toast } = useApp();
@@ -48,6 +49,7 @@ export default function Shell() {
     const n: Record<string, number> = {};
     n.fila = R.state.chamados.filter(c => !R.domMarketing(c) && R.naMinhaFila(c) && (c.status === "aberta" || c.status === "tratativa" || (c.status === "informar" && R.ehCallcenter()))).length;
     n.direcionamento = R.pendentesDirecionamento().length;
+    n.definir = R.podeEditarAgenda() ? R.state.chamados.filter(c => R.domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId).length : 0;
     n.aprovacoes = R.ehGestao() ? R.pendenciasGestao().total : 0;
     n.pendencias = R.minhasPendencias().total;
     return n;
@@ -121,6 +123,7 @@ export default function Shell() {
             {atual === "fila" && <Fila />}
             {atual === "acompmkt" && <AcompMkt />}
             {atual === "direcionamento" && <Direcionamento />}
+            {atual === "definir" && <Definir />}
             {atual === "consulta" && <Consulta />}
             {atual === "dashboard" && <Dashboard />}
             {atual === "pendencias" && <Pendencias />}

@@ -197,14 +197,14 @@ function Tratativa({ c }: any) {
     );
   }
   if (c.setorDestino === "suporte_consultores") {
-    if (!R.podeEditarAgenda()) return <div className="resp-box"><h4>Aguardando direcionamento a um projetista</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>O Suporte a Consultores, a Supervisão de Marketing ou a Gestão fazem esse direcionamento.</div></div>;
+    if (!R.podeEditarAgenda()) return <div className="resp-box"><h4>Aguardando definir o vendedor</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>O Suporte a Consultores, a Supervisão de Marketing ou a Gestão fazem esse direcionamento.</div></div>;
     return (
-      <div className="resp-box"><h4>Direcionar a um projetista</h4>
+      <div className="resp-box"><h4>Definir vendedor</h4>
         {t.medidas && <RowSb k="Medidas">{t.medidas}</RowSb>}
         {t.obs && <RowSb k="Observação">{t.obs}</RowSb>}
         <RowSb k="Vinda à loja" pb="4px 0 12px">{fmtDateTime(c.dataLoja)}</RowSb>
-        <div className="grid"><div className="field"><label>Projetista que vai atender</label><select value={aten} onChange={e => setAten(e.target.value)}><option value="">Selecione…</option>{R.projetistas().map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div></div>
-        <div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => { if (!aten) { toast("Selecione o atendente"); return; } ex(() => A.designarProjetista(c.id, aten), "Encaminhado ao atendente"); }}>Direcionar ao projetista</button></div>
+        <div className="grid"><div className="field"><label>Vendedor que vai atender</label><select value={aten} onChange={e => setAten(e.target.value)}><option value="">Selecione…</option>{R.projetistas().map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div></div>
+        <div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => { if (!aten) { toast("Selecione o vendedor"); return; } ex(() => A.designarProjetista(c.id, aten), "Vendedor definido"); }}>Definir vendedor</button></div>
       </div>
     );
   }

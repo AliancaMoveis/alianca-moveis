@@ -73,12 +73,12 @@ export function AcompMkt() {
   const { R, st, preset } = useApp();
   const [filtro, setFiltro] = useState("andamento");
   const [fTipo, setFTipo] = useState(""); const [fSetor, setFSetor] = useState(preset?.setor || ""); const [q, setQ] = useState("");
-  useEffect(() => { if (preset?.setor) { setFSetor(preset.setor); setFiltro("andamento"); } }, [preset]);
+  useEffect(() => { if (preset?.setor) { setFSetor(preset.setor); setFiltro("andamento"); } if (preset?.filtro) setFiltro(preset.filtro); }, [preset]);
   const soMeu = !(R.ehGestao() || R.temMarketing());
   const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c) && (!fTipo || c.tipo === fTipo) && (!fSetor || c.setorDestino === fSetor) && bate(c, q));
-  const FILTROS: Record<string, (c: any) => boolean> = { andamento: c => R.emAberto(c), criticos: c => R.prioridade(c) === "critico", todos: () => true };
+  const FILTROS: Record<string, (c: any) => boolean> = { andamento: c => R.emAberto(c), semvendedor: c => c.setorDestino === "suporte_consultores" && !c.atendenteId, criticos: c => R.prioridade(c) === "critico", todos: () => true };
   Object.keys(STATUS_CLIENTE).forEach(k => (FILTROS[k] = c => R.statusClienteDe(c) === k));
-  const chips = [["andamento", "Em andamento"], ["criticos", "Críticos — sem atualização"]].concat(Object.keys(STATUS_CLIENTE).map(k => [k, STATUS_CLIENTE[k]])).concat([["todos", "Todos"]]);
+  const chips = [["andamento", "Em andamento"], ["semvendedor", "Sem vendedor"], ["criticos", "Críticos — sem atualização"]].concat(Object.keys(STATUS_CLIENTE).map(k => [k, STATUS_CLIENTE[k]])).concat([["todos", "Todos"]]);
   const cont: Record<string, number> = {}; chips.forEach(([k]) => (cont[k] = base.filter(FILTROS[k]).length));
   const arr = R.ordenar(base.filter(FILTROS[filtro] || FILTROS.todos));
   return (
@@ -90,7 +90,7 @@ export function AcompMkt() {
         <select id="mkTipo" value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos os motivos</option>{Object.entries(R.TIPOS).filter(([, t]: any) => t.presale).map(([k, t]: any) => <option key={k} value={k}>{t.nome}</option>)}</select>
         <select id="mkSetor" value={fSetor} onChange={e => setFSetor(e.target.value)}><option value="">Todas as etapas</option>{R.setoresVisiveis().filter(x => R.ehSetorMarketing(x.id)).map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}</select>
       </div>
-      <div className="chips" id="mkFiltros">{chips.filter(([k]) => ["andamento", "criticos", "todos", filtro].includes(k) || cont[k]).map(([k, l]) => <button key={k} className={"chip" + (filtro === k ? " on" : "")} onClick={() => setFiltro(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
+      <div className="chips" id="mkFiltros">{chips.filter(([k]) => ["andamento", "criticos", "todos", filtro].concat(R.podeEditarAgenda() ? ["semvendedor"] : []).includes(k) || cont[k]).map(([k, l]) => <button key={k} className={"chip" + (filtro === k ? " on" : "")} onClick={() => setFiltro(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
       <div className="legenda"><span><i style={{ background: "var(--st-aberta)" }}></i>Em andamento</span><span><i style={{ background: "var(--critico)" }}></i>Crítico — mais de {LIMITE_INATIVIDADE_H}h sem atualização</span><span><i style={{ background: "var(--st-concluida)" }}></i>Encerrado (vendido, cancelado ou não compareceu)</span></div>
       <div className="list" id="listaMkt">{arr.length ? arr.map(c => <Ticket key={c.id} c={c} />) : <Vazio big="Nenhum cliente aqui">Nada pendente para este filtro.</Vazio>}</div>
     </section>
