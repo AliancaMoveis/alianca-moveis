@@ -572,7 +572,7 @@ function TratPosvenda({ c }: any) {
           <Sel k="checklistResp" label="Quem fez o checklist" req={r === "checklist"}><option value="">Não informado</option>{R.responsaveisChecklist().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</Sel>
           <div className="field full"><label>O que foi constatado</label><textarea value={v.ocorrido} onChange={s("ocorrido")} placeholder="Depois de falar com o cliente/montador ou da vistoria: o que de fato aconteceu e por quê"></textarea></div>
         </div>
-        {!montadores.length && <div className="hint" style={{ marginTop: 6 }}>Cadastre os montadores em Pós-venda — números → Montadores.</div>}
+        {!montadores.length && <div className="hint" style={{ marginTop: 6 }}>Cadastre os montadores em Pós-venda → Números e montadores → Montadores.</div>}
       </div>
       <div className="resp-box"><h4>3 · Custo e solução</h4>
         <div className="grid">

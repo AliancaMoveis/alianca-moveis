@@ -21,6 +21,10 @@ export default function Dashboard() {
   const de = preset === "mes" ? hoje.slice(0, 8) + "01" : preset === "30" ? menos(29) : preset === "90" ? menos(89) : pDe;
   const ate = preset === "periodo" ? pAte : hoje;
   const noPeriodo = (v: any) => { if (!v) return false; const d = new Date(v); return (!de || d >= new Date(de + "T00:00:00")) && (!ate || d <= new Date(ate + "T23:59:59")); };
+  // área: quem vê call center e marketing (Gestão) pode separar. Pós-venda Projetados conta como call center.
+  const veAmbos = R.ehGestao() || (R.verTudo() && R.temMarketing());
+  const [area, setArea] = useState<"tudo" | "cc" | "mkt">("tudo");
+  const naArea = (c: any) => area === "tudo" || (area === "mkt") === !!R.domMarketing(c);
   const todos = st.chamados.filter(R.podeVer);
   const vis = todos.filter((c: any) => noPeriodo(c.criadoEm));
   const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => String(x.texto).startsWith("Status → Concluída")); return h.length ? h[h.length - 1].quando : c.criadoEm; };
@@ -33,7 +37,13 @@ export default function Dashboard() {
     crit = cc.filter((c: any) => pr(c) === "critico").length, urg = cc.filter((c: any) => pr(c) === "urgente").length, resp = cc.filter((c: any) => c.status === "respondida").length,
     conc = cc.filter((c: any) => c.status === "concluida" && noPeriodo(concluidoEm(c))).length, novos = vis.filter((c: any) => !R.domMarketing(c)).length;
 
-  const vejaMkt = R.temMarketing() || R.ehGestao();
+  const vejaMkt = (R.temMarketing() || R.ehGestao()) && area !== "cc";
+  const verCC = area !== "mkt";
+  const mktTodos = todos.filter(R.domMarketing);
+  const mktAndamento = mktTodos.filter((c: any) => R.emAberto(c)).length, mktCrit = mktTodos.filter((c: any) => R.prioridade(c) === "critico").length;
+  const mktNovos = vis.filter(R.domMarketing).length;
+  const mktVendasPer = mktTodos.filter((c: any) => vendaContaVolume(c.venda) && noPeriodo(c.venda.dataVenda || c.venda.quando)).length;
+  const mktAConfirmar = mktTodos.filter((c: any) => c.venda && c.venda.status === "registrada").length;
   const mktTix = vis.filter(R.domMarketing);
   const porOp: Record<string, any> = {};
   mktTix.forEach((c: any) => { const k = c.solicitanteId; porOp[k] = porOp[k] || { loja: 0, consultor: 0, total: 0 }; porOp[k].total++; if (R.TIPOS[c.tipo] && R.TIPOS[c.tipo].direto) porOp[k].loja++; else porOp[k].consultor++; });
@@ -57,11 +67,11 @@ export default function Dashboard() {
   const srows = ORDEM.map(s => [STATUS[s].label, cc.filter((c: any) => c.status === s && (s !== "concluida" || noPeriodo(concluidoEm(c)))).length, s] as [string, number, string]);
   const smx = Math.max(1, ...srows.map(x => x[1]));
   // uma linha por chamado, com a faixa de prioridade dele (crítico, atrasado ou urgente); marketing entra só se parado +24h
-  const acao = R.ordenar(todos.filter((c: any) => ["critico", "atrasado", "urgente"].includes(pr(c))));
+  const acao = R.ordenar(todos.filter((c: any) => naArea(c) && ["critico", "atrasado", "urgente"].includes(pr(c))));
   const ab = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa");
   const pf: Record<string, number> = {}; ab.forEach((c: any) => { if (c.fabrica) pf[c.fabrica] = (pf[c.fabrica] || 0) + 1; });
   const fr = Object.entries(pf).sort((a, b) => b[1] - a[1]); const mxf = Math.max(1, ...fr.map(x => x[1]));
-  const evs: any[] = []; todos.forEach((c: any) => (c.historico || []).forEach((h: any) => evs.push({ id: c.id, quando: h.quando, quem: h.quem, texto: h.texto })));
+  const evs: any[] = []; todos.filter(naArea).forEach((c: any) => (c.historico || []).forEach((h: any) => evs.push({ id: c.id, quando: h.quando, quem: h.quem, texto: h.texto })));
   evs.sort((a, b) => +new Date(b.quando) - +new Date(a.quando));
 
   return (
@@ -79,9 +89,13 @@ export default function Dashboard() {
           </>}
           <span className="live" style={{ marginLeft: "auto" }}><i></i>ao vivo</span>
         </div>
+        {veAmbos && <div className="subnav" style={{ marginTop: 12 }}>
+          {([["tudo", "Todos os setores"], ["cc", "Call center e pós-venda"], ["mkt", "Marketing"]] as [any, string][]).map(([k, l]) => <button key={k} className={area === k ? "on" : ""} onClick={() => setArea(k)}>{l}</button>)}
+        </div>}
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Período {fmtDate(de)} a {fmtDate(ate)}: vale para novos, concluídos, agendamentos e vendas. O que está em aberto aparece sempre, de qualquer data.</div>
       </div>
-      <div className="kpis" id="kpis">
+      {verCC && veAmbos && area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Call center e pós-venda</div>}
+      {verCC && <div className="kpis" id="kpis">
         <Kpi n={novos} l="Novos no período" />
         <Kpi n={abertas} l="Em aberto (sem resposta)" />
         <Kpi n={crit} l="Críticos (+24h)" cls={crit ? "alert" : ""} cor={crit ? "var(--critico)" : undefined} />
@@ -89,10 +103,20 @@ export default function Dashboard() {
         <Kpi n={urg} l="Urgentes no prazo" cls={urg ? "urg" : ""} />
         <Kpi n={resp} l="Respondidos — falta concluir" />
         <Kpi n={conc} l="Concluídos no período" />
-      </div>
+      </div>}
+      {vejaMkt && veAmbos && <>
+        {area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Marketing</div>}
+        <div className="kpis" id="kpisMkt">
+          <Kpi n={mktNovos} l="Clientes novos no período" />
+          <Kpi n={mktAndamento} l="Em andamento" />
+          <Kpi n={mktCrit} l={`Sem atualização +${LIMITE_INATIVIDADE_H}h`} cls={mktCrit ? "alert" : ""} cor={mktCrit ? "var(--critico)" : undefined} />
+          <Kpi n={mktAConfirmar} l="Vendas a confirmar" cls={mktAConfirmar ? "urg" : ""} />
+          <Kpi n={mktVendasPer} l="Vendas no período" cor="var(--st-concluida)" />
+        </div>
+      </>}
       {R.verTudo() && (
         <div className="setores" id="setoresWrap">
-          {R.setoresVisiveis().map((s: any) => {
+          {R.setoresVisiveis().filter((s: any) => area === "tudo" || (area === "mkt") === R.ehSetorMarketing(s.id)).map((s: any) => {
             const mkt = R.ehSetorMarketing(s.id);
             const arr = todos.filter((c: any) => c.setorDestino === s.id && (c.status !== "concluida" && R.emAberto(c) || noPeriodo(concluidoEm(c))));
             const aberto = mkt ? arr.filter((c: any) => R.emAberto(c)).length : arr.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length;
@@ -136,7 +160,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      {R.verTudo() && (
+      {R.verTudo() && verCC && (
         <div className="panel-grid" id="painelCallcenterWrap">
           <div className="panel"><h3>Atendimento por atendente (Call center)</h3><div id="ccPorAtendente">
             {rowsAt.length ? rowsAt.map(([nm, v]) => <BarRow key={nm} nm={nm} pct={v.ab / Math.max(1, ...rowsAt.map(x => x[1].ab)) * 100} v={v.ab} extra={<span className="v" style={{ color: "var(--st-concluida)" }}>{v.rv}</span>} />) : <Nada t="Sem solicitações do call center ainda." />}
@@ -144,7 +168,7 @@ export default function Dashboard() {
         </div>
       )}
       <div className="panel-grid">
-        <div className="panel"><h3 id="tPanel1">Situação da fila</h3><div id="bars1">{srows.map(([nm, n, s]) => <BarRow key={s} nm={nm} pct={n / smx * 100} v={n} cor={`var(--st-${s})`} />)}</div></div>
+        {verCC && <div className="panel"><h3 id="tPanel1">Situação da fila</h3><div id="bars1">{srows.map(([nm, n, s]) => <BarRow key={s} nm={nm} pct={n / smx * 100} v={n} cor={`var(--st-${s})`} />)}</div></div>}
         <div className="panel"><h3>Precisam de ação agora</h3><div className="acao-list" id="acaoList">
           {acao.length ? acao.map((c: any) => { const sp = pr(c); const lbl = R.domMarketing(c) ? "Sem atualização" : sp === "critico" ? "Crítico" : sp === "atrasado" ? "Atrasado" : "Urgente"; const cor = sp === "critico" ? "var(--critico)" : "var(--danger)";
             return <div className="acao" key={c.id} style={{ borderLeftColor: cor }} onClick={() => abrirDetalhe(c.id)}><span>{c.id} · {c.cliente} · <b>{R.setorNome(c.setorDestino)}</b></span><span className="g" style={{ color: cor }}>{lbl}</span></div>; })
@@ -152,7 +176,7 @@ export default function Dashboard() {
         </div></div>
       </div>
       <div className="panel-grid">
-        <div className="panel"><h3>Em aberto por fábrica</h3><div id="barsFabrica">{fr.length ? fr.map(([fid, n]) => <BarRow key={fid} nm={R.nomeFab(fid)} pct={n / mxf * 100} v={n} />) : <Nada t="Nada em aberto." />}</div></div>
+        {verCC && <div className="panel"><h3>Em aberto por fábrica</h3><div id="barsFabrica">{fr.length ? fr.map(([fid, n]) => <BarRow key={fid} nm={R.nomeFab(fid)} pct={n / mxf * 100} v={n} />) : <Nada t="Nada em aberto." />}</div></div>}
         <div className="panel"><h3>Atividade recente <span className="live"><i></i>ao vivo</span></h3><div className="feed" id="feed">
           {evs.length ? evs.slice(0, 12).map((e, i) => <div className="f" key={i}><span><b>{e.id}</b> {e.texto} <span style={{ color: "var(--ink-faint)" }}>· {e.quem}</span></span><span className="t">{tempoRel(e.quando)}</span></div>) : <Nada t="Sem atividade." />}
         </div></div>

@@ -408,13 +408,16 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (mk.length) { if (!cc.length) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
     const ge: string[][] = [];
     if (ehGestao()) ge.push(["aprovacoes", "Aprovações"]);
-    if (ehPosvenda()) ge.push(["novopv", "Novo atendimento"]);
-    if (podeVerPosvenda()) ge.push(["posvenda", "Pós-venda — números"]);
     const ehProjetista = mySetores().includes("atendente_cliente");
     if (ehConsultorExterno() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : "Vendas e comissão"]);
     if (verTudo()) ge.push(["relatorios", "Relatórios"]);
     if (verTudo() || temMarketing()) ge.push(["atividades", "Controle de atividades"]);
-    if (ge.length) G.push({ g: ehConsultorExterno() && !ehGestao() ? "Meu financeiro" : ehPosvenda() && !ehGestao() ? "Pós-venda" : "Gestão", ic: "▣", itens: ge });
+    if (ge.length) G.push({ g: ehConsultorExterno() && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
+    // Pós-venda Projetados: grupo próprio (Vânia, Jurídico e Gestão)
+    const pv: string[][] = [];
+    if (ehPosvenda() || ehGestao()) pv.push(["novopv", "Novo atendimento"]);
+    if (podeVerPosvenda()) pv.push(["posvenda", "Números e montadores"]);
+    if (pv.length) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Pós-venda", ic: "✚", itens: pv });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
     if (ehGestao()) cd.push(["admin", "Administração"]);
