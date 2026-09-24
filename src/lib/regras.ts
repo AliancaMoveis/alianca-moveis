@@ -8,7 +8,7 @@ export const STATUS: Record<string, { label: string; cls: string }> = {
 };
 export const STATUS_CLIENTE: Record<string, string> = {
   aguardando_consultor: "Aguardando consultor", direcionado_consultor: "Direcionado ao consultor", visita_realizada: "Visita realizada",
-  agendado_loja: "Agendado loja", com_vendedor: "Com vendedor", vendido_revisao: "Vendido — a confirmar",
+  agendado_loja: "Agendado loja", com_vendedor: "Com vendedor", orcamento: "Orçamento", sem_resposta: "Sem resposta", reagendado: "Reagendado", reprovado: "Reprovado", vendido_revisao: "Vendido — a confirmar",
   vendido_promissoria: "Vendido — promissória", vendido: "Vendido — efetivado", venda_cancelada: "Venda cancelada", nao_compareceu: "Não compareceu",
 };
 export const VENDA_STATUS: Record<string, string> = {
@@ -21,13 +21,15 @@ export const LIBS: Record<string, string> = {
   admin: "Administração (usuários e setores)", verMarketing: "Ver todo o agendamento de marketing (todas as etapas e consultores)",
   viaCallcenter: "Não fala com o cliente: ao concluir vai para \"Informar cliente\" e o call center avisa",
 };
-export const MARKETING_SETORES = ["marketing_operadora", "marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente"];
+export const MARKETING_SETORES = ["marketing_operadora", "marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente", "gerente_loja"];
+// status do cliente enquanto está com o vendedor (antes do desfecho)
+export const EM_ATENDIMENTO = ["com_vendedor", "orcamento", "sem_resposta", "reagendado"];
 export const LIMITE_INATIVIDADE_H = 24;
-export const statusFinalCliente = ["vendido", "vendido_promissoria", "venda_cancelada", "nao_compareceu"];
+export const statusFinalCliente = ["vendido", "vendido_promissoria", "venda_cancelada", "nao_compareceu", "reprovado"];
 export const COR_SETOR: Record<string, string> = {
   callcenter: "#4b6bd6", prazo_fabrica: "#b8802a", montagem: "#2f8fa8", assistencia: "#c23b3b", checklist: "#7a5bb5", medidas: "#1f9c7a",
   marketing_operadora: "#d1478f", marketing_supervisao: "#8e44ad", consultor_externo: "#b8802a", suporte_consultores: "#0f8a8a",
-  atendente_cliente: "#3f8f4f", posvenda: "#c06a2b", juridico: "#6b4e2e", supervisao: "#5a6270", gestao: "#1a1d21",
+  atendente_cliente: "#3f8f4f", gerente_loja: "#2d6a4f", posvenda: "#c06a2b", juridico: "#6b4e2e", supervisao: "#5a6270", gestao: "#1a1d21",
 };
 // Pós-venda Projetados
 export const PV_TIPOS: Record<string, string> = {
@@ -126,7 +128,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (c.setorDestino === "marketing_supervisao") return "aguardando_consultor";
     if (c.setorDestino === "consultor_externo") return (c.tratativa && c.tratativa.realizada) ? "visita_realizada" : "direcionado_consultor";
     if (c.setorDestino === "suporte_consultores") return "agendado_loja";
-    if (c.setorDestino === "atendente_cliente") return "com_vendedor";
+    if (c.setorDestino === "atendente_cliente") return ["orcamento", "sem_resposta", "reagendado", "reprovado"].includes(c.statusCliente) ? c.statusCliente : "com_vendedor";
     return c.statusCliente || "aguardando_consultor";
   }
   function statusClienteDe(c: Chamado) { if (domMarketing(c)) return normalizarStatusCliente(c); if (c.statusCliente) return c.statusCliente; return "aguardando_consultor"; }
@@ -211,6 +213,23 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeMudarDataLoja = (c: Chamado) => podeEditarAgenda() || (c.consultorId && c.consultorId === currentUserId);
 
   const consultores = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("consultor_externo"));
+  // ---------- agendamento na loja / vendedor ----------
+  const ehDireto = (c: Chamado) => !!(TIPOS[c.tipo] && TIPOS[c.tipo].direto);
+  const origemLoja = (c: Chamado) => ehDireto(c) ? "marketing" : "externo";
+  // cliente que vem (ou veio) à loja sem planta/fotos anexadas
+  const semAnexo = (c: Chamado) => domMarketing(c) && !(c.anexos || []).length && !c.venda && !statusFinalCliente.includes(statusClienteDe(c))
+    && (!!c.dataLoja || !!(c.tratativa && c.tratativa.realizada));
+  // o cliente já veio (data/hora da loja passou) e o vendedor ainda não deu parecer depois disso
+  function semParecer(c: Chamado) {
+    if (!domMarketing(c) || c.setorDestino !== "atendente_cliente" || c.venda || !c.dataLoja) return false;
+    if (statusFinalCliente.includes(statusClienteDe(c))) return false;
+    const dl = parseData(c.dataLoja); if (dl > new Date()) return false;
+    const t = c.tratativa || {};
+    return !t.parecerEm || new Date(t.parecerEm) < dl;
+  }
+  const parecerCobrado = (c: Chamado) => !!(c.tratativa && c.tratativa.cobradoEm) && c.setorDestino === "atendente_cliente" && !c.venda && !statusFinalCliente.includes(statusClienteDe(c));
+  // quem responde por definir o vendedor e cobrar parecer: Suporte = clientes dos consultores externos; Supervisão Marketing / Gerente de Loja = agendados pelo marketing
+  const souRespLoja = (c: Chamado) => (mySetores().includes("suporte_consultores") && !ehDireto(c)) || (temMarketing() && ehDireto(c));
   const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente"));
 
   // financeiro
@@ -233,6 +252,28 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const comissao = totalVendido * (pct / 100);
     return { visitas, vendas, pagamentoVisitas, totalVendido, comissao, total: pagamentoVisitas + comissao };
   }
+
+  // ---------- funil do marketing: visita → loja → venda ----------
+  // período pela data da visita (ou do cadastro, se não houver); agendamento direto pela data na loja
+  const visitaFeita = (c: Chamado) => !!((c.tratativa && c.tratativa.realizada) || c.dataLoja || c.venda);
+  const compareceu = (c: Chamado) => !!c.venda || ["orcamento", "sem_resposta", "reprovado"].includes(statusClienteDe(c));
+  function funil(lista: Chamado[]) {
+    const pct = cfg().comissaoPct;
+    const realizadas = lista.filter(visitaFeita), agendadas = lista.filter(c => !!c.dataLoja);
+    const vieram = lista.filter(compareceu), faltaram = lista.filter(c => statusClienteDe(c) === "nao_compareceu");
+    const vendas = lista.filter(c => vendaContaVolume(c.venda)), aConfirmar = lista.filter(c => c.venda && c.venda.status === "registrada");
+    const efetivadas = lista.filter(c => vendaContaComissao(c.venda));
+    const valor = vendas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
+    const comissao = efetivadas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0) * pct / 100;
+    const pendentes = lista.filter(c => c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.realizada));
+    const taxa = (a: number, b: number) => b ? Math.round(a / b * 100) : null;
+    return { total: lista.length, realizadas: realizadas.length, agendadas: agendadas.length, vieram: vieram.length, faltaram: faltaram.length,
+      vendas: vendas.length, aConfirmar: aConfirmar.length, valor, comissao, pendentes: pendentes.length,
+      pPresenca: taxa(vieram.length, realizadas.length), pVisitaVenda: taxa(vendas.length, realizadas.length), pLojaVenda: taxa(vendas.length, vieram.length) };
+  }
+  const ancoraVisita = (c: Chamado) => c.dataVisita || c.criadoEm;
+  const clientesConsultor = (uid: string, de: string, ate: string) => state.chamados.filter(c => domMarketing(c) && !ehDireto(c) && c.consultorId === uid && (!de && !ate || dentroPeriodo(ancoraVisita(c), de, ate)));
+  const funilConsultor = (uid: string, de: string, ate: string) => funil(clientesConsultor(uid, de, ate));
 
   // ---------- prioridade única por chamado (cada chamado cai em UMA faixa, sem duplicidade) ----------
   // call center: crítico (+24h vencido) > atrasado (vencido até 24h) > urgente (marcado, ainda no prazo) > perto (vence em 24h) > ok > respondida > concluída
@@ -295,7 +336,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
   function msgWhatsProjetista(c: Chamado) {
     const u = me(); const L: string[] = [];
-    L.push(`Olá, ${primeiroNome(c.cliente)}! Sou ${nomeNatural(u ? u.nome : "")}, projetista da Aliança Móveis.`); L.push("");
+    L.push(`Olá, ${primeiroNome(c.cliente)}! Sou ${nomeNatural(u ? u.nome : "")}, vendedor(a) da Aliança Móveis.`); L.push("");
     const dl = c.dataLoja ? dh(c.dataLoja) : null;
     if (dl) L.push(`Já está tudo certo para o nosso atendimento no dia ${dl}, aqui na loja.`); else L.push("Já está tudo certo para o seu atendimento aqui na loja.");
     L.push(""); L.push("Ao chegar na loja, pode procurar por mim."); L.push(""); L.push("Te aguardo!");
@@ -349,7 +390,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const ch = state.chamados;
     add("aceite", "Aguardando seu aceite", "Outro vendedor indicou você para assumir estes clientes.", ch.filter(c => c.transferencia && c.transferencia.status === "pendente" && c.transferencia.para === eu), "var(--primary)");
     add("pedi", "Suas solicitações de transferência", "Aguardando o aceite do outro vendedor ou aprovação.", ch.filter(c => c.transferencia && c.transferencia.status === "pendente" && c.transferencia.solicitadoPor === eu && c.transferencia.para !== eu), "var(--ink-faint)");
-    add("meusclientes", "Seus clientes na loja", "Clientes designados a você que ainda não tiveram desfecho registrado.", ch.filter(c => c.atendenteId === eu && statusClienteDe(c) === "com_vendedor" && !c.venda), "var(--st-respondida)");
+    add("cobrado", "Parecer cobrado pelo Suporte", "Atualize o status do atendimento e escreva o parecer.", ch.filter(c => c.atendenteId === eu && parecerCobrado(c)), "var(--danger)");
+    add("darparecer", "Clientes que já vieram — falta seu parecer", "O horário na loja já passou. Registre o status: orçamento, sem resposta, reprovado, reagendado, não compareceu ou venda.", ch.filter(c => c.atendenteId === eu && semParecer(c)), "var(--warn)");
+    add("meusclientes", "Seus clientes na loja", "Clientes definidos para você que ainda não tiveram desfecho registrado.", ch.filter(c => c.atendenteId === eu && EM_ATENDIMENTO.includes(statusClienteDe(c)) && !c.venda), "var(--st-respondida)");
     add("devolvido", "Vendas canceladas pela Gestão", "O cliente voltou para você. Verifique e registre novamente, se for o caso.", ch.filter(c => c.atendenteId === eu && c.venda && c.venda.status === "cancelada"), "var(--danger)");
     const semAtualizacaoMkt = ch.filter(c => {
       if (!clienteCriticoInatividade(c)) return false;
@@ -367,13 +410,16 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
     if (temMarketing()) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
-    if (mySetores().includes("suporte_consultores") || temMarketing()) add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId), "var(--warn)");
+    if (mySetores().includes("suporte_consultores") || temMarketing()) {
+      add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c)), "var(--warn)");
+      add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c)), "var(--danger)");
+    }
     add("informar", "Informar o cliente", "O setor registrou a solução mas não fala com o cliente. Avise o cliente e conclua.", ch.filter(c => !domMarketing(c) && c.status === "informar" && (ehCallcenter() || c.solicitanteId === eu)), "var(--st-informar)");
     add("criticos", "Críticos no seu setor", "Mais de 24h sem resposta — precisam de ação imediata.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && situacaoPrazo(c) === "critico"), "var(--critico)");
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => !domMarketing(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["aceite", "apvendas", "aptransf", "appromis", "informar", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
+    const PRIORIDADE = ["cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));
@@ -384,17 +430,19 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   function statsPessoa(uid: string, ehVend: boolean) {
     const meus = state.chamados.filter(c => domMarketing(c) && (ehVend ? c.atendenteId === uid : c.consultorId === uid));
-    const ativos = meus.filter(c => ["aguardando_consultor", "direcionado_consultor", "visita_realizada", "agendado_loja", "com_vendedor"].includes(statusClienteDe(c))).length;
+    const ativos = meus.filter(c => ["aguardando_consultor", "direcionado_consultor", "visita_realizada", "agendado_loja", ...EM_ATENDIMENTO].includes(statusClienteDe(c))).length;
     const vend = meus.filter(c => vendaContaVolume(c.venda));
     const total = vend.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
-    const fechados = meus.filter(c => ["vendido", "vendido_promissoria", "nao_compareceu", "venda_cancelada"].includes(statusClienteDe(c))).length;
+    const fechados = meus.filter(c => ["vendido", "vendido_promissoria", "nao_compareceu", "venda_cancelada", "reprovado"].includes(statusClienteDe(c))).length;
     const conv = fechados ? Math.round(vend.length / fechados * 100) : 0;
     return { meus, ativos, vendas: vend.length, total, conv };
   }
 
   function menuPerfil() {
     const G: any[] = [];
-    G.push({ g: "Pessoal", ic: "◆", itens: [["dashboard", "Dashboard"], ["pendencias", "Minhas pendências"]] });
+    // quem define vendedor (Suporte, Supervisão Marketing, Gerente de Loja) tem a tela logo abaixo das pendências
+    const defineVend = !ehGestao() && (mySetores().includes("suporte_consultores") || temMarketing());
+    G.push({ g: "Pessoal", ic: "◆", itens: [["dashboard", "Dashboard"], ["pendencias", "Minhas pendências"]].concat(defineVend ? [["definir", "Definir vendedor"]] : []) });
     const temCC = mySetores().some((x: string) => !ehSetorMarketing(x) && !["supervisao", "gestao"].includes(x));
     const temMkt = mySetores().some((x: string) => ehSetorMarketing(x));
     const cc: string[][] = [];
@@ -404,9 +452,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const mk: string[][] = [];
     if (podeCriarMkt()) mk.push(["novocli", "Novo cliente"]);
     if (temMarketing() || ehGestao()) {
-      mk.push(["acompmkt", "Acompanhamento"], ["direcionamento", "Direcionar consultor"], ["definir", "Definir vendedor"], ["agenda", "Agendamento loja"], ["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
+      mk.push(["acompmkt", "Acompanhamento"], ["direcionamento", "Direcionar consultor"]);
+      if (!defineVend) mk.push(["definir", "Definir vendedor"]);
+      mk.push(["agenda", "Agendamento loja"], ["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
     } else if (temMkt) {
-      if (mySetores().includes("suporte_consultores")) mk.push(["definir", "Definir vendedor"]);
       mk.push(["acompmkt", "Minha fila"], ["carteira", "Minha carteira"], ["agenda", "Agendamento loja"]);
       if (mySetores().includes("suporte_consultores")) mk.push(["vendedores", "Vendedores"]);
       mk.push(["clientes", "Clientes"]);
@@ -415,7 +464,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const ge: string[][] = [];
     if (ehGestao()) ge.push(["aprovacoes", "Aprovações"]);
     const ehProjetista = mySetores().includes("atendente_cliente");
-    if (ehConsultorExterno() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : "Vendas e comissão"]);
+    if (ehConsultorExterno() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : ehConsultorExterno() ? "Vendas e comissão" : ehProjetista ? "Minhas vendas" : "Vendas dos vendedores"]);
     if (verTudo()) ge.push(["relatorios", "Relatórios"]);
     if (verTudo() || temMarketing()) ge.push(["atividades", "Controle de atividades"]);
     if (ge.length) G.push({ g: ehConsultorExterno() && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
@@ -435,6 +484,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
+    funil, funilConsultor, clientesConsultor, visitaFeita, compareceu, ancoraVisita,
+    ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };

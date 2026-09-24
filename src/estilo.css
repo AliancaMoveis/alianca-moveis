@@ -545,3 +545,52 @@ button.dv-kpi{cursor:pointer}
 .dv-vend-l.vazio{cursor:default;color:var(--ink-faint)}
 @media (max-width:1000px){.dv-grid{grid-template-columns:1fr}.dv-side{position:static}.dv-kpis{grid-template-columns:repeat(3,1fr)}}
 @media (max-width:640px){.dv-card{grid-template-columns:60px 1fr}.dv-acao{grid-column:1/-1}.dv-kpis{grid-template-columns:repeat(2,1fr)}}
+
+/* agendamento na loja: avisos e marcas */
+.b-semanexo{background:#fff4d6;color:#8a5a00;border:1px solid #f0c24b}
+.aviso-anexo{background:#fff4d6;border:1px solid #f0c24b;color:#7a5200;border-radius:9px;padding:9px 12px;font-size:12.5px}
+.marca-loja{font-size:11.5px;font-weight:700;border-radius:20px;padding:3px 10px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-soft)}
+.marca-loja.sim{background:var(--primary-soft);border-color:var(--primary);color:var(--primary)}
+.marca-loja.ok{background:var(--st-concluida-bg, #e6f4ea);border-color:var(--st-concluida);color:var(--st-concluida)}
+.origem{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 7px;color:#fff;white-space:nowrap}
+.origem.marketing{background:#d1478f}
+.origem.externo{background:#b8802a}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .b-semanexo,:root:not([data-theme="light"]) .aviso-anexo{background:#3a2e10;color:#f0c24b;border-color:#8a6a1a}}
+:root[data-theme="dark"] .b-semanexo,:root[data-theme="dark"] .aviso-anexo{background:#3a2e10;color:#f0c24b;border-color:#8a6a1a}
+.ag-dia{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.ag-dia-cab{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line-soft)}
+.ag-dia-cab>div:first-child{flex:1}
+.ag-dia-tit{font-weight:700;font-size:16px;text-transform:capitalize}
+.ag-dia-sub{font-size:12.5px;color:var(--ink-soft);margin-top:2px}
+.ag-dia-total{text-align:right}
+.ag-dia-total b{display:block;font-size:30px;line-height:1;color:var(--primary)}
+.ag-dia-total span{font-size:11.5px;color:var(--ink-faint)}
+.ag-legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);margin:0 0 12px;align-items:center}
+.ag-legenda>span{display:inline-flex;gap:6px;align-items:center}
+.sc-orcamento{background:var(--st-tratativa-bg);color:var(--st-tratativa)}
+.sc-sem_resposta{background:var(--warn-bg);color:var(--warn)}
+.sc-reagendado{background:var(--primary-soft);color:var(--primary)}
+.sc-reprovado{background:var(--danger-bg);color:var(--danger)}
+/* painéis de atendimento na loja (Dashboard) */
+.dl-wrap{margin-bottom:8px}
+.dl-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 10px}
+.dl-cab h3{margin:0;font-size:16px;flex:1}
+.dl-lista{display:flex;flex-direction:column}
+.dl-l{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.dl-l:last-child{border-bottom:0}
+.dl-h{font-size:14px;min-width:44px}
+.dl-nm{flex:1;min-width:140px;cursor:pointer;font-weight:600;font-size:13.5px}
+.dl-nm small,.dl-vend small,.dl-resp small{display:block;font-weight:400;font-size:11.5px;color:var(--ink-faint)}
+.dl-resp small{display:inline}
+.dl-vend{display:flex;align-items:center;gap:6px;padding:9px 0;border-bottom:1px solid var(--line-soft)}
+.dl-vend b{font-size:13.5px}
+.dl-resp{padding:9px 0;border-bottom:1px solid var(--line-soft);cursor:pointer;font-size:13px}
+.dl-txt{font-size:12.5px;color:var(--ink-soft);margin-top:3px}
+.dl-tab{width:100%;border-collapse:collapse;font-size:13px}
+.dl-tab th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-faint);padding:6px 8px;border-bottom:1px solid var(--line)}
+.dl-tab td{padding:8px;border-bottom:1px solid var(--line-soft)}
+.at-prod{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+.at-prod span{font-size:12px;background:var(--primary-soft);color:var(--primary);border-radius:8px;padding:3px 9px}
+.at-prod b{font-size:13px}
+.panel-grid>.panel{min-width:0}
+.dl-tab td:first-child{min-width:120px}

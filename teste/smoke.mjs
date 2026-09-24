@@ -23,7 +23,8 @@ for (const n of perfis) {
     const titulo = await page.textContent("main .view.active h2").catch(() => "?");
     visitados.push(`${it} → ${titulo}`);
     // sub-abas
-    for (const sub of await page.$$("main .view.active .subnav button")) { await sub.click(); await page.waitForTimeout(50); }
+    const nSub = (await page.$$("main .subnav button")).length;
+    for (let i = 0; i < nSub; i++) { const bts = await page.$$("main .subnav button"); if (bts[i]) { await bts[i].click(); await page.waitForTimeout(50); } }
   }
   // abrir todas as fichas pela Consulta (ou Clientes/Minha fila quando não houver Consulta)
   let abertas = 0;

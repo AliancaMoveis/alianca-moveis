@@ -12,7 +12,7 @@ function classificaAcao(txt: string) {
   if (/transferência/.test(t)) return { k: "transferencia", l: "Transferência" };
   if (/vendedor alterado/.test(t)) return { k: "transferencia", l: "Troca de vendedor" };
   if (/direcionado ao consultor|atribu/.test(t)) return { k: "direcionamento", l: "Direcionamento" };
-  if (/direcionado ao projetista|designad/.test(t)) return { k: "designacao", l: "Designação" };
+  if (/direcionado ao projetista|vendedor definido|designad/i.test(t)) return { k: "designacao", l: "Designação" };
   if (/status do cliente alterado|status →/.test(t)) return { k: "status", l: "Mudança de status" };
   if (/visita marcada como realizada|contato com o cliente/.test(t)) return { k: "visita", l: "Visita" };
   if (/agendamento na loja remarcado|vinda à loja agendada|reagendamento da vinda/.test(t)) return { k: "agenda", l: "Agenda" };
@@ -84,6 +84,7 @@ export default function Atividades() {
         return (
           <div className="at-card" key={r.u.id}><div className="top"><div className="av" style={{ background: cor }}>{inicial(r.u.nome)}</div><div><div className="nm">{r.u.nome}</div><div className="sb">{R.setoresLabel(r.u)} · última ação {tempoRel(r.ultima)} atrás</div></div><div className="qt"><b>{r.n}</b><span>ações</span></div></div>
             <div className="at-barra"><i style={{ width: r.n / maxN * 100 + "%", background: cor }}></i></div>
+            <Producao u={r.u} de={f.de} ate={f.ate} />
             <div className="at-tags">{Object.entries(r.tipos).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5).map(([l, n]: any) => <span key={l} className="at-tag">{l}: {n}</span>)}</div></div>
         );
       }) : <div className="empty">Nenhuma atividade no período.</div>}</div>}
@@ -103,4 +104,21 @@ export default function Atividades() {
       }) : <div className="empty">Nenhuma atividade no período.</div>}</div>}
     </section>
   );
+}
+
+// consultor e vendedor: o resultado do trabalho, além das ações
+function Producao({ u, de, ate }: any) {
+  const { R, st } = useApp() as any;
+  const ss = u.setores || [];
+  if (ss.includes("consultor_externo")) {
+    const f = R.funilConsultor(u.id, de, ate);
+    return <div className="at-prod"><span>Visitas encaminhadas <b>{f.total}</b></span><span>Realizadas <b>{f.realizadas}</b></span><span>Agendamentos loja <b>{f.agendadas}</b></span><span>Vieram <b>{f.vieram}</b></span><span>Vendas <b>{f.vendas}</b></span></div>;
+  }
+  if (ss.includes("atendente_cliente")) {
+    const l = st.chamados.filter((c: any) => R.domMarketing(c) && c.atendenteId === u.id && c.dataLoja && ((!de && !ate) || R.dentroPeriodo(c.dataLoja, de, ate)));
+    const f = R.funil(l);
+    const par = l.filter((c: any) => c.tratativa && c.tratativa.parecerEm).length, sem = l.filter((c: any) => R.semParecer(c)).length;
+    return <div className="at-prod"><span>Clientes recebidos <b>{f.total}</b></span><span>Com parecer <b>{par}</b></span><span>Sem parecer <b style={sem ? { color: "var(--danger)" } : undefined}>{sem}</b></span><span>Vendas <b>{f.vendas}</b></span></div>;
+  }
+  return null;
 }

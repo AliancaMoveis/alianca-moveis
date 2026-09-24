@@ -15,7 +15,7 @@ function Cena({ children }: { children: React.ReactNode }) {
           </div>
           <div className="lg-hero">
             <h2>Visibilidade total.<br />Do contato à venda.</h2>
-            <p>Call center, marketing, consultores externos, projetistas e resultados — em tempo real, num único lugar.</p>
+            <p>Call center, marketing, consultores externos, vendedores e resultados — em tempo real, num único lugar.</p>
           </div>
           <div className="lg-pills">
             {["Call center", "Marketing", "Consultores externos", "Agendamento loja", "Financeiro", "Relatórios"].map(p => <span key={p} className="lg-pill">{p}</span>)}

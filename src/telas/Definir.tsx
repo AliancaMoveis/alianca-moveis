@@ -13,7 +13,7 @@ const rotuloDia = (iso: string) => { const d = parseData(iso + "T12:00"); return
 
 export default function Definir() {
   const { R, st, abrirDetalhe } = useApp() as any;
-  const [aba, setAba] = useState<"sem" | "definidos">("sem");
+  const [aba, setAba] = useState<"sem" | "definidos" | "parecer">("sem");
   const hoje = hojeISO();
   const d = new Date(); d.setDate(d.getDate() + 1); const amanha = isoLocal(d);
   const d7 = new Date(); d7.setDate(d7.getDate() + 7); const ate7 = isoLocal(d7);
@@ -23,7 +23,8 @@ export default function Definir() {
     .sort((a: any, b: any) => String(a.dataLoja || "9").localeCompare(String(b.dataLoja || "9")));
   const comVend = mkt.filter((c: any) => c.atendenteId && c.dataLoja && dia(c) >= hoje && !c.venda && R.statusClienteDe(c) !== "nao_compareceu");
   const definidos = comVend.filter((c: any) => dia(c) <= ate7).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
-  const vendedores = R.projetistas();
+  const vendedores = R.vendedores();
+  const semParecer = mkt.filter((c: any) => R.semParecer(c)).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
 
   const passou = sem.filter((c: any) => c.dataLoja && dia(c) < hoje), nHoje = sem.filter((c: any) => dia(c) === hoje), nAm = sem.filter((c: any) => dia(c) === amanha);
   // grupos por dia (data vencida primeiro)
@@ -40,19 +41,20 @@ export default function Definir() {
   return (
     <section className="view active" id="view-definir">
       <div className="view-head"><div><h2>Definir vendedor</h2>
-        <p>Clientes com vinda à loja agendada que ainda não têm vendedor. Escolha quem atende: o cliente vai para a fila do vendedor na hora.</p></div></div>
+        <p>Clientes com vinda à loja agendada que ainda não têm vendedor. Escolha quem atende: o cliente vai para a fila do vendedor na hora. <b>Externos</b> (do consultor) ficam com o Suporte Consultores; <b>Marketing</b> com a Supervisão Marketing ou o Gerente de Loja.</p></div></div>
 
       <div className="dv-kpis">
         <button className={"dv-kpi" + (sem.length ? " on" : "")} onClick={() => setAba("sem")}><b>{sem.length}</b><span>Sem vendedor</span></button>
         <div className={"dv-kpi" + (passou.length ? " alerta" : "")}><b>{passou.length}</b><span>Data já passou</span></div>
         <div className={"dv-kpi" + (nHoje.length ? " hoje" : "")}><b>{nHoje.length}</b><span>Vêm hoje</span></div>
         <div className="dv-kpi"><b>{nAm.length}</b><span>Vêm amanhã</span></div>
-        <button className="dv-kpi" onClick={() => setAba("definidos")}><b>{definidos.length}</b><span>Já definidos (7 dias)</span></button>
+        <button className={"dv-kpi" + (semParecer.length ? " alerta" : "")} onClick={() => setAba("parecer")}><b>{semParecer.length}</b><span>Já vieram — sem parecer</span></button>
       </div>
 
       <div className="subnav" style={{ marginBottom: 14 }}>
         <button className={aba === "sem" ? "on" : ""} onClick={() => setAba("sem")}>Sem vendedor{sem.length ? ` (${sem.length})` : ""}</button>
-        <button className={aba === "definidos" ? "on" : ""} onClick={() => setAba("definidos")}>Já definidos — próximos 7 dias</button>
+        <button className={aba === "parecer" ? "on" : ""} onClick={() => setAba("parecer")}>Sem parecer do vendedor{semParecer.length ? ` (${semParecer.length})` : ""}</button>
+        <button className={aba === "definidos" ? "on" : ""} onClick={() => setAba("definidos")}>Já definidos — próximos 7 dias ({definidos.length})</button>
       </div>
 
       <div className="dv-grid">
@@ -64,6 +66,9 @@ export default function Definir() {
                 {arr.map((c: any) => <Cartao key={c.id} c={c} vendedores={vendedores} comVend={comVend} abrir={() => abrirDetalhe(c.id)} />)}
               </div>
             )) : <div className="empty"><div className="big">Tudo definido</div>Nenhum cliente agendado está sem vendedor.</div>
+          ) : aba === "parecer" ? (
+            semParecer.length ? <div className="dv-dia">{semParecer.map((c: any) => <CartaoParecer key={c.id} c={c} abrir={() => abrirDetalhe(c.id)} />)}</div>
+              : <div className="empty"><div className="big">Tudo em dia</div>Todos os clientes que já vieram têm parecer do vendedor.</div>
           ) : (
             definidos.length ? <div className="dv-dia">{definidos.map((c: any) => <Cartao key={c.id} c={c} vendedores={vendedores} comVend={comVend} abrir={() => abrirDetalhe(c.id)} troca />)}</div>
               : <div className="empty"><div className="big">Nada nos próximos 7 dias</div>Nenhum cliente com vendedor definido vem à loja nesse período.</div>
@@ -90,6 +95,23 @@ export default function Definir() {
   );
 }
 
+function CartaoParecer({ c, abrir }: any) {
+  const { R, executar: ex } = useApp() as any;
+  const t = c.tratativa || {};
+  return (
+    <div className="dv-card" style={{ borderLeftColor: t.cobradoEm ? "var(--critico)" : "var(--danger)" }}>
+      <div className="dv-hora" style={{ color: "var(--danger)" }}><b>{hora(c)}</b><span>{dia(c) === hojeISO() ? "hoje" : rotuloDia(dia(c)).split(",")[1].trim()}</span></div>
+      <div className="dv-info" onClick={abrir}>
+        <div className="dv-nome"><span className={"origem " + R.origemLoja(c)}>{R.origemLoja(c) === "marketing" ? "Marketing" : "Externo"}</span> {c.cliente} <span className="dv-id">{c.id}</span></div>
+        <div className="dv-meta">vendedor <b>{R.nomeUser(c.atendenteId)}</b>{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : ""}{t.parecerEm ? " · último parecer antes da vinda" : " · nenhum parecer"}</div>
+        {t.cobradoEm && <div className="dv-tags"><span className="badge b-critico">Cobrado {fmtCurto(t.cobradoEm)} por {t.cobradoPor}</span></div>}
+      </div>
+      <div className="dv-acao"><button className="btn primary sm" style={{ gridColumn: "1/-1" }} onClick={() => ex(() => A.cobrarParecer(c.id), "Parecer cobrado — o vendedor vê nas pendências")}>{t.cobradoEm ? "Cobrar de novo" : "Cobrar parecer do vendedor"}</button></div>
+    </div>
+  );
+}
+const fmtCurto = (v: any) => new Date(v).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
 function Cartao({ c, vendedores, comVend, abrir, troca }: any) {
   const { R, executar: ex, toast } = useApp() as any;
   const [v, setV] = useState(troca ? c.atendenteId : "");
@@ -111,9 +133,9 @@ function Cartao({ c, vendedores, comVend, abrir, troca }: any) {
     <div className="dv-card" style={{ borderLeftColor: cor }}>
       <div className="dv-hora" style={{ color: cor }}><b>{hora(c)}</b><span>{c.dataLoja ? (dia(c) === hoje ? "hoje" : rotuloDia(dia(c)).split(",")[1].trim()) : "sem data"}</span></div>
       <div className="dv-info" onClick={abrir}>
-        <div className="dv-nome">{c.cliente} <span className="dv-id">{c.id}</span></div>
-        <div className="dv-meta">{c.produto || "—"}{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : " · direto na loja"}{c.telefone ? " · " + c.telefone : ""}</div>
-        <div className="dv-tags">{imgs > 0 && <span className="pill">📐 planta/fotos ({imgs})</span>}{t.medidas && <span className="pill">medidas</span>}{t.obs && <span className="pill" title={t.obs}>obs. do consultor</span>}{troca && <span className="pill">com {R.nomeUser(c.atendenteId)}</span>}</div>
+        <div className="dv-nome"><span className={"origem " + R.origemLoja(c)}>{R.origemLoja(c) === "marketing" ? "Marketing" : "Externo"}</span> {c.cliente} <span className="dv-id">{c.id}</span></div>
+        <div className="dv-meta">{c.produto || "—"}{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : " · agendado pelo marketing"}{c.telefone ? " · " + c.telefone : ""}</div>
+        <div className="dv-tags">{R.semAnexo(c) && <span className="badge b-semanexo">⚠️ Sem anexo</span>}{t.querProjeto === "sim" && <span className="marca-loja sim">📐 Quer projeto pronto</span>}{t.querProjeto === "nao" && <span className="marca-loja">Não quer projeto pronto</span>}{imgs > 0 && <span className="pill">planta/fotos ({imgs})</span>}{t.medidas && <span className="pill">medidas</span>}{t.obs && <span className="pill" title={t.obs}>obs. do consultor</span>}{troca && <span className="pill">com {R.nomeUser(c.atendenteId)}</span>}</div>
       </div>
       <div className="dv-acao">
         <select value={v} onChange={e => setV(e.target.value)}>

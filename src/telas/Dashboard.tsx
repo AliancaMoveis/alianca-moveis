@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../estado";
+import { PainelConsultor, PainelLoja, PainelVendedor } from "./DashLoja";
 import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
@@ -38,12 +39,15 @@ export default function Dashboard() {
     conc = cc.filter((c: any) => c.status === "concluida" && noPeriodo(concluidoEm(c))).length, novos = vis.filter((c: any) => !R.domMarketing(c)).length;
 
   const vejaMkt = (R.temMarketing() || R.ehGestao()) && area !== "cc";
-  const verCC = area !== "mkt";
+  const verCC = area !== "mkt" && (R.verTudo() || R.mySetores().some((x: string) => !R.ehSetorMarketing(x)));
   const mktTodos = todos.filter(R.domMarketing);
-  const mktAndamento = mktTodos.filter((c: any) => R.emAberto(c)).length, mktCrit = mktTodos.filter((c: any) => R.prioridade(c) === "critico").length;
+  const mktCrit = mktTodos.filter((c: any) => R.prioridade(c) === "critico").length;
   const mktNovos = vis.filter(R.domMarketing).length;
   const mktVendasPer = mktTodos.filter((c: any) => vendaContaVolume(c.venda) && noPeriodo(c.venda.dataVenda || c.venda.quando)).length;
   const mktAConfirmar = mktTodos.filter((c: any) => c.venda && c.venda.status === "registrada").length;
+  const mktVisitasPer = mktTodos.filter((c: any) => !R.ehDireto(c) && R.visitaFeita(c) && noPeriodo(c.dataVisita || c.criadoEm)).length;
+  const mktAgendPer = mktTodos.filter((c: any) => c.dataLoja && noPeriodo(c.dataLoja)).length;
+  const mktVisitasPend = mktTodos.filter((c: any) => c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.realizada)).length;
   const mktTix = vis.filter(R.domMarketing);
   const porOp: Record<string, any> = {};
   mktTix.forEach((c: any) => { const k = c.solicitanteId; porOp[k] = porOp[k] || { loja: 0, consultor: 0, total: 0 }; porOp[k].total++; if (R.TIPOS[c.tipo] && R.TIPOS[c.tipo].direto) porOp[k].loja++; else porOp[k].consultor++; });
@@ -94,9 +98,11 @@ export default function Dashboard() {
         </div>}
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Período {fmtDate(de)} a {fmtDate(ate)}: vale para novos, concluídos, agendamentos e vendas. O que está em aberto aparece sempre, de qualquer data.</div>
       </div>
+      {R.podeEditarAgenda() && (area !== "cc") && <PainelLoja de={de} ate={ate} />}
+      {R.mySetores().includes("atendente_cliente") && !R.ehGestao() && <PainelVendedor />}
       {verCC && veAmbos && area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Call center e pós-venda</div>}
       {verCC && <div className="kpis" id="kpis">
-        <Kpi n={novos} l="Novos no período" />
+        <Kpi n={novos} l="Atendimentos no período" />
         <Kpi n={abertas} l="Em aberto (sem resposta)" />
         <Kpi n={crit} l="Críticos (+24h)" cls={crit ? "alert" : ""} cor={crit ? "var(--critico)" : undefined} />
         <Kpi n={atras} l="Atrasados (até 24h)" cls={atras ? "alert" : ""} />
@@ -109,10 +115,12 @@ export default function Dashboard() {
         {area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Marketing</div>}
         <div className="kpis" id="kpisMkt">
           <Kpi n={mktNovos} l="Clientes novos no período" />
-          <Kpi n={mktAndamento} l="Em andamento" />
+          <Kpi n={mktVisitasPer} l="Visitas no período" />
+          <Kpi n={mktAgendPer} l="Agendamentos na loja no período" />
           <Kpi n={mktCrit} l={`Sem atualização +${LIMITE_INATIVIDADE_H}h`} cls={mktCrit ? "alert" : ""} cor={mktCrit ? "var(--critico)" : undefined} />
           <Kpi n={mktAConfirmar} l="Vendas a confirmar" cls={mktAConfirmar ? "urg" : ""} />
           <Kpi n={mktVendasPer} l="Vendas no período" cor="var(--st-concluida)" />
+          <Kpi n={mktVisitasPend} l="Visitas pendentes (a realizar)" cls={mktVisitasPend ? "urg" : ""} />
         </div>
       </>}
       {R.verTudo() && (
@@ -145,10 +153,11 @@ export default function Dashboard() {
           </div></div>
         </div>
       )}
+      {ehCons && <PainelConsultor de={de} ate={ate} />}
       {ehCons && r && (
         <div id="dashConsultorWrap" style={{ marginBottom: 16 }}>
           <div className="panel">
-            <h3>Minhas vendas e comissão <span className="pill" style={{ marginLeft: 8 }}>{fmtDate(de)} a {fmtDate(ate)}</span></h3>
+            <h3>Minhas vendas e comissão (consultor) <span className="pill" style={{ marginLeft: 8 }}>{fmtDate(de)} a {fmtDate(ate)}</span></h3>
             <div className="kpis" style={{ marginBottom: 0 }}>
               <Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={fmtMoeda(r.pagamentoVisitas)} l="Pagamento por visitas" />
               <Kpi n={r.vendas.length} l="Vendas efetivadas" /><Kpi n={fmtMoeda(r.totalVendido)} l="Valor vendido" />

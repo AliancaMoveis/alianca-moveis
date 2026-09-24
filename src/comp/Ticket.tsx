@@ -20,11 +20,19 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
     : pr === "atrasado" ? <span className="badge b-urgente">⏰ Atrasado</span>
     : pr === "urgente" ? <span className="badge b-urgente">⚠ Urgente</span> : null;
   const att = c.anexos && c.anexos.length ? <span className="att-count">📎 {c.anexos.length}</span> : null;
+  // agendamento na loja: origem, sem anexo, quer projeto, parecer
+  const t = c.tratativa || {};
+  const marcas = presale && (c.dataLoja || c.setorDestino === "suporte_consultores" || c.setorDestino === "atendente_cliente") ? <>
+    <span className={"origem " + R.origemLoja(c)}>{R.origemLoja(c) === "marketing" ? "Marketing" : "Externo"}</span>{" "}
+    {R.semAnexo(c) && <><span className="badge b-semanexo">⚠️ Sem anexo</span>{" "}</>}
+    {t.querProjeto === "sim" && <><span className="marca-loja sim">📐 Quer projeto</span>{" "}</>}
+    {R.parecerCobrado(c) ? <><span className="badge b-critico">Parecer cobrado</span>{" "}</> : R.semParecer(c) ? <><span className="badge b-urgente">Sem parecer</span>{" "}</> : null}
+  </> : (presale && R.semAnexo(c) ? <><span className="badge b-semanexo">⚠️ Sem anexo</span>{" "}</> : null);
 
   let linha2: React.ReactNode;
   if (presale && c.setorDestino === "atendente_cliente") {
     const vendaTxt = c.venda ? (" · venda " + c.venda.numero + (c.venda.vendedor ? " · " + c.venda.vendedor : "") + (R.podeVerValor(c) && c.venda.valor ? " · R$ " + c.venda.valor : "")) : "";
-    linha2 = <><ScBadge c={c} />{vendaTxt}{c.atendenteId ? " · atendente " + R.nomeUser(c.atendenteId) : ""}</>;
+    linha2 = <><ScBadge c={c} />{vendaTxt}{c.atendenteId ? " · vendedor " + R.nomeUser(c.atendenteId) : ""}{c.dataLoja ? <> · loja <b>{fmtDiaHora(c.dataLoja)}</b></> : null}</>;
   } else if (presale && c.setorDestino === "suporte_consultores") {
     linha2 = <>Vinda à loja <b>{fmtDateTime(c.dataLoja)}</b></>;
   } else if (presale) {
@@ -38,7 +46,7 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
       <span className="bar"></span>
       <div className="idcol"><span className="tid">{c.id}</span><span className="tdate">{fmtDateTime(c.criadoEm)}</span></div>
       <div className="main">
-        <div className="cli">{presale ? <>{c.cliente} {urg}</> : <>{c.cliente}{R.ehFabrica(c) && c.fabrica ? <> · <b>{R.nomeFab(c.fabrica)}</b></> : null} {urg}</>}</div>
+        <div className="cli">{presale ? <>{c.cliente} {marcas}{urg}</> : <>{c.cliente}{R.ehFabrica(c) && c.fabrica ? <> · <b>{R.nomeFab(c.fabrica)}</b></> : null} {urg}</>}</div>
         <div className="meta"><span className="pill">{R.tipoNome(c.tipo)}</span> <span className="pill setor">{R.setorNome(c.setorDestino)}</span> · {linha2} {att}</div>
         {resposta && c.resposta && (
           <div className="resp-inline"><b>Retorno:</b> {c.resposta.texto || "—"}{c.resposta.previsao ? " · previsão " + fmtDate(c.resposta.previsao) : ""} <span style={{ color: "var(--ink-faint)" }}>({c.resposta.quem || "—"})</span></div>

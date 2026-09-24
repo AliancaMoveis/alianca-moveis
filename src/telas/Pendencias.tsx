@@ -75,7 +75,7 @@ export function Aprovacoes() {
       </div>
       {!p.total && <div id="apVazio" className="empty"><div className="big">Nada pendente</div>Não há nenhuma decisão aguardando você.</div>}
       <div id="apSecoes">
-        {p.vendasConfirmar.length > 0 && <div className="ap-sec"><h3>Vendas a confirmar <span className="badge b-tratativa">{p.vendasConfirmar.length}</span></h3><div className="sub">Registradas pelo projetista. Não contam em nenhum relatório até você decidir.</div>{p.vendasConfirmar.map(c => linhaVenda(c, ""))}</div>}
+        {p.vendasConfirmar.length > 0 && <div className="ap-sec"><h3>Vendas a confirmar <span className="badge b-tratativa">{p.vendasConfirmar.length}</span></h3><div className="sub">Registradas pelo vendedor. Não contam em nenhum relatório até você decidir.</div>{p.vendasConfirmar.map(c => linhaVenda(c, ""))}</div>}
         {p.promissorias.length > 0 && <div className="ap-sec"><h3>Promissórias em aberto <span className="badge b-tratativa">{p.promissorias.length}</span></h3><div className="sub">Já contam como venda, mas <b>não geram comissão</b> enquanto não forem efetivadas.</div>{p.promissorias.map(c => linhaVenda(c, "prom"))}</div>}
         {p.transferencias.length > 0 && <div className="ap-sec"><h3>Transferências de vendedor <span className="badge b-aberta">{p.transferencias.length}</span></h3>
           <div className="sub">Pedidos feitos <b>entre vendedores</b>. Gestão, Supervisão de Marketing e Suporte trocam direto, sem passar por aqui. Enquanto não houver aceite ou aprovação, o cliente segue com o vendedor atual.</div>

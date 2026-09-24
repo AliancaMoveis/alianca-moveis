@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, comprimir, enviarFotos } from "../lib/acoes";
 import {
-  PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  EM_ATENDIMENTO, PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 
@@ -44,6 +44,7 @@ export default function Detalhe({ id }: { id: string }) {
         <div className="mh">
           <div><span className="tid">{c.id}</span>{" "}
             {presale ? <span style={{ marginLeft: 8 }}><ScBadge c={c} /></span> : <span className={"badge " + st_.cls} style={{ marginLeft: 8 }}>{st_.label}</span>}{" "}
+            {presale && R.semAnexo(c) && <span className="badge b-semanexo" style={{ marginLeft: 6 }}>⚠️ Sem anexo</span>}
             {presale ? (R.clienteCriticoInatividade(c) ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico — sem atualização</span> : null)
               : (prio === "critico" ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico</span> : prio === "atrasado" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⏰ Atrasado</span> : prio === "urgente" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⚠ Urgente</span> : null)}
           </div>
@@ -109,7 +110,7 @@ function ClienteCard({ c }: any) {
   const dataChave = direto ? c.dataLoja : c.dataVisita;
   const itens: [string, string][] = [["Telefone", c.telefone || "—"], ["E-mail", c.email || "—"], [direto ? "Data na loja" : "Data da visita", dataChave ? fmtDT(dataChave) : "—"], ["Ambiente de interesse", c.produto || "—"]];
   if (!direto) itens.splice(2, 0, ["Consultor", consultor ? consultor.nome : "—"], ["Endereço", c.endereco || "—"]);
-  if (c.atendenteId) itens.push(["Vendedor / Projetista", R.nomeUser(c.atendenteId)]);
+  if (c.atendenteId) itens.push(["Vendedor", R.nomeUser(c.atendenteId)]);
   const wa = R.waLinkCliente(c), maps = R.mapsLink(c), waze = R.wazeLink(c);
   return (
     <div className="cli-card">
@@ -140,6 +141,8 @@ function Tratativa({ c }: any) {
   const [dv, setDv] = useState(c.dataVisita || ""); const [end, setEnd] = useState(c.endereco || "");
   const [dataLoja, setDataLoja] = useState(c.dataLoja ? String(c.dataLoja).slice(0, 16) : "");
   const [aten, setAten] = useState("");
+  const [querProjeto, setQuerProjeto] = useState<string>(t.querProjeto || "");
+  const [vs, setVs] = useState(""); const [vsData, setVsData] = useState(""); const [vsTxt, setVsTxt] = useState("");
   useEffect(() => { setV({ agenda: t.agenda || "", montador: t.montador || "", peca: t.peca || "", data: t.data || "", medidas: t.medidas || "", obs: t.obs || "" }); }, [c.id, JSON.stringify(t)]);
   const s = (k: string) => (e: any) => setV((x: any) => ({ ...x, [k]: e.target.value }));
   const salvar = (campos: string[]) => ex(() => A.salvarTratativa(c.id, Object.fromEntries(campos.map(k => [k, v[k]]))), "Tratativa salva");
@@ -189,9 +192,13 @@ function Tratativa({ c }: any) {
         <div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><button className="btn primary sm" onClick={() => salvar(["medidas", "obs"])}>Salvar</button><Btn on={t.realizada} campo="realizada" lOn="Visita realizada ✓" lOff="Marcar visita como realizada" /></div>
         <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Agendamento na loja</div>
-          <div className="grid"><div className="field"><label>Data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={dataLoja} onChange={e => setDataLoja(e.target.value)} /></div></div>
-          <div style={{ fontSize: 12, color: "var(--ink-soft)", margin: "6px 0 10px" }}>Ao agendar, o cliente vai para a fila do Suporte Consultores, que designa o vendedor.</div>
-          <button className="btn primary sm" onClick={() => { if (!dataLoja || dataLoja.length < 16) { toast("Informe a data e o horário da vinda à loja"); return; } ex(() => A.agendarLoja(c.id, dataLoja, v.medidas, v.obs), "Agendado — enviado para designar o vendedor"); }}>Agendar na loja e encaminhar</button>
+          <div className="grid">
+            <div className="field"><label>Data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={dataLoja} onChange={e => setDataLoja(e.target.value)} /></div>
+            <div className="field"><label>Cliente quer projeto pronto? <span className="req-star">*</span></label><select value={querProjeto} onChange={e => setQuerProjeto(e.target.value)}><option value="">Selecione…</option><option value="sim">Sim — quer ver o projeto pronto</option><option value="nao">Não</option></select></div>
+          </div>
+          {!(c.anexos || []).length && <div className="aviso-anexo" style={{ marginTop: 10 }}>⚠️ <b>Sem anexo.</b> Anexe a planta baixa e as fotos antes de agendar — sem elas o vendedor atende no escuro.</div>}
+          <div style={{ fontSize: 12, color: "var(--ink-soft)", margin: "8px 0 10px" }}>Ao agendar, o cliente vai para a fila do Suporte Consultores, que define o vendedor.</div>
+          <button className="btn primary sm" onClick={() => { if (!dataLoja || dataLoja.length < 16) { toast("Informe a data e o horário da vinda à loja"); return; } if (!querProjeto) { toast("Informe se o cliente quer projeto pronto"); return; } ex(() => A.agendarLoja(c.id, dataLoja, v.medidas, v.obs, querProjeto), "Agendado — enviado para definir o vendedor"); }}>Agendar na loja e encaminhar</button>
         </div>
       </div>
     );
@@ -209,30 +216,53 @@ function Tratativa({ c }: any) {
     );
   }
   if (c.setorDestino === "atendente_cliente") {
-    const sc = c.statusCliente || "com_vendedor";
-    const scReal = R.statusClienteDe(c);
+    const sc = R.statusClienteDe(c);
     const infoTop = <>{t.medidas && <RowSb k="Medidas">{t.medidas}</RowSb>}<RowSb k="Vinda à loja" pb="4px 0 12px">{fmtDateTime(c.dataLoja)}</RowSb></>;
     if (c.venda || VENDA_SC.includes(sc)) {
-      const vv = c.venda || {}; const vs = vv.status || "registrada";
+      const vv = c.venda || {}; const vs2 = vv.status || "registrada";
       return (
         <div className="resp-box"><h4>Atendimento concluído <ScBadge c={c} /></h4>
           {vv.numero && <RowSb k="Venda">Nº {vv.numero}{R.podeVerValor(c) && vv.valor ? " · R$ " + vv.valor : ""}</RowSb>}
           {R.ehGestao() ? (
-            <div style={{ marginTop: 12 }}><div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Situação da venda: <b>{VENDA_STATUS[vs] || vs}</b> — alterar para:</div>
+            <div style={{ marginTop: 12 }}><div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Situação da venda: <b>{VENDA_STATUS[vs2] || vs2}</b> — alterar para:</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {vs !== "efetivada" && <button className="btn primary sm" onClick={() => ex(() => A.decidirVenda(c.id, "efetivada"), "Situação atualizada")}>Efetivada</button>}
-                {vs !== "promissoria" && <button className="btn sm" onClick={() => ex(() => A.decidirVenda(c.id, "promissoria"), "Situação atualizada")}>Promissória</button>}
-                {vs !== "cancelada" && <button className="btn danger sm" onClick={() => ex(() => A.decidirVenda(c.id, "cancelada"), "Situação atualizada")}>Cancelar venda</button>}
+                {vs2 !== "efetivada" && <button className="btn primary sm" onClick={() => ex(() => A.decidirVenda(c.id, "efetivada"), "Situação atualizada")}>Efetivada</button>}
+                {vs2 !== "promissoria" && <button className="btn sm" onClick={() => ex(() => A.decidirVenda(c.id, "promissoria"), "Situação atualizada")}>Promissória</button>}
+                {vs2 !== "cancelada" && <button className="btn danger sm" onClick={() => ex(() => A.decidirVenda(c.id, "cancelada"), "Situação atualizada")}>Cancelar venda</button>}
               </div></div>
-          ) : <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginTop: 8 }}>Situação da venda: <b>{VENDA_STATUS[vs] || vs}</b>. Só a Gestão altera.</div>}
+          ) : <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginTop: 8 }}>Situação da venda: <b>{VENDA_STATUS[vs2] || vs2}</b>. Só a Gestão altera.</div>}
         </div>
       );
     }
-    if (scReal === "nao_compareceu") return <div className="resp-box"><h4>Cliente não compareceu</h4>{infoTop}<button className="btn sm" onClick={() => ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>Cliente veio afinal — reabrir</button></div>;
-    if (sc === "com_vendedor") return <div className="resp-box"><h4>Atendimento em loja <ScBadge c={c} /></h4>{infoTop}<div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>Registre a venda no bloco “Dados da venda”, abaixo.</div></div>;
-    return <div className="resp-box"><h4>Aguardando o cliente na loja <ScBadge c={c} /></h4>{infoTop}<div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-      <button className="btn primary sm" onClick={() => ex(() => A.marcarComparecimento(c.id, "chegou"), "Atualizado")}>Cliente chegou — com vendedor</button>
-      <button className="btn sm" onClick={() => ex(() => A.marcarComparecimento(c.id, "nao_compareceu"), "Atualizado")}>Cliente não compareceu</button></div></div>;
+    if (sc === "nao_compareceu" || sc === "reprovado") return <div className="resp-box"><h4>{sc === "reprovado" ? "Atendimento reprovado" : "Cliente não compareceu"} <ScBadge c={c} /></h4>{infoTop}
+      {t.parecer && <RowSb k="Parecer">{t.parecer}</RowSb>}
+      <button className="btn sm" onClick={() => sc === "reprovado" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>{sc === "reprovado" ? "Reabrir atendimento" : "Cliente veio afinal — reabrir"}</button></div>;
+    // status do atendimento do vendedor, com parecer
+    const OPC: [string, string][] = [["orcamento", "Orçamento"], ["sem_resposta", "Sem resposta"], ["reagendado", "Reagendado"], ["reprovado", "Reprovado"], ["nao_compareceu", "Não compareceu"], ["vendido", "Vendido — registrar a venda"], ["com_vendedor", "Em atendimento"]];
+    const salvarStatus = () => {
+      if (!vs) { toast("Escolha o status"); return; }
+      if (vs === "vendido") { const alvo = document.getElementById("tVendaNumero"); if (alvo) { alvo.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => (alvo as HTMLInputElement).focus(), 350); } toast("Registre o nº e o valor da venda no bloco Dados da venda"); return; }
+      if (vs === "reagendado" && (!vsData || vsData.length < 16)) { toast("Informe a nova data e horário da vinda à loja"); return; }
+      if (["orcamento", "sem_resposta", "reprovado"].includes(vs) && !vsTxt.trim()) { toast("Escreva o parecer: o que aconteceu com o cliente"); return; }
+      ex(() => A.vendedorStatus(c.id, vs, vs === "reagendado" ? vsData : "", vsTxt.trim()), "Status atualizado").then(ok => { if (ok) { setVs(""); setVsData(""); setVsTxt(""); } });
+    };
+    return (
+      <div className="resp-box"><h4>Atendimento do vendedor <ScBadge c={c} /></h4>
+        {t.cobradoEm && <div className="alerta" style={{ marginTop: 0 }}><b>Parecer cobrado</b> por {t.cobradoPor || "Suporte"} em {fmtDateTime(t.cobradoEm)}. Atualize o status abaixo.</div>}
+        {infoTop}
+        <div style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}>
+          <Btn on={t.emContato} campo="emContato" lOn="Já em contato com o cliente ✓" lOff="Marcar: já estou em contato" />
+          <Btn on={t.projetoSistema} campo="projetoSistema" lOn="Projeto pronto no sistema ✓" lOff="Marcar: projeto pronto no sistema" />
+        </div>
+        {t.parecerEm && <div style={{ fontSize: 12.5, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 9, padding: "9px 12px", marginBottom: 12 }}>Último parecer: <b>{STATUS_CLIENTE[t.parecerStatus] || t.parecerStatus}</b>{t.parecer ? " — " + t.parecer : ""} <span style={{ color: "var(--ink-faint)" }}>({t.parecerPor}, {fmtDateTime(t.parecerEm)})</span></div>}
+        <div className="grid">
+          <div className="field"><label>Status do atendimento <span className="req-star">*</span></label><select value={vs} onChange={e => setVs(e.target.value)}><option value="">Selecione…</option>{OPC.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+          {vs === "reagendado" && <div className="field"><label>Nova data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={vsData} onChange={e => setVsData(e.target.value)} /></div>}
+          {vs && vs !== "vendido" && <div className="field full"><label>Parecer {["orcamento", "sem_resposta", "reprovado"].includes(vs) && <span className="req-star">*</span>}</label><textarea value={vsTxt} onChange={e => setVsTxt(e.target.value)} placeholder="O que aconteceu: valor do orçamento, próximo passo, motivo da recusa…" /></div>}
+        </div>
+        <div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={salvarStatus}>Salvar status</button></div>
+      </div>
+    );
   }
   return null;
 }
@@ -244,7 +274,7 @@ function StatusCliente({ c }: any) {
   const [dl, setDl] = useState(c.dataLoja ? String(c.dataLoja).slice(0, 16) : "");
   useEffect(() => { setNovo(atual); setDl(c.dataLoja ? String(c.dataLoja).slice(0, 16) : ""); }, [atual, c.id, c.dataLoja]);
   const pedeData = novo === "agendado_loja";
-  if (!(R.podeTratar(c) || R.ehGestao())) return <Row k="Status do cliente"><ScBadge c={c} /></Row>;
+  if (!(R.podeTratar(c) || R.ehGestao()) || R.me()?.somenteAtribuidos) return <Row k="Status do cliente"><ScBadge c={c} /></Row>;
   const g = R.ehGestao();
   const opcoes = Object.keys(STATUS_CLIENTE).filter(k => g || !VENDA_SC.includes(k) || k === atual);
   async function aplicar() {
@@ -355,7 +385,7 @@ function Vendedor({ c }: any) {
   const projs = R.projetistas().filter(p => p.id !== c.atendenteId);
   const sel = (label: string) => <div className="field"><label>{label}</label><select value={novo} onChange={e => setNovo(e.target.value)}><option value="">Selecione…</option>{projs.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></div>;
   return (
-    <div className="resp-box"><h4>Vendedor designado</h4>
+    <div className="resp-box"><h4>Vendedor definido</h4>
       <RowSb k="Vendedor atual" pb="5px 0" bold>{atual ? atual.nome : "—"}</RowSb>
       {tr ? <>
         <div style={{ marginTop: 10, padding: "12px 14px", background: "var(--warn-bg)", border: "1px solid var(--warn)", borderRadius: 10 }}>
@@ -406,7 +436,8 @@ function Destaque({ c, anexar }: any) {
   let titulo = "", valor = "", extra = "", cor = "var(--primary)";
   if (["aguardando_consultor", "direcionado_consultor"].includes(sc)) { titulo = "Data solicitada para a visita"; valor = fmtDT(c.dataVisita); extra = c.endereco || ""; cor = "var(--st-aberta)"; }
   else if (sc === "visita_realizada") { titulo = "Visita feita — falta agendar a loja"; valor = fmtDT(c.dataVisita); extra = "Próximo passo: combinar a data de ida à loja"; cor = "var(--st-respondida)"; }
-  else if (["agendado_loja", "com_vendedor"].includes(sc)) { titulo = "Cliente vem à loja em"; valor = fmtDT(c.dataLoja); extra = c.atendenteId ? "Projetista: " + R.nomeUser(c.atendenteId) : "Ainda sem projetista designado"; cor = sc === "com_vendedor" ? "var(--st-respondida)" : "var(--st-aberta)"; }
+  else if (["agendado_loja", ...EM_ATENDIMENTO].includes(sc)) { titulo = "Cliente vem à loja em"; valor = fmtDT(c.dataLoja); extra = c.atendenteId ? "Vendedor: " + R.nomeUser(c.atendenteId) : "Ainda sem vendedor definido"; cor = sc === "agendado_loja" ? "var(--st-aberta)" : "var(--st-respondida)"; }
+  else if (sc === "reprovado") { titulo = "Atendimento reprovado"; valor = fmtDT(c.dataLoja); cor = "var(--danger)"; }
   else if (VENDA_SC.includes(sc)) { const v = c.venda || {}; titulo = "Venda nº " + (v.numero || "—"); valor = R.podeVerValor(c) && v.valor ? "R$ " + v.valor : "valor restrito"; extra = (VENDA_STATUS[v.status] || "") + (v.dataVenda ? " · " + fmtDate(v.dataVenda) : ""); cor = corVenda(v.status); }
   else if (sc === "nao_compareceu") { titulo = "Cliente não compareceu"; valor = fmtDT(c.dataLoja); cor = "var(--danger)"; }
   if (!titulo) return null;
@@ -416,6 +447,7 @@ function Destaque({ c, anexar }: any) {
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: cor }}>{titulo}</div>
       <div style={{ fontSize: 21, fontWeight: 700, marginTop: 4, letterSpacing: "-.02em" }}>{valor}</div>
       {extra && <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginTop: 4 }}>{extra}</div>}
+      <MarcasLoja c={c} />
       {(imgs.length || links.length) ? (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
@@ -425,7 +457,22 @@ function Destaque({ c, anexar }: any) {
           <div className="thumbs">{imgs.map((a: any, i: number) => <img key={a.id || i} className="thumb" src={a.url} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />)}
             {links.map((a: any, i: number) => <a key={"l" + i} className="att-link" href={a.url} target="_blank" rel="noopener">🔗 link</a>)}</div>
         </div>
-      ) : <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-faint)" }}>Nenhuma planta ou foto anexada ainda.</div>}
+      ) : R.semAnexo(c) ? <div className="aviso-anexo" style={{ marginTop: 12 }}>⚠️ <b>Sem anexo.</b> Nenhuma planta ou foto do cliente — {c.consultorId ? "o consultor precisa anexar" : "anexe a planta ou fotos"} antes do atendimento na loja.</div>
+        : <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-faint)" }}>Nenhuma planta ou foto anexada ainda.</div>}
+    </div>
+  );
+}
+
+// o que o vendedor precisa ver de relance: se o cliente quer projeto pronto e como está o preparo do atendimento
+export function MarcasLoja({ c }: any) {
+  const t = c.tratativa || {};
+  if (!t.querProjeto && !t.emContato && !t.projetoSistema) return null;
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+      {t.querProjeto === "sim" && <span className="marca-loja sim">📐 Quer projeto pronto</span>}
+      {t.querProjeto === "nao" && <span className="marca-loja">Não quer projeto pronto</span>}
+      {t.emContato && <span className="marca-loja ok">Vendedor em contato</span>}
+      {t.projetoSistema && <span className="marca-loja ok">Projeto pronto no sistema</span>}
     </div>
   );
 }

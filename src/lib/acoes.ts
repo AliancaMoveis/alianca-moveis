@@ -23,8 +23,10 @@ export const A = {
   alterarStatusCliente: (id: string, novo: string, dataLoja?: string) => rpc("alterar_status_cliente", { p_id: id, p_novo: novo, ...(dataLoja ? { p_data_loja: dataLoja } : {}) }),
   direcionarConsultor: (id: string, consultor: string, dataVisita: string, endereco: string) =>
     rpc("direcionar_consultor", { p_id: id, p_consultor: consultor, p_data_visita: nz(dataVisita), p_endereco: endereco || "" }),
-  agendarLoja: (id: string, dataLoja: string, medidas: string, obs: string) =>
-    rpc("agendar_loja", { p_id: id, p_data_loja: nz(dataLoja && dataLoja.length === 10 ? dataLoja + "T09:00" : dataLoja), p_medidas: medidas, p_obs: obs }),
+  agendarLoja: (id: string, dataLoja: string, medidas: string, obs: string, querProjeto?: string) =>
+    rpc("agendar_loja", { p_id: id, p_data_loja: nz(dataLoja && dataLoja.length === 10 ? dataLoja + "T09:00" : dataLoja), p_medidas: medidas, p_obs: obs, p_quer_projeto: querProjeto || null }),
+  vendedorStatus: (id: string, status: string, data: string, parecer: string) => rpc("vendedor_status", { p_id: id, p_status: status, p_data: nz(data), p_parecer: parecer || "" }),
+  cobrarParecer: (id: string) => rpc("cobrar_parecer", { p_id: id }),
   designarProjetista: (id: string, atendente: string) => rpc("designar_projetista", { p_id: id, p_atendente: atendente }),
   marcarComparecimento: (id: string, acao: "chegou" | "nao_compareceu" | "voltou") => rpc("marcar_comparecimento", { p_id: id, p_acao: acao }),
   reagendarLoja: (id: string, nova: string) => rpc("reagendar_loja", { p_id: id, p_nova: nz(nova) }),

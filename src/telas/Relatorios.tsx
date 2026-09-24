@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../estado";
-import { estaAtrasado } from "../lib/regras";
+import { estaAtrasado, hojeISO } from "../lib/regras";
+import RelMkt from "./RelMkt";
 import { BarRow, Kpi } from "./Dashboard";
 
 const Nada = ({ t }: { t: string }) => <div style={{ color: "var(--ink-faint)", fontSize: 13 }}>{t}</div>;
@@ -11,9 +12,11 @@ function Barras({ rows, cor, sufixo = "" }: { rows: [string, number][]; cor?: st
 
 export default function Relatorios() {
   const { R, st } = useApp();
-  const [f, setF] = useState({ de: "", ate: "", se: "", tp: "" });
+  const hoje = hojeISO();
+  const [f, setF] = useState({ de: hoje.slice(0, 8) + "01", ate: hoje, se: "", tp: "" });
+  const [aba, setAba] = useState<"cc" | "mkt">("cc");
   const s = (k: string) => (e: any) => setF(x => ({ ...x, [k]: e.target.value }));
-  let arr = st.chamados.filter(R.podeVer);
+  let arr = st.chamados.filter(c => R.podeVer(c) && !R.domMarketing(c));
   if (f.de) arr = arr.filter(c => new Date(c.criadoEm) >= new Date(f.de + "T00:00:00"));
   if (f.ate) arr = arr.filter(c => new Date(c.criadoEm) <= new Date(f.ate + "T23:59:59"));
   if (f.se) arr = arr.filter(c => c.setorDestino === f.se);
@@ -42,10 +45,12 @@ export default function Relatorios() {
       <div className="card" style={{ padding: "18px 20px", marginBottom: 16 }}><div className="grid">
         <div className="field"><label>De</label><input type="date" value={f.de} onChange={s("de")} /></div>
         <div className="field"><label>Até</label><input type="date" value={f.ate} onChange={s("ate")} /></div>
-        <div className="field"><label>Setor</label><select value={f.se} onChange={s("se")}><option value="">Todos os setores</option>{R.setoresVisiveis().map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>
-        <div className="field"><label>Motivo</label><select value={f.tp} onChange={s("tp")}><option value="">Todos os motivos</option>{Object.entries(R.TIPOS).map(([k, t]: any) => <option key={k} value={k}>{t.nome}</option>)}</select></div>
-      </div><div style={{ marginTop: 14, display: "flex", gap: 10 }}><button className="btn ghost sm" onClick={() => setF({ de: "", ate: "", se: "", tp: "" })}>Limpar filtros</button><span className="live" style={{ marginLeft: 0 }}><i></i>atualiza ao vivo</span></div></div>
-      <div className="kpis" id="relKpis"><Kpi n={total} l="Solicitações no período" /><Kpi n={conc} l="Concluídas" /><Kpi n={at} l="Atrasadas agora" cls={at ? "alert" : ""} /><Kpi n={tmed != null ? tmed.toFixed(1) + "h" : "—"} l="Tempo médio de resposta" /></div>
+        {aba === "cc" && <><div className="field"><label>Setor</label><select value={f.se} onChange={s("se")}><option value="">Todos os setores</option>{R.setoresVisiveis().map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>
+        <div className="field"><label>Motivo</label><select value={f.tp} onChange={s("tp")}><option value="">Todos os motivos</option>{Object.entries(R.TIPOS).filter(([, t]: any) => !t.presale).map(([k, t]: any) => <option key={k} value={k}>{t.nome}</option>)}</select></div></>}
+      </div><div style={{ marginTop: 14, display: "flex", gap: 10 }}><button className="btn ghost sm" onClick={() => setF({ de: hoje.slice(0, 8) + "01", ate: hoje, se: "", tp: "" })}>Mês atual</button><button className="btn ghost sm" onClick={() => setF({ de: "", ate: "", se: "", tp: "" })}>Todo o período</button><span className="live" style={{ marginLeft: 0 }}><i></i>atualiza ao vivo</span></div></div>
+      <div className="subnav" style={{ marginBottom: 14 }}><button className={aba === "cc" ? "on" : ""} onClick={() => setAba("cc")}>Call center e pós-venda</button><button className={aba === "mkt" ? "on" : ""} onClick={() => setAba("mkt")}>Marketing</button></div>
+      {aba === "mkt" ? <RelMkt de={f.de} ate={f.ate} /> : <>
+      <div className="kpis" id="relKpis"><Kpi n={total} l="Atendimentos no período" /><Kpi n={conc} l="Concluídas" /><Kpi n={at} l="Atrasadas agora" cls={at ? "alert" : ""} /><Kpi n={tmed != null ? tmed.toFixed(1) + "h" : "—"} l="Tempo médio de resposta" /></div>
       <div className="panel-grid">
         <div className="panel"><h3>Volume por setor</h3><div><Barras rows={R.setoresVisiveis().map(x => [x.nome, porSetor[x.id] || 0] as [string, number])} /></div></div>
         <div className="panel"><h3>Tempo médio de resposta por setor</h3><div>{rowsTempo.length ? <Barras rows={rowsTempo} sufixo="h" /> : <Nada t="Ainda sem respostas registradas." />}</div></div>
@@ -59,6 +64,7 @@ export default function Relatorios() {
         <div className="panel"><h3>Fábricas — mais atraso</h3><div>{rowsFabAtr.length ? <Barras rows={rowsFabAtr} cor="var(--danger)" /> : <Nada t="Nenhuma fábrica atrasada no período." />}</div></div>
       </div>
       <div className="panel" style={{ marginBottom: 16 }}><h3>Fábricas — melhor resolutiva <span className="hint" style={{ marginLeft: 6 }}>% respondido dentro do prazo</span></h3><div>{pctRows(rowsFabResol)}</div></div>
+      </>}
     </section>
   );
 }

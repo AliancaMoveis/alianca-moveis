@@ -17,13 +17,13 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
   const arr = d ? R.ordenar(d.meus.slice()) : [];
   return (
     <section className="view active" id={"view-" + qual}>
-      <div className="view-head"><div><h2 id={"pesTitulo" + sufixo}>{ehVend ? "Vendedores" : "Consultores externos"}</h2><p id={"pesSub" + sufixo}>{(ehVend ? "Carteira de cada projetista da loja." : "Carteira de cada consultor externo.") + " Clique num card para ver os clientes."}</p></div></div>
+      <div className="view-head"><div><h2 id={"pesTitulo" + sufixo}>{ehVend ? "Vendedores" : "Consultores externos"}</h2><p id={"pesSub" + sufixo}>{(ehVend ? "Carteira de cada vendedor da loja." : "Carteira de cada consultor externo.") + " Clique num card para ver os clientes."}</p></div></div>
       <div className="pess" id={"pesCards" + sufixo}>
         {dados.length ? dados.map(dd => {
           const cor = corDoSetor(setor);
           return (
             <div key={dd.u.id} className={"pcard" + (sel === dd.u.id ? " sel" : "")} onClick={() => setSel(s => s === dd.u.id ? null : dd.u.id)}>
-              <div className="t"><div className="av2" style={{ background: cor }}>{inicial(dd.u.nome.split("— ")[1] || dd.u.nome)}</div><div><div className="nm">{dd.u.nome}</div><div className="sb">{ehVend ? "Projetista (loja)" : "Consultor externo"}</div></div></div>
+              <div className="t"><div className="av2" style={{ background: cor }}>{inicial(dd.u.nome.split("— ")[1] || dd.u.nome)}</div><div><div className="nm">{dd.u.nome}</div><div className="sb">{ehVend ? "Vendedor (loja)" : "Consultor externo"}</div></div></div>
               <div className="num"><div>Ativos<b>{dd.ativos}</b></div><div>Vendas<b>{dd.vendas}</b></div><div>Vendido<b style={{ fontSize: 14 }}>{fmtMoeda(dd.total)}</b></div><div>Conversão<b>{dd.conv}%</b></div></div>
               <div className="bar"><i style={{ width: dd.total / maxT * 100 + "%", background: cor }}></i></div>
             </div>
@@ -89,7 +89,7 @@ export function Clientes() {
         {arr.length ? arr.map(c => {
           const v = c.venda;
           const cons = c.consultorId ? R.nomeUser(c.consultorId) : null, aten = c.atendenteId ? R.nomeUser(c.atendenteId) : null;
-          const meta = [c.produto || "", c.solicitante ? "cadastrado por " + c.solicitante : "", cons ? "consultor " + cons : "", aten ? "atendente " + aten : ""].filter(Boolean).join(" · ");
+          const meta = [c.produto || "", c.solicitante ? "cadastrado por " + c.solicitante : "", cons ? "consultor " + cons : "", aten ? "vendedor " + aten : ""].filter(Boolean).join(" · ");
           const corS = v ? (v.status === "efetivada" ? "var(--st-concluida)" : v.status === "promissoria" ? "var(--st-tratativa)" : v.status === "cancelada" ? "var(--danger)" : "var(--warn)") : "";
           return (
             <div className="cli-row" key={c.id} onClick={() => abrirDetalhe(c.id)}>

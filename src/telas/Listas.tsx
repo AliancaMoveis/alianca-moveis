@@ -76,9 +76,9 @@ export function AcompMkt() {
   useEffect(() => { if (preset?.setor) { setFSetor(preset.setor); setFiltro("andamento"); } if (preset?.filtro) setFiltro(preset.filtro); }, [preset]);
   const soMeu = !(R.ehGestao() || R.temMarketing());
   const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c) && (!fTipo || c.tipo === fTipo) && (!fSetor || c.setorDestino === fSetor) && bate(c, q));
-  const FILTROS: Record<string, (c: any) => boolean> = { andamento: c => R.emAberto(c), semvendedor: c => c.setorDestino === "suporte_consultores" && !c.atendenteId, criticos: c => R.prioridade(c) === "critico", todos: () => true };
+  const FILTROS: Record<string, (c: any) => boolean> = { andamento: c => R.emAberto(c), semvendedor: c => c.setorDestino === "suporte_consultores" && !c.atendenteId, semparecer: c => R.semParecer(c), semanexo: c => R.semAnexo(c), criticos: c => R.prioridade(c) === "critico", todos: () => true };
   Object.keys(STATUS_CLIENTE).forEach(k => (FILTROS[k] = c => R.statusClienteDe(c) === k));
-  const chips = [["andamento", "Em andamento"], ["semvendedor", "Sem vendedor"], ["criticos", "Críticos — sem atualização"]].concat(Object.keys(STATUS_CLIENTE).map(k => [k, STATUS_CLIENTE[k]])).concat([["todos", "Todos"]]);
+  const chips = [["andamento", "Em andamento"], ["semvendedor", "Sem vendedor"], ["semparecer", "Sem parecer do vendedor"], ["semanexo", "⚠️ Sem anexo"], ["criticos", "Críticos — sem atualização"]].concat(Object.keys(STATUS_CLIENTE).map(k => [k, STATUS_CLIENTE[k]])).concat([["todos", "Todos"]]);
   const cont: Record<string, number> = {}; chips.forEach(([k]) => (cont[k] = base.filter(FILTROS[k]).length));
   const arr = R.ordenar(base.filter(FILTROS[filtro] || FILTROS.todos));
   return (
