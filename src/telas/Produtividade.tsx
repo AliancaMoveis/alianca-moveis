@@ -46,6 +46,9 @@ export default function Produtividade() {
   const linhas = ops.map((u: any) => ({ u, r: calc(u.id), pag: pags.find((p: any) => p.operadora_id === u.id) })).sort((a: any, b: any) => b.r.total - a.r.total);
   const tot = linhas.reduce((s: any, x: any) => ({ agend: s.agend + x.r.agend, vendas: s.vendas + x.r.vendas, bonus: s.bonus + x.r.bonus, total: s.total + x.r.total }), { agend: 0, vendas: 0, bonus: 0, total: 0 });
   const metaHoje = metaDe[hoje];
+  // operadora: só é "a receber" o que a supervisora aprovou; o resto fica pendente de aprovação
+  const aprovado = linhas.reduce((s: number, x: any) => s + (x.pag ? Number(x.pag.total) : 0), 0);
+  const pendente = Math.max(0, tot.total - aprovado);
   const diasMes: string[] = []; for (let d = new Date(de + "T12:00"); isoLocal(d) <= ate && isoLocal(d) <= hoje; d.setDate(d.getDate() + 1)) diasMes.push(isoLocal(d));
   const salvarMeta = () => {
     const m = parseInt(f.meta), v = parseFloat(String(f.valor).replace(",", "."));
@@ -90,17 +93,20 @@ export default function Produtividade() {
       <div className="kpis">
         <Kpi n={tot.agend} l="Agendamentos no mês" /><Kpi n={tot.vendas} l="Vendas fechadas" />
         <Kpi n={fmtMoeda(tot.vendas * valorVenda)} l={`Vendas × ${fmtMoeda(valorVenda)}`} /><Kpi n={fmtMoeda(tot.bonus)} l="Bônus de meta" />
-        <Kpi n={fmtMoeda(tot.total)} l={gestor ? "Total a pagar" : "Total a receber"} cor="var(--st-concluida)" />
+        {gestor ? <Kpi n={fmtMoeda(tot.total)} l="Total a pagar" cor="var(--st-concluida)" /> : <>
+          <Kpi n={fmtMoeda(aprovado)} l="Aprovado para receber" cor={aprovado ? "var(--st-concluida)" : "var(--ink-faint)"} />
+          <Kpi n={fmtMoeda(pendente)} l="Pendente de aprovação" cor={pendente ? "var(--warn)" : "var(--ink-faint)"} />
+        </>}
       </div>
 
       <div className="panel" style={{ marginBottom: 16 }}><h3>{gestor ? "Pagamento por operadora" : "Meu pagamento"} — {titulo}</h3>
-        {linhas.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Operadora</th><th>Agendou</th><th>→ Consultor</th><th>→ Loja</th><th>Vieram</th><th>Vendas fechadas</th><th>Valor vendas</th><th>Metas batidas</th><th>Bônus</th><th>Total</th><th>Aprovação</th></tr></thead>
+        {linhas.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Operadora</th><th>Agendou</th><th>→ Consultor</th><th>→ Loja</th><th>Vieram</th><th>Vendas fechadas</th><th>Valor vendas</th><th>Metas batidas</th><th>Bônus</th><th>{gestor ? "Total" : "Previsto"}</th><th>Aprovação</th></tr></thead>
           <tbody>{linhas.map(({ u, r, pag }: any) => (
             <tr key={u.id}><td><b>{u.nome}</b></td><td>{r.agend}</td><td>{r.cons}</td><td>{r.loja}</td><td>{r.vieram}</td>
               <td style={{ fontWeight: 700, color: "var(--st-concluida)" }}>{r.vendas}{r.pendentes ? <small style={{ color: "var(--warn)", fontWeight: 400 }}> (+{r.pendentes} aguardando)</small> : null}</td>
               <td>{fmtMoeda(r.valorVendas)}</td><td>{r.batidos}/{r.diasMeta}</td><td>{fmtMoeda(r.bonus)}</td><td style={{ fontWeight: 800 }}>{fmtMoeda(r.total)}</td>
-              <td style={{ whiteSpace: "nowrap" }}>{pag ? <><span className="badge b-concluida">Aprovado {fmtMoeda(Number(pag.total))}</span><div style={{ fontSize: 11, color: "var(--ink-faint)" }}>{R.nomeUser(pag.aprovado_por)} · {fmtDateTime(pag.aprovado_em)}</div>
-                {Number(pag.total) !== r.total && <div style={{ fontSize: 11, color: "var(--warn)" }}>valores mudaram depois da aprovação</div>}</> : <span className="badge b-aberta">Aguardando aprovação</span>}
+              <td style={{ whiteSpace: "nowrap" }}>{pag ? <><span className="badge b-concluida">{gestor ? "Aprovado" : "Aprovado para receber"} {fmtMoeda(Number(pag.total))}</span><div style={{ fontSize: 11, color: "var(--ink-faint)" }}>{R.nomeUser(pag.aprovado_por)} · {fmtDateTime(pag.aprovado_em)}</div>
+                {Number(pag.total) !== r.total && <div style={{ fontSize: 11, color: "var(--warn)" }}>{gestor ? "valores mudaram depois da aprovação — reaprove" : "diferença de " + fmtMoeda(Math.abs(r.total - Number(pag.total))) + " pendente de aprovação"}</div>}</> : <span className="badge b-urgente" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>Pendente de aprovação</span>}
                 {gestor && <div style={{ marginTop: 4, display: "flex", gap: 6 }}>
                   <button className="btn primary sm" onClick={() => ex(() => A.aprovarPagamentoMkt(u.id, de, ate), "Pagamento aprovado").then((ok: boolean) => ok && carregar())}>{pag ? "Reaprovar" : "Aprovar"}</button>
                   {pag && <button className="btn ghost sm" onClick={() => ex(() => A.cancelarAprovacaoMkt(pag.id), "Aprovação desfeita").then((ok: boolean) => ok && carregar())}>Desfazer</button>}</div>}</td></tr>))}</tbody></table></div>
