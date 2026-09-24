@@ -156,6 +156,7 @@ function Tratativa({ c }: any) {
   if (!R.domMarketing(c)) return null;
 
   if (c.setorDestino === "marketing_supervisao") {
+    if (!(R.temMarketing() || R.ehGestao())) return <div className="resp-box"><h4>Aguardando direcionamento</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>A Supervisão Marketing ainda vai direcionar este cliente ao consultor. Depois disso aparecem aqui os campos da visita e o agendamento na loja.</div></div>;
     return (
       <div className="resp-box"><h4>Designar consultor</h4>
         <div style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 9, padding: "11px 13px", marginBottom: 14, fontSize: 13 }}>
