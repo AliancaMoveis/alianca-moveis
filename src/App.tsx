@@ -4,7 +4,7 @@ import { sb } from "./lib/supabase";
 import { carregarEstado, type Estado } from "./lib/dados";
 import { AppProvider } from "./estado";
 import Login, { NovaSenha } from "./telas/Login";
-import Shell from "./telas/Shell";
+import Raiz from "./movel/Raiz";
 import { Overlays } from "./comp/Overlays";
 
 export default function App() {
@@ -47,7 +47,7 @@ export default function App() {
   }
   return (
     <AppProvider key={eu.id} uid={eu.id} inicial={estado} overlays={(o) => <Overlays {...o} />}>
-      <Shell />
+      <Raiz />
     </AppProvider>
   );
 }
