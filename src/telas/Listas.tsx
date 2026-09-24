@@ -33,10 +33,10 @@ export function Fila() {
     criticos: c => R.prioridade(c) === "critico",
     atrasados: c => R.prioridade(c) === "atrasado",
     urgentes: c => R.prioridade(c) === "urgente",
-    aberta: c => c.status === "aberta", tratativa: c => c.status === "tratativa", respondida: c => c.status === "respondida", concluida: c => c.status === "concluida",
+    aberta: c => c.status === "aberta", tratativa: c => c.status === "tratativa", respondida: c => c.status === "respondida", informar: c => c.status === "informar", concluida: c => c.status === "concluida",
     todos: () => true,
   };
-  const chips = [["abertos", "Em aberto"], ["criticos", "Críticos (+24h)"], ["atrasados", "Atrasados"], ["urgentes", "Urgentes no prazo"], ["aberta", "Abertas"], ["tratativa", "Em tratativa"], ["respondida", "Respondidas"], ["concluida", "Concluídas"], ["todos", "Todos"]];
+  const chips = [["abertos", "Em aberto"], ["criticos", "Críticos (+24h)"], ["atrasados", "Atrasados"], ["urgentes", "Urgentes no prazo"], ["aberta", "Abertas"], ["tratativa", "Em tratativa"], ["respondida", "Respondidas"], ["informar", "Informar cliente"], ["concluida", "Concluídas"], ["todos", "Todos"]];
   const cont: Record<string, number> = {}; chips.forEach(([k]) => (cont[k] = base.filter(FILTROS[k]).length));
   const arr = R.ordenar(base.filter(FILTROS[filtro] || FILTROS.todos));
   return (
@@ -61,7 +61,7 @@ export function Fila() {
         </select>}
       </div>
       <div className="chips" id="filtros">{chips.map(([k, l]) => <button key={k} className={"chip" + (filtro === k ? " on" : "")} onClick={() => setFiltro(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
-      <div className="legenda"><span><i style={{ background: "var(--st-aberta)" }}></i>Dentro do prazo</span><span><i style={{ background: "var(--warn)" }}></i>Perto de vencer (24h)</span><span><i style={{ background: "var(--danger)" }}></i>Atrasado ou urgente</span><span><i style={{ background: "var(--critico)" }}></i>Crítico (+24h sem resposta)</span><span><i style={{ background: "var(--st-respondida)" }}></i>Respondido — falta concluir</span></div>
+      <div className="legenda"><span><i style={{ background: "var(--st-aberta)" }}></i>Dentro do prazo</span><span><i style={{ background: "var(--warn)" }}></i>Perto de vencer (24h)</span><span><i style={{ background: "var(--danger)" }}></i>Atrasado ou urgente</span><span><i style={{ background: "var(--critico)" }}></i>Crítico (+24h sem resposta)</span><span><i style={{ background: "var(--st-respondida)" }}></i>Respondido — falta concluir</span><span><i style={{ background: "var(--st-informar)" }}></i>Informar o cliente</span></div>
       <div className="list" id="listaFila">{arr.length ? arr.map(c => <Ticket key={c.id} c={c} />) : <Vazio big="Nenhum chamado aqui">Nada pendente para este filtro.</Vazio>}</div>
     </section>
   );

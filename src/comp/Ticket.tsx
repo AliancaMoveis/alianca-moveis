@@ -11,8 +11,8 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
   const { R, abrirDetalhe } = useApp();
   const presale = R.domMarketing(c);
   const pr = R.prioridade(c), st = STATUS[c.status], dr = diasRestantes(c);
-  const slaTxt = pr === "respondida" ? "Respondido — falta concluir" : pr === "concluida" ? "Concluído" : pr === "critico" ? "Crítico — sem resposta há +24h" : pr === "atrasado" ? "Atrasado" : (dr <= 0 ? "Vence hoje" : `Responder em ${dr} ${dr === 1 ? "dia" : "dias"}`);
-  const slaCls = pr === "critico" ? "critico" : pr === "atrasado" ? "late" : pr === "perto" ? "warn" : "";
+  const slaTxt = pr === "informar" ? "Avisar o cliente" : pr === "respondida" ? "Respondido — falta concluir" : pr === "concluida" ? "Concluído" : pr === "critico" ? "Crítico — sem resposta há +24h" : pr === "atrasado" ? "Atrasado" : (dr <= 0 ? "Vence hoje" : `Responder em ${dr} ${dr === 1 ? "dia" : "dias"}`);
+  const slaCls = pr === "informar" ? "warn" : pr === "critico" ? "critico" : pr === "atrasado" ? "late" : pr === "perto" ? "warn" : "";
   // um único selo por chamado, conforme a faixa de prioridade
   const urg = presale
     ? (pr === "critico" ? <span className="badge b-critico" title={Math.floor(R.horasSemAtualizar(c)) + "h sem atualização"}>🔴 Crítico — sem atualização</span> : null)
@@ -38,7 +38,7 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
       <span className="bar"></span>
       <div className="idcol"><span className="tid">{c.id}</span><span className="tdate">{fmtDateTime(c.criadoEm)}</span></div>
       <div className="main">
-        <div className="cli">{presale ? <>{c.cliente} {urg}</> : <>{c.cliente} · <b>{R.nomeFab(c.fabrica)}</b> {urg}</>}</div>
+        <div className="cli">{presale ? <>{c.cliente} {urg}</> : <>{c.cliente}{R.ehFabrica(c) && c.fabrica ? <> · <b>{R.nomeFab(c.fabrica)}</b></> : null} {urg}</>}</div>
         <div className="meta"><span className="pill">{R.tipoNome(c.tipo)}</span> <span className="pill setor">{R.setorNome(c.setorDestino)}</span> · {linha2} {att}</div>
         {resposta && c.resposta && (
           <div className="resp-inline"><b>Retorno:</b> {c.resposta.texto || "—"}{c.resposta.previsao ? " · previsão " + fmtDate(c.resposta.previsao) : ""} <span style={{ color: "var(--ink-faint)" }}>({c.resposta.quem || "—"})</span></div>

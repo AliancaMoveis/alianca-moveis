@@ -8,8 +8,11 @@ const VAZIO = { pvOrigem: "cliente", pvPeca: "", tipo: "", cliente: "", clienteD
 type NovoAnexo = { tipo: "img" | "link"; nome: string; url: string; blob?: Blob };
 
 export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
-  const { R, st, toast, recarregar, irPara, abrirDetalhe, setModal } = useApp() as any;
-  const inicialF = () => ({ ...VAZIO, tipo: escopo === "pv" ? "posvenda" : "" });
+  const { R, st, toast, recarregar, irPara, abrirDetalhe, setModal, preset } = useApp() as any;
+  // "+ Nova solicitação" na ficha: já vem com os dados do cliente e fica ligada ao atendimento de origem
+  const pre = preset && preset.prefill ? preset.prefill : null;
+  const inicialF = () => ({ ...VAZIO, tipo: escopo === "pv" ? "posvenda" : "", ...(pre ? { cliente: pre.cliente || "", clienteDoc: pre.clienteDoc || "", telefone: pre.telefone || "", pedido: pre.pedido || "", dataVenda: pre.dataVenda ? String(pre.dataVenda).slice(0, 10) : "", produto: pre.produto || "" } : {}) });
+  const [origem, setOrigem] = useState<string | null>(pre ? pre.vinculadoA || null : null);
   const [f, setF] = useState<any>(inicialF);
   const [anexos, setAnexos] = useState<NovoAnexo[]>([]);
   const [link, setLink] = useState("");
@@ -47,7 +50,8 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
     setAnexos(a => [...a, ...novos]);
   }
   const ehPv = f.tipo === "posvenda";
-  function limpar() { setF(inicialF()); setAnexos([]); setLink(""); setDups([]); }
+  function limpar() { setF({ ...VAZIO, tipo: escopo === "pv" ? "posvenda" : "" }); setOrigem(null); setAnexos([]); setLink(""); setDups([]); }
+  const ehFab = f.tipo === "prazo_fabrica";
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -55,8 +59,9 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
     if (!R.podeCriarTipo(f.tipo)) { toast("Você não tem permissão para abrir este motivo"); return; }
     setEnviando(true);
     try {
-      const vinc = dups.length ? dups[0].c.id : null;
-      const id = await A.criarChamado({ ...f, vinculadoA: vinc });
+      const vinc = origem || (dups.length ? dups[0].c.id : null);
+      const base = ehMkt ? { ...f, clienteDoc: "", pedido: "", dataVenda: "", pedidoFabrica: "", fabrica: "", prazoTatico: "", slaManual: "" } : f;
+      const id = await A.criarChamado({ ...base, fabrica: ehMkt ? "" : ehFab || ehPv ? f.fabrica : "", pedidoFabrica: ehFab ? f.pedidoFabrica : "", prazoTatico: ehFab || f.tipo === "entrega" ? f.prazoTatico : "", vinculadoA: vinc });
       if (ehPv) await A.posvendaRelato(id, f.pvOrigem, f.pvPeca).catch(() => null);
       const fotos = anexos.filter(a => a.tipo === "img");
       const itens = fotos.length ? await enviarFotos(id, fotos.map(a => ({ nome: a.nome, blob: a.blob! }))) : [];
@@ -78,7 +83,8 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
         <h2 id="novaTitulo">{escopo === "pv" ? "Novo atendimento de pós-venda" : ehMkt ? "Novo cliente" : "Nova solicitação"}</h2>
         <p id="novaSub">{escopo === "pv" ? "Registre o cliente e o relato do problema como foi contado. A análise (responsabilidade, custo) você completa depois, na ficha." : ehMkt ? "Cadastro de cliente do marketing. Não se mistura com as solicitações do call center." : "Escolha o motivo do contato — ele define para qual setor a tratativa é encaminhada."}</p>
       </div></div>
-      {dups.length > 0 && (
+      {origem && <div className="ro-note" style={{ marginBottom: 14 }}>Nova solicitação para <b>{f.cliente}</b>, ligada ao atendimento <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(origem); }}>{origem}</a> — o histórico do cliente continua junto. Escolha o motivo do novo assunto. <a href="#" onClick={e => { e.preventDefault(); setOrigem(null); }}>Desligar</a></div>}
+      {dups.length > 0 && !origem && (
         <div id="alertaDuplicado"><div className="dup">
           <div className="tit">⚠ {presale ? "Este cliente já está cadastrado" : "Este cliente já tem solicitação registrada"}</div>
           <div className="sub">Encontrei {dups.length} registro(s) {presale ? "deste cliente no marketing" : "deste cliente no call center"}. Veja antes de abrir outro — evite duplicar o atendimento.</div>
@@ -111,30 +117,30 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
         </div>
         <div className="sec-label">Quem está solicitando</div>
         <div className="loginfo" id="loginfo"><div className="av">{inicial(u.nome)}</div><div className="who"><b>{u.nome}</b><span>{(u.setores || []).length ? u.setores.map(id => <span key={id} className="perfil-tag">{R.setorNome(id)}</span>).reduce((a: any, b: any) => [a, " ", b] as any) : <span className="perfil-tag">sem setor</span>}</span></div><div className="tag">preenchido pelo seu login</div></div>
-        <div className="sec-label">Cliente e venda</div>
+        <div className="sec-label">{ehMkt ? "Dados do cliente (lead)" : "Cliente e venda"}</div>
         <div className="grid">
           <div className="field"><label>Nome do cliente <span className="req-star">*</span></label><input name="cliente" required placeholder="Nome completo" value={f.cliente} onChange={set("cliente")} /></div>
-          {!presale && <div className="field" id="fieldClienteDoc"><label>CPF / CNPJ do cliente <span className="req-star">*</span></label><input name="clienteDoc" required placeholder="000.000.000-00" value={f.clienteDoc} onChange={set("clienteDoc")} /></div>}
+          {!ehMkt && <div className="field" id="fieldClienteDoc"><label>CPF / CNPJ do cliente <span className="req-star">*</span></label><input name="clienteDoc" required placeholder="000.000.000-00" value={f.clienteDoc} onChange={set("clienteDoc")} /></div>}
           <div className="field"><label>Telefone / contato</label><input name="telefone" placeholder="(00) 00000-0000" value={f.telefone} onChange={set("telefone")} /></div>
-          {!presale && <div className="field" id="fieldPedido"><label>Nº venda <span className="req-star">*</span></label><input name="pedido" required placeholder="Ex.: 48213" value={f.pedido} onChange={set("pedido")} /></div>}
-          {!presale && <div className="field" id="fieldDataVenda"><label>Data da venda</label><input name="dataVenda" type="date" value={f.dataVenda} onChange={set("dataVenda")} /></div>}
-          {!presale && <div className="field" id="fieldPedidoFabrica"><label>Nº do nosso pedido na fábrica <span className="hint">(opcional)</span></label><input name="pedidoFabrica" placeholder="Se souber" value={f.pedidoFabrica} onChange={set("pedidoFabrica")} /></div>}
+          {!ehMkt && <div className="field" id="fieldPedido"><label>Nº venda <span className="req-star">*</span></label><input name="pedido" required placeholder="Ex.: 48213" value={f.pedido} onChange={set("pedido")} /></div>}
+          {!ehMkt && <div className="field" id="fieldDataVenda"><label>Data da venda</label><input name="dataVenda" type="date" value={f.dataVenda} onChange={set("dataVenda")} /></div>}
+          {ehFab && <div className="field" id="fieldPedidoFabrica"><label>Nº do nosso pedido na fábrica <span className="hint">(opcional)</span></label><input name="pedidoFabrica" placeholder="Se souber" value={f.pedidoFabrica} onChange={set("pedidoFabrica")} /></div>}
         </div>
-        {!presale && <div className="sec-label" id="secProdutoFabrica">Produto e fábrica</div>}
+        {!ehMkt && <div className="sec-label" id="secProdutoFabrica">{ehFab ? "Produto e fábrica" : "Produto"}</div>}
         <div className="grid">
-          <div className="field full"><label id="lblProduto">{presale ? "Ambiente de interesse " : "Produto "}<span className="req-star">*</span></label>
-            <input name="produto" required placeholder={presale ? "Ex.: Cozinha planejada (projeto de interesse)" : "Ex.: Guarda-roupa 6 portas Verona — Nogueira"} value={f.produto} onChange={set("produto")} /></div>
-          {!presale && <div className="field" id="fieldFabrica"><label>Fábrica / fornecedor <span className="req-star">*</span></label>
-            <select name="fabrica" required value={f.fabrica} onChange={set("fabrica")}><option value="">Selecione…</option>{st.fabricas.map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select>
+          <div className="field full"><label id="lblProduto">{ehMkt ? "Ambiente de interesse " : "Produto "}<span className="req-star">*</span></label>
+            <input name="produto" required placeholder={ehMkt ? "Ex.: Cozinha planejada (projeto de interesse)" : "Ex.: Guarda-roupa 6 portas Verona — Nogueira"} value={f.produto} onChange={set("produto")} /></div>
+          {(ehFab || ehPv) && <div className="field" id="fieldFabrica"><label>Fábrica / fornecedor {ehFab ? <span className="req-star">*</span> : <span className="hint">(se souber)</span>}</label>
+            <select name="fabrica" required={ehFab} value={f.fabrica} onChange={set("fabrica")}><option value="">Selecione…</option>{st.fabricas.map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select>
             {R.temCadastros() ? <button type="button" className="btn ghost sm" style={{ marginTop: 6, alignSelf: "flex-start" }} onClick={() => setModal(<EditFab id={null} />)}>+ Cadastrar fábrica que não está na lista</button>
               : <span className="hint" style={{ marginTop: 4 }}>Fábrica não está na lista? Peça à Supervisão para cadastrar.</span>}</div>}
-          {!presale && <div className="field" id="fieldPrazoTatico"><label>Prazo de entrega no Tático <span className="hint">(prazo original)</span></label><input name="prazoTatico" type="date" value={f.prazoTatico} onChange={set("prazoTatico")} /></div>}
-          <div className="field"><label>Prazo para responder <span className="hint">(vazio = 2 dias úteis)</span></label><input name="slaManual" type="date" value={f.slaManual} onChange={set("slaManual")} /></div>
+          {(ehFab || f.tipo === "entrega") && <div className="field" id="fieldPrazoTatico"><label>Prazo de entrega no Tático <span className="hint">(prazo original)</span></label><input name="prazoTatico" type="date" value={f.prazoTatico} onChange={set("prazoTatico")} /></div>}
+          {!ehMkt && <div className="field"><label>Prazo para responder <span className="hint">(vazio = 2 dias úteis)</span></label><input name="slaManual" type="date" value={f.slaManual} onChange={set("slaManual")} /></div>}
           {ehPv && <div className="field"><label>Quem acionou <span className="req-star">*</span></label><select value={f.pvOrigem} onChange={set("pvOrigem")}><option value="cliente">Cliente reclamou</option><option value="montador">Montador pediu suporte na obra</option></select></div>}
           {ehPv && <div className="field"><label>Ambiente / peça afetada</label><input placeholder="Ex.: Cozinha — porta do aéreo" value={f.pvPeca} onChange={set("pvPeca")} /></div>}
-          <div className="field full"><label>{ehPv ? "Relato do problema" : "Detalhe do atendimento"} <span className="req-star">*</span></label><textarea name="motivo" required placeholder={ehPv ? "Como o cliente/montador contou: o que aconteceu, quando, o que está afetado." : "O que o cliente precisa / relatou."} value={f.motivo} onChange={set("motivo")}></textarea></div>
+          <div className="field full"><label>{ehPv ? "Relato do problema" : ehMkt ? "Observações do lead" : "Detalhe do atendimento"} <span className="req-star">*</span></label><textarea name="motivo" required placeholder={ehPv ? "Como o cliente/montador contou: o que aconteceu, quando, o que está afetado." : ehMkt ? "O que o cliente procura, melhor horário para contato, observações para o consultor." : "O que o cliente precisa / relatou."} value={f.motivo} onChange={set("motivo")}></textarea></div>
         </div>
-        {presale && (
+        {ehMkt && (
           <div id="blocoVisita">
             <div className="sec-label" id="secBlocoVisita">Dados do agendamento <span className="hint" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}> (o que faltar, a Supervisão Marketing completa depois)</span></div>
             <div className="grid">
@@ -166,9 +172,9 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
           </div>
         )}
         <div className="form-foot">
-          <button type="submit" className="btn primary" disabled={enviando}>{enviando ? "Abrindo…" : ehPv ? "Abrir atendimento de pós-venda" : "Abrir solicitação"}</button>
+          <button type="submit" className="btn primary" disabled={enviando}>{enviando ? "Abrindo…" : ehPv ? "Abrir atendimento de pós-venda" : ehMkt ? "Cadastrar cliente" : "Abrir solicitação"}</button>
           <button type="reset" className="btn ghost">Limpar</button>
-          <span className="sla-note">Prazo automático: <b>2 dias úteis</b></span>
+          {!ehMkt && <span className="sla-note">Prazo automático: <b>2 dias úteis</b></span>}
         </div>
       </form></div>
     </section>

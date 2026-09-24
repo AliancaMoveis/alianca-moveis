@@ -13,7 +13,7 @@ const usuarios = [
 ].map(([n, nome, setores, s]: any) => ({ id: U(n), nome, email: "", setores, somenteAtribuidos: s, ativo: true }));
 const L = (criar = false, verTudo = false, cadastros = false, admin = false, verMarketing = false) => ({ criar, verTudo, cadastros, admin, verMarketing });
 const setores = [
-  ["callcenter", "Call center", L(true)], ["prazo_fabrica", "Prazo de fábrica", L()], ["montagem", "Montagem", L()], ["assistencia", "Assistência", L()],
+  ["callcenter", "Call center", L(true)], ["prazo_fabrica", "Prazo de fábrica", { ...L(), viaCallcenter: true }], ["montagem", "Montagem", L()], ["assistencia", "Assistência", L()],
   ["checklist", "Checklist", L()], ["medidas", "Medidas", L()], ["marketing_operadora", "Operadora Marketing", L(true)],
   ["marketing_supervisao", "Supervisão Marketing", L(true, false, false, false, true)], ["consultor_externo", "Consultor externo", L()],
   ["suporte_consultores", "Suporte Consultores Externos", L()], ["atendente_cliente", "Projetista (loja)", L()], ["posvenda", "Pós-venda Projetados", L(true)], ["juridico", "Jurídico", L(false, true)],

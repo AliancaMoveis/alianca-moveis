@@ -4,7 +4,7 @@ import type { Estado, Chamado, Usuario } from "./dados";
 
 export const STATUS: Record<string, { label: string; cls: string }> = {
   aberta: { label: "Aberta", cls: "b-aberta" }, tratativa: { label: "Em tratativa", cls: "b-tratativa" },
-  respondida: { label: "Respondida", cls: "b-respondida" }, concluida: { label: "Concluída", cls: "b-concluida" },
+  respondida: { label: "Respondida", cls: "b-respondida" }, informar: { label: "Informar cliente", cls: "b-informar" }, concluida: { label: "Concluída", cls: "b-concluida" },
 };
 export const STATUS_CLIENTE: Record<string, string> = {
   aguardando_consultor: "Aguardando consultor", direcionado_consultor: "Direcionado ao consultor", visita_realizada: "Visita realizada",
@@ -15,10 +15,11 @@ export const VENDA_STATUS: Record<string, string> = {
   registrada: "Aguardando confirmação da Gestão", promissoria: "Promissória — sem pagamento", efetivada: "Efetivada", cancelada: "Cancelada",
 };
 export const VENDA_TO_CLIENTE: Record<string, string> = { registrada: "vendido_revisao", promissoria: "vendido_promissoria", efetivada: "vendido", cancelada: "venda_cancelada" };
-export const ORDEM = ["aberta", "tratativa", "respondida", "concluida"];
+export const ORDEM = ["aberta", "tratativa", "respondida", "informar", "concluida"];
 export const LIBS: Record<string, string> = {
   criar: "Abrir solicitações", verTudo: "Ver todos os setores (visão global)", cadastros: "Acessar aba Fábricas",
   admin: "Administração (usuários e setores)", verMarketing: "Ver todo o agendamento de marketing (todas as etapas e consultores)",
+  viaCallcenter: "Não fala com o cliente: ao concluir vai para \"Informar cliente\" e o call center avisa",
 };
 export const MARKETING_SETORES = ["marketing_operadora", "marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente"];
 export const LIMITE_INATIVIDADE_H = 24;
@@ -63,15 +64,15 @@ export function tempoRel(iso: any) { const s = (Date.now() - +parseData(iso)) / 
 export const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 export const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-export function estaAtrasado(c: Chamado) { if (c.status === "respondida" || c.status === "concluida") return false; return new Date() > new Date(c.slaResposta); }
+export function estaAtrasado(c: Chamado) { if (c.status === "respondida" || c.status === "informar" || c.status === "concluida") return false; return new Date() > new Date(c.slaResposta); }
 export function diasRestantes(c: Chamado) { return Math.ceil((+new Date(c.slaResposta) - +new Date()) / 86400000); }
 export function horasAtraso(c: Chamado) { if (!estaAtrasado(c)) return 0; return (+new Date() - +new Date(c.slaResposta)) / 3600000; }
 export function situacaoPrazo(c: Chamado) {
-  if (c.status === "concluida") return "concluida"; if (c.status === "respondida") return "respondida";
+  if (c.status === "concluida") return "concluida"; if (c.status === "respondida") return "respondida"; if (c.status === "informar") return "informar";
   if (estaAtrasado(c)) return horasAtraso(c) >= 24 ? "critico" : "atrasado";
   const h = (+new Date(c.slaResposta) - +new Date()) / 3600000; return h <= 24 ? "perto" : "ok";
 }
-export const pesoPrazo: Record<string, number> = { critico: 0, atrasado: 1, perto: 2, ok: 3, respondida: 4, concluida: 5 };
+export const pesoPrazo: Record<string, number> = { critico: 0, atrasado: 1, informar: 2, perto: 3, ok: 4, respondida: 5, concluida: 6 };
 
 // ---------- dinheiro ----------
 export function parseMoeda(v: any) { const n = parseFloat((v || "0").toString().replace(/\./g, "").replace(",", ".")); return isNaN(n) ? 0 : n; }
@@ -161,6 +162,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     return mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
   }
   const ehCallcenter = () => mySetores().includes("callcenter");
+  // setor que não fala com o cliente (ex.: Solicitação Fábrica): ao concluir, o chamado vai para "Informar cliente"
+  const viaCC = (setorId: string) => !!getSetor(setorId)?.liberacoes?.viaCallcenter;
+  const ehFabrica = (c: Chamado) => c.tipo === "prazo_fabrica";
   // treinamento: call center e Supervisão (call center); a Gestão também, por administrar o sistema
   const podeTreinamento = () => ehGestao() || mySetores().some((x: string) => ["callcenter", "supervisao"].includes(x));
   // call center acompanha qualquer solicitação de pós-venda: anota novo contato e marca urgente (quem trata fala com o cliente e conclui)
@@ -239,11 +243,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
       return clienteCriticoInatividade(c) ? "critico" : "ok";
     }
     const sp = situacaoPrazo(c); // critico | atrasado | perto | ok | respondida | concluida
-    if (sp === "critico" || sp === "atrasado" || sp === "respondida" || sp === "concluida") return sp;
+    if (sp === "critico" || sp === "atrasado" || sp === "respondida" || sp === "informar" || sp === "concluida") return sp;
     if (c.urgente) return "urgente";
     return sp;
   }
-  const RANK: Record<string, number> = { critico: 0, atrasado: 1, urgente: 2, perto: 3, ok: 4, respondida: 5, concluida: 6 };
+  const RANK: Record<string, number> = { critico: 0, atrasado: 1, urgente: 2, informar: 3, perto: 4, ok: 5, respondida: 6, concluida: 7 };
   const emAberto = (c: Chamado) => prioridade(c) !== "concluida";
   function ordenar(arr: Chamado[]) {
     if (ehConsultorExterno() && !ehGestao()) {
@@ -364,11 +368,12 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     if (temMarketing()) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores")) add("designar", "Clientes sem projetista", "Já têm data na loja, mas ninguém foi designado para atender.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId), "var(--warn)");
+    add("informar", "Informar o cliente", "O setor registrou a solução mas não fala com o cliente. Avise o cliente e conclua.", ch.filter(c => !domMarketing(c) && c.status === "informar" && (ehCallcenter() || c.solicitanteId === eu)), "var(--st-informar)");
     add("criticos", "Críticos no seu setor", "Mais de 24h sem resposta — precisam de ação imediata.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && situacaoPrazo(c) === "critico"), "var(--critico)");
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => !domMarketing(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["aceite", "apvendas", "aptransf", "appromis", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
+    const PRIORIDADE = ["aceite", "apvendas", "aptransf", "appromis", "informar", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));
@@ -427,7 +432,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   return {
     state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
-    verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
+    verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,

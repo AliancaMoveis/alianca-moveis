@@ -25,7 +25,9 @@ export default function Detalhe({ id }: { id: string }) {
     </div>
   );
 
-  const st_ = STATUS[c.status], late = estaAtrasado(c), rep = R.getRep(c), fab = R.getFab(c), link = R.waLink(c), tratar = R.podeTratar(c), anexar = R.podeAnexar(c);
+  // dados da fábrica e contato do representante só em Solicitação Fábrica (prazo de fábrica)
+  const ehFab = R.ehFabrica(c);
+  const st_ = STATUS[c.status], late = estaAtrasado(c), rep = R.getRep(c), fab = R.getFab(c), link = ehFab ? R.waLink(c) : null, tratar = R.podeTratar(c), anexar = R.podeAnexar(c);
   const presale = R.domMarketing(c);
   const prazoSit = situacaoPrazo(c);
   const prio = R.prioridade(c);
@@ -63,26 +65,30 @@ export default function Detalhe({ id }: { id: string }) {
           {!presale && <>
             <Row k="Cliente">{c.cliente}{c.clienteDoc ? " · " + c.clienteDoc : ""}{c.telefone ? " · " + c.telefone : ""}</Row>
             <Row k="Pedido venda">{c.pedido}{c.dataVenda ? " · " + fmtDate(c.dataVenda) : ""}</Row>
-            <Row k="Pedido fábrica">{c.pedidoFabrica || "—"}</Row>
             <Row k="Produto">{c.produto}</Row>
-            <Row k="Fábrica">{fab ? fab.nome : "—"}{fab && fab.emails ? " · " + fab.emails : ""}</Row>
-            <Row k="Representante">{rep ? rep.nome : "—"}{rep && rep.whats ? " · " + rep.whats : ""}</Row>
-            <Row k="Prazo Tático">{fmtDate(c.prazoTatico)}</Row>
+            {ehFab && <>
+              <Row k="Pedido fábrica">{c.pedidoFabrica || "—"}</Row>
+              <Row k="Fábrica">{fab ? fab.nome : (tratar ? <DefinirFabrica c={c} /> : "—")}{fab && fab.emails ? " · " + fab.emails : ""}</Row>
+              <Row k="Representante">{rep ? rep.nome : "—"}{rep && rep.whats ? " · " + rep.whats : ""}</Row>
+            </>}
+            {(ehFab || c.tipo === "entrega") && c.prazoTatico && <Row k="Prazo Tático">{fmtDate(c.prazoTatico)}</Row>}
           </>}
           {presale && <Row k="Motivo do contato">{R.tipoNome(c.tipo)}</Row>}
           <Row k="Solicitado por">{c.solicitante} · {c.setor || "—"}</Row>
           <Row k="Detalhe">{c.motivo || "—"}</Row>
           {tratResumo && <Row k="Tratativa">{tratResumo}</Row>}
           {c.resposta && <><Row k="Previsão informada">{fmtDate(c.resposta.previsao)}</Row><Row k="Observação">{c.resposta.texto || "—"}</Row></>}
+          {c.status === "informar" && <div className="alerta" style={{ background: "var(--st-informar-bg)", borderColor: "var(--st-informar)" }}><b style={{ color: "var(--st-informar)" }}>Informar o cliente.</b> O setor {R.setorNome(c.setorDestino)} registrou a solução{c.resposta && c.resposta.previsao ? " (previsão " + fmtDate(c.resposta.previsao) + ")" : ""}. O call center avisa o cliente e conclui.</div>}
           {tratar && late && semResp && (prazoSit === "critico" ? (
             <div className="alerta" style={{ background: "var(--critico-bg)", borderColor: "var(--critico)" }}><b style={{ color: "var(--critico)" }}>Crítico — mais de 24h sem resposta.</b> O sistema já escalou este chamado automaticamente. Cobre agora.
-              <div className="row">{link ? <a className="btn wa sm" href={link} target="_blank" rel="noopener">Cobrar no WhatsApp</a> : <button className="btn sm" disabled>Sem WhatsApp</button>}</div></div>
+              {link && <div className="row"><a className="btn wa sm" href={link} target="_blank" rel="noopener">Cobrar no WhatsApp</a></div>}</div>
           ) : (
-            <div className="alerta"><b>Atrasado — escalado automaticamente para urgente.</b> Cobre o representante ou trate agora.
-              <div className="row">{link ? <a className="btn wa sm" href={link} target="_blank" rel="noopener">Cobrar no WhatsApp</a> : <button className="btn sm" disabled>Sem WhatsApp</button>}
+            <div className="alerta"><b>Atrasado — escalado automaticamente para urgente.</b> {ehFab ? "Cobre o representante ou trate agora." : "Trate agora."}
+              <div className="row">{link && <a className="btn wa sm" href={link} target="_blank" rel="noopener">Cobrar no WhatsApp</a>}
                 <button className="btn sm" onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button></div></div>
           ))}
           {!presale && <Anexos c={c} editavel={anexar} />}
+          {!presale && <HistoricoCliente c={c} />}
           {tratar ? <AcoesGerais c={c} link={link} presale={presale} notaRef={notaRef} foco={focoDetalhe} />
             : R.podeAcompanhar(c) ? <AcompanhamentoCC c={c} link={link} notaRef={notaRef} foco={focoDetalhe} />
             : <div className="ro-note">Você tem acesso de leitura a este chamado. Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>.{anexar ? " Você pode anexar comprovações acima." : ""}</div>}
@@ -132,7 +138,7 @@ function Tratativa({ c }: any) {
   const [cons, setCons] = useState(c.consultorId || "");
   const [editAg, setEditAg] = useState(false);
   const [dv, setDv] = useState(c.dataVisita || ""); const [end, setEnd] = useState(c.endereco || "");
-  const [dataLoja, setDataLoja] = useState(c.dataLoja ? String(c.dataLoja).slice(0, 10) : "");
+  const [dataLoja, setDataLoja] = useState(c.dataLoja ? String(c.dataLoja).slice(0, 16) : "");
   const [aten, setAten] = useState("");
   useEffect(() => { setV({ agenda: t.agenda || "", montador: t.montador || "", peca: t.peca || "", data: t.data || "", medidas: t.medidas || "", obs: t.obs || "" }); }, [c.id, JSON.stringify(t)]);
   const s = (k: string) => (e: any) => setV((x: any) => ({ ...x, [k]: e.target.value }));
@@ -179,9 +185,13 @@ function Tratativa({ c }: any) {
           <div className="field full"><label>Complemento das medidas <span className="hint">(opcional — o oficial é a planta anexada)</span></label><textarea value={v.medidas} onChange={s("medidas")} placeholder="Ex.: cotas que não aparecem na planta"></textarea></div>
           <div className="field full"><label>Observação da visita</label><textarea value={v.obs} onChange={s("obs")} placeholder="Condições do local, acesso, particularidades..."></textarea></div>
         </div>
-        <div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.realizada} campo="realizada" lOn="Visita realizada ✓" lOff="Marcar visita como realizada" /><button className="btn sm" onClick={() => salvar(["medidas", "obs"])}>Salvar</button></div>
-        <div className="grid" style={{ marginTop: 16 }}><div className="field"><label>Data combinada para vir à loja</label><input type="date" value={dataLoja} onChange={e => setDataLoja(e.target.value)} /></div></div>
-        <div style={{ marginTop: 10 }}><button className="btn primary sm" onClick={() => { if (!dataLoja) { toast("Informe a data da vinda à loja"); return; } ex(() => A.agendarLoja(c.id, dataLoja, v.medidas, v.obs), "Encaminhado ao Suporte"); }}>Agendar vinda à loja e encaminhar</button></div>
+        <div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><button className="btn primary sm" onClick={() => salvar(["medidas", "obs"])}>Salvar</button><Btn on={t.realizada} campo="realizada" lOn="Visita realizada ✓" lOff="Marcar visita como realizada" /></div>
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Agendamento na loja</div>
+          <div className="grid"><div className="field"><label>Data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={dataLoja} onChange={e => setDataLoja(e.target.value)} /></div></div>
+          <div style={{ fontSize: 12, color: "var(--ink-soft)", margin: "6px 0 10px" }}>Ao agendar, o cliente vai para a fila do Suporte Consultores, que designa o vendedor.</div>
+          <button className="btn primary sm" onClick={() => { if (!dataLoja || dataLoja.length < 16) { toast("Informe a data e o horário da vinda à loja"); return; } ex(() => A.agendarLoja(c.id, dataLoja, v.medidas, v.obs), "Agendado — enviado para designar o vendedor"); }}>Agendar na loja e encaminhar</button>
+        </div>
       </div>
     );
   }
@@ -230,11 +240,19 @@ function StatusCliente({ c }: any) {
   const { R, executar: ex, toast } = useApp();
   const atual = R.statusClienteDe(c);
   const [novo, setNovo] = useState(atual);
-  useEffect(() => setNovo(atual), [atual, c.id]);
+  const [dl, setDl] = useState(c.dataLoja ? String(c.dataLoja).slice(0, 16) : "");
+  useEffect(() => { setNovo(atual); setDl(c.dataLoja ? String(c.dataLoja).slice(0, 16) : ""); }, [atual, c.id, c.dataLoja]);
+  const pedeData = novo === "agendado_loja";
   if (!(R.podeTratar(c) || R.ehGestao())) return <Row k="Status do cliente"><ScBadge c={c} /></Row>;
   const g = R.ehGestao();
   const opcoes = Object.keys(STATUS_CLIENTE).filter(k => g || !VENDA_SC.includes(k) || k === atual);
   async function aplicar() {
+    if (pedeData) {
+      if (!dl || dl.length < 16) { toast("Agendado loja: informe a data e o horário na loja"); return; }
+      const mudouData = !c.dataLoja || String(c.dataLoja).slice(0, 16) !== dl;
+      if (novo === atual && !mudouData) { toast("O status já é esse"); return; }
+      ex(() => A.alterarStatusCliente(c.id, novo, dl), "Agendado — vai para designar o vendedor"); return;
+    }
     if (novo === atual) { toast("O status já é esse"); return; }
     if (novo === "vendido" && !g) { toast("Só a Gestão pode confirmar a venda como efetivada"); setNovo(atual); return; }
     if (novo === "vendido" && !c.venda) {
@@ -247,7 +265,8 @@ function StatusCliente({ c }: any) {
   }
   return (
     <div className="resp-box"><h4>Status do cliente</h4>
-      <div className="inline-2"><div className="field"><select id="selStatusCliente" value={novo} onChange={e => setNovo(e.target.value)}>{opcoes.map(k => <option key={k} value={k} disabled={!g && VENDA_SC.includes(k)}>{STATUS_CLIENTE[k]}</option>)}</select></div><button className="btn sm" onClick={aplicar}>Alterar status</button></div>
+      <div className="inline-2"><div className="field"><select id="selStatusCliente" value={novo} onChange={e => setNovo(e.target.value)}>{opcoes.map(k => <option key={k} value={k} disabled={!g && VENDA_SC.includes(k)}>{STATUS_CLIENTE[k]}</option>)}</select></div><button className="btn sm" onClick={aplicar}>{pedeData ? "Salvar agendamento" : "Alterar status"}</button></div>
+      {pedeData && <div className="grid" style={{ marginTop: 10 }}><div className="field"><label>Data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={dl} onChange={e => setDl(e.target.value)} /></div></div>}
       <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>{g ? "Toda alteração fica registrada no histórico, abaixo." : "A confirmação final da venda (“Vendido”) só a Gestão pode dar — registre a venda abaixo e aguarde."}</div>
     </div>
   );
@@ -447,18 +466,31 @@ function Anexos({ c, editavel }: any) {
 }
 
 function HistoricoCliente({ c }: any) {
-  const { R, st, abrirDetalhe } = useApp();
+  const { R, st, abrirDetalhe, irPara, fecharDetalhe } = useApp() as any;
   const presale = R.domMarketing(c);
-  const irmaos = st.chamados.filter(x => x.id !== c.id && R.domMarketing(x) === presale && R.podeVer(x) && !!mesmaPessoa(x, { clienteDoc: c.clienteDoc, telefone: c.telefone, pedido: c.pedido, cliente: c.cliente }));
-  if (!irmaos.length) return null;
-  const todos = [c].concat(irmaos).sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
+  // mesmo cliente = mesmo CPF/CNPJ, telefone, nº da venda ou nome — pega também outras vendas do mesmo cliente
+  const irmaos = st.chamados.filter((x: any) => x.id !== c.id && R.domMarketing(x) === presale && R.podeVer(x) && !!mesmaPessoa(x, { clienteDoc: c.clienteDoc, telefone: c.telefone, pedido: c.pedido, cliente: c.cliente }));
+  const podeNova = !presale && R.podeCriarCC();
+  if (!irmaos.length && !podeNova) return null;
+  const todos = [c].concat(irmaos).sort((a: any, b: any) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
+  const nova = () => { fecharDetalhe(); irPara("nova", { prefill: { cliente: c.cliente, clienteDoc: c.clienteDoc, telefone: c.telefone, pedido: c.pedido, dataVenda: c.dataVenda, produto: c.produto, vinculadoA: c.id } }); };
   return (
-    <div className="hist-cli"><h4>Histórico deste cliente · {todos.length} {presale ? "registros" : "solicitações"}</h4>
-      {todos.map(x => { const at = x.id === c.id; const s = presale ? (STATUS_CLIENTE[R.statusClienteDe(x)] || "") : (STATUS[x.status] || {} as any).label || "";
-        return <div key={x.id} className={"l" + (at ? " atual" : "")} onClick={at ? undefined : () => abrirDetalhe(x.id)}><span className="pill">{x.id}</span><span>{R.tipoNome(x.tipo)}</span><span style={{ color: "var(--ink-faint)" }}>{fmtDateTime(x.criadoEm)}</span><span style={{ marginLeft: "auto" }}>{s}{at ? <> · <b>este</b></> : ""}</span></div>; })}
-      <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 9 }}>Cada solicitação tem prazo e tratativa próprios — por isso não são unificadas.</div>
+    <div className="hist-cli"><h4 style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={{ flex: 1 }}>Histórico deste cliente · {todos.length} {presale ? "registros" : "solicitações"}</span>
+      {podeNova && <button className="btn primary sm" onClick={nova}>+ Nova solicitação</button>}</h4>
+      {todos.map((x: any) => { const at = x.id === c.id; const s = presale ? (STATUS_CLIENTE[R.statusClienteDe(x)] || "") : (STATUS[x.status] || {} as any).label || "";
+        return <div key={x.id} className={"l" + (at ? " atual" : "")} onClick={at ? undefined : () => abrirDetalhe(x.id)}><span className="pill">{x.id}</span><span>{R.tipoNome(x.tipo)}{!presale && x.pedido ? " · venda " + x.pedido : ""}</span><span style={{ color: "var(--ink-faint)" }}>{fmtDateTime(x.criadoEm)}</span><span style={{ marginLeft: "auto" }}>{s}{at ? <> · <b>este</b></> : ""}</span></div>; })}
+      <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 9 }}>{presale ? "Cada registro tem tratativa própria." : "Inclui todas as vendas do mesmo cliente. Assunto novo (ex.: montagem depois do prazo)? Use \"+ Nova solicitação\": o histórico fica ligado a este atendimento."}</div>
     </div>
   );
+}
+
+function DefinirFabrica({ c }: any) {
+  const { R, st, executar: ex } = useApp() as any;
+  const [f, setF] = useState("");
+  return <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+    <select value={f} onChange={e => setF(e.target.value)}><option value="">Informar a fábrica…</option>{(st.fabricas || []).filter((x: any) => x.ativo !== false).map((x: any) => <option key={x.id} value={x.id}>{x.nome}</option>)}</select>
+    <button className="btn sm" disabled={!f} onClick={() => ex(() => A.definirFabrica(c.id, f), "Fábrica definida")}>Salvar</button>
+  </span>;
 }
 
 function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
@@ -478,11 +510,12 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
       <button className={"btn " + (c.urgente ? "danger" : "")} onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button>
     </div>
     {!presale && <><div className="sec-label" style={{ marginTop: 16 }}>Mudar status</div>
-      <div className="status-flow" id="flow">{ORDEM.map(s => <button key={s} className={c.status === s ? "cur" : ""} onClick={() => { if (s !== c.status) ex(() => A.mudarStatus(c.id, s), "Status atualizado"); }}>{STATUS[s].label}</button>)}</div></>}
+      {R.viaCC(c.setorDestino) && <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 6 }}>Ao concluir, o chamado vai para <b>Informar cliente</b>: o call center avisa o cliente e encerra.</div>}
+      <div className="status-flow" id="flow">{ORDEM.filter(s => s !== "informar" || R.viaCC(c.setorDestino) || c.status === "informar").map(s => <button key={s} className={c.status === s ? "cur" : ""} onClick={() => { if (s !== c.status) ex(() => A.mudarStatus(c.id, s), "Status atualizado"); }}>{STATUS[s].label}</button>)}</div></>}
     {!presale && <div className="resp-box"><h4>Registrar solução / previsão</h4><div className="grid">
       <div className="field"><label>Previsão</label><input type="date" value={prev} onChange={e => setPrev(e.target.value)} /></div>
       <div className="field"><label>Quem respondeu</label><input value={quem} onChange={e => setQuem(e.target.value)} /></div>
-      <div className="field full"><label>Observação</label><textarea placeholder="A solução ou resposta passada ao cliente (o setor fala direto com o cliente)" value={texto} onChange={e => setTexto(e.target.value)}></textarea></div>
+      <div className="field full"><label>Observação</label><textarea placeholder={R.viaCC(c.setorDestino) ? "O retorno da fábrica/representante — o call center repassa ao cliente" : "A solução ou resposta passada ao cliente (o setor fala direto com o cliente)"} value={texto} onChange={e => setTexto(e.target.value)}></textarea></div>
     </div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => { if (!prev && !texto.trim()) { toast("Preencha previsão ou observação"); return; } ex(() => A.registrarRetorno(c.id, prev, quem.trim(), texto.trim()), "Retorno salvo"); }}>Salvar retorno</button></div></div>}
     {podeEncaminhar && <div className="resp-box"><h4>Encaminhar para outro setor</h4><div className="inline-2"><div className="field"><select value={enc} onChange={e => setEnc(e.target.value)}>{R.setoresVisiveis().map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}</select></div>
       <button className="btn sm" onClick={() => { if (enc === c.setorDestino) { toast("Já está neste setor"); return; } ex(() => A.encaminharSetor(c.id, enc), "Encaminhado"); }}>Encaminhar</button></div></div>}
@@ -498,7 +531,10 @@ function AcompanhamentoCC({ c, link, notaRef, foco }: any) {
   const { R, executar: ex } = useApp();
   const [nota, setNota] = useState("");
   return <>
-    <div className="ro-note" style={{ marginTop: 12 }}>Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>, que fala direto com o cliente e conclui. Pelo call center você pode registrar um novo contato do cliente e marcar urgente.</div>
+    {c.status === "informar" ? <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--st-informar)" }}><h4>Informar o cliente</h4>
+      <div style={{ fontSize: 13, marginBottom: 10 }}>{c.resposta ? <>Retorno: <b>{c.resposta.texto || "—"}</b>{c.resposta.previsao ? " · previsão " + fmtDate(c.resposta.previsao) : ""}</> : "Veja o retorno no histórico abaixo."}</div>
+      <button className="btn primary sm" onClick={() => ex(() => A.mudarStatus(c.id, "concluida"), "Cliente informado — concluído")}>Cliente informado — concluir</button></div>
+    : <div className="ro-note" style={{ marginTop: 12 }}>Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>{R.viaCC(c.setorDestino) ? <>. Quando ele registrar o retorno, o chamado volta para o call center em <b>Informar cliente</b>.</> : <>, que fala direto com o cliente e conclui.</>} Pelo call center você pode registrar um novo contato do cliente e marcar urgente.</div>}
     <div style={{ margin: "12px 0 6px", display: "flex", gap: 9, flexWrap: "wrap" }}>
       {link && <a className="btn wa" href={link} target="_blank" rel="noopener">WhatsApp do representante</a>}
       <button className={"btn " + (c.urgente ? "danger" : "")} onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button>

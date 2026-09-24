@@ -13,13 +13,14 @@ export const A = {
   alternarUrgente: (id: string) => rpc("alternar_urgente", { p_id: id }),
   mudarStatus: (id: string, s: string) => rpc("mudar_status", { p_id: id, p_status: s }),
   registrarRetorno: (id: string, previsao: string, quem: string, texto: string) => rpc("registrar_retorno", { p_id: id, p_previsao: nz(previsao), p_quem: quem, p_texto: texto }),
+  definirFabrica: (id: string, fab: string) => rpc("definir_fabrica", { p_id: id, p_fab: fab }),
   alterarPrazo: (id: string, data: string) => rpc("alterar_prazo", { p_id: id, p_data: nz(data) }),
   adicionarNota: (id: string, texto: string) => rpc("adicionar_nota", { p_id: id, p_texto: texto }),
   salvarTratativa: (id: string, campos: any) => rpc("salvar_tratativa", { p_id: id, p_campos: campos }),
   alternarMarcacao: (id: string, campo: string) => rpc("alternar_marcacao", { p_id: id, p_campo: campo }),
   entregaParaFabrica: (id: string) => rpc("entrega_para_fabrica", { p_id: id }),
   encaminharSetor: (id: string, setor: string) => rpc("encaminhar_setor", { p_id: id, p_setor: setor }),
-  alterarStatusCliente: (id: string, novo: string) => rpc("alterar_status_cliente", { p_id: id, p_novo: novo }),
+  alterarStatusCliente: (id: string, novo: string, dataLoja?: string) => rpc("alterar_status_cliente", { p_id: id, p_novo: novo, ...(dataLoja ? { p_data_loja: dataLoja } : {}) }),
   direcionarConsultor: (id: string, consultor: string, dataVisita: string, endereco: string) =>
     rpc("direcionar_consultor", { p_id: id, p_consultor: consultor, p_data_visita: nz(dataVisita), p_endereco: endereco || "" }),
   agendarLoja: (id: string, dataLoja: string, medidas: string, obs: string) =>

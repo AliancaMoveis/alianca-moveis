@@ -34,7 +34,7 @@ export default function Dashboard() {
   const cc = todos.filter((c: any) => !R.domMarketing(c));
   const pr = (c: any) => R.prioridade(c);
   const abertas = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length, atras = cc.filter((c: any) => pr(c) === "atrasado").length,
-    crit = cc.filter((c: any) => pr(c) === "critico").length, urg = cc.filter((c: any) => pr(c) === "urgente").length, resp = cc.filter((c: any) => c.status === "respondida").length,
+    crit = cc.filter((c: any) => pr(c) === "critico").length, urg = cc.filter((c: any) => pr(c) === "urgente").length, resp = cc.filter((c: any) => c.status === "respondida").length, inf = cc.filter((c: any) => c.status === "informar").length,
     conc = cc.filter((c: any) => c.status === "concluida" && noPeriodo(concluidoEm(c))).length, novos = vis.filter((c: any) => !R.domMarketing(c)).length;
 
   const vejaMkt = (R.temMarketing() || R.ehGestao()) && area !== "cc";
@@ -69,7 +69,7 @@ export default function Dashboard() {
   // uma linha por chamado, com a faixa de prioridade dele (crítico, atrasado ou urgente); marketing entra só se parado +24h
   const acao = R.ordenar(todos.filter((c: any) => naArea(c) && ["critico", "atrasado", "urgente"].includes(pr(c))));
   const ab = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa");
-  const pf: Record<string, number> = {}; ab.forEach((c: any) => { if (c.fabrica) pf[c.fabrica] = (pf[c.fabrica] || 0) + 1; });
+  const pf: Record<string, number> = {}; ab.forEach((c: any) => { if (c.fabrica && c.tipo === "prazo_fabrica") pf[c.fabrica] = (pf[c.fabrica] || 0) + 1; });
   const fr = Object.entries(pf).sort((a, b) => b[1] - a[1]); const mxf = Math.max(1, ...fr.map(x => x[1]));
   const evs: any[] = []; todos.filter(naArea).forEach((c: any) => (c.historico || []).forEach((h: any) => evs.push({ id: c.id, quando: h.quando, quem: h.quem, texto: h.texto })));
   evs.sort((a, b) => +new Date(b.quando) - +new Date(a.quando));
@@ -102,6 +102,7 @@ export default function Dashboard() {
         <Kpi n={atras} l="Atrasados (até 24h)" cls={atras ? "alert" : ""} />
         <Kpi n={urg} l="Urgentes no prazo" cls={urg ? "urg" : ""} />
         <Kpi n={resp} l="Respondidos — falta concluir" />
+        <Kpi n={inf} l="Informar o cliente" cor={inf ? "var(--st-informar)" : undefined} />
         <Kpi n={conc} l="Concluídos no período" />
       </div>}
       {vejaMkt && veAmbos && <>
@@ -176,7 +177,7 @@ export default function Dashboard() {
         </div></div>
       </div>
       <div className="panel-grid">
-        {verCC && <div className="panel"><h3>Em aberto por fábrica</h3><div id="barsFabrica">{fr.length ? fr.map(([fid, n]) => <BarRow key={fid} nm={R.nomeFab(fid)} pct={n / mxf * 100} v={n} />) : <Nada t="Nada em aberto." />}</div></div>}
+        {verCC && <div className="panel"><h3>Prazo de fábrica em aberto, por fábrica</h3><div id="barsFabrica">{fr.length ? fr.map(([fid, n]) => <BarRow key={fid} nm={R.nomeFab(fid)} pct={n / mxf * 100} v={n} />) : <Nada t="Nada em aberto." />}</div></div>}
         <div className="panel"><h3>Atividade recente <span className="live"><i></i>ao vivo</span></h3><div className="feed" id="feed">
           {evs.length ? evs.slice(0, 12).map((e, i) => <div className="f" key={i}><span><b>{e.id}</b> {e.texto} <span style={{ color: "var(--ink-faint)" }}>· {e.quem}</span></span><span className="t">{tempoRel(e.quando)}</span></div>) : <Nada t="Sem atividade." />}
         </div></div>

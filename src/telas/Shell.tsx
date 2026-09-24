@@ -46,7 +46,7 @@ export default function Shell() {
   const u = R.me()!;
   const contagens = useMemo(() => {
     const n: Record<string, number> = {};
-    n.fila = R.state.chamados.filter(c => !R.domMarketing(c) && R.naMinhaFila(c) && (c.status === "aberta" || c.status === "tratativa")).length;
+    n.fila = R.state.chamados.filter(c => !R.domMarketing(c) && R.naMinhaFila(c) && (c.status === "aberta" || c.status === "tratativa" || (c.status === "informar" && R.ehCallcenter()))).length;
     n.direcionamento = R.pendentesDirecionamento().length;
     n.aprovacoes = R.ehGestao() ? R.pendenciasGestao().total : 0;
     n.pendencias = R.minhasPendencias().total;
