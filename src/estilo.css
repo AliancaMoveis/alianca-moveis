@@ -906,3 +906,6 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ap-erro{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#eef1f6;color:#1b2333;text-align:center;padding:20px}
 .ap-erro img{height:60px;margin-bottom:10px}.ap-erro b{font-size:24px}.ap-erro span{color:#56627a}
 @media (max-width:900px){.ap-item{grid-template-columns:70px 1fr;grid-template-areas:"h c" "o v" "s s"}.ap-hora{grid-area:h;font-size:22px}.ap-cli{grid-area:c}.ap-origem{grid-area:o}.ap-vend{grid-area:v}.ap-sit{grid-area:s}.ap-top,.ap-dias,.ap-resumo,.ap-lista{padding-left:14px;padding-right:14px}.ap-relogio b{font-size:28px}.ap-resumo .mix{margin-left:0}}
+.mv-convite{display:flex;align-items:center;gap:10px;background:#fff7e0;border:1px solid #e8c56a;color:#6d5000;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13px;cursor:pointer}
+.mv-convite span{flex:1}
+.mv-convite button{border:0;background:none;color:inherit;font-size:15px;padding:0 4px}

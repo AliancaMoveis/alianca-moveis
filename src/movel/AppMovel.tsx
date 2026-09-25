@@ -9,6 +9,7 @@ import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import Agenda from "../telas/Agenda";
 import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
+import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
 
 export type Perfil = "consultor" | "vendedor" | "gestor" | "marketing";
@@ -49,6 +50,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
       </header>
       <Simulando />
       <main className="mv-corpo" key={aba}>
+        {aba === abas[0][0] && <ConviteNotif irEu={() => setAba("eu")} />}
         {perfil === "consultor" && aba === "hoje" && <ConsHoje abrir={setAberto} ir={setAba} />}
         {perfil === "consultor" && aba === "clientes" && <ConsClientes abrir={setAberto} />}
         {perfil === "vendedor" && aba === "hoje" && <VendHoje abrir={setAberto} />}
@@ -424,6 +426,7 @@ function Eu({ perfil, completa, irTime }: any) {
   const u = R.me();
   const hoje = hojeISO(), de = hoje.slice(0, 8) + "01";
   return <>
+    <Notificacoes />
     <TrocarUsuario />
     <div className="mv-perfil"><div className="av">{(u?.nome || "?").replace(/^.*—\s*/, "").slice(0, 1)}</div><div><b>{u?.nome}</b><span>{R.setoresLabel(u)}</span></div></div>
     {irTime && <><div className="mv-sec">Marketing</div><button className="mv-linha" onClick={irTime}><b>🎯 Metas e pagamento do time de marketing</b><span>Meta do dia, bônus, produtividade e aprovação</span></button></>}

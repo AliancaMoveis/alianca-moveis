@@ -15,8 +15,22 @@ export function usaCelular() {
   return m;
 }
 
+// abre a ficha quando o app é aberto por uma notificação (/?abrir=ID) ou quando a notificação é tocada com o app aberto
+function useAbrirPorNotificacao() {
+  const { abrirDetalhe, st } = useApp() as any;
+  useEffect(() => {
+    const abrir = (url: string) => { try { const id = new URL(url, location.origin).searchParams.get("abrir"); if (id && st.chamados.some((c: any) => c.id === id)) abrirDetalhe(id); } catch { /* */ } };
+    abrir(location.href);
+    if (new URLSearchParams(location.search).get("abrir")) history.replaceState(null, "", location.pathname);
+    const f = (e: MessageEvent) => { if (e.data && e.data.tipo === "abrir") abrir(e.data.url); };
+    navigator.serviceWorker?.addEventListener("message", f);
+    return () => navigator.serviceWorker?.removeEventListener("message", f);
+  }, []);
+}
+
 export default function Raiz() {
   const { R } = useApp() as any;
+  useAbrirPorNotificacao();
   const cel = usaCelular();
   const [versao, setVersao] = useState(ler());
   const perfil = perfilMovel(R);

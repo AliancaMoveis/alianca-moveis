@@ -37,6 +37,8 @@ export async function entrarComo(id: string, nomeAlvo: string, meuNome: string) 
 }
 
 export async function sair() {
+  // ao sair, este aparelho para de receber os avisos desta pessoa (não na simulação de teste)
+  if (!simulacao()) { try { const { desativarPush } = await import("./push"); await desativarPush(); } catch { /* */ } }
   try { localStorage.removeItem(KEY); } catch { /* */ }
   await sb.auth.signOut();
 }
