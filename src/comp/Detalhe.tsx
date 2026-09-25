@@ -110,7 +110,9 @@ function ClienteCard({ c }: any) {
   const dataChave = direto ? c.dataLoja : c.dataVisita;
   const itens: [string, string][] = [["Telefone", c.telefone || "—"], ["E-mail", c.email || "—"], [direto ? "Data na loja" : "Data da visita", dataChave ? fmtDT(dataChave) : "—"], ["Ambiente de interesse", c.produto || "—"]];
   if (!direto) itens.splice(2, 0, ["Consultor", consultor ? consultor.nome : "—"], ["Endereço", c.endereco || "—"]);
-  if (c.atendenteId) itens.push(["Vendedor", R.nomeUser(c.atendenteId)]);
+  const tt = c.tratativa || {};
+  if (c.atendenteId) itens.push(["Vendedor", R.nomeUser(c.atendenteId) + (tt.assumidoFila ? " — assumiu da fila (tela da loja)" : "")]);
+  else if (tt.atendenteExterno) itens.push(["Vendedor", tt.atendenteExterno + " — freelancer, assumiu da fila (sem cadastro)"]);
   itens.push(["Agendado por (marketing)", c.solicitante || "—"]);
   const wa = R.waLinkCliente(c), maps = R.mapsLink(c), waze = R.wazeLink(c);
   return (
@@ -208,6 +210,7 @@ function Tratativa({ c }: any) {
     if (!R.podeEditarAgenda()) return <div className="resp-box"><h4>Aguardando definir o vendedor</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>O Suporte a Consultores, a Supervisão de Marketing ou a Gestão fazem esse direcionamento.</div></div>;
     return (
       <div className="resp-box"><h4>Definir vendedor</h4>
+        {t.atendenteExterno && <div className="dv-pedido" style={{ marginBottom: 12, background: "#fff1d6", borderColor: "#e0a84a", color: "#7a4a00" }}>⚠️ <b>{t.atendenteExterno}</b> (freelancer, sem cadastro) assumiu este cliente pela tela da loja{t.assumidoEm ? " em " + fmtDateTime(t.assumidoEm) : ""}. Defina abaixo o vendedor responsável no sistema.</div>}
         {t.pedidoAtend && <div className="dv-pedido" style={{ marginBottom: 12 }}>🙋 <b>{t.pedidoAtendNome || R.nomeUser(t.pedidoAtend)}</b> informou que está atendendo este cliente — aguardando aprovação
           <div style={{ display: "flex", gap: 6, marginTop: 6 }}><button className="btn primary sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, true), "Aprovado — cliente com o vendedor")}>Aprovar</button>
             <button className="btn ghost sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, false), "Pedido recusado")}>Recusar</button></div></div>}

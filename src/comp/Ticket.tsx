@@ -32,9 +32,9 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
   let linha2: React.ReactNode;
   if (presale && c.setorDestino === "atendente_cliente") {
     const vendaTxt = c.venda ? (" · venda " + c.venda.numero + (c.venda.vendedor ? " · " + c.venda.vendedor : "") + (R.podeVerValor(c) && c.venda.valor ? " · R$ " + c.venda.valor : "")) : "";
-    linha2 = <><ScBadge c={c} />{vendaTxt}{c.atendenteId ? " · vendedor " + R.nomeUser(c.atendenteId) : ""}{c.dataLoja ? <> · loja <b>{fmtDiaHora(c.dataLoja)}</b></> : null}</>;
+    linha2 = <><ScBadge c={c} />{vendaTxt}{c.atendenteId ? " · vendedor " + R.nomeUser(c.atendenteId) : ""}{c.tratativa && c.tratativa.assumidoFila ? <> <span className="marca-loja assumido">assumido na fila</span></> : null}{c.dataLoja ? <> · loja <b>{fmtDiaHora(c.dataLoja)}</b></> : null}</>;
   } else if (presale && c.setorDestino === "suporte_consultores") {
-    linha2 = <>Vinda à loja <b>{fmtDateTime(c.dataLoja)}</b> · {c.tratativa && c.tratativa.pedidoAtend ? <b style={{ color: "var(--primary)" }}>{c.tratativa.pedidoAtendNome || "vendedor"} pediu — aguardando aprovação</b> : <b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b>}</>;
+    linha2 = <>Vinda à loja <b>{fmtDateTime(c.dataLoja)}</b> · {c.tratativa && c.tratativa.atendenteExterno ? <b style={{ color: "#8a4b00" }}>Freelancer {c.tratativa.atendenteExterno} assumiu na fila — definir responsável</b> : c.tratativa && c.tratativa.pedidoAtend ? <b style={{ color: "var(--primary)" }}>{c.tratativa.pedidoAtendNome || "vendedor"} pediu — aguardando aprovação</b> : <b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b>}</>;
   } else if (presale) {
     const dv = c.dataVisita ? fmtDiaHora(c.dataVisita) : "sem data";
     linha2 = <>Visita <b>{dv}</b>{c.tratativa && c.tratativa.contatoIniciado ? <> <span className="pill">contato iniciado</span></> : null} · Consultor {c.consultorId ? R.nomeUser(c.consultorId) : "—"}{c.endereco ? " · " + c.endereco : ""}</>;

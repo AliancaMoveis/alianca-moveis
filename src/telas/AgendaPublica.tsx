@@ -22,7 +22,9 @@ export default function AgendaPublica() {
   const [atualizado, setAtualizado] = useState<Date | null>(null);
   const [aviso, setAviso] = useState<{ ok: boolean; t: string } | null>(null);
   const [enviando, setEnviando] = useState("");
-  const [escolher, setEscolher] = useState<any>(null);   // cliente sem vendedor: escolher o nome do vendedor
+  const [escolher, setEscolher] = useState<any>(null);   // cliente sem vendedor: quem assume o atendimento
+  const [sel, setSel] = useState("");                     // id do vendedor ou "outro"
+  const [outro, setOutro] = useState("");
   const [vendedores, setVendedores] = useState<any[]>([]);
   useEffect(() => { if (token) A.agendaPublicaVendedores(token).then(setVendedores).catch(() => setVendedores([])); }, []);
   useEffect(() => { if (!aviso) return; const t = setTimeout(() => setAviso(null), 6000); return () => clearTimeout(t); }, [aviso]);
@@ -62,14 +64,21 @@ export default function AgendaPublica() {
     } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível avisar" }); }
     finally { setEnviando(""); }
   };
-  const iniciar = async (x: any, v: any) => {
+  const abrirAssumir = (x: any) => { setSel(""); setOutro(""); setEscolher(x); };
+  const assumir = async () => {
+    const x = escolher; if (!x) return;
+    if (!sel) { setAviso({ ok: false, t: "Selecione o seu nome" }); return; }
+    const ehOutro = sel === "outro", nomeOutro = outro.trim();
+    if (ehOutro && nomeOutro.length < 2) { setAviso({ ok: false, t: "Escreva o seu nome" }); return; }
+    const v = vendedores.find(y => y.id === sel);
     setEnviando(x.id);
     try {
-      await A.agendaPublicaIniciar(token, x.id, v.id);
-      setDados(d => (d || []).map(y => y.id === x.id ? { ...y, pedido_vendedor: v.nome } : y));
-      setAviso({ ok: true, t: "✓ " + soNome(v.nome) + " iniciou o atendimento de " + x.cliente + ". A coordenação vai confirmar." });
+      await A.agendaPublicaAssumir(token, x.id, ehOutro ? null : sel, ehOutro ? nomeOutro : "");
+      const nome = ehOutro ? nomeOutro : v ? v.nome : "";
+      setDados(d => (d || []).map(y => y.id === x.id ? { ...y, vendedor: nome, assumido: true, externo: ehOutro, situacao: ehOutro ? y.situacao : "com_vendedor", pedido_vendedor: "" } : y));
+      setAviso({ ok: true, t: "✓ " + soNome(nome) + " assumiu o atendimento de " + x.cliente + "." });
       setEscolher(null);
-    } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível iniciar" }); setEscolher(null); }
+    } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível assumir" }); }
     finally { setEnviando(""); }
   };
   const podeAvisar = (x: any) => ehHoje && !["vendido", "vendido_promissoria", "vendido_revisao", "nao_compareceu", "reprovado", "venda_cancelada"].includes(x.situacao);
@@ -105,13 +114,12 @@ export default function AgendaPublica() {
                 <div className={"ap-origem " + x.origem}>{x.origem === "marketing" ? "Marketing" : "Externo"}</div>
                 <div className="ap-cli"><b>{x.cliente}</b>
                   <span>{x.consultor ? "Consultor: " + soNome(x.consultor) : "Agendado pelo marketing"}{x.quer_projeto ? " · 📐 quer projeto" : ""}</span></div>
-                <div className="ap-vend">{x.vendedor ? <><small>Vendedor</small><b>{soNome(x.vendedor)}</b></>
+                <div className="ap-vend">{x.vendedor ? <><small>{x.externo ? "Freelancer" : "Vendedor"}</small><b>{soNome(x.vendedor)}</b>{x.assumido ? <span className="ap-assumido">{x.externo ? "sem cadastro · assumiu na fila" : "assumiu na fila"}</span> : null}</>
                   : x.pedido_vendedor ? <><small>Aguardando aprovação</small><b className="pedido">{soNome(x.pedido_vendedor)}</b></>
                   : cls === "agu" ? <b className="semv">Sem vendedor · fila</b> : <b>—</b>}</div>
                 <div className={"ap-sit " + cls}>{passou ? "Atrasado" : sit}</div>
-                <div className="ap-acao">{podeAvisar(x) && !x.vendedor ? (x.pedido_vendedor
-                    ? <><div className="ap-iniciado">▶ {soNome(x.pedido_vendedor)} iniciou</div><small>aguardando confirmação</small></>
-                    : <><button className="ap-iniciar" disabled={enviando === x.id} onClick={() => setEscolher(x)}>▶ Iniciar atendimento</button><small>escolha seu nome</small></>)
+                <div className="ap-acao">{podeAvisar(x) && x.externo ? <small>freelancer — sem aviso no celular</small>
+                  : podeAvisar(x) && !x.vendedor ? <><button className="ap-iniciar" disabled={enviando === x.id} onClick={() => abrirAssumir(x)}>✋ Assumir atendimento</button><small>{x.pedido_vendedor ? soNome(x.pedido_vendedor) + " pediu pelo sistema" : "selecione seu nome"}</small></>
                   : podeAvisar(x) ? (() => { const f = falta(x); const hr = x.avisado_em ? new Date(x.avisado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
                   return <>
                     <button className={"ap-chegou" + (x.avisos ? " feito" : "")} disabled={!!f || enviando === x.id} onClick={() => avisar(x)}>
@@ -123,9 +131,16 @@ export default function AgendaPublica() {
       </div>
       {escolher && <div className="ap-modal" onClick={() => setEscolher(null)}>
         <div className="ap-modal-c" onClick={e => e.stopPropagation()}>
-          <b>Quem vai atender {escolher.cliente}?</b>
-          <span>Toque no seu nome. A coordenação recebe o aviso para confirmar.</span>
-          <div className="ap-vends">{vendedores.length ? vendedores.map(v => <button key={v.id} disabled={enviando === escolher.id} onClick={() => iniciar(escolher, v)}>{soNome(v.nome)}</button>) : <em>Nenhum vendedor cadastrado.</em>}</div>
+          <b>Assumir o atendimento de {escolher.cliente}</b>
+          <span>O cliente fica no seu nome, marcado como <b>assumido na fila</b>. Você se responsabiliza pelo atendimento como se ele tivesse sido direcionado a você.</span>
+          <label className="ap-campo">Seu nome
+            <select value={sel} onChange={e => setSel(e.target.value)} autoFocus>
+              <option value="">Selecione…</option>
+              {vendedores.map(v => <option key={v.id} value={v.id}>{soNome(v.nome)}</option>)}
+              <option value="outro">Outro (não estou na lista)</option>
+            </select></label>
+          {sel === "outro" && <label className="ap-campo">Escreva seu nome completo<input value={outro} onChange={e => setOutro(e.target.value)} placeholder="Ex.: Pedro Almeida (freelancer)" autoFocus /></label>}
+          <button className="ap-confirmar" disabled={enviando === escolher.id || !sel || (sel === "outro" && outro.trim().length < 2)} onClick={assumir}>{enviando === escolher.id ? "Assumindo…" : "✋ Assumir atendimento"}</button>
           <button className="ap-cancelar" onClick={() => setEscolher(null)}>Cancelar</button>
         </div></div>}
       {aviso && <div className={"ap-toast" + (aviso.ok ? "" : " erro")} onClick={() => setAviso(null)}>{aviso.t}</div>}

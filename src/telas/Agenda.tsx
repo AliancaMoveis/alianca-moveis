@@ -102,7 +102,9 @@ function Dia({ iso, resumida, escopo, principal }: { iso: string; resumida: bool
                     <div className="dt">{alheio ? null : <>{c.telefone || "sem telefone"}</>}{cons ? <>{alheio ? "" : " · "}consultor <b>{cons}</b></> : null}
                       {vend ? <>{(alheio && !cons) ? "" : " · "}vendedor <b style={meuAtend ? { color: "var(--st-concluida)" } : undefined}>{meuAtend ? "você" : vend}</b></>
                         : pedido ? <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "var(--primary)" }}>{pedido === eu ? "você pediu" : R.nomeUser(pedido) + " pediu"} — aguardando aprovação</b></>
-                        : <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b></>}</div>
+                        : t.atendenteExterno ? <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "#8a4b00" }}>freelancer {t.atendenteExterno} (assumiu na fila)</b></>
+                        : <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b></>}
+                      {vend && t.assumidoFila ? <> <span className="marca-loja assumido">assumido na fila</span></> : null}</div>
                     {c.produto && <div className="dt">{c.produto}</div>}
                     {/* vendedor pede para assumir um cliente da fila */}
                     {souVendedor && !c.atendenteId && !R.ehGestao() && (!pedido
