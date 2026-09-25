@@ -216,7 +216,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeMudarDataLoja = (c: Chamado) => podeEditarAgenda() || (c.consultorId && c.consultorId === currentUserId);
 
   // gerente que negociou a venda (obrigatório no registro): Gerentes de Loja e Gestão
-  const gerentesVenda = () => state.usuarios.filter(u => u.ativo && ((u.setores || []).includes("gerente_loja") || (u.setores || []).includes("gestao")))
+  const gerentesVenda = () => state.usuarios.filter(u => u.ativo && ["gerente_loja", "gestao", "proprietario"].some(s => (u.setores || []).includes(s)))
     .sort((a, b) => Number((b.setores || []).includes("gerente_loja")) - Number((a.setores || []).includes("gerente_loja")) || a.nome.localeCompare(b.nome));
   const consultores = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("consultor_externo"));
   // ---------- agendamento na loja / vendedor ----------
@@ -239,6 +239,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente"));
 
   // ---------- medidas (venda → medidas → checklist) ----------
+  // Proprietário: vê e pode tudo (como a Gestão), mas sem tarefas pessoais
+  const ehProprietario = () => mySetores().includes("proprietario");
   const ehMedidor = () => mySetores().includes("medidas") && !!me()?.somenteAtribuidos;
   const ehSupMedidas = () => ehGestao() || mySetores().includes("medidas_supervisao");
   const etapaMedida = (c: Chamado) => (c.tratativa && c.tratativa.medida && c.tratativa.medida.etapa) || (c.status === "concluida" ? "liberada" : "validar");
@@ -407,6 +409,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   function minhasPendencias() {
     const eu = currentUserId; const G: any[] = [];
+    if (ehProprietario()) return { grupos: [], total: 0 };
     const add = (chave: string, titulo: string, desc: string, itens: Chamado[], cor: string) => { if (itens.length) G.push({ chave, titulo, desc, itens, cor }); };
     const agora = new Date();
     const ch = state.chamados;
@@ -470,13 +473,15 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const G: any[] = [];
     // quem define vendedor (Suporte, Supervisão Marketing, Gerente de Loja) tem a tela logo abaixo das pendências
     // Gestão e Supervisão Marketing: as atividades do dia a dia ficam juntas no "Pessoal" (não se perdem no menu)
-    const coord = ehGestao() || mySetores().includes("marketing_supervisao");
+    const coord = (ehGestao() && !ehProprietario()) || mySetores().includes("marketing_supervisao");
     const defineVend = coord || mySetores().includes("suporte_consultores") || temMarketing();
-    const pessoal: string[][] = [["dashboard", "Dashboard"], ["pendencias", "Minhas pendências"]];
-    if (ehGestao()) pessoal.push(["aprovacoes", "Aprovações (vendas e transferências)"]);
-    if (defineVend) pessoal.push(["definir", "Definir vendedor"]);
-    if (coord) pessoal.push(["direcionamento", "Direcionar consultor"]);
-    if (coord) pessoal.push(["produtividade", "Produtividade e pagamento"]);
+    const pessoal: string[][] = ehProprietario() ? [["dashboard", "Painel do dono"]] : [["dashboard", "Dashboard"], ["pendencias", "Minhas pendências"]];
+    if (!ehProprietario()) {
+      if (ehGestao()) pessoal.push(["aprovacoes", "Aprovações (vendas e transferências)"]);
+      if (defineVend) pessoal.push(["definir", "Definir vendedor"]);
+      if (coord) pessoal.push(["direcionamento", "Direcionar consultor"]);
+      if (coord) pessoal.push(["produtividade", "Produtividade e pagamento"]);
+    }
     G.push({ g: "Pessoal", ic: "◆", itens: pessoal });
     const temCC = mySetores().some((x: string) => !ehSetorMarketing(x) && !["supervisao", "gestao"].includes(x));
     const temMkt = mySetores().some((x: string) => ehSetorMarketing(x));
@@ -488,6 +493,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (podeCriarMkt()) mk.push(["novocli", "Novo cliente"]);
     if (temMarketing() || ehGestao()) {
       mk.push(["acompmkt", "Acompanhamento"]);
+      if (ehProprietario()) mk.push(["definir", "Definir vendedor"]);
       if (!coord) mk.push(["direcionamento", "Direcionar consultor"]);
       mk.push(["agenda", "Agendamento loja"], ["operadoras", "Controle das operadoras"]);
       if (!coord) mk.push(["produtividade", "Produtividade e pagamento"]);
@@ -518,7 +524,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, gerentesVenda, ehMedidor, ehSupMedidas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, compareceu, ancoraVisita,

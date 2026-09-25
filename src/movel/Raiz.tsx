@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import Shell from "../telas/Shell";
 import AppMovel, { perfilMovel } from "./AppMovel";
+import { abrirAviso } from "../comp/Avisos";
 
 const CHAVE = "a360-versao";
 const ler = () => { try { return localStorage.getItem(CHAVE) || ""; } catch { return ""; } };
@@ -19,9 +20,14 @@ export function usaCelular() {
 function useAbrirPorNotificacao() {
   const { abrirDetalhe, st } = useApp() as any;
   useEffect(() => {
-    const abrir = (url: string) => { try { const id = new URL(url, location.origin).searchParams.get("abrir"); if (id && st.chamados.some((c: any) => c.id === id)) abrirDetalhe(id); } catch { /* */ } };
+    const abrir = (url: string) => { try {
+      const q = new URL(url, location.origin).searchParams;
+      const n = q.get("notif"), id = q.get("abrir");
+      if (n) { setTimeout(() => abrirAviso(Number(n)), 300); return; } // mostra a notificação inteira (com botão para a ficha)
+      if (id && st.chamados.some((c: any) => c.id === id)) abrirDetalhe(id);
+    } catch { /* */ } };
     abrir(location.href);
-    if (new URLSearchParams(location.search).get("abrir")) history.replaceState(null, "", location.pathname);
+    { const q = new URLSearchParams(location.search); if (q.get("abrir") || q.get("notif")) history.replaceState(null, "", location.pathname); }
     const f = (e: MessageEvent) => { if (e.data && e.data.tipo === "abrir") abrir(e.data.url); };
     navigator.serviceWorker?.addEventListener("message", f);
     return () => navigator.serviceWorker?.removeEventListener("message", f);

@@ -7,15 +7,18 @@ import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "
 import { EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume } from "../lib/regras";
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
+import { SinoAvisos } from "../comp/Avisos";
 import Agenda from "../telas/Agenda";
+import PainelDono from "../telas/PainelDono";
 import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
 import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
 import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados } from "./Medidas";
 
-export type Perfil = "consultor" | "vendedor" | "gestor" | "marketing" | "medidor";
+export type Perfil = "consultor" | "vendedor" | "gestor" | "marketing" | "medidor" | "dono";
 export function perfilMovel(R: any): Perfil | null {
   const s = R.mySetores();
+  if (s.includes("proprietario")) return "dono";
   if (R.ehGestao() || R.temMarketing() || R.verTudo() || s.includes("suporte_consultores")) return "gestor";
   if (s.includes("consultor_externo")) return "consultor";
   if (s.includes("medidas") && R.me()?.somenteAtribuidos) return "medidor";
@@ -32,6 +35,7 @@ const diaCurto = (v: any) => { const d = dia(v); if (!d) return "sem data"; if (
 export default function AppMovel({ perfil, completa }: { perfil: Perfil; completa: () => void }) {
   const { R, detalheId, modal } = useApp() as any;
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Comissão", "💰"], ["eu", "Eu", "👤"]]
+    : perfil === "dono" ? [["painel", "Painel", "📊"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
@@ -43,19 +47,21 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const gereMkt = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
   const { abrirDetalhe } = useApp() as any;
   const podeRegistrar = perfil === "marketing" || (perfil === "gestor" && (R.ehGestao() || R.temMarketing()));
-  const papel = perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
+  const papel = perfil === "dono" ? "Proprietário" : perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
   const pend = perfil === "vendedor" ? R.state.chamados.filter((c: any) => c.atendenteId === R.currentUserId && (R.parecerCobrado(c) || R.semParecer(c))).length : 0;
   return (
     <div className="mv">
       <header className="mv-top">
         <img src="/logo.png" alt="" className="mv-logo" />
         <div className="mv-tit"><b>{papel} · Aliança Móveis</b><span>{u?.nome ? primeiro(u.nome) : ""}</span></div>
+        <SinoAvisos claro />
       </header>
       <Simulando />
       <main className="mv-corpo" key={aba}>
         {aba === abas[0][0] && <ConviteNotif irEu={() => setAba("eu")} />}
         {perfil === "consultor" && aba === "hoje" && <ConsHoje abrir={setAberto} ir={setAba} />}
         {perfil === "consultor" && aba === "clientes" && <ConsClientes abrir={setAberto} />}
+        {perfil === "dono" && aba === "painel" && <PainelDono />}
         {perfil === "medidor" && aba === "hoje" && <MedHoje abrir={setAberto} ir={setAba} />}
         {perfil === "medidor" && aba === "medidas" && <MedLista abrir={setAberto} />}
         {perfil === "vendedor" && aba === "hoje" && <VendHoje abrir={setAberto} />}

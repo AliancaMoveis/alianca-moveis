@@ -7,7 +7,7 @@ const U = (n: number) => `00000000-0000-4000-a000-${String(n).padStart(12, "0")}
 const usuarios = [
   [7, "Bruno Fiaron", ["gestao"], false], [1, "Rafaela Lima", ["callcenter"], false], [2, "Camila Rocha", ["callcenter"], false],
   [3, "Diego Alves", ["prazo_fabrica"], false], [4, "Bruno Sá", ["montagem"], false], [5, "Paula Reis", ["assistencia", "montagem"], false],
-  [8, "Fernanda Melo", ["checklist"], false], [9, "Igor Tavares", ["medidas"], true], [19, "Lucilene", ["medidas_supervisao", "medidas"], false], [10, "Ana Ribeiro", ["marketing_operadora"], false],
+  [8, "Fernanda Melo", ["checklist"], false], [9, "Igor Tavares", ["medidas"], true], [19, "Lucilene", ["medidas_supervisao", "medidas"], false], [20, "Washington", ["proprietario"], false], [10, "Ana Ribeiro", ["marketing_operadora"], false],
   [13, "Marcelo Duarte", ["marketing_supervisao"], false], [11, "Consultor — Anderson", ["consultor_externo"], true], [12, "Consultor — Priscila", ["consultor_externo"], true],
   [14, "Suporte — Carla", ["suporte_consultores"], false], [15, "Vendedor — Roy", ["atendente_cliente"], true], [16, "Vendedora — Giovanna", ["atendente_cliente"], true], [6, "Supervisão", ["supervisao"], false], [17, "Vânia", ["posvenda"], false], [18, "Camila (Jurídico)", ["juridico"], false],
 ].map(([n, nome, setores, s]: any) => ({ id: U(n), nome, email: "", setores, somenteAtribuidos: s, ativo: true }));
@@ -17,7 +17,7 @@ const setores = [
   ["checklist", "Checklist", L()], ["medidas", "Medidas", L()], ["medidas_supervisao", "Supervisão de Medidas", L(true)], ["marketing_operadora", "Operadora Marketing", L(true)],
   ["marketing_supervisao", "Supervisão Marketing", L(true, false, false, false, true)], ["consultor_externo", "Consultor externo", L()],
   ["suporte_consultores", "Suporte Consultores Externos", L()], ["atendente_cliente", "Vendedores (loja)", L()], ["posvenda", "Pós-venda Projetados", L(true)], ["juridico", "Jurídico", L(false, true)],
-  ["supervisao", "Supervisão (Call center)", L(true, true, true)], ["gestao", "Gestão", L(true, true, true, true)],
+  ["supervisao", "Supervisão (Call center)", L(true, true, true)], ["gestao", "Gestão", L(true, true, true, true)], ["proprietario", "Proprietário", L(true, true, true, true, true)],
 ].map(([id, nome, liberacoes]: any) => ({ id, nome, liberacoes }));
 const tipos: any = {
   previsao_frete: { nome: "Previsão do frete (já com o freteiro)", destino: "callcenter", rapido: true },

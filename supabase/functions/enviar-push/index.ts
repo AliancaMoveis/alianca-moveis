@@ -16,7 +16,7 @@ Deno.serve(async (req: Request) => {
   let enviados = 0;
   for (const n of ns || []) {
     const { data: subs } = await sb.from("push_inscricoes").select("*").eq("usuario_id", n.usuario_id);
-    const payload = JSON.stringify({ titulo: n.titulo, corpo: n.corpo, url: n.chamado_id ? "/?abrir=" + encodeURIComponent(n.chamado_id) : "/", tag: n.chave || "n" + n.id });
+    const payload = JSON.stringify({ titulo: n.titulo, corpo: n.corpo, url: "/?notif=" + n.id + (n.chamado_id ? "&abrir=" + encodeURIComponent(n.chamado_id) : ""), tag: n.chave || "n" + n.id });
     let ok = 0; const erros: string[] = [];
     for (const s of subs || []) {
       try {

@@ -1,3 +1,4 @@
+import { SinoAvisos } from "../comp/Avisos";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { inicial } from "../lib/regras";
@@ -116,6 +117,7 @@ export default function Shell() {
             <div className="trilha"><span id="trGrupo">{itemAtual ? itemAtual.g : "Pessoal"}</span><b id="trItem">{itemAtual ? itemAtual.l : "Dashboard"}</b></div>
             {sim && <div style={{ marginLeft: 16, fontSize: 12, background: "var(--warn-bg)", color: "var(--warn)", border: "1px solid var(--warn)", borderRadius: 8, padding: "4px 10px" }}>Modo de teste: você está como <b>{R.me()?.nome}</b> · <a href="#" onClick={e => { e.preventDefault(); voltar(); }} style={{ color: "inherit" }}>voltar para {sim.nome}</a></div>}
             <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-faint)", display: "flex", alignItems: "center", gap: 6 }}>
+              <SinoAvisos />
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#5fb87a", display: "inline-block", animation: "pulse2 2s infinite" }}></span>
               ALIANÇA 360
             </div>

@@ -4,6 +4,8 @@ import { PainelConsultor, PainelLoja, PainelVendedor } from "./DashLoja";
 import PainelOperadora from "./PainelOperadora";
 import PainelConsultorVisual from "./PainelConsultorVisual";
 import PainelGestao from "./PainelGestao";
+import PainelDono from "./PainelDono";
+import PainelBruno from "./PainelBruno";
 import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
@@ -95,7 +97,7 @@ export default function Dashboard() {
           </>}
           <span className="live" style={{ marginLeft: "auto" }}><i></i>ao vivo</span>
         </div>
-        {veAmbos && <div className="subnav" style={{ marginTop: 12 }}>
+        {veAmbos && !R.ehGestao() && <div className="subnav" style={{ marginTop: 12 }}>
           {([["tudo", "Todos os setores"], ["cc", "Call center e pós-venda"], ["mkt", "Marketing"]] as [any, string][]).map(([k, l]) => <button key={k} className={area === k ? "on" : ""} onClick={() => setArea(k)}>{l}</button>)}
         </div>}
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Período {fmtDate(de)} a {fmtDate(ate)}: vale para novos, concluídos, agendamentos e vendas. O que está em aberto aparece sempre, de qualquer data.</div>
@@ -104,6 +106,8 @@ export default function Dashboard() {
   // operadora do marketing: dashboard só visual (números e gráficos), sem lista de ações
   const souOperadora = R.mySetores().includes("marketing_operadora") && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
   const souConsultor = R.ehConsultorExterno() && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
+  if (R.ehProprietario()) return <section className="view active" id="view-dashboard"><div className="view-head"><div><h2>Painel do dono</h2><p>Resultado do mês, loja ao vivo, quem vende e quanto custa vender. Só visualização — as tarefas ficam com a Gestão.</p></div></div><PainelDono /></section>;
+  if (R.ehGestao()) return <section className="view active" id="view-dashboard">{cabecalho}<PainelBruno de={de} ate={ate} /></section>;
   if (souConsultor) return <section className="view active" id="view-dashboard">{cabecalho}<PainelConsultorVisual de={de} ate={ate} /></section>;
   if (souOperadora) return <section className="view active" id="view-dashboard">{cabecalho}<PainelOperadora de={de} ate={ate} /></section>;
   return (
