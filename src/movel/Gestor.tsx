@@ -1,6 +1,7 @@
 // App do celular — Gestão / Supervisões: painel completo (Marketing primeiro, Call center depois),
 // equipe (consultores, vendedores, operadoras, setores), fila de ação e busca de clientes.
 import { useEffect, useRef, useState } from "react";
+import { A } from "../lib/acoes";
 import { useApp } from "../estado";
 import { STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume } from "../lib/regras";
 
@@ -34,6 +35,32 @@ export function areas(R: any, st: any) {
 function SelArea({ area, setArea, a }: any) {
   if (!(a.mkt && a.cc)) return null;
   return <div className="mv-area"><button className={area === "mkt" ? "on" : ""} onClick={() => setArea("mkt")}>📣 Marketing</button><button className={area === "cc" ? "on" : ""} onClick={() => setArea("cc")}>☎ Call center</button></div>;
+}
+
+// quem vê R$ das vendas da loja: Gestão e Gerente de Loja (o banco também só entrega o valor para eles)
+export const veValorLoja = (R: any) => R.ehGestao() || R.mySetores().includes("gerente_loja");
+const doMkt = (u: any) => !!u && (u.setores || []).some((x: string) => ["marketing_operadora", "marketing_supervisao"].includes(x));
+const diaLocal = (v: any) => { const x = parseData(v); return isNaN(+x) ? "" : isoLocal(x); };
+// produção e pagamento de cada pessoa do marketing no período (mesma regra da tela Produtividade)
+export function useTimeMkt(P: { de: string; ate: string }, tick = 0) {
+  const { R, st } = useApp() as any;
+  const [metas, setMetas] = useState<any[]>([]);
+  useEffect(() => { let v = true; A.listarMetasMkt(P.de, P.ate).then(m => { if (v) setMetas(m || []); }).catch(() => setMetas([])); return () => { v = false; }; }, [P.de, P.ate, tick]);
+  const hoje = hojeISO(), valorVenda = Number((R.cfg() as any).valorVendaMkt ?? 10);
+  const ops = st.usuarios.filter((u: any) => u.ativo && doMkt(u) && (u.setores || []).includes("marketing_operadora"));
+  const linhas = ops.map((u: any) => {
+    const l = st.chamados.filter((c: any) => R.domMarketing(c) && c.solicitanteId === u.id);
+    const ag = l.filter((c: any) => { const d = diaLocal(c.criadoEm); return d >= P.de && d <= P.ate; });
+    const porDia: Record<string, number> = {}; ag.forEach((c: any) => { const d = diaLocal(c.criadoEm); porDia[d] = (porDia[d] || 0) + 1; });
+    const vendas = l.filter((c: any) => c.venda && c.venda.status === "efetivada" && (() => { const d = String(c.venda.dataVenda || c.venda.quando || "").slice(0, 10); return d >= P.de && d <= P.ate; })());
+    const aConf = l.filter((c: any) => c.venda && ["registrada", "promissoria"].includes(c.venda.status));
+    const dm = metas.filter((m: any) => m.dia <= hoje), bat = dm.filter((m: any) => (porDia[m.dia] || 0) >= m.meta);
+    const bonus = bat.reduce((x: number, m: any) => x + Number(m.valor), 0);
+    return { u, ag, mkt: ag.filter((c: any) => R.ehDireto(c)), ext: ag.filter((c: any) => !R.ehDireto(c)), vieram: ag.filter(R.compareceu), vendas, aConf,
+      diasMeta: dm.length, batidos: bat.length, bonus, total: vendas.length * valorVenda + bonus, hojeFeitos: porDia[hoje] || 0 };
+  }).sort((a: any, b: any) => b.vendas.length - a.vendas.length || b.ag.length - a.ag.length);
+  const metaHoje = metas.find((m: any) => m.dia === hoje);
+  return { linhas, valorVenda, metaHoje, metas };
 }
 
 // ----- blocos -----
@@ -76,20 +103,30 @@ function LinhaCliente({ c, abrir, R }: any) {
 }
 
 // ================= RESUMO =================
+function buscar(todos: any[], q: string) {
+  const t = q.trim().toLowerCase(), dg = t.replace(/\D/g, "");
+  if (t.length < 2) return [];
+  return todos.filter((c: any) => (c.cliente + " " + c.id + " " + (c.produto || "") + " " + (c.venda?.numero || "")).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))).slice(0, 60);
+}
 export function GestResumo() {
-  const { R, st } = useApp() as any;
+  const { R, st, abrirDetalhe } = useApp() as any;
   const a = areas(R, st);
   const [area, setArea] = useState<"mkt" | "cc">(a.mkt ? "mkt" : "cc");
   const [per, setPer] = useState<Per>("mes");
   const L = useLista();
   const P = periodo(per);
   const noPer = (v: any) => !!v && R.dentroPeriodo(v, P.de, P.ate);
+  const [q, setQ] = useState("");
+  const achados = buscar(a.todos, q);
   return <>
+    <input className="mv-busca" type="search" placeholder="🔎 Consultar cliente: nome, telefone, nº…" value={q} onChange={e => setQ(e.target.value)} />
+    {q.trim().length >= 2 ? <><div className="mv-sec">Resultado <i>{achados.length}</i></div>{achados.length ? achados.map((c: any) => <LinhaCliente key={c.id} c={c} R={R} abrir={() => abrirDetalhe(c.id)} />) : <div className="mv-vazio">Nenhum cliente encontrado.</div>}</> : <>
     <SelArea area={area} setArea={(x: any) => { setArea(x); L.fechar(); }} a={a} />
     <SelPer per={per} setPer={p => { setPer(p); L.fechar(); }} />
     {area === "mkt" ? <ResMkt todos={a.todos} noPer={noPer} P={P} L={L} /> : <ResCC todos={a.todos} noPer={noPer} P={P} L={L} />}
     <ListaClientes sel={L.sel} fechar={L.fechar} />
     {!L.sel && <div className="mv-dica" style={{ marginTop: 10 }}>Toque nos quadros com “ver lista” para ver os clientes e abrir a ficha.</div>}
+    </>}
   </>;
 }
 
@@ -102,7 +139,7 @@ function ResMkt({ todos, noPer, P, L }: any) {
   const vendas = mk.filter((c: any) => vendaContaVolume(c.venda) && noPer(c.venda.dataVenda || c.venda.quando));
   const efet = vendas.filter((c: any) => vendaContaComissao(c.venda));
   const aConf = mk.filter((c: any) => c.venda && c.venda.status === "registrada");
-  const veValor = vendas.some((c: any) => R.podeVerValor(c)) || R.ehGestao();
+  const veValor = veValorLoja(R);
   const valor = vendas.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0);
   const vDir = vendas.filter((c: any) => R.ehDireto(c)), vExt = vendas.filter((c: any) => !R.ehDireto(c));
   const soma = (l: any[]) => l.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0);
@@ -128,14 +165,17 @@ function ResMkt({ todos, noPer, P, L }: any) {
   const semCons = mk.filter((c: any) => !R.ehDireto(c) && !c.consultorId && R.emAberto(c) && !c.dataLoja);
   const parados = mk.filter((c: any) => R.emAberto(c) && R.clienteCriticoInatividade(c));
   return <>
-    <div className="mv-receber"><span>Vendas · {P.nome}</span><b>{veValor ? fmtMoeda(valor) : vendas.length + " venda(s)"}</b>
-      <small>{vendas.length} venda(s){veValor && vendas.length ? " · ticket médio " + fmtMoeda(valor / vendas.length) : ""} · {efet.length} efetivada(s)</small></div>
-    <div className="mv-tiles">
-      {T("vendas", vendas.length, "Vendas", vendas, "var(--st-concluida)")}
-      {T("aconf", aConf.length, "Vendas a confirmar", aConf, aConf.length ? "var(--warn)" : undefined)}
-      {T("vdir", veValor ? fmtMoeda(soma(vDir)) : vDir.length, "Vendas agend. marketing", vDir, undefined, vDir.length + " venda(s)")}
-      {T("vext", veValor ? fmtMoeda(soma(vExt)) : vExt.length, "Vendas consultor externo", vExt, undefined, vExt.length + " venda(s)")}
+    {/* principais números do marketing: agendamentos (marketing e externos), vindas na loja e vendas */}
+    <div className="mv-receber mk"><span>Agendamentos · {P.nome}</span><b>{novos.length}</b>
+      <small><b>{novosDir.length}</b> marketing (direto na loja) · <b>{novosExt.length}</b> externos (consultor)</small></div>
+    <div className="mv-tiles c3">
+      {T("nd", novosDir.length, "Agend. marketing", novosDir)}{T("ne", novosExt.length, "Agend. externos", novosExt)}{T("vr0", vieram.length, "Vieram na loja", vieram, "var(--warn)")}
+      {T("vendas", vendas.length, "Vendas", vendas, "var(--st-concluida)")}{T("vdir", vDir.length, "Vendas marketing", vDir)}{T("vext", vExt.length, "Vendas externos", vExt)}
     </div>
+    <div className="mv-taxas" style={{ margin: "2px 2px 10px" }}><span>Presença na loja <b>{pc(vieram.length, vieram.length + faltaram.length)}</b></span><span>Agendamento→venda <b>{pc(vendas.length, novos.length)}</b></span><span>Veio→comprou <b>{pc(vendas.length, vieram.length)}</b></span>{aConf.length ? <span>A confirmar <b style={{ color: "var(--warn)" }}>{aConf.length}</b></span> : null}</div>
+    {veValor && <div className="mv-valor" onClick={() => L.abrirLista("vendasv", "Vendas do período", vendas)}><span>Valor vendido ({P.nome})<br /><small>{vendas.length ? "ticket médio " + fmtMoeda(valor / vendas.length) + " · " : ""}mkt {fmtMoeda(soma(vDir))} · externos {fmtMoeda(soma(vExt))}</small></span><b>{fmtMoeda(valor)}</b></div>}
+
+    <TimeMkt P={P} L={L} />
 
     <div className="mv-sec">⚡ Agora — precisa de atenção</div>
     <div className="mv-tiles c3">
@@ -148,8 +188,7 @@ function ResMkt({ todos, noPer, P, L }: any) {
 
     <div className="mv-sec">Entrada de clientes · {P.nome}</div>
     <div className="mv-tiles">
-      {T("nv", novos.length, "Clientes novos", novos)}{T("nd", novosDir.length, "Agendados direto loja", novosDir)}
-      {T("ne", novosExt.length, "Para consultor externo", novosExt)}{T("or", orc.length, "Orçamentos em aberto", orc, orc.length ? "var(--warn)" : undefined)}
+      {T("nv", novos.length, "Clientes novos", novos)}{T("or", orc.length, "Orçamentos em aberto", orc, orc.length ? "var(--warn)" : undefined)}
     </div>
 
     <div className="mv-sec">Consultor externo: visita → loja → venda</div>
@@ -165,6 +204,25 @@ function ResMkt({ todos, noPer, P, L }: any) {
       {T("nl", naLoja.length, "Agendados na loja", naLoja)}{T("vr", vieram.length, "Vieram", vieram, undefined, "presença " + pc(vieram.length, vieram.length + faltaram.length))}
       {T("fl", faltaram.length, "Não compareceram", faltaram, faltaram.length ? "var(--danger)" : undefined)}{T("pe", perdidos.length, "Perdidos / cancelados", perdidos, perdidos.length ? "var(--danger)" : undefined)}
     </div>
+  </>;
+}
+
+// vendas por pessoa do marketing (controle e comissão delas)
+function TimeMkt({ P, L }: any) {
+  const T = useTimeMkt(P);
+  if (!T.linhas.length) return null;
+  const tot = T.linhas.reduce((x: number, l: any) => x + l.total, 0);
+  return <>
+    <div className="mv-sec">Time do marketing · {P.nome}{T.metaHoje ? <small style={{ textTransform: "none", fontWeight: 500 }}> · meta hoje {T.metaHoje.meta}</small> : null}</div>
+    {T.linhas.map((x: any, i: number) => <div key={x.u.id} className="mv-pessoa">
+      <button className="mv-pessoa-h" onClick={() => L.abrirLista("op" + x.u.id, primeiro(x.u.nome) + " — agendamentos", x.ag)}><span className="pos">{i + 1}</span><b>{x.u.nome}</b><em>{fmtMoeda(x.total)}</em></button>
+      <div className="mv-pessoa-n">
+        <div><b>{x.ag.length}</b><span>Agendou</span></div><div><b>{x.vieram.length}</b><span>Vieram</span></div>
+        <div onClick={() => L.abrirLista("opv" + x.u.id, primeiro(x.u.nome) + " — vendas", x.vendas)}><b style={{ color: "var(--st-concluida)" }}>{x.vendas.length}</b><span>Vendas</span></div>
+        <div><b>{x.batidos}/{x.diasMeta}</b><span>Metas</span></div></div>
+      <div className="mv-pessoa-rod">{x.mkt.length} marketing · {x.ext.length} externos{T.metaHoje ? " · hoje " + x.hojeFeitos + "/" + T.metaHoje.meta : ""}{x.aConf.length ? " · " + x.aConf.length + " venda(s) a confirmar" : ""} · {x.vendas.length}×{fmtMoeda(T.valorVenda)}{x.bonus ? " + bônus " + fmtMoeda(x.bonus) : ""}</div>
+    </div>)}
+    <div className="mv-dica">Total a pagar ao time no período: <b>{fmtMoeda(tot)}</b> (vendas efetivadas × {fmtMoeda(T.valorVenda)} + bônus de meta). Aprovação na aba <b>Time</b>.</div>
   </>;
 }
 
@@ -217,19 +275,20 @@ function ResCC({ todos, noPer, P, L }: any) {
 }
 
 // ================= EQUIPE =================
-export function GestEquipe() {
+export function GestEquipe({ irTime }: { irTime?: () => void }) {
   const { R, st } = useApp() as any;
   const a = areas(R, st);
   const [area, setArea] = useState<"mkt" | "cc">(a.mkt ? "mkt" : "cc");
   const [per, setPer] = useState<Per>("mes");
-  const [grupo, setGrupo] = useState<"cons" | "vend" | "op">("cons");
+  const [grupo, setGrupo] = useState<"cons" | "vend" | "op">(R.ehGestao() ? "cons" : "op");
   const [aberto, setAberto] = useState("");
   const L = useLista();
   const P = periodo(per);
   const noPer = (v: any) => !!v && R.dentroPeriodo(v, P.de, P.ate);
   const mk = a.todos.filter((c: any) => R.domMarketing(c));
-  const veValor = R.ehGestao() || mk.some((c: any) => c.venda && R.podeVerValor(c));
+  const veValor = veValorLoja(R);
   const V = (n: number) => veValor ? fmtMoeda(n) : "—";
+  const TM = useTimeMkt(P);
   const soma = (l: any[]) => l.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0);
   let linhas: any[] = [];
   if (area === "mkt" && grupo === "cons") {
@@ -250,14 +309,10 @@ export function GestEquipe() {
         dest: V(soma(vd)), extra: [["Conversão", pc(vd.length, vi.length)], ["Ticket médio", vd.length ? V(soma(vd) / vd.length) : "—"], ["Orçamentos", orc.length]], listas: [["Agendados no período", ag], ["Vendas", vd], ["Sem parecer", sp], ["Orçamentos em aberto", orc]] };
     });
   } else if (area === "mkt") {
-    const doMkt = (uid: string) => { const u = R.getUser(uid); return !!u && (u.setores || []).some((s: string) => ["marketing_operadora", "marketing_supervisao"].includes(s)); };
-    const ops = st.usuarios.filter((u: any) => u.ativo && doMkt(u.id));
-    linhas = ops.map((u: any) => {
-      const l = mk.filter((c: any) => c.solicitanteId === u.id && noPer(c.criadoEm));
-      const vi = l.filter(R.compareceu), vd = l.filter((c: any) => vendaContaVolume(c.venda));
-      return { u, l, chave: vd.length * 1e9 + l.length, nums: [["Agendou", l.length], ["P/ consultor", l.filter((c: any) => !R.ehDireto(c)).length], ["Vieram", vi.length], ["Vendas", vd.length]],
-        dest: vd.length + " venda(s)", extra: [["Agend.→venda", pc(vd.length, l.length)], ["Direto loja", l.filter((c: any) => R.ehDireto(c)).length], ["Valor", V(soma(vd))]], listas: [["Agendamentos", l], ["Vieram", vi], ["Vendas", vd]] };
-    });
+    linhas = TM.linhas.map((x: any) => ({ u: x.u, l: x.ag, chave: x.total * 1000 + x.ag.length,
+      nums: [["Agendou", x.ag.length], ["Vieram", x.vieram.length], ["Vendas", x.vendas.length], ["Metas", x.batidos + "/" + x.diasMeta]],
+      dest: fmtMoeda(x.total), extra: [["Marketing", x.mkt.length], ["Externos", x.ext.length], ["Agend.→venda", pc(x.vendas.length, x.ag.length)], ["Vendas × " + fmtMoeda(TM.valorVenda), fmtMoeda(x.vendas.length * TM.valorVenda)], ["Bônus", fmtMoeda(x.bonus)], ["A confirmar", x.aConf.length]],
+      listas: [["Agendamentos", x.ag], ["Vieram", x.vieram], ["Vendas", x.vendas], ["Vendas a confirmar", x.aConf]] }));
   } else {
     // call center: por setor e por atendente
     const cc = a.todos.filter((c: any) => !R.domMarketing(c));
@@ -272,8 +327,9 @@ export function GestEquipe() {
   return <>
     <SelArea area={area} setArea={(x: any) => { setArea(x); setAberto(""); L.fechar(); }} a={a} />
     <SelPer per={per} setPer={p => { setPer(p); L.fechar(); }} />
-    {area === "mkt" && <div className="mv-seg">{([["cons", "Consultores"], ["vend", "Vendedores"], ["op", "Operadoras mkt"]] as any[]).map(([k, l]) =>
+    {area === "mkt" && <div className="mv-seg">{((R.ehGestao() ? [["cons", "Consultores"], ["vend", "Vendedores"], ["op", "Time marketing"]] : [["op", "Time marketing"], ["cons", "Consultores"], ["vend", "Vendedores"]]) as any[]).map(([k, l]) =>
       <button key={k} className={grupo === k ? "on" : ""} onClick={() => { setGrupo(k); setAberto(""); L.fechar(); }}>{l}</button>)}</div>}
+    {area === "mkt" && grupo === "op" && irTime && <button className="mv-principal" style={{ marginBottom: 10 }} onClick={irTime}>🎯 Metas do dia e aprovação de pagamento</button>}
     {area === "cc" && <div className="mv-sec">Chamados abertos por atendente · {P.nome}</div>}
     {linhas.length ? linhas.map((x, i) => <div key={x.u.id} className={"mv-pessoa" + (aberto === x.u.id ? " on" : "")}>
       <button className="mv-pessoa-h" onClick={() => { setAberto(aberto === x.u.id ? "" : x.u.id); L.fechar(); }}>
@@ -318,5 +374,74 @@ export function GestAcao() {
         {L.sel && L.sel.k === "urg" && <ListaClientes sel={L.sel} fechar={L.fechar} />}</div>
       {!grupos.length && !urg.length && <div className="mv-vazio">Tudo sob controle. 👍</div>}
     </>}
+  </>;
+}
+
+// ================= TIME DO MARKETING (metas do dia + aprovação do pagamento) =================
+export function GestTime({ voltar }: { voltar?: () => void }) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const hoje = hojeISO();
+  const [off, setOff] = useState(0);
+  const d0 = parseData(hoje + "T12:00"), ini = new Date(d0.getFullYear(), d0.getMonth() - off, 1), fim = new Date(d0.getFullYear(), d0.getMonth() - off + 1, 0);
+  const P = { de: isoLocal(ini), ate: isoLocal(fim), nome: MESES[ini.getMonth()] };
+  const [tick, setTick] = useState(0);
+  const T = useTimeMkt(P, tick);
+  const [pags, setPags] = useState<any[]>([]);
+  useEffect(() => { A.listarPagamentosMkt(P.de, P.ate).then(setPags).catch(() => setPags([])); }, [P.de, tick]);
+  const [f, setF] = useState({ dia: hoje, meta: "", valor: "100" });
+  const recarregar = () => setTick(t => t + 1);
+  const salvar = () => {
+    const m = parseInt(f.meta), v = parseFloat(String(f.valor).replace(",", "."));
+    if (!m || m <= 0) { toast("Informe a meta de agendamentos"); return; } if (isNaN(v) || v < 0) { toast("Informe o valor do bônus"); return; }
+    ex(() => A.salvarMetaMkt(f.dia, m, v, ""), "Meta salva").then((ok: boolean) => { if (ok) { setF({ ...f, meta: "" }); recarregar(); } });
+  };
+  const gere = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
+  const totPagar = T.linhas.reduce((x: number, l: any) => x + l.total, 0);
+  const totAprov = T.linhas.reduce((x: number, l: any) => { const p = pags.find((y: any) => y.operadora_id === l.u.id); return x + (p ? Number(p.total) : 0); }, 0);
+  const proximas = T.metas.filter((m: any) => m.dia >= hoje).slice(0, 7);
+  return <>
+    {voltar && <button className="mv-voltar" onClick={voltar}>‹ Voltar</button>}
+    <div className="mv-seg">{[0, 1, 2].map(o => <button key={o} className={off === o ? "on" : ""} onClick={() => setOff(o)}>{o === 0 ? "Este mês" : MESES[new Date(d0.getFullYear(), d0.getMonth() - o, 1).getMonth()]}</button>)}</div>
+
+    {off === 0 && <>
+      <div className="mv-receber mk"><span>Hoje · {fmtDate(hoje)}</span><b>{T.metaHoje ? "Meta " + T.metaHoje.meta : "Sem meta hoje"}</b>
+        <small>{T.metaHoje ? "Bônus " + fmtMoeda(Number(T.metaHoje.valor)) + " para quem bater" : "Defina abaixo a meta e o bônus do dia"}</small></div>
+      {T.linhas.map((x: any) => { const meta = T.metaHoje ? T.metaHoje.meta : 0; const ok = meta && x.hojeFeitos >= meta; return (
+        <div key={x.u.id} className="mv-barra" style={{ padding: "6px 2px" }}><span>{primeiro(x.u.nome)}</span>
+          <i><em style={{ width: (meta ? Math.min(100, x.hojeFeitos / meta * 100) : x.hojeFeitos ? 100 : 0) + "%", background: ok ? "var(--st-concluida)" : "var(--primary)" }}></em></i>
+          <b>{x.hojeFeitos}{meta ? "/" + meta : ""}{ok ? " ✓" : ""}</b></div>); })}
+      {gere && <div className="mv-bloco">
+        <div className="mv-bloco-t">🎯 Definir meta do dia</div>
+        <div className="mv-form3">
+          <label>Dia<input type="date" value={f.dia} onChange={e => setF({ ...f, dia: e.target.value })} /></label>
+          <label>Meta (agend.)<input inputMode="numeric" value={f.meta} onChange={e => setF({ ...f, meta: e.target.value.replace(/\D/g, "") })} placeholder="ex.: 10" /></label>
+          <label>Bônus R$<input inputMode="decimal" value={f.valor} onChange={e => setF({ ...f, valor: e.target.value })} /></label>
+        </div>
+        <button className="mv-principal" onClick={salvar}>Salvar meta</button>
+        {proximas.length > 0 && <div className="mv-metas">{proximas.map((m: any) => <div key={m.dia}><b>{fmtDate(m.dia).slice(0, 5)}</b> meta {m.meta} · bônus {fmtMoeda(Number(m.valor))}
+          <button onClick={() => ex(() => A.removerMetaMkt(m.dia), "Meta removida").then((ok: boolean) => ok && recarregar())}>remover</button></div>)}</div>}
+        <div className="mv-dica" style={{ marginTop: 8 }}>Dia sem meta = sem bônus. A meta vale para cada operadora individualmente.</div>
+      </div>}
+    </>}
+
+    <div className="mv-sec">Pagamento · {P.nome}</div>
+    <div className="mv-tiles">
+      <Tile n={fmtMoeda(totPagar)} l="Total calculado" /><Tile n={fmtMoeda(totAprov)} l="Já aprovado" cor={totAprov ? "var(--st-concluida)" : undefined} />
+    </div>
+    {T.linhas.map((x: any) => { const pag = pags.find((y: any) => y.operadora_id === x.u.id); const mudou = pag && Number(pag.total) !== x.total; return (
+      <div key={x.u.id} className="mv-pessoa">
+        <div className="mv-pessoa-h"><b>{x.u.nome}</b><em>{fmtMoeda(x.total)}</em></div>
+        <div className="mv-pessoa-n"><div><b>{x.ag.length}</b><span>Agendou</span></div><div><b>{x.vieram.length}</b><span>Vieram</span></div>
+          <div><b style={{ color: "var(--st-concluida)" }}>{x.vendas.length}</b><span>Vendas</span></div><div><b>{x.batidos}/{x.diasMeta}</b><span>Metas</span></div></div>
+        <div className="mv-pessoa-rod">{x.vendas.length} × {fmtMoeda(T.valorVenda)} = {fmtMoeda(x.vendas.length * T.valorVenda)} · bônus {fmtMoeda(x.bonus)}{x.aConf.length ? " · " + x.aConf.length + " venda(s) a confirmar (entram depois)" : ""}</div>
+        <div className="mv-pessoa-x" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {pag ? <span className="badge b-concluida">Aprovado {fmtMoeda(Number(pag.total))}</span> : <span className="badge" style={{ color: "var(--warn)", borderColor: "var(--warn)" }}>Pendente de aprovação</span>}
+          {mudou && <small style={{ color: "var(--warn)" }}>valores mudaram — reaprove</small>}
+          {gere && <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+            <button className="btn primary sm" onClick={() => ex(() => A.aprovarPagamentoMkt(x.u.id, P.de, P.ate), "Pagamento aprovado").then((ok: boolean) => ok && recarregar())}>{pag ? "Reaprovar" : "Aprovar"}</button>
+            {pag && <button className="btn ghost sm" onClick={() => ex(() => A.cancelarAprovacaoMkt(pag.id), "Aprovação desfeita").then((ok: boolean) => ok && recarregar())}>Desfazer</button>}</span>}
+        </div>
+      </div>); })}
+    {!T.linhas.length && <div className="mv-vazio">Nenhuma operadora cadastrada.</div>}
   </>;
 }

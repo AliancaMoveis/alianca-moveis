@@ -200,7 +200,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeCriarMkt = () => Object.keys(TIPOS).some(k => TIPOS[k].presale && podeCriarTipo(k));
   const operacionais = () => (state.setores || []).filter(s => !(s.liberacoes && s.liberacoes.verTudo));
   const setoresVisiveis = () => operacionais().filter(s => !ehSetorMarketing(s.id) || temMarketing() || ehGestao());
-  const podeVerValor = (c: Chamado) => ehGestao() || temMarketing() || (c.atendenteId && c.atendenteId === currentUserId) || (c.consultorId && c.consultorId === currentUserId);
+  const podeVerValor = (c: Chamado) => ehGestao() || mySetores().includes("gerente_loja") || (c.atendenteId && c.atendenteId === currentUserId) || (c.consultorId && c.consultorId === currentUserId);
   const ehConsultorExterno = () => mySetores().includes("consultor_externo");
   const ehPosvenda = () => mySetores().includes("posvenda");
   const ehJuridico = () => mySetores().includes("juridico");

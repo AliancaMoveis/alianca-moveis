@@ -779,3 +779,19 @@ button.mv-tile.sel{border-color:var(--primary);box-shadow:0 0 0 2px var(--primar
 .mv-barra{grid-template-columns:minmax(86px,40%) 1fr auto}
 .mv-barra span{line-height:1.2}
 .mv-barra b{min-width:28px}
+.mv-receber.mk{background:linear-gradient(135deg,#8a2a6b,#c0428a)}
+.mv-pessoa-rod{font-size:11.5px;color:var(--ink-soft);padding:0 12px 10px}
+.mv-pessoa-n div[onclick],.mv-pessoa-n div{cursor:pointer}
+.mv-valor{cursor:pointer}
+.mv-valor small{opacity:.9;font-size:11.5px}
+.mv-voltar{border:0;background:none;color:var(--primary);font:inherit;font-weight:700;padding:4px 0 10px}
+.mv-time .kpis{grid-template-columns:1fr 1fr}
+.mv-time table{font-size:12px}
+.mv-time .panel,.mv-time .card{padding:12px}
+.mv-time .grid{grid-template-columns:1fr 1fr}
+.mv-form3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:6px;margin-bottom:8px}
+.mv-form3 label{font-size:11.5px;color:var(--ink-soft);display:flex;flex-direction:column;gap:3px}
+.mv-form3 input{min-width:0;width:100%;font-size:15px;padding:9px 8px}
+.mv-metas{margin-top:10px;font-size:12.5px}
+.mv-metas div{display:flex;gap:6px;align-items:center;padding:5px 0;border-top:1px dashed var(--line)}
+.mv-metas button{margin-left:auto;border:0;background:none;color:var(--danger);font:inherit;font-size:12px}

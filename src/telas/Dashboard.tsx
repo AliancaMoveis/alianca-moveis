@@ -57,7 +57,7 @@ export default function Dashboard() {
   const porOpVenda: Record<string, any> = {};
   vendidos.forEach((c: any) => { const k = c.solicitanteId; porOpVenda[k] = porOpVenda[k] || { n: 0, total: 0 }; porOpVenda[k].n++; const val = parseFloat((c.venda && c.venda.valor || "0").replace(/\./g, "").replace(",", ".")); if (!isNaN(val)) porOpVenda[k].total += val; });
   const rowsVenda = Object.entries(porOpVenda).map(([uid, v]) => [R.nomeUser(uid), v] as [string, any]);
-  const vejaValor = R.ehGestao() || R.temMarketing();
+  const vejaValor = R.ehGestao() || R.mySetores().includes("gerente_loja");
 
   const ehCons = R.ehConsultorExterno();
   const r = ehCons ? R.extratoConsultor(R.currentUserId, de, ate) : null;

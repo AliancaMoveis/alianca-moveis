@@ -8,7 +8,7 @@ import { EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import Agenda from "../telas/Agenda";
-import { GestAcao, GestEquipe, GestResumo } from "./Gestor";
+import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
 
 export type Perfil = "consultor" | "vendedor" | "gestor";
 export function perfilMovel(R: any): Perfil | null {
@@ -28,10 +28,12 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const { R, detalheId, modal } = useApp() as any;
   const abas: [string, string, string][] = perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
+    : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["time", "Time", "🎯"], ["equipe", "Equipe", "👥"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]];
   const [aba, setAba] = useState(abas[0][0]);
   const [aberto, setAberto] = useState<string | null>(null);
   const u = R.me();
+  const gereMkt = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
   const papel = perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
   const pend = perfil === "vendedor" ? R.state.chamados.filter((c: any) => c.atendenteId === R.currentUserId && (R.parecerCobrado(c) || R.semParecer(c))).length : 0;
   return (
@@ -48,10 +50,11 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "vendedor" && aba === "clientes" && <VendClientes abrir={setAberto} />}
         {perfil !== "gestor" && aba === "painel" && <Painel perfil={perfil} abrir={setAberto} />}
         {perfil === "gestor" && aba === "resumo" && <GestResumo />}
-        {perfil === "gestor" && aba === "equipe" && <GestEquipe />}
+        {perfil === "gestor" && aba === "equipe" && <GestEquipe irTime={gereMkt ? () => setAba("time") : undefined} />}
+        {perfil === "gestor" && aba === "time" && <GestTime voltar={!abas.some(x => x[0] === "time") ? () => setAba("equipe") : undefined} />}
         {perfil === "gestor" && aba === "acao" && <GestAcao />}
         {aba === "loja" && <div className="mv-agenda"><Agenda /></div>}
-        {aba === "eu" && <Eu perfil={perfil} completa={completa} />}
+        {aba === "eu" && <Eu perfil={perfil} completa={completa} irTime={gereMkt && !abas.some(x => x[0] === "time") ? () => setAba("time") : undefined} />}
       </main>
       <nav className="mv-tabs">
         {abas.map(([k, l, ic]) => <button key={k} className={aba === k ? "on" : ""} onClick={() => setAba(k)}><span className="ic">{ic}</span>{l}{k === "clientes" && pend > 0 && <i className="mv-dot">{pend}</i>}</button>)}
@@ -406,13 +409,14 @@ function AcoesVendedor({ c }: any) {
 }
 
 // ---------- eu / mais ----------
-function Eu({ perfil, completa }: any) {
+function Eu({ perfil, completa, irTime }: any) {
   const { R, st } = useApp() as any;
   const u = R.me();
   const hoje = hojeISO(), de = hoje.slice(0, 8) + "01";
   return <>
     <TrocarUsuario />
     <div className="mv-perfil"><div className="av">{(u?.nome || "?").replace(/^.*—\s*/, "").slice(0, 1)}</div><div><b>{u?.nome}</b><span>{R.setoresLabel(u)}</span></div></div>
+    {irTime && <><div className="mv-sec">Marketing</div><button className="mv-linha" onClick={irTime}><b>🎯 Metas e pagamento do time de marketing</b><span>Meta do dia, bônus, produtividade e aprovação</span></button></>}
     <div className="mv-sec">Aplicativo</div>
     <Instalar />
     <button className="mv-linha" onClick={completa}><b>Abrir versão completa</b><span>Todas as telas do sistema (melhor no computador)</span></button>
