@@ -22,6 +22,9 @@ export default function AgendaPublica() {
   const [atualizado, setAtualizado] = useState<Date | null>(null);
   const [aviso, setAviso] = useState<{ ok: boolean; t: string } | null>(null);
   const [enviando, setEnviando] = useState("");
+  const [escolher, setEscolher] = useState<any>(null);   // cliente sem vendedor: escolher o nome do vendedor
+  const [vendedores, setVendedores] = useState<any[]>([]);
+  useEffect(() => { if (token) A.agendaPublicaVendedores(token).then(setVendedores).catch(() => setVendedores([])); }, []);
   useEffect(() => { if (!aviso) return; const t = setTimeout(() => setAviso(null), 6000); return () => clearTimeout(t); }, [aviso]);
   const dia = (() => { const d = new Date(); d.setDate(d.getDate() + off); return d; })();
   const diaIso = iso(dia);
@@ -57,6 +60,16 @@ export default function AgendaPublica() {
       setDados(d => (d || []).map(y => y.id === x.id ? { ...y, avisado_em: new Date().toISOString(), avisos: (y.avisos || 0) + 1 } : y));
       setAviso({ ok: true, t: r && r.vendedor && x.vendedor ? "✓ " + soNome(x.vendedor) + " foi avisado(a) no celular: " + x.cliente + " chegou." : "✓ Cliente sem vendedor — a coordenação foi avisada no celular." });
     } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível avisar" }); }
+    finally { setEnviando(""); }
+  };
+  const iniciar = async (x: any, v: any) => {
+    setEnviando(x.id);
+    try {
+      await A.agendaPublicaIniciar(token, x.id, v.id);
+      setDados(d => (d || []).map(y => y.id === x.id ? { ...y, pedido_vendedor: v.nome } : y));
+      setAviso({ ok: true, t: "✓ " + soNome(v.nome) + " iniciou o atendimento de " + x.cliente + ". A coordenação vai confirmar." });
+      setEscolher(null);
+    } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível iniciar" }); setEscolher(null); }
     finally { setEnviando(""); }
   };
   const podeAvisar = (x: any) => ehHoje && !["vendido", "vendido_promissoria", "vendido_revisao", "nao_compareceu", "reprovado", "venda_cancelada"].includes(x.situacao);
@@ -96,7 +109,10 @@ export default function AgendaPublica() {
                   : x.pedido_vendedor ? <><small>Aguardando aprovação</small><b className="pedido">{soNome(x.pedido_vendedor)}</b></>
                   : cls === "agu" ? <b className="semv">Sem vendedor · fila</b> : <b>—</b>}</div>
                 <div className={"ap-sit " + cls}>{passou ? "Atrasado" : sit}</div>
-                <div className="ap-acao">{podeAvisar(x) ? (() => { const f = falta(x); const hr = x.avisado_em ? new Date(x.avisado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+                <div className="ap-acao">{podeAvisar(x) && !x.vendedor ? (x.pedido_vendedor
+                    ? <><div className="ap-iniciado">▶ {soNome(x.pedido_vendedor)} iniciou</div><small>aguardando confirmação</small></>
+                    : <><button className="ap-iniciar" disabled={enviando === x.id} onClick={() => setEscolher(x)}>▶ Iniciar atendimento</button><small>escolha seu nome</small></>)
+                  : podeAvisar(x) ? (() => { const f = falta(x); const hr = x.avisado_em ? new Date(x.avisado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
                   return <>
                     <button className={"ap-chegou" + (x.avisos ? " feito" : "")} disabled={!!f || enviando === x.id} onClick={() => avisar(x)}>
                       {enviando === x.id ? "Avisando…" : f ? "Avisar de novo em " + Math.floor(f / 60) + ":" + String(f % 60).padStart(2, "0") : x.avisos ? "🔔 Avisar de novo" : "🔔 Cliente chegou"}</button>
@@ -105,6 +121,13 @@ export default function AgendaPublica() {
               </div>);
           })}
       </div>
+      {escolher && <div className="ap-modal" onClick={() => setEscolher(null)}>
+        <div className="ap-modal-c" onClick={e => e.stopPropagation()}>
+          <b>Quem vai atender {escolher.cliente}?</b>
+          <span>Toque no seu nome. A coordenação recebe o aviso para confirmar.</span>
+          <div className="ap-vends">{vendedores.length ? vendedores.map(v => <button key={v.id} disabled={enviando === escolher.id} onClick={() => iniciar(escolher, v)}>{soNome(v.nome)}</button>) : <em>Nenhum vendedor cadastrado.</em>}</div>
+          <button className="ap-cancelar" onClick={() => setEscolher(null)}>Cancelar</button>
+        </div></div>}
       {aviso && <div className={"ap-toast" + (aviso.ok ? "" : " erro")} onClick={() => setAviso(null)}>{aviso.t}</div>}
       <footer className="ap-rod">{erro ? <span style={{ color: "#c24a4a" }}>Sem conexão — tentando de novo… </span> : null}Atualizado às {atualizado ? atualizado.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"} · atualiza sozinho a cada minuto</footer>
     </div>

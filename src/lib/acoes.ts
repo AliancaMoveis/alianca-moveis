@@ -65,6 +65,14 @@ export const A = {
     if ((import.meta as any).env?.VITE_MOCK) return ((window as any).__agendaPublicaMock || []) as any[];
     return (await rpc<any[]>("agenda_publica_dia", { p_token: token, p_dia: dia })) || [];
   },
+  agendaPublicaVendedores: async (token: string) => {
+    if ((import.meta as any).env?.VITE_MOCK) return [{ id: "v1", nome: "Giovanna" }, { id: "v2", nome: "Lucas" }, { id: "v3", nome: "Roy" }];
+    return (await rpc<any[]>("agenda_publica_vendedores", { p_token: token })) || [];
+  },
+  agendaPublicaIniciar: async (token: string, id: string, vendedor: string) => {
+    if ((import.meta as any).env?.VITE_MOCK) return null;
+    return rpc("agenda_publica_iniciar", { p_token: token, p_id: id, p_vendedor: vendedor });
+  },
   agendaPublicaAvisar: async (token: string, id: string) => {
     if ((import.meta as any).env?.VITE_MOCK) return { avisados: 1, vendedor: true };
     return rpc<any>("agenda_publica_avisar", { p_token: token, p_id: id });
