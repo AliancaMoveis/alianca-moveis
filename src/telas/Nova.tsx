@@ -74,6 +74,8 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
     const finalizar = modo.current === "finalizar" && podeFinalizarJa;
     if (finalizar && resposta.trim().length < 3) { toast("Escreva o que foi informado ao cliente"); return; }
     if (acionar && !finalizar && (motivoSup.trim() || f.motivo || "").trim().length < 5) { toast("Escreva por que a supervisão precisa acompanhar"); return; }
+    if (!f.cliente.trim()) { toast("Informe o nome do cliente"); return; }
+    if (!ehMkt && soDigitos(f.clienteDoc).length < 11) { toast("Informe o CPF/CNPJ do cliente"); (document.querySelector('input[name="clienteDoc"]') as HTMLInputElement | null)?.focus(); return; }
     if (String(f.telefone || "").replace(/\D/g, "").length < 10) { toast("Informe o telefone do cliente com DDD"); (document.querySelector('input[name="telefone"]') as HTMLInputElement | null)?.focus(); return; }
     setEnviando(true);
     try {
@@ -143,7 +145,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
         <div className="sec-label">{ehMkt ? "Dados do cliente (lead)" : "Cliente e venda"}</div>
         <div className="grid">
           <div className="field"><label>Nome do cliente <span className="req-star">*</span></label><input name="cliente" required placeholder="Nome completo" value={f.cliente} onChange={set("cliente")} /></div>
-          {!ehMkt && <div className="field" id="fieldClienteDoc"><label>CPF / CNPJ do cliente {rapido ? <span className="hint">(opcional)</span> : <span className="req-star">*</span>}</label><input name="clienteDoc" required={!rapido} placeholder="000.000.000-00" value={f.clienteDoc} onChange={set("clienteDoc")} /></div>}
+          {!ehMkt && <div className="field" id="fieldClienteDoc"><label>CPF / CNPJ do cliente <span className="req-star">*</span></label><input name="clienteDoc" required placeholder="000.000.000-00" value={f.clienteDoc} onChange={set("clienteDoc")} /></div>}
           <div className="field"><label>Telefone / contato <span className="req-star">*</span></label><input name="telefone" placeholder="(00) 00000-0000" value={f.telefone} onChange={set("telefone")} /></div>
           {!ehMkt && <div className="field" id="fieldPedido"><label>Nº venda {rapido ? <span className="hint">(opcional)</span> : <span className="req-star">*</span>}</label><input name="pedido" required={!rapido} placeholder="Ex.: 48213" value={f.pedido} onChange={set("pedido")} /></div>}
           {!ehMkt && <div className="field" id="fieldDataVenda"><label>Data da venda</label><input name="dataVenda" type="date" value={f.dataVenda} onChange={set("dataVenda")} /></div>}
