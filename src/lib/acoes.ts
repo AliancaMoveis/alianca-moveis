@@ -30,6 +30,18 @@ export const A = {
   assumirAcompanhamento: (id: string) => rpc("assumir_acompanhamento", { p_id: id }),
   encerrarAcompanhamento: (id: string, obs: string) => rpc("encerrar_acompanhamento", { p_id: id, p_obs: obs || "" }),
   iniciarAtendimento: (id: string) => rpc("iniciar_atendimento", { p_id: id }),
+  medidaDirecionar: (id: string, medidor: string, data: string, endereco: string) => rpc("medida_direcionar", { p_id: id, p_medidor: medidor, p_data: nz(data), p_endereco: endereco || "" }),
+  medidaRealizada: (id: string, medidas: string, obs: string) => rpc("medida_realizada", { p_id: id, p_medidas: medidas || "", p_obs: obs || "" }),
+  medidaRefazer: (id: string, motivo: string) => rpc("medida_refazer", { p_id: id, p_motivo: motivo }),
+  medidaLiberar: (id: string, obs: string) => rpc<string>("medida_liberar", { p_id: id, p_obs: obs || "" }),
+  solicitarReembolso: async (uid: string, tipo: string, valor: number, data: string, descricao: string, foto: Blob, chamado?: string) => {
+    const path = `${uid}/${crypto.randomUUID()}.jpg`;
+    const { error } = await sb.storage.from("reembolsos").upload(path, foto, { contentType: "image/jpeg" });
+    if (error) throw new Error("Não foi possível enviar a foto do comprovante");
+    return rpc<string>("solicitar_reembolso", { p_tipo: tipo, p_valor: valor, p_data: data, p_descricao: descricao || "", p_comprovante: path, p_chamado: nz(chamado) });
+  },
+  decidirReembolso: (id: string, aprovar: boolean, motivo = "") => rpc("decidir_reembolso", { p_id: id, p_aprovar: aprovar, p_motivo: motivo }),
+  urlComprovante: async (path: string) => { const { data } = await sb.storage.from("reembolsos").createSignedUrl(path, 600); return data?.signedUrl || ""; },
   cobrarParecer: (id: string) => rpc("cobrar_parecer", { p_id: id }),
   solicitarAtendimento: (id: string) => rpc("solicitar_atendimento", { p_id: id }),
   cancelarPedidoAtendimento: (id: string) => rpc("cancelar_pedido_atendimento", { p_id: id }),

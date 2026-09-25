@@ -15,7 +15,9 @@ export type Estado = {
   tipos: Record<string, any>;
   config: { comissaoPct: number; pagamentoVisita: number; valorVendaMkt?: number; modoTeste?: boolean };
   montadores: Montador[];
+  reembolsos: Reembolso[];
 };
+export type Reembolso = { id: string; usuarioId: string; chamadoId: string; data: string; tipo: string; valor: number; descricao: string; path: string; status: string; criadoEm: string; decididoEm: string; motivo: string };
 export type Montador = { id: string; nome: string; telefone: string; ativo: boolean };
 
 async function todos<T = any>(tabela: string, colunas = "*", ordem?: string): Promise<T[]> {
@@ -58,7 +60,7 @@ export async function carregarEstado(tentativa = 0): Promise<Estado> {
   }
 }
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda, reemb] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em", "criado_em"),
@@ -74,6 +76,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("anexos", "id,chamado_id,tipo,nome,url,storage_path,criado_em", "criado_em"),
     todos("montadores", "*", "nome"),
     todos("posvenda", "*"), // só o setor Pós-venda e a Gestão recebem linhas (RLS)
+    todos("reembolsos", "*", "criado_em").catch(() => []), // o próprio pedido ou a Gestão (RLS)
   ]);
   const pvDe: Record<string, any> = {};
   posvenda.forEach((p: any) => (pvDe[p.chamado_id] = {
@@ -115,6 +118,8 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     representantes: reps.map((r: any) => ({ id: r.id, nome: r.nome, whats: r.whats, email: r.email })),
     fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })),
     tipos: tiposMap,
+    reembolsos: (reemb as any[]).map((r: any) => ({ id: r.id, usuarioId: r.usuario_id, chamadoId: r.chamado_id || "", data: r.data, tipo: r.tipo, valor: Number(r.valor), descricao: r.descricao || "",
+      path: r.comprovante_path, status: r.status, criadoEm: r.criado_em, decididoEm: r.decidido_em || "", motivo: r.motivo || "" })),
     montadores: montadores.map((m: any) => ({ id: m.id, nome: m.nome, telefone: m.telefone || "", ativo: m.ativo })),
     config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), valorVendaMkt: cfg.data.valor_venda_mkt != null ? Number(cfg.data.valor_venda_mkt) : 10, modoTeste: !!cfg.data.modo_teste } : { comissaoPct: 1.5, pagamentoVisita: 40 },
     chamados: chamados.map((c: any) => {
@@ -127,7 +132,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
         dataVenda: c.data_venda || "", pedidoFabrica: c.pedido_fabrica, produto: c.produto, fabrica: c.fabrica_id || "",
         prazoTatico: c.prazo_tatico || "", motivo: c.motivo, urgente: c.urgente, escalonadoAuto: c.escalonado_auto, escaladoEm: c.escalado_em,
         vinculadoA: c.vinculado_a, consultorId: c.consultor_id || "", atendenteId: c.atendente_id || "",
-        dataVisita: hora(c.data_visita), endereco: c.endereco, dataLoja: hora(c.data_loja), statusCliente: c.status_cliente || "",
+        dataVisita: hora(c.data_visita), medidorId: c.medidor_id || "", dataMedida: hora(c.data_medida), endereco: c.endereco, dataLoja: hora(c.data_loja), statusCliente: c.status_cliente || "",
         tratativa: c.tratativa || {},
         resposta: c.resposta_quando ? { previsao: c.resposta_previsao || "", quem: c.resposta_quem, texto: c.resposta_texto, quando: c.resposta_quando } : null,
         venda: v ? {

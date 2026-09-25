@@ -11,12 +11,14 @@ import Agenda from "../telas/Agenda";
 import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
 import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
+import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados } from "./Medidas";
 
-export type Perfil = "consultor" | "vendedor" | "gestor" | "marketing";
+export type Perfil = "consultor" | "vendedor" | "gestor" | "marketing" | "medidor";
 export function perfilMovel(R: any): Perfil | null {
   const s = R.mySetores();
   if (R.ehGestao() || R.temMarketing() || R.verTudo() || s.includes("suporte_consultores")) return "gestor";
   if (s.includes("consultor_externo")) return "consultor";
+  if (s.includes("medidas") && R.me()?.somenteAtribuidos) return "medidor";
   if (s.includes("atendente_cliente")) return "vendedor";
   if (s.includes("marketing_operadora")) return "marketing";
   return null;
@@ -30,6 +32,7 @@ const diaCurto = (v: any) => { const d = dia(v); if (!d) return "sem data"; if (
 export default function AppMovel({ perfil, completa }: { perfil: Perfil; completa: () => void }) {
   const { R, detalheId, modal } = useApp() as any;
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Comissão", "💰"], ["eu", "Eu", "👤"]]
+    : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["time", "Time", "🎯"], ["equipe", "Equipe", "👥"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
@@ -40,7 +43,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const gereMkt = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
   const { abrirDetalhe } = useApp() as any;
   const podeRegistrar = perfil === "marketing" || (perfil === "gestor" && (R.ehGestao() || R.temMarketing()));
-  const papel = perfil === "marketing" ? "Marketing" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
+  const papel = perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
   const pend = perfil === "vendedor" ? R.state.chamados.filter((c: any) => c.atendenteId === R.currentUserId && (R.parecerCobrado(c) || R.semParecer(c))).length : 0;
   return (
     <div className="mv">
@@ -53,13 +56,15 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {aba === abas[0][0] && <ConviteNotif irEu={() => setAba("eu")} />}
         {perfil === "consultor" && aba === "hoje" && <ConsHoje abrir={setAberto} ir={setAba} />}
         {perfil === "consultor" && aba === "clientes" && <ConsClientes abrir={setAberto} />}
+        {perfil === "medidor" && aba === "hoje" && <MedHoje abrir={setAberto} ir={setAba} />}
+        {perfil === "medidor" && aba === "medidas" && <MedLista abrir={setAberto} />}
         {perfil === "vendedor" && aba === "hoje" && <VendHoje abrir={setAberto} />}
         {perfil === "vendedor" && aba === "clientes" && <VendClientes abrir={setAberto} />}
         {perfil === "marketing" && aba === "hoje" && <MktHoje ir={setAba} abrir={abrirDetalhe} />}
         {perfil === "marketing" && aba === "clientes" && <MktClientes abrir={abrirDetalhe} />}
         {perfil === "marketing" && aba === "ganhos" && <MktGanhos abrir={abrirDetalhe} />}
         {podeRegistrar && aba === "novo" && <>{perfil === "gestor" && <button className="mv-voltar" onClick={() => setAba("resumo")}>‹ Voltar</button>}<MktNovo pronto={id => { setAba(perfil === "marketing" ? "clientes" : "resumo"); abrirDetalhe(id); }} /></>}
-        {(perfil === "consultor" || perfil === "vendedor") && aba === "painel" && <Painel perfil={perfil} abrir={setAberto} />}
+        {(perfil === "consultor" || perfil === "vendedor" || perfil === "medidor") && aba === "painel" && <Painel perfil={perfil} abrir={setAberto} />}
         {perfil === "gestor" && aba === "resumo" && <GestResumo />}
         {perfil === "gestor" && aba === "equipe" && <GestEquipe irTime={gereMkt ? () => setAba("time") : undefined} />}
         {perfil === "gestor" && aba === "time" && <GestTime voltar={!abas.some(x => x[0] === "time") ? () => setAba("equipe") : undefined} />}
@@ -108,12 +113,14 @@ function consDados(R: any, st: any) {
 function ConsHoje({ abrir, ir }: any) {
   const { R, st } = useApp() as any;
   const d = consDados(R, st);
+  const md = medDados(R);
   const prox = d.atrasadas[0] || d.deHoje[0] || d.aFazer[0];
   return <>
     <div className="mv-nums">
       <Num n={d.deHoje.length} l="Visitas hoje" on={() => ir("clientes")} />
       <Num n={d.faltaLoja.length} l="Agendar loja" cor={d.faltaLoja.length ? "var(--warn)" : undefined} on={() => ir("clientes")} />
       <Num n={d.semAnexo.length} l="Sem anexo" cor={d.semAnexo.length ? "#b07a00" : undefined} on={() => ir("clientes")} />
+      <Num n={md.aFazer.length} l="Medidas" cor={md.atrasadas.length ? "var(--danger)" : undefined} on={() => ir("clientes")} />
     </div>
     {prox ? <div className="mv-hero" onClick={() => abrir(prox.id)}>
       <div className="mv-hero-l">{d.atrasadas.includes(prox) ? "Visita atrasada" : "Próxima visita"}</div>
@@ -122,6 +129,8 @@ function ConsHoje({ abrir, ir }: any) {
       <div className="mv-hero-s">{prox.endereco || "sem endereço"}</div>
       <Contato c={prox} />
     </div> : <Vazio t="Nenhuma visita a fazer. 👍" />}
+    {md.aFazer.length > 0 && <><div className="mv-sec">📐 Medidas a fazer (pós-venda · R$ {R.cfg().pagamentoVisita}, sem comissão)</div>
+      {md.aFazer.map((c: any) => <CartaoMedida key={c.id} c={c} abrir={abrir} />)}</>}
     {d.faltaLoja.length > 0 && <><div className="mv-sec">Visita feita — falta agendar a loja</div>
       {d.faltaLoja.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: "Toque para agendar a vinda à loja" }} destaque />)}</>}
     {d.deHoje.filter((c: any) => c !== prox).length > 0 && <><div className="mv-sec">Mais visitas hoje</div>
@@ -135,7 +144,8 @@ const Busca = ({ q, setQ }: any) => <input className="mv-busca" type="search" pl
 function ConsClientes({ abrir }: any) {
   const { R, st } = useApp() as any;
   const d = consDados(R, st);
-  const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "todas">("fazer");
+  const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "todas" | "medidas">("fazer");
+  const md = medDados(R);
   const [q, setQ] = useState("");
   const res = d.meus.filter((c: any) => c.venda || (c.tratativa && c.tratativa.parecerEm) || R.statusClienteDe(c) === "nao_compareceu").sort((a: any, b: any) => String(b.dataLoja || "").localeCompare(String(a.dataLoja || "")));
   const todas = d.meus.slice().sort((a: any, b: any) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
@@ -144,9 +154,9 @@ function ConsClientes({ abrir }: any) {
     : c.dataLoja ? "loja " + diaCurto(c.dataLoja) + " " + hora(c.dataLoja) + (c.atendenteId ? " · vendedor " + primeiro(R.nomeUser(c.atendenteId)) : " · sem vendedor") : (c.endereco || c.produto);
   return <>
     <Busca q={q} setQ={setQ} />
-    {!q && <div className="mv-seg">{([["fazer", "A fazer", d.aFazer.length], ["loja", "Agendar loja", d.faltaLoja.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["todas", "Todos", d.meus.length]] as any[]).map(([k, l, n]) =>
+    {!q && <div className="mv-seg">{([["fazer", "A fazer", d.aFazer.length], ["loja", "Agendar loja", d.faltaLoja.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["todas", "Todos", d.meus.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
       <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
-    {lista.length ? lista.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: sub(c) }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
+    {f === "medidas" && !q ? <MedLista abrir={abrir} /> : lista.length ? lista.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: sub(c) }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
   </>;
 }
 
@@ -217,7 +227,19 @@ function Painel({ perfil, abrir }: any) {
   const alternar = (k: string) => setLista(lista === k ? "" : k);
   const meses = <div className="mv-seg">{[0, 1, 2].map(o => <button key={o} className={off === o ? "on" : ""} onClick={() => { setOff(o); setLista(""); }}>{o === 0 ? "Este mês" : mesPeriodo(o).nome}</button>)}</div>;
   let conteudo: any, itens: any[] = [], tituloLista = "";
-  if (perfil === "consultor") {
+  if (perfil === "medidor") {
+    const cfg = R.cfg();
+    const ex = R.extratoConsultor(eu, P.de, P.ate);
+    if (lista === "medidas") { itens = ex.medidas; tituloLista = "Medidas feitas (pagas)"; }
+    conteudo = <>
+      <div className="mv-receber"><span>Valor a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + reembolsos aprovados {fmtMoeda(ex.totalReembolsos)}</small></div>
+      <div className="mv-tiles">
+        <Tile k="medidas" n={ex.medidas.length} l="Medidas feitas" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
+        <Tile n={fmtMoeda(ex.totalReembolsos)} l="Reembolsos aprovados" /><Tile n={medDados(R).aFazer.length} l="Medidas a fazer" cor="var(--warn)" />
+      </div>
+      <Reembolsos de={P.de} ate={P.ate} />
+    </>;
+  } else if (perfil === "consultor") {
     const cfg = R.cfg();
     const ex = R.extratoConsultor(eu, P.de, P.ate);
     const F = R.funilConsultor(eu, P.de, P.ate);
@@ -227,10 +249,12 @@ function Painel({ perfil, abrir }: any) {
     if (lista === "vendas") { itens = ex.vendas; tituloLista = "Vendas efetivadas"; }
     if (lista === "confirmar") { itens = aConfirmar; tituloLista = "Vendas aguardando confirmação"; }
     if (lista === "clientes") { itens = doPer; tituloLista = "Clientes do mês"; }
+    if (lista === "medidas") { itens = ex.medidas; tituloLista = "Medidas feitas (pagas, sem comissão)"; }
     conteudo = <>
-      <div className="mv-receber"><span>Valor a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.visitas.length} visita(s) × {fmtMoeda(cfg.pagamentoVisita)} + comissão {String(cfg.comissaoPct).replace(".", ",")}% das vendas efetivadas</small></div>
+      <div className="mv-receber"><span>Valor a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.visitas.length} visita(s) + {ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + comissão {String(cfg.comissaoPct).replace(".", ",")}% das vendas efetivadas{ex.totalReembolsos ? " + reembolsos " + fmtMoeda(ex.totalReembolsos) : ""}</small></div>
       <div className="mv-tiles">
         <Tile k="visitas" n={ex.visitas.length} l="Visitas realizadas" on={() => alternar("visitas")} /><Tile n={fmtMoeda(ex.pagamentoVisitas)} l="Pagamento por visitas" />
+        <Tile k="medidas" n={ex.medidas.length} l="📐 Medidas feitas" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
         <Tile k="vendas" n={ex.vendas.length} l="Vendas efetivadas" cor="var(--st-concluida)" on={() => alternar("vendas")} /><Tile n={fmtMoeda(ex.totalVendido)} l="Total vendido" />
         <Tile n={fmtMoeda(ex.comissao)} l={"Comissão (" + String(cfg.comissaoPct).replace(".", ",") + "%)"} cor="var(--st-concluida)" /><Tile k="confirmar" n={aConfirmar.length} l="Vendas a confirmar" cor={aConfirmar.length ? "var(--warn)" : undefined} on={() => alternar("confirmar")} />
       </div>
@@ -241,6 +265,7 @@ function Painel({ perfil, abrir }: any) {
         <div className="mv-taxas"><span>Presença <b>{pctTxt(F.pPresenca)}</b></span><span>Visita→venda <b>{pctTxt(F.pVisitaVenda)}</b></span><span>Loja→venda <b>{pctTxt(F.pLojaVenda)}</b></span></div>
       </div>
       {aConfirmar.length > 0 && <div className="mv-dica">A comissão entra quando a venda é confirmada (efetivada). {aConfirmar.length} venda(s) ainda aguardando.</div>}
+      <Reembolsos de={P.de} ate={P.ate} />
     </>;
   } else {
     const meus = st.chamados.filter((c: any) => R.domMarketing(c) && c.atendenteId === eu);
@@ -274,7 +299,7 @@ function Painel({ perfil, abrir }: any) {
     {meses}
     {conteudo}
     {lista && <><div className="mv-sec">{tituloLista} <i>{itens.length}</i></div>
-      {itens.length ? itens.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: c.venda ? "" : hora(c.dataLoja || c.dataVisita), dia: c.venda ? fmtDate(c.venda.dataVenda || c.venda.quando).slice(0, 5) : diaCurto(c.dataLoja || c.dataVisita), sub: c.venda ? "venda " + c.venda.numero + " · " + fmtMoeda(parseMoeda(c.venda.valor)) : (c.produto || "—") }} />) : <Vazio t="Nada neste mês." />}</>}
+      {itens.length ? itens.map((c: any) => c.tipo === "medidas" ? <CartaoMedida key={c.id} c={c} abrir={abrir} /> : <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: c.venda ? "" : hora(c.dataLoja || c.dataVisita), dia: c.venda ? fmtDate(c.venda.dataVenda || c.venda.quando).slice(0, 5) : diaCurto(c.dataLoja || c.dataVisita), sub: c.venda ? "venda " + c.venda.numero + " · " + fmtMoeda(parseMoeda(c.venda.valor)) : (c.produto || "—") }} />) : <Vazio t="Nada neste mês." />}</>}
     {!lista && <div className="mv-dica" style={{ marginTop: 10 }}>Toque nos quadros para ver a lista de clientes.</div>}
   </>;
 }
@@ -287,6 +312,12 @@ function Folha({ id, fechar, perfil }: any) {
   if (!c) return null;
   const sc = R.statusClienteDe(c);
   const t = c.tratativa || {};
+  if (c.tipo === "medidas") return (
+    <div className="mv-folha">
+      <div className="mv-folha-top"><button className="mv-voltar" onClick={fechar}>‹ Voltar</button></div>
+      <div className="mv-folha-corpo"><FolhaMedida c={c} Contato={Contato} Anexar={Anexar} /></div>
+    </div>
+  );
   return (
     <div className="mv-folha">
       <div className="mv-folha-top"><button className="mv-voltar" onClick={fechar}>‹ Voltar</button><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span></div>

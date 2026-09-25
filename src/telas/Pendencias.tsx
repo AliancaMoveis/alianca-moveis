@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { STATUS_CLIENTE, VENDA_STATUS, fmtDate, fmtDateTime } from "../lib/regras";
+import { STATUS_CLIENTE, TIPO_REEMBOLSO, VENDA_STATUS, fmtDate, fmtDateTime, fmtMoeda } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 
 export function Pendencias() {
@@ -47,6 +48,7 @@ export function Pendencias() {
 export function Aprovacoes() {
   const { R, abrirDetalhe, executar } = useApp();
   const p = R.pendenciasGestao();
+  const reembPend = (R.state.reembolsos || []).filter((r: any) => r.status === "pendente");
   const decidirVenda = (id: string, ns: string) => executar(() => A.decidirVenda(id, ns, "aprovacoes"), "Venda " + VENDA_STATUS[ns].toLowerCase());
   const decidirTransf = (id: string, aceitar: boolean) => executar(() => A.responderTransferencia(id, aceitar, "aprovacoes"), aceitar ? "Transferência aprovada" : "Transferência recusada");
   const linhaVenda = (c: any, classe: string) => {
@@ -71,9 +73,11 @@ export function Aprovacoes() {
         <Kpi n={p.vendasConfirmar.length} l="Vendas a confirmar" cls={p.vendasConfirmar.length ? "alert" : ""} cor={p.vendasConfirmar.length ? "var(--warn)" : undefined} />
         <Kpi n={p.promissorias.length} l="Promissórias em aberto" cor={p.promissorias.length ? "var(--st-tratativa)" : undefined} />
         <Kpi n={p.transferencias.length} l="Transferências" cor={p.transferencias.length ? "var(--primary)" : undefined} />
-        <Kpi n={p.total} l="Total pendente" />
+        <Kpi n={reembPend.length} l="Reembolsos" cor={reembPend.length ? "var(--warn)" : undefined} />
+        <Kpi n={p.total + reembPend.length} l="Total pendente" />
       </div>
-      {!p.total && <div id="apVazio" className="empty"><div className="big">Nada pendente</div>Não há nenhuma decisão aguardando você.</div>}
+      <ReembolsosGestao />
+      {!p.total && !reembPend.length && <div id="apVazio" className="empty"><div className="big">Nada pendente</div>Não há nenhuma decisão aguardando você.</div>}
       <div id="apSecoes">
         {p.vendasConfirmar.length > 0 && <div className="ap-sec"><h3>Vendas a confirmar <span className="badge b-tratativa">{p.vendasConfirmar.length}</span></h3><div className="sub">Registradas pelo vendedor. Não contam em nenhum relatório até você decidir.</div>{p.vendasConfirmar.map(c => linhaVenda(c, ""))}</div>}
         {p.promissorias.length > 0 && <div className="ap-sec"><h3>Promissórias em aberto <span className="badge b-tratativa">{p.promissorias.length}</span></h3><div className="sub">Já contam como venda, mas <b>não geram comissão</b> enquanto não forem efetivadas.</div>{p.promissorias.map(c => linhaVenda(c, "prom"))}</div>}
@@ -87,5 +91,32 @@ export function Aprovacoes() {
         </div>}
       </div>
     </section>
+  );
+}
+
+// Reembolsos (pedágio, estacionamento…) pedidos por consultores e medidores — a Gestão aprova ou recusa
+export function ReembolsosGestao() {
+  const { R, executar, toast } = useApp() as any;
+  const [motivo, setMotivo] = useState<Record<string, string>>({});
+  const [ver, setVer] = useState<string>("");
+  const lista = (R.state.reembolsos || []).filter((r: any) => r.status === "pendente").sort((a: any, b: any) => String(a.criadoEm).localeCompare(String(b.criadoEm)));
+  if (!lista.length) return null;
+  const abrir = async (r: any) => { const u = await A.urlComprovante(r.path); if (u) { setVer(u); } else toast("Não foi possível abrir o comprovante"); };
+  return (
+    <div className="ap-sec"><h3>Reembolsos <span className="badge b-tratativa">{lista.length}</span></h3>
+      <div className="sub">Despesas de consultores e medidores (pedágio, estacionamento…). Aprovado entra no valor a receber do mês da despesa.</div>
+      {lista.map((r: any) => (
+        <div className="ap-item" key={r.id}>
+          <div><div className="nm">{R.nomeUser(r.usuarioId)} · {TIPO_REEMBOLSO[r.tipo] || r.tipo}</div>
+            <div className="meta">{fmtDate(r.data)}{r.descricao ? " · " + r.descricao : ""}{r.chamadoId ? " · cliente " + r.chamadoId : ""} · <a href="#" onClick={e => { e.preventDefault(); abrir(r); }}>ver comprovante</a></div></div>
+          <div><div className="val">{fmtMoeda(r.valor)}</div>
+            <div className="acoes">
+              <button className="btn primary sm" onClick={() => executar(() => A.decidirReembolso(r.id, true), "Reembolso aprovado")}>Aprovar</button>
+              <input placeholder="Motivo da recusa" value={motivo[r.id] || ""} onChange={e => setMotivo({ ...motivo, [r.id]: e.target.value })} style={{ maxWidth: 160 }} />
+              <button className="btn danger sm" onClick={() => { const m = (motivo[r.id] || "").trim(); if (m.length < 3) { toast("Escreva o motivo da recusa"); return; } executar(() => A.decidirReembolso(r.id, false, m), "Reembolso recusado"); }}>Recusar</button>
+            </div></div>
+        </div>))}
+      {ver && <div className="overlay on" onMouseDown={e => { if (e.target === e.currentTarget) setVer(""); }}><div className="modal" style={{ maxWidth: 560 }}><div className="mh"><b>Comprovante</b><button className="x" onClick={() => setVer("")}>&times;</button></div><div className="mb"><img src={ver} alt="comprovante" style={{ width: "100%", borderRadius: 8 }} /></div></div></div>}
+    </div>
   );
 }

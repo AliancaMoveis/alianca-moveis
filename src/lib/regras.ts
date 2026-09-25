@@ -11,6 +11,8 @@ export const STATUS_CLIENTE: Record<string, string> = {
   agendado_loja: "Agendado loja", com_vendedor: "Com vendedor", orcamento: "Orçamento", sem_resposta: "Sem resposta", reagendado: "Reagendado", reprovado: "Reprovado", vendido_revisao: "Vendido — a confirmar",
   vendido_promissoria: "Vendido — promissória", vendido: "Vendido — efetivado", venda_cancelada: "Venda cancelada", nao_compareceu: "Não compareceu",
 };
+export const TIPO_REEMBOLSO: Record<string, string> = { pedagio: "Pedágio", estacionamento: "Estacionamento", combustivel: "Combustível", outro: "Outro" };
+export const ETAPA_MEDIDA: Record<string, string> = { validar: "Validar medidas", agendada: "Medição agendada", realizada: "Medida feita — conferir", liberada: "Liberada para o checklist" };
 export const VENDA_STATUS: Record<string, string> = {
   registrada: "Aguardando confirmação da Gestão", promissoria: "Promissória — sem pagamento", efetivada: "Efetivada", cancelada: "Cancelada",
 };
@@ -174,11 +176,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeAcompanhar = (c: Chamado) => podeTratar(c) || (ehCallcenter() && !domMarketing(c));
   function podeTratar(c: Chamado) {
     const u = me();
-    if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || trPendPara(c);
+    if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || (!!c.medidorId && c.medidorId === currentUserId) || trPendPara(c);
     if (ehGestao()) return true;
     if (domMarketing(c)) return temMarketing() || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino);
     if (verTudo()) return true;
-    return mySetores().includes(c.setorDestino);
+    return mySetores().includes(c.setorDestino) || (!!c.medidorId && c.medidorId === currentUserId);
   }
   function podeAnexar(c: Chamado) {
     if (ehGestao()) return true;
@@ -236,6 +238,17 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const souRespLoja = (c: Chamado) => (mySetores().includes("suporte_consultores") && !ehDireto(c)) || (temMarketing() && ehDireto(c));
   const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente"));
 
+  // ---------- medidas (venda → medidas → checklist) ----------
+  const ehMedidor = () => mySetores().includes("medidas") && !!me()?.somenteAtribuidos;
+  const ehSupMedidas = () => ehGestao() || mySetores().includes("medidas_supervisao");
+  const etapaMedida = (c: Chamado) => (c.tratativa && c.tratativa.medida && c.tratativa.medida.etapa) || (c.status === "concluida" ? "liberada" : "validar");
+  const quemMede = () => ({
+    medidores: state.usuarios.filter(u => u.ativo && (u.setores || []).includes("medidas") && !(u.setores || []).includes("medidas_supervisao")),
+    consultores: state.usuarios.filter(u => u.ativo && (u.setores || []).includes("consultor_externo")),
+  });
+  const medidasDe = (uid: string) => state.chamados.filter(c => c.tipo === "medidas" && c.medidorId === uid);
+  const reembolsosDe = (uid: string) => (state.reembolsos || []).filter(r => r.usuarioId === uid);
+
   // financeiro
   const cfg = () => state.config || { comissaoPct: 1.5, pagamentoVisita: 40 };
   const visitasPagas = (consultorId: string) => state.chamados.filter(c => c.consultorId === consultorId && c.tratativa && c.tratativa.realizada && c.dataLoja);
@@ -254,7 +267,12 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const pagamentoVisitas = visitas.length * pagamentoVisita;
     const totalVendido = vendas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
     const comissao = totalVendido * (pct / 100);
-    return { visitas, vendas, pagamentoVisitas, totalVendido, comissao, total: pagamentoVisitas + comissao };
+    // medidas feitas (R$ por visita, sem comissão) e reembolsos aprovados
+    const medidas = medidasDe(consultorId).filter(c => c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && (dentroPeriodo(c.tratativa.medida.realizadaEm, de, ate) || (!de && !ate)));
+    const pagamentoMedidas = medidas.length * pagamentoVisita;
+    const reembolsos = reembolsosDe(consultorId).filter(r => r.status === "aprovado" && (dentroPeriodo(r.data, de, ate) || (!de && !ate)));
+    const totalReembolsos = reembolsos.reduce((s, r) => s + r.valor, 0);
+    return { visitas, vendas, pagamentoVisitas, totalVendido, comissao, medidas, pagamentoMedidas, reembolsos, totalReembolsos, total: pagamentoVisitas + comissao + pagamentoMedidas + totalReembolsos };
   }
 
   // ---------- funil do marketing: visita → loja → venda ----------
@@ -420,12 +438,16 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c)), "var(--danger)");
     }
     if (ehGestao() || mySetores().includes("supervisao")) add("acomp", "🚨 Pedidos de acompanhamento", "O call center chamou a supervisão para estes chamados. Abra e marque \"Estou acompanhando\".", ch.filter(c => acompAtivo(c)), "var(--critico)");
+    if (ehSupMedidas()) {
+      add("medvalidar", "📐 Medidas para validar", "Confira as medidas (do consultor ou do medidor). Se estiverem certas, libere para o checklist; se não, direcione a medição.", ch.filter(c => c.tipo === "medidas" && c.status !== "concluida" && ["validar", "realizada"].includes(etapaMedida(c))), "var(--primary)");
+    }
+    add("medfazer", "📐 Medidas a fazer", "Medições direcionadas para você. Depois de medir, anexe as fotos/planta e marque como realizada.", ch.filter(c => c.tipo === "medidas" && c.medidorId === eu && etapaMedida(c) === "agendada"), "var(--warn)");
     add("informar", "Informar o cliente", "O setor registrou a solução mas não fala com o cliente. Avise o cliente e conclua.", ch.filter(c => !domMarketing(c) && c.status === "informar" && (ehCallcenter() || c.solicitanteId === eu)), "var(--st-informar)");
     add("criticos", "Críticos no seu setor", "Mais de 24h sem resposta — precisam de ação imediata.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && situacaoPrazo(c) === "critico"), "var(--critico)");
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => !domMarketing(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => !domMarketing(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["acomp", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
+    const PRIORIDADE = ["acomp", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));
@@ -479,10 +501,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (mk.length) { if (!cc.length) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
     const ge: string[][] = [];
     const ehProjetista = mySetores().includes("atendente_cliente");
-    if (ehConsultorExterno() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : ehConsultorExterno() ? "Vendas e comissão" : ehProjetista ? "Minhas vendas" : "Vendas dos vendedores"]);
+    if (ehConsultorExterno() || ehMedidor() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : ehConsultorExterno() ? "Vendas e comissão" : ehMedidor() ? "Minhas medidas e reembolsos" : ehProjetista ? "Minhas vendas" : "Vendas dos vendedores"]);
     if (verTudo()) ge.push(["relatorios", "Relatórios"]);
     if (verTudo() || temMarketing()) ge.push(["atividades", "Controle de atividades"]);
-    if (ge.length) G.push({ g: ehConsultorExterno() && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
+    if (ge.length) G.push({ g: (ehConsultorExterno() || ehMedidor()) && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
     // Pós-venda Projetados: grupo próprio (Vânia, Jurídico e Gestão)
     const pv: string[][] = [];
     if (ehPosvenda() || ehGestao()) pv.push(["novopv", "Novo atendimento"]);
@@ -496,7 +518,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, gerentesVenda, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, gerentesVenda, ehMedidor, ehSupMedidas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, compareceu, ancoraVisita,

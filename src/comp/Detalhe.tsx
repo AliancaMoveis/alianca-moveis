@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import {
-  EM_ATENDIMENTO, PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  EM_ATENDIMENTO, ETAPA_MEDIDA, PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 
@@ -89,6 +89,7 @@ export default function Detalhe({ id }: { id: string }) {
               <div className="row">{link && <a className="btn wa sm" href={link} target="_blank" rel="noopener">Cobrar no WhatsApp</a>}
                 <button className="btn sm" onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button></div></div>
           ))}
+          {c.tipo === "medidas" && <MedidaBloco c={c} />}
           {!presale && <Anexos c={c} editavel={anexar} />}
           {!presale && <HistoricoCliente c={c} />}
           {tratar ? <AcoesGerais c={c} link={link} presale={presale} notaRef={notaRef} foco={focoDetalhe} />
@@ -132,7 +133,7 @@ function ClienteCard({ c }: any) {
 }
 
 function tratativaExiste(c: any, R: any) {
-  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "medidas", "posvenda"].includes(c.tipo)) return true;
+  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "posvenda"].includes(c.tipo)) return true;
   if (!R.domMarketing(c)) return false;
   return ["marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente"].includes(c.setorDestino);
 }
@@ -590,6 +591,63 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
     <div className="resp-box"><h4>Anotação interna</h4><div className="inline-2"><div className="field"><input ref={notaRef} placeholder={foco === "nota" ? "Cliente ligou de novo — descreva o que ele pediu agora" : "Ex.: Liguei 10h, sem retorno."} value={nota} onChange={e => setNota(e.target.value)} /></div>
       <button className="btn sm" onClick={async () => { const v = nota.trim(); if (!v) return; if (await ex(() => A.adicionarNota(c.id, v), "Anotação adicionada")) setNota(""); }}>Adicionar</button></div></div>
   </>;
+}
+
+// 📐 medidas: venda → medidas → checklist. Supervisora valida/direciona/libera; medidor (ou consultor) mede.
+function MedidaBloco({ c }: any) {
+  const { R, st, executar: ex, toast, abrirDetalhe } = useApp() as any;
+  const m = (c.tratativa && c.tratativa.medida) || {};
+  const etapa = R.etapaMedida(c);
+  const venda = c.vinculadoA ? st.chamados.find((x: any) => x.id === c.vinculadoA) : null;
+  const checklist = st.chamados.find((x: any) => x.vinculadoA === c.id && x.tipo === "checklist");
+  const sup = R.ehSupMedidas(), souMedidor = !!c.medidorId && c.medidorId === R.currentUserId;
+  const { medidores, consultores } = R.quemMede();
+  const [quem, setQuem] = useState(c.medidorId || m.consultorVisita || "");
+  const [quando, setQuando] = useState(c.dataMedida ? String(c.dataMedida).slice(0, 16) : "");
+  const [end, setEnd] = useState(c.endereco || "");
+  const [obs, setObs] = useState(""); const [mot, setMot] = useState("");
+  const [med, setMed] = useState(m.medidas || ""); const [mobs, setMobs] = useState(m.obs || "");
+  const cor = etapa === "liberada" ? "var(--st-concluida)" : etapa === "agendada" ? "var(--warn)" : "var(--primary)";
+  const anexosConsultor = venda ? (venda.anexos || []).length : 0;
+  return (
+    <div className="resp-box" style={{ borderColor: cor }}>
+      <h4>📐 Medidas <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{ETAPA_MEDIDA[etapa] || etapa}</span></h4>
+      <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 10 }}>Processo: venda → <b>medidas</b> → checklist.</div>
+      {venda && <RowSb k="Venda" pb="4px 0"><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(venda.id); }}>{venda.id}</a>{venda.venda ? " · nº " + venda.venda.numero : ""}{venda.atendenteId ? " · vendedor " + R.nomeUser(venda.atendenteId) : ""}</RowSb>}
+      {m.consultorVisita && <RowSb k="Consultor que visitou" pb="4px 0">{R.nomeUser(m.consultorVisita)}{venda ? " · " + anexosConsultor + " anexo(s) na visita" : ""}</RowSb>}
+      {(m.medidasConsultor || m.obsConsultor) && <RowSb k="Medidas do consultor" pb="4px 0">{[m.medidasConsultor, m.obsConsultor].filter(Boolean).join(" · ")}</RowSb>}
+      {c.medidorId && <RowSb k="Quem mede" pb="4px 0"><b>{R.nomeUser(c.medidorId)}</b>{c.dataMedida ? " · " + fmtDateTime(c.dataMedida) : ""}</RowSb>}
+      {m.realizadaEm && <RowSb k="Medida feita" pb="4px 0">{fmtDateTime(m.realizadaEm)}{m.medidas ? " · " + m.medidas : ""}{m.obs ? " · " + m.obs : ""}</RowSb>}
+      {m.refazer && etapa === "agendada" && <div className="alerta" style={{ margin: "8px 0" }}><b>Refazer:</b> {m.refazer}</div>}
+      {etapa === "liberada" && <div className="ro-note" style={{ marginTop: 8 }}>{m.validouConsultor ? "Medidas do consultor validadas" : "Medidas conferidas"}{m.liberadaPor ? " por " + m.liberadaPor : ""}{m.liberadaEm ? " em " + fmtDateTime(m.liberadaEm) : ""}.{checklist ? <> Checklist: <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(checklist.id); }}>{checklist.id}</a></> : null}</div>}
+
+      {(souMedidor || sup) && etapa === "agendada" && <div className="resp-box" style={{ marginTop: 12 }}><h4>Registrar a medida</h4>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Anexe as fotos/planta da medição (abaixo) e marque como realizada. A medida paga {fmtMoeda(R.cfg().pagamentoVisita)} a quem mediu.</div>
+        <div className="grid"><div className="field full"><label>Medidas</label><textarea value={med} onChange={e => setMed(e.target.value)} placeholder="Ex.: parede 3,20m x pé-direito 2,60m…" /></div>
+          <div className="field full"><label>Observação</label><input value={mobs} onChange={e => setMobs(e.target.value)} /></div></div>
+        <button className="btn primary sm" style={{ marginTop: 10 }} onClick={() => { if (!(c.anexos || []).length) { toast("Anexe as fotos/planta da medição primeiro"); return; } ex(() => A.medidaRealizada(c.id, med.trim(), mobs.trim()), "Medida registrada — a supervisora vai conferir"); }}>✓ Medida realizada</button>
+      </div>}
+
+      {sup && ["validar", "realizada"].includes(etapa) && <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--st-concluida)" }}><h4>✅ Medidas certas — liberar para o checklist</h4>
+        <div className="inline-2"><div className="field"><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação para o checklist (opcional)" /></div>
+          <button className="btn primary sm" onClick={() => ex(() => A.medidaLiberar(c.id, obs.trim()), "Liberado — checklist aberto")}>Liberar para o checklist</button></div></div>}
+
+      {sup && etapa === "realizada" && <div className="resp-box" style={{ marginTop: 12 }}><h4>↩️ Pedir para refazer</h4>
+        <div className="inline-2"><div className="field"><input value={mot} onChange={e => setMot(e.target.value)} placeholder="O que precisa ser refeito" /></div>
+          <button className="btn sm" onClick={() => { if (mot.trim().length < 3) { toast("Diga o que precisa ser refeito"); return; } ex(() => A.medidaRefazer(c.id, mot.trim()), "Devolvido para refazer"); }}>Refazer</button></div></div>}
+
+      {sup && etapa !== "liberada" && <div className="resp-box" style={{ marginTop: 12 }}><h4>📐 {etapa === "agendada" ? "Redirecionar" : "Direcionar"} a medição</h4>
+        <div className="grid">
+          <div className="field"><label>Quem vai medir</label><select value={quem} onChange={e => setQuem(e.target.value)}><option value="">Selecione…</option>
+            <optgroup label="Medidores">{medidores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</optgroup>
+            <optgroup label="Consultores externos">{consultores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}{u.id === m.consultorVisita ? " (fez a visita)" : ""}</option>)}</optgroup></select></div>
+          <div className="field"><label>Data e horário</label><input type="datetime-local" value={quando} onChange={e => setQuando(e.target.value)} /></div>
+          <div className="field full"><label>Endereço</label><input value={end} onChange={e => setEnd(e.target.value)} /></div>
+        </div>
+        <button className="btn sm" style={{ marginTop: 10 }} onClick={() => { if (!quem) { toast("Escolha quem vai medir"); return; } if (!quando || quando.length < 16) { toast("Informe a data e o horário"); return; } ex(() => A.medidaDirecionar(c.id, quem, quando, end.trim()), "Medição direcionada — avisado no celular"); }}>Direcionar</button>
+      </div>}
+    </div>
+  );
 }
 
 // 🚨 acompanhamento da supervisão: atendente do call center chama; Supervisão/Gestão assumem e encerram

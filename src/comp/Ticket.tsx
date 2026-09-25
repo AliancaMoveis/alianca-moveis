@@ -1,5 +1,5 @@
 import { useApp } from "../estado";
-import { STATUS, STATUS_CLIENTE, diasRestantes, fmtDate, fmtDateTime, fmtDiaHora } from "../lib/regras";
+import { ETAPA_MEDIDA, STATUS, STATUS_CLIENTE, diasRestantes, fmtDate, fmtDateTime, fmtDiaHora } from "../lib/regras";
 
 export function ScBadge({ c }: { c: any }) {
   const { R } = useApp();
@@ -26,6 +26,7 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
     <span className={"origem " + R.origemLoja(c)}>{R.origemLoja(c) === "marketing" ? "Marketing" : "Externo"}</span>{" "}
     {R.semAnexo(c) && <><span className="badge b-semanexo">⚠️ Sem anexo</span>{" "}</>}
     {t.querProjeto === "sim" && <><span className="marca-loja sim">📐 Quer projeto</span>{" "}</>}
+    {c.tipo === "medidas" ? <><span className="badge" style={{ background: R.etapaMedida(c) === "agendada" ? "var(--warn)" : R.etapaMedida(c) === "liberada" ? "var(--st-concluida)" : "var(--primary)", color: "#fff" }}>📐 {ETAPA_MEDIDA[R.etapaMedida(c)]}{c.medidorId && R.etapaMedida(c) === "agendada" ? " · " + R.nomeUser(c.medidorId) : ""}</span>{" "}</> : null}
     {R.acompAtivo(c) ? <><span className="badge b-critico">🚨 {c.tratativa.acomp.status === "pendente" ? "Supervisão chamada" : "Em acompanhamento"}</span>{" "}</> : null}
     {R.parecerCobrado(c) ? <><span className="badge b-critico">Parecer cobrado</span>{" "}</> : R.semParecer(c) ? <><span className="badge b-urgente">Sem parecer</span>{" "}</> : null}
   </> : (presale && R.semAnexo(c) ? <><span className="badge b-semanexo">⚠️ Sem anexo</span>{" "}</> : null);
