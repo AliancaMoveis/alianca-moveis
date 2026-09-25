@@ -12,9 +12,13 @@ export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v:
   <div className="bar-row"><span className="nm">{nm}</span><span className="track"><span className="fill" style={{ width: pct + "%", ...(cor ? { background: cor } : {}) }}></span></span><span className="v">{v}</span>{extra}</div>
 );
 const Nada = ({ t }: { t: string }) => <div style={{ color: "var(--ink-faint)", fontSize: 13 }}>{t}</div>;
-export const Kpi = ({ n, l, cls, cor, fs }: { n: any; l: string; cls?: string; cor?: string; fs?: number }) => (
-  <div className={"kpi" + (cls ? " " + cls : "")}><div className="n" style={{ ...(cor ? { color: cor } : {}), ...(fs ? { fontSize: fs } : {}) }}>{n}</div><div className="l">{l}</div></div>
-);
+export const Kpi = ({ n, l, cls, cor, fs }: { n: any; l: string; cls?: string; cor?: string; fs?: number }) => {
+  // valores em dinheiro: "R$" pequeno, número numa linha só e fonte que cabe no quadro
+  const din = typeof n === "string" && n.startsWith("R$ ");
+  const num = din ? n.slice(3) : n;
+  const tam = din ? (num.length > 12 ? 16 : num.length > 9 ? 19 : num.length > 7 ? 21 : 24) : fs;
+  return <div className={"kpi" + (cls ? " " + cls : "")}><div className={"n" + (din ? " din" : "")} style={{ ...(cor ? { color: cor } : {}), ...(tam ? { fontSize: tam } : {}) }}>{din ? <><small>R$</small>{num}</> : n}</div><div className="l">{l}</div></div>;
+};
 
 export default function Dashboard() {
   const { R, st, irPara, abrirDetalhe, currentUserId } = useApp() as any;
@@ -165,7 +169,7 @@ export default function Dashboard() {
           </div></div>
           <div className="panel"><h3>Vendas das suas operadoras</h3><div id="mktVendas">
             {pendentesVal > 0 && <div style={{ fontSize: 11.5, color: "var(--warn)", marginBottom: 8 }}>{pendentesVal} venda(s) aguardando confirmação da Gestão — não contam aqui ainda.</div>}
-            {rowsVenda.length ? rowsVenda.map(([nm, v]) => <div key={nm}><BarRow nm={nm} pct={v.n / Math.max(1, ...rowsVenda.map(x => x[1].n)) * 100} v={v.n} cor="var(--st-concluida)" />{vejaValor && v.total ? <div style={{ fontSize: 11.5, color: "var(--ink-faint)", margin: "-6px 0 8px 0" }}>R$ {v.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div> : null}</div>) : <Nada t="Nenhuma venda efetivada ainda." />}
+            {rowsVenda.length ? rowsVenda.map(([nm, v]) => <div key={nm}><BarRow nm={nm} pct={v.n / Math.max(1, ...rowsVenda.map(x => x[1].n)) * 100} v={v.n} cor="var(--st-concluida)" />{vejaValor && v.total ? <div style={{ fontSize: 11.5, color: "var(--ink-faint)", margin: "-6px 0 8px 0" }}>R$ {v.total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div> : null}</div>) : <Nada t="Nenhuma venda efetivada ainda." />}
           </div></div>
         </div>
       )}

@@ -80,7 +80,7 @@ export const pesoPrazo: Record<string, number> = { critico: 0, atrasado: 1, info
 
 // ---------- dinheiro ----------
 export function parseMoeda(v: any) { const n = parseFloat((v || "0").toString().replace(/\./g, "").replace(",", ".")); return isNaN(n) ? 0 : n; }
-export function fmtMoeda(n: number) { return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 }); }
+export function fmtMoeda(n: number) { const v = Number(n) || 0; return "R$ " + (Math.round(v * 100) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ---------- whatsapp ----------
 export function sanitizeWhats(w: string) { let d = (w || "").replace(/\D/g, ""); if (!d) return ""; if (d.length <= 11 && d.slice(0, 2) !== "55") d = "55" + d; return d; }
