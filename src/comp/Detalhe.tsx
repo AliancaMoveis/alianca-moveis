@@ -44,6 +44,7 @@ export default function Detalhe({ id }: { id: string }) {
         <div className="mh">
           <div><span className="tid">{c.id}</span>{" "}
             {presale ? <span style={{ marginLeft: 8 }}><ScBadge c={c} /></span> : <span className={"badge " + st_.cls} style={{ marginLeft: 8 }}>{st_.label}</span>}{" "}
+            {!presale && R.acompAtivo(c) && <span className="badge b-critico" style={{ marginLeft: 6 }}>🚨 {c.tratativa.acomp.status === "pendente" ? "Supervisão chamada" : "Em acompanhamento"}</span>}
             {presale && R.semAnexo(c) && <span className="badge b-semanexo" style={{ marginLeft: 6 }}>⚠️ Sem anexo</span>}
             {presale ? (R.clienteCriticoInatividade(c) ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico — sem atualização</span> : null)
               : (prio === "critico" ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico</span> : prio === "atrasado" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⏰ Atrasado</span> : prio === "urgente" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⚠ Urgente</span> : null)}
@@ -93,6 +94,7 @@ export default function Detalhe({ id }: { id: string }) {
           {tratar ? <AcoesGerais c={c} link={link} presale={presale} notaRef={notaRef} foco={focoDetalhe} />
             : R.podeAcompanhar(c) ? <AcompanhamentoCC c={c} link={link} notaRef={notaRef} foco={focoDetalhe} />
             : <div className="ro-note">Você tem acesso de leitura a este chamado. Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>.{anexar ? " Você pode anexar comprovações acima." : ""}</div>}
+          {!presale && <AcompSupervisao c={c} />}
           <div className="hist"><h4>Histórico</h4>{c.historico.slice().reverse().map((x: any, i: number) => <div className="h" key={i}><b>{fmtDateTime(x.quando)}</b> · {x.quem} — {x.texto}</div>)}</div>
           <Vinculados c={c} />
           {c.vinculadoA && <div className="ro-note" style={{ marginTop: 10 }}>Vinculado ao atendimento <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.vinculadoA); }}>{c.vinculadoA}</a>.</div>}
@@ -585,6 +587,43 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
     <div className="resp-box"><h4>Anotação interna</h4><div className="inline-2"><div className="field"><input ref={notaRef} placeholder={foco === "nota" ? "Cliente ligou de novo — descreva o que ele pediu agora" : "Ex.: Liguei 10h, sem retorno."} value={nota} onChange={e => setNota(e.target.value)} /></div>
       <button className="btn sm" onClick={async () => { const v = nota.trim(); if (!v) return; if (await ex(() => A.adicionarNota(c.id, v), "Anotação adicionada")) setNota(""); }}>Adicionar</button></div></div>
   </>;
+}
+
+// 🚨 acompanhamento da supervisão: atendente do call center chama; Supervisão/Gestão assumem e encerram
+function AcompSupervisao({ c }: any) {
+  const { R, executar: ex, toast } = useApp();
+  const [abrir, setAbrir] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [obs, setObs] = useState("");
+  const a = (c.tratativa && c.tratativa.acomp) || null;
+  const ativo = a && (a.status === "pendente" || a.status === "acompanhando");
+  const souSup = R.ehGestao() || R.mySetores().includes("supervisao");
+  const souCC = R.mySetores().includes("callcenter");
+  if (ativo) return (
+    <div className="alerta acomp-box">
+      <b>🚨 {a.status === "pendente" ? "Supervisão chamada — aguardando" : "Em acompanhamento pela supervisão"}</b>
+      <div style={{ fontSize: 13, marginTop: 4 }}>Pedido por <b>{a.porNome}</b> em {fmtDateTime(a.em)}: {a.motivo}</div>
+      {a.status === "acompanhando" && <div style={{ fontSize: 13, marginTop: 2 }}>👀 <b>{a.supNome}</b> está acompanhando desde {fmtDateTime(a.supEm)}.</div>}
+      {souSup && <div className="row" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+        {a.status === "pendente" && <button className="btn primary sm" onClick={() => ex(() => A.assumirAcompanhamento(c.id), "Você está acompanhando — a atendente foi avisada")}>👀 Estou acompanhando</button>}
+        <input style={{ flex: 1, minWidth: 180 }} placeholder="Como foi resolvido (opcional)" value={obs} onChange={e => setObs(e.target.value)} />
+        <button className="btn sm" onClick={async () => { if (await ex(() => A.encerrarAcompanhamento(c.id, obs.trim()), "Acompanhamento encerrado")) setObs(""); }}>Encerrar acompanhamento</button>
+      </div>}
+    </div>
+  );
+  if (!souCC || c.status === "concluida") return null;
+  return (
+    <div style={{ margin: "12px 0" }}>
+      {!abrir ? <button className="btn danger" onClick={() => setAbrir(true)}>🚨 Pedir acompanhamento da supervisão</button>
+        : <div className="resp-box" style={{ borderColor: "var(--danger)" }}><h4>🚨 Pedir acompanhamento da supervisão</h4>
+          <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 6 }}>A supervisão e a Gestão recebem o aviso no celular na hora. Se ninguém assumir em 15 min, a supervisão é avisada de novo.</div>
+          <div className="field"><textarea placeholder="O que está acontecendo e por que precisa da supervisão? Ex.: cliente muito irritado, ameaçando Procon." value={motivo} onChange={e => setMotivo(e.target.value)} /></div>
+          <div className="row" style={{ gap: 8, marginTop: 8 }}>
+            <button className="btn danger sm" onClick={async () => { const m = motivo.trim(); if (m.length < 5) { toast("Escreva o motivo"); return; } if (await ex(() => A.pedirAcompanhamento(c.id, m), "Supervisão avisada")) { setMotivo(""); setAbrir(false); } }}>Chamar supervisão</button>
+            <button className="btn sm" onClick={() => setAbrir(false)}>Cancelar</button>
+          </div></div>}
+    </div>
+  );
 }
 
 // call center acompanhando uma solicitação que está com outro setor

@@ -120,6 +120,7 @@ export default function AgendaPublica() {
                 <div className={"ap-sit " + cls}>{passou ? "Atrasado" : sit}</div>
                 <div className="ap-acao">{podeAvisar(x) && x.externo ? <small>freelancer — sem aviso no celular</small>
                   : podeAvisar(x) && !x.vendedor ? <><button className="ap-iniciar" disabled={enviando === x.id} onClick={() => abrirAssumir(x)}>✋ Assumir atendimento</button><small>{x.pedido_vendedor ? soNome(x.pedido_vendedor) + " pediu pelo sistema" : "selecione seu nome"}</small></>
+                  : podeAvisar(x) && x.em_atendimento ? <><span className="ap-ematd">🟢 Em atendimento</span><small>desde {new Date(x.em_atendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></>
                   : podeAvisar(x) ? (() => { const f = falta(x); const hr = x.avisado_em ? new Date(x.avisado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
                   return <>
                     <button className={"ap-chegou" + (x.avisos ? " feito" : "")} disabled={!!f || enviando === x.id} onClick={() => avisar(x)}>

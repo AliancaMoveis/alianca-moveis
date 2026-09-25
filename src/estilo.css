@@ -936,3 +936,7 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ap-campo select:focus,.ap-campo input:focus{border-color:#27468f;outline:none}
 .ap-confirmar{margin-top:10px;border:0;border-radius:14px;padding:15px;font:inherit;font-weight:800;font-size:18px;background:#c77a00;color:#fff;cursor:pointer}
 .ap-confirmar:disabled{background:#dfe4ee;color:#7a869d;cursor:default}
+.acomp-box{background:var(--critico-bg);border-color:var(--critico);margin:12px 0}.acomp-box>b{color:var(--critico)}.acomp-box input{border:1px solid var(--line,#ccc);border-radius:8px;padding:6px 9px;font:inherit}
+.mv-iniciar{margin-bottom:10px;background:#1f9d55!important}
+.mv-ematd{background:rgba(31,157,85,.15);border:1px solid #1f9d55;color:#2ecc71;border-radius:12px;padding:12px;text-align:center;font-weight:700;margin-bottom:10px}
+.ap-ematd{display:inline-block;background:#1f9d55;color:#fff;border-radius:10px;padding:10px 14px;font-weight:700;white-space:nowrap}

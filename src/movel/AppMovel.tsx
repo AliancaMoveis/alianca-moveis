@@ -405,6 +405,8 @@ function AcoesVendedor({ c }: any) {
   return (
     <div className="mv-bloco">
       {t.cobradoEm && <div className="mv-alerta">Parecer cobrado por {t.cobradoPor} · {fmtDateTime(t.cobradoEm)}</div>}
+      {t.emAtendimento ? <div className="mv-ematd">🟢 Em atendimento desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+        : <button className="mv-principal mv-iniciar" onClick={() => ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado")}>▶️ Iniciar atendimento</button>}
       <div className="mv-2">
         <button className={"mv-op" + (t.emContato ? " on" : "")} onClick={() => ex(() => A.alternarMarcacao(c.id, "emContato"), "Atualizado")}>{t.emContato ? "✓ Em contato" : "Já estou em contato"}</button>
         <button className={"mv-op" + (t.projetoSistema ? " on" : "")} onClick={() => ex(() => A.alternarMarcacao(c.id, "projetoSistema"), "Atualizado")}>{t.projetoSistema ? "✓ Projeto no sistema" : "Projeto pronto no sistema"}</button>

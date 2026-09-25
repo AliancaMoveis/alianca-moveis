@@ -26,6 +26,7 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
     <span className={"origem " + R.origemLoja(c)}>{R.origemLoja(c) === "marketing" ? "Marketing" : "Externo"}</span>{" "}
     {R.semAnexo(c) && <><span className="badge b-semanexo">⚠️ Sem anexo</span>{" "}</>}
     {t.querProjeto === "sim" && <><span className="marca-loja sim">📐 Quer projeto</span>{" "}</>}
+    {R.acompAtivo(c) ? <><span className="badge b-critico">🚨 {c.tratativa.acomp.status === "pendente" ? "Supervisão chamada" : "Em acompanhamento"}</span>{" "}</> : null}
     {R.parecerCobrado(c) ? <><span className="badge b-critico">Parecer cobrado</span>{" "}</> : R.semParecer(c) ? <><span className="badge b-urgente">Sem parecer</span>{" "}</> : null}
   </> : (presale && R.semAnexo(c) ? <><span className="badge b-semanexo">⚠️ Sem anexo</span>{" "}</> : null);
 

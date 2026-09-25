@@ -26,6 +26,10 @@ export const A = {
   agendarLoja: (id: string, dataLoja: string, medidas: string, obs: string, querProjeto?: string) =>
     rpc("agendar_loja", { p_id: id, p_data_loja: nz(dataLoja && dataLoja.length === 10 ? dataLoja + "T09:00" : dataLoja), p_medidas: medidas, p_obs: obs, p_quer_projeto: querProjeto || null }),
   vendedorStatus: (id: string, status: string, data: string, parecer: string) => rpc("vendedor_status", { p_id: id, p_status: status, p_data: nz(data), p_parecer: parecer || "" }),
+  pedirAcompanhamento: (id: string, motivo: string) => rpc("pedir_acompanhamento", { p_id: id, p_motivo: motivo }),
+  assumirAcompanhamento: (id: string) => rpc("assumir_acompanhamento", { p_id: id }),
+  encerrarAcompanhamento: (id: string, obs: string) => rpc("encerrar_acompanhamento", { p_id: id, p_obs: obs || "" }),
+  iniciarAtendimento: (id: string) => rpc("iniciar_atendimento", { p_id: id }),
   cobrarParecer: (id: string) => rpc("cobrar_parecer", { p_id: id }),
   solicitarAtendimento: (id: string) => rpc("solicitar_atendimento", { p_id: id }),
   cancelarPedidoAtendimento: (id: string) => rpc("cancelar_pedido_atendimento", { p_id: id }),
