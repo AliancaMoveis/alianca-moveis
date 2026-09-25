@@ -30,7 +30,7 @@ export default function Operadoras() {
   const T = resumo(base);
   const porOp: Record<string, any[]> = {}; base.forEach((c: any) => (porOp[c.solicitanteId] = porOp[c.solicitanteId] || []).push(c));
   const linhas = Object.entries(porOp).map(([uid, l]) => ({ uid, nome: R.nomeUser(uid), r: resumo(l) })).sort((a, b) => b.r.vendas - a.r.vendas || b.r.total - a.r.total);
-  const veValor = base.some((c: any) => c.venda && R.podeVerValor(c));
+  const veValor = R.ehGestao() || R.mySetores().includes("gerente_loja");
   const V = (n: number) => veValor ? fmtMoeda(n) : "—";
 
   const FIL: Record<string, (c: any) => boolean> = {
@@ -69,17 +69,17 @@ export default function Operadoras() {
         <Kpi n={pc(T.vieram, T.agendados)} l="Comparecimento (vieram ÷ agendados na loja)" />
         <Kpi n={pc(T.vendas, T.total)} l="Conversão (vendas ÷ clientes agendados)" />
         <Kpi n={pc(T.vendas, T.vieram)} l="Loja → venda (vendas ÷ vieram)" />
-        <Kpi n={V(T.valor)} l="Valor vendido" />
+        {veValor && <Kpi n={V(T.valor)} l="Valor vendido" />}
         <Kpi n={T.aConfirmar} l="Vendas a confirmar" cls={T.aConfirmar ? "urg" : ""} />
       </div>
 
       <div className="panel" style={{ marginBottom: 16 }}><h3>Por pessoa do marketing <span className="hint" style={{ marginLeft: 6 }}>clique para ver os clientes dela</span></h3>
-        {linhas.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Operadora</th><th>Agendou</th><th>→ Consultor</th><th>→ Loja</th><th>Visitas feitas</th><th>Com data na loja</th><th>Vieram</th><th>Não vieram</th><th>Vendas</th><th>% comparec.</th><th>% conversão</th><th>Valor vendido</th></tr></thead>
+        {linhas.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Operadora</th><th>Agendou</th><th>→ Consultor</th><th>→ Loja</th><th>Visitas feitas</th><th>Com data na loja</th><th>Vieram</th><th>Não vieram</th><th>Vendas</th><th>% comparec.</th><th>% conversão</th>{veValor && <th>Valor vendido</th>}</tr></thead>
           <tbody>{linhas.map(({ uid, nome, r }) => (
             <tr key={uid} onClick={() => setOp(op === uid ? "" : uid)} style={{ cursor: "pointer", background: op === uid ? "var(--primary-soft)" : undefined }}>
               <td><b>{nome}</b></td><td>{r.total}</td><td>{r.cons}</td><td>{r.loja}</td><td>{r.realizadas}</td><td>{r.agendados}</td><td>{r.vieram}</td><td>{r.faltaram}</td>
               <td style={{ fontWeight: 700, color: "var(--st-concluida)" }}>{r.vendas}{r.aConfirmar ? <small style={{ color: "var(--warn)", fontWeight: 400 }}> (+{r.aConfirmar} a conf.)</small> : null}</td>
-              <td>{pc(r.vieram, r.agendados)}</td><td>{pc(r.vendas, r.total)}</td><td>{V(r.valor)}</td></tr>))}</tbody></table></div>
+              <td>{pc(r.vieram, r.agendados)}</td><td>{pc(r.vendas, r.total)}</td>{veValor && <td>{V(r.valor)}</td>}</tr>))}</tbody></table></div>
           : <div className="empty" style={{ padding: "18px 8px" }}>Nenhum cliente cadastrado pelo marketing no período.</div>}
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>"Vieram" = venda registrada ou parecer do vendedor (orçamento, sem resposta, reprovado). Vendas contam efetivadas e promissórias.</div>
       </div>

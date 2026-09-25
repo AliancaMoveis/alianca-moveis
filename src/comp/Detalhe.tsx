@@ -349,7 +349,7 @@ function Venda({ c }: any) {
     return (
       <div className="resp-box" style={{ borderColor: cor }}><h4>Dados da venda <span className="badge" style={{ background: cor, color: "#fff" }}>{VENDA_STATUS[vs] || vs}</span></h4>
         <RowSb k="Nº da venda" pb="5px 0">{v.numero || "—"}</RowSb>
-        <RowSb k="Valor" pb="5px 0" bold>{vejaVal ? (v.valor ? "R$ " + v.valor : "—") : "— (restrito)"}</RowSb>
+        {vejaVal && <RowSb k="Valor" pb="5px 0" bold>{v.valor ? "R$ " + v.valor : "—"}</RowSb>}
         <RowSb k="Data da venda" pb="5px 0">{v.dataVenda ? fmtDate(v.dataVenda) : "—"}</RowSb>
         <RowSb k="Vendedor na loja" pb="5px 0">{v.vendedor || v.atendenteNome || "—"}</RowSb>
         {nota}
@@ -442,7 +442,7 @@ function Destaque({ c, anexar }: any) {
   else if (sc === "visita_realizada") { titulo = "Visita feita — falta agendar a loja"; valor = fmtDT(c.dataVisita); extra = "Próximo passo: combinar a data de ida à loja"; cor = "var(--st-respondida)"; }
   else if (["agendado_loja", ...EM_ATENDIMENTO].includes(sc)) { titulo = "Cliente vem à loja em"; valor = fmtDT(c.dataLoja); extra = c.atendenteId ? "Vendedor: " + R.nomeUser(c.atendenteId) : "Ainda sem vendedor definido"; cor = sc === "agendado_loja" ? "var(--st-aberta)" : "var(--st-respondida)"; }
   else if (sc === "reprovado") { titulo = "Atendimento reprovado"; valor = fmtDT(c.dataLoja); cor = "var(--danger)"; }
-  else if (VENDA_SC.includes(sc)) { const v = c.venda || {}; titulo = "Venda nº " + (v.numero || "—"); valor = R.podeVerValor(c) && v.valor ? "R$ " + v.valor : "valor restrito"; extra = (VENDA_STATUS[v.status] || "") + (v.dataVenda ? " · " + fmtDate(v.dataVenda) : ""); cor = corVenda(v.status); }
+  else if (VENDA_SC.includes(sc)) { const v = c.venda || {}; titulo = "Venda nº " + (v.numero || "—"); valor = R.podeVerValor(c) && v.valor ? "R$ " + v.valor : (v.dataVenda ? "Vendido em " + fmtDate(v.dataVenda) : "Vendido"); extra = (VENDA_STATUS[v.status] || "") + (v.dataVenda ? " · " + fmtDate(v.dataVenda) : ""); cor = corVenda(v.status); }
   else if (sc === "nao_compareceu") { titulo = "Cliente não compareceu"; valor = fmtDT(c.dataLoja); cor = "var(--danger)"; }
   if (!titulo) return null;
   const imgs = (c.anexos || []).filter((a: any) => a.tipo === "img"), links = (c.anexos || []).filter((a: any) => a.tipo !== "img");

@@ -12,7 +12,7 @@ export default function RelMkt({ de, ate }: { de: string; ate: string }) {
   const mkt = st.chamados.filter((c: any) => R.domMarketing(c) && R.podeVer(c));
   const visitas = mkt.filter((c: any) => !R.ehDireto(c) && c.consultorId && noPer(R.ancoraVisita(c)));
   const F = R.funil(visitas);
-  const veValor = mkt.some((c: any) => c.venda && R.podeVerValor(c));
+  const veValor = R.ehGestao() || R.mySetores().includes("gerente_loja");
   const cons = R.consultores().map((u: any) => ({ u, f: R.funil(visitas.filter((c: any) => c.consultorId === u.id)) })).filter((x: any) => x.f.total).sort((a: any, b: any) => b.f.vendas - a.f.vendas || b.f.total - a.f.total);
   // agendamento direto pelo marketing (sem consultor), pela data na loja
   const diretos = mkt.filter((c: any) => R.ehDireto(c) && c.dataLoja && noPer(c.dataLoja));
@@ -38,11 +38,11 @@ export default function RelMkt({ de, ate }: { de: string; ate: string }) {
         <Kpi n={pc(F.pPresenca)} l="Presença na loja (vieram ÷ visitas realizadas)" />
         <Kpi n={pc(F.pVisitaVenda)} l="Visita → venda (vendas ÷ visitas realizadas)" />
         <Kpi n={pc(F.pLojaVenda)} l="Loja → venda (vendas ÷ vieram)" />
-        <Kpi n={V(F.valor)} l="Valor vendido" /><Kpi n={V(F.comissao)} l={`Comissão dos consultores (${R.cfg().comissaoPct}%, efetivadas)`} />
+        {veValor && <><Kpi n={V(F.valor)} l="Valor vendido" /><Kpi n={V(F.comissao)} l={`Comissão dos consultores (${R.cfg().comissaoPct}%, efetivadas)`} /></>}
       </div>
       <div className="panel" style={{ marginBottom: 16 }}><h3>Por consultor</h3>
-        {cons.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Consultor</th><th>Encaminhadas</th><th>Realizadas</th><th>A realizar</th><th>Agend. loja</th><th>Vieram</th><th>Não vieram</th><th>Vendas</th><th>% presença</th><th>% visita→venda</th><th>% loja→venda</th><th>Valor vendido</th><th>Comissão</th></tr></thead>
-          <tbody>{cons.map(({ u, f }: any) => <tr key={u.id}><td><b>{u.nome}</b></td><td>{f.total}</td><td>{f.realizadas}</td><td>{f.pendentes}</td><td>{f.agendadas}</td><td>{f.vieram}</td><td>{f.faltaram}</td><td style={{ fontWeight: 700, color: "var(--st-concluida)" }}>{f.vendas}{f.aConfirmar ? <small style={{ color: "var(--warn)", fontWeight: 400 }}> (+{f.aConfirmar} a conf.)</small> : null}</td><td>{pc(f.pPresenca)}</td><td>{pc(f.pVisitaVenda)}</td><td>{pc(f.pLojaVenda)}</td><td>{V(f.valor)}</td><td>{V(f.comissao)}</td></tr>)}</tbody></table></div>
+        {cons.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Consultor</th><th>Encaminhadas</th><th>Realizadas</th><th>A realizar</th><th>Agend. loja</th><th>Vieram</th><th>Não vieram</th><th>Vendas</th><th>% presença</th><th>% visita→venda</th><th>% loja→venda</th>{veValor && <><th>Valor vendido</th><th>Comissão</th></>}</tr></thead>
+          <tbody>{cons.map(({ u, f }: any) => <tr key={u.id}><td><b>{u.nome}</b></td><td>{f.total}</td><td>{f.realizadas}</td><td>{f.pendentes}</td><td>{f.agendadas}</td><td>{f.vieram}</td><td>{f.faltaram}</td><td style={{ fontWeight: 700, color: "var(--st-concluida)" }}>{f.vendas}{f.aConfirmar ? <small style={{ color: "var(--warn)", fontWeight: 400 }}> (+{f.aConfirmar} a conf.)</small> : null}</td><td>{pc(f.pPresenca)}</td><td>{pc(f.pVisitaVenda)}</td><td>{pc(f.pLojaVenda)}</td>{veValor && <><td>{V(f.valor)}</td><td>{V(f.comissao)}</td></>}</tr>)}</tbody></table></div>
           : <div className="empty" style={{ padding: "18px 8px" }}>Nenhuma visita no período.</div>}
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Vendas contam efetivadas e promissórias; a comissão só as efetivadas. "Vieram" = venda registrada ou parecer do vendedor (orçamento, sem resposta, reprovado).</div>
       </div>

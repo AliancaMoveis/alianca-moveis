@@ -95,7 +95,7 @@ function LinhaCliente({ c, abrir, R }: any) {
     ? [c.dataLoja ? "loja " + fmtDate(c.dataLoja).slice(0, 5) + " " + String(c.dataLoja).slice(11, 16) : c.dataVisita ? "visita " + fmtDate(c.dataVisita).slice(0, 5) : "",
        c.consultorId ? "cons. " + primeiro(R.nomeUser(c.consultorId)) : R.ehDireto(c) ? "direto loja" : "",
        c.atendenteId ? "vend. " + primeiro(R.nomeUser(c.atendenteId)) : c.dataLoja ? "sem vendedor" : "",
-       c.venda && R.podeVerValor(c) ? fmtMoeda(parseMoeda(c.venda.valor)) : ""].filter(Boolean).join(" · ")
+       c.venda && R.podeVerValor(c) && c.venda.valor ? fmtMoeda(parseMoeda(c.venda.valor)) : ""].filter(Boolean).join(" · ")
     : [c.id, R.setorNome(c.setorDestino), R.tipoNome(c.tipo)].join(" · ");
   return <button className="mv-linha" onClick={abrir} style={cor ? { borderLeftColor: cor } : undefined}>
     <b>{c.cliente}{mk && R.semAnexo(c) ? " ⚠️" : ""}<em className={mk ? "sc sc-" + sc : "st-mini st-" + c.status}>{mk ? (STATUS_CLIENTE[sc] || "—") : (STATUS[c.status]?.label || c.status)}</em></b>
@@ -296,7 +296,7 @@ export function GestEquipe({ irTime }: { irTime?: () => void }) {
       const l = R.clientesConsultor(u.id, P.de, P.ate), F = R.funil(l), ex = R.extratoConsultor(u.id, P.de, P.ate);
       const pend = mk.filter((c: any) => c.consultorId === u.id && c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.realizada));
       return { u, l, chave: F.valor * 1000 + F.vendas, nums: [["Clientes", F.total], ["Visitados", F.realizadas], ["Na loja", F.agendadas], ["Vendas", F.vendas]],
-        dest: V(F.valor), extra: [["Visita→venda", F.pVisitaVenda === null ? "—" : F.pVisitaVenda + "%"], ["A receber", V(ex.total)], ["Visitas a fazer", pend.length]], listas: [["Clientes do período", l], ["Visitas a fazer", pend]] };
+        dest: veValor ? V(F.valor) : F.vendas + " venda(s)", extra: [["Visita→venda", F.pVisitaVenda === null ? "—" : F.pVisitaVenda + "%"], ...(veValor ? [["A receber", V(ex.total)]] : []), ["Visitas a fazer", pend.length]], listas: [["Clientes do período", l], ["Visitas a fazer", pend]] };
     });
   } else if (area === "mkt" && grupo === "vend") {
     linhas = R.projetistas().map((u: any) => {
@@ -306,7 +306,7 @@ export function GestEquipe({ irTime }: { irTime?: () => void }) {
       const sp = meus.filter((c: any) => R.semParecer(c) || R.parecerCobrado(c));
       const orc = meus.filter((c: any) => ["orcamento", "sem_resposta", "reagendado"].includes(R.statusClienteDe(c)) && !c.venda);
       return { u, l: ag, chave: soma(vd), nums: [["Agendados", ag.length], ["Vieram", vi.length], ["Vendas", vd.length], ["Sem parecer", sp.length]],
-        dest: V(soma(vd)), extra: [["Conversão", pc(vd.length, vi.length)], ["Ticket médio", vd.length ? V(soma(vd) / vd.length) : "—"], ["Orçamentos", orc.length]], listas: [["Agendados no período", ag], ["Vendas", vd], ["Sem parecer", sp], ["Orçamentos em aberto", orc]] };
+        dest: veValor ? V(soma(vd)) : vd.length + " venda(s)", extra: [["Conversão", pc(vd.length, vi.length)], ...(veValor ? [["Ticket médio", vd.length ? V(soma(vd) / vd.length) : "—"]] : []), ["Orçamentos", orc.length]], listas: [["Agendados no período", ag], ["Vendas", vd], ["Sem parecer", sp], ["Orçamentos em aberto", orc]] };
     });
   } else if (area === "mkt") {
     linhas = TM.linhas.map((x: any) => ({ u: x.u, l: x.ag, chave: x.total * 1000 + x.ag.length,

@@ -28,7 +28,7 @@ function VendasVendedores() {
   const temValor = vendas.some((c: any) => R.podeVerValor(c));
   const val = (arr: any[]) => temValor ? fmtMoeda(soma(arr)) : "—";
   const Lista = ({ arr, vazio }: any) => arr.length ? arr.slice().sort((a: any, b: any) => String(b.venda.dataVenda || b.venda.quando).localeCompare(String(a.venda.dataVenda || a.venda.quando))).map((c: any) => (
-    <div className="fin-item" key={c.id} onClick={() => abrirDetalhe(c.id)} style={{ cursor: "pointer" }}><div><div className="nm">{c.cliente}</div><div className="sub">Venda nº {c.venda.numero} · {fmtDate(c.venda.dataVenda || c.venda.quando)}{!souVend ? " · " + R.nomeUser(c.atendenteId) : ""}{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : ""}</div></div><div className="val">{R.podeVerValor(c) && c.venda.valor ? "R$ " + c.venda.valor : "—"}</div></div>
+    <div className="fin-item" key={c.id} onClick={() => abrirDetalhe(c.id)} style={{ cursor: "pointer" }}><div><div className="nm">{c.cliente}</div><div className="sub">Venda nº {c.venda.numero} · {fmtDate(c.venda.dataVenda || c.venda.quando)}{!souVend ? " · " + R.nomeUser(c.atendenteId) : ""}{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : ""}</div></div>{R.podeVerValor(c) && c.venda.valor ? <div className="val">{"R$ " + c.venda.valor}</div> : null}</div>
   )) : <div className="empty" style={{ padding: "24px 10px" }}>{vazio}</div>;
   return (
     <section className="view active" id="view-financeiro">
@@ -40,9 +40,9 @@ function VendasVendedores() {
         {!souVend && <div className="field"><label>Vendedor</label><select value={vend} onChange={e => setVend(e.target.value)}><option value="">Todos os vendedores</option>{R.vendedores().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>}
       </div></div>
       <div className="kpis">
-        <Kpi n={ext.length} l="Vendas — clientes externos" /><Kpi n={val(ext)} l="Total externos" />
-        <Kpi n={mkt.length} l="Vendas — clientes marketing" /><Kpi n={val(mkt)} l="Total marketing" />
-        <Kpi n={val(vendas)} l="Total geral" cor="var(--st-concluida)" />
+        <Kpi n={ext.length} l="Vendas — clientes externos" />{temValor && <Kpi n={val(ext)} l="Total externos" />}
+        <Kpi n={mkt.length} l="Vendas — clientes marketing" />{temValor && <Kpi n={val(mkt)} l="Total marketing" />}
+        {temValor ? <Kpi n={val(vendas)} l="Total geral" cor="var(--st-concluida)" /> : <Kpi n={vendas.length} l="Total de vendas" cor="var(--st-concluida)" />}
       </div>
       {aConfirmar > 0 && <div style={{ fontSize: 12.5, color: "var(--warn)", margin: "-6px 0 12px" }}>{aConfirmar} venda(s) aguardando confirmação da Gestão — ainda não entram nestes totais.</div>}
       <div className="panel-grid">
