@@ -20,9 +20,12 @@ export default function AgendaPublica() {
   const [dados, setDados] = useState<any[] | null>(null);
   const [erro, setErro] = useState("");
   const [atualizado, setAtualizado] = useState<Date | null>(null);
+  const [aviso, setAviso] = useState<{ ok: boolean; t: string } | null>(null);
+  const [enviando, setEnviando] = useState("");
+  useEffect(() => { if (!aviso) return; const t = setTimeout(() => setAviso(null), 6000); return () => clearTimeout(t); }, [aviso]);
   const dia = (() => { const d = new Date(); d.setDate(d.getDate() + off); return d; })();
   const diaIso = iso(dia);
-  useEffect(() => { document.title = "Agenda da loja · Aliança Móveis"; const t = setInterval(() => setAgora(new Date()), 15000); return () => clearInterval(t); }, []);
+  useEffect(() => { document.title = "Agenda da loja · Aliança Móveis"; const t = setInterval(() => setAgora(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
     let vivo = true;
     const carregar = () => A.agendaPublicaDia(token, diaIso).then(r => { if (vivo) { setDados(r); setErro(""); setAtualizado(new Date()); } })
@@ -44,6 +47,19 @@ export default function AgendaPublica() {
   const n = { total: l.length, fila: l.filter(x => !x.vendedor && !["vendido", "vendido_promissoria", "vendido_revisao", "nao_compareceu"].includes(x.situacao)).length,
     atd: l.filter(x => ["com_vendedor", "orcamento", "sem_resposta", "reagendado"].includes(x.situacao)).length, ven: l.filter(x => (SIT[x.situacao] || [])[1] === "ven").length,
     mkt: l.filter(x => x.origem === "marketing").length };
+  // "Cliente chegou": avisa o vendedor no celular (sem vendedor, avisa a coordenação). Repetir só depois de 3 min.
+  const ESPERA = 180;
+  const falta = (x: any) => x.avisado_em ? Math.max(0, ESPERA - Math.floor((agora.getTime() - new Date(x.avisado_em).getTime()) / 1000)) : 0;
+  const avisar = async (x: any) => {
+    setEnviando(x.id);
+    try {
+      const r: any = await A.agendaPublicaAvisar(token, x.id);
+      setDados(d => (d || []).map(y => y.id === x.id ? { ...y, avisado_em: new Date().toISOString(), avisos: (y.avisos || 0) + 1 } : y));
+      setAviso({ ok: true, t: r && r.vendedor && x.vendedor ? "✓ " + soNome(x.vendedor) + " foi avisado(a) no celular: " + x.cliente + " chegou." : "✓ Cliente sem vendedor — a coordenação foi avisada no celular." });
+    } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível avisar" }); }
+    finally { setEnviando(""); }
+  };
+  const podeAvisar = (x: any) => ehHoje && !["vendido", "vendido_promissoria", "vendido_revisao", "nao_compareceu", "reprovado", "venda_cancelada"].includes(x.situacao);
   const proximoIdx = ehHoje ? l.findIndex(x => min(x.hora) >= hhmm - 15) : -1;
   return (
     <div className="ap">
@@ -80,10 +96,17 @@ export default function AgendaPublica() {
                   : x.pedido_vendedor ? <><small>Aguardando aprovação</small><b className="pedido">{soNome(x.pedido_vendedor)}</b></>
                   : cls === "agu" ? <b className="semv">Sem vendedor · fila</b> : <b>—</b>}</div>
                 <div className={"ap-sit " + cls}>{passou ? "Atrasado" : sit}</div>
+                <div className="ap-acao">{podeAvisar(x) ? (() => { const f = falta(x); const hr = x.avisado_em ? new Date(x.avisado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+                  return <>
+                    <button className={"ap-chegou" + (x.avisos ? " feito" : "")} disabled={!!f || enviando === x.id} onClick={() => avisar(x)}>
+                      {enviando === x.id ? "Avisando…" : f ? "Avisar de novo em " + Math.floor(f / 60) + ":" + String(f % 60).padStart(2, "0") : x.avisos ? "🔔 Avisar de novo" : "🔔 Cliente chegou"}</button>
+                    {x.avisos ? <small>{x.vendedor ? "Vendedor avisado" : "Coordenação avisada"} às {hr}{x.avisos > 1 ? " · " + x.avisos + "x" : ""}</small> : <small>{x.vendedor ? "avisa " + soNome(x.vendedor) : "avisa a coordenação"}</small>}
+                  </>; })() : null}</div>
               </div>);
           })}
       </div>
-      <footer className="ap-rod">{erro ? <span style={{ color: "#c24a4a" }}>Sem conexão — tentando de novo… </span> : null}Atualizado às {atualizado ? atualizado.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"} · atualiza sozinho a cada minuto · somente consulta</footer>
+      {aviso && <div className={"ap-toast" + (aviso.ok ? "" : " erro")} onClick={() => setAviso(null)}>{aviso.t}</div>}
+      <footer className="ap-rod">{erro ? <span style={{ color: "#c24a4a" }}>Sem conexão — tentando de novo… </span> : null}Atualizado às {atualizado ? atualizado.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"} · atualiza sozinho a cada minuto</footer>
     </div>
   );
 }

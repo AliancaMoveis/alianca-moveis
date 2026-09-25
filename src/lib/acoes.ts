@@ -65,6 +65,10 @@ export const A = {
     if ((import.meta as any).env?.VITE_MOCK) return ((window as any).__agendaPublicaMock || []) as any[];
     return (await rpc<any[]>("agenda_publica_dia", { p_token: token, p_dia: dia })) || [];
   },
+  agendaPublicaAvisar: async (token: string, id: string) => {
+    if ((import.meta as any).env?.VITE_MOCK) return { avisados: 1, vendedor: true };
+    return rpc<any>("agenda_publica_avisar", { p_token: token, p_id: id });
+  },
   salvarModoTeste: (ligado: boolean) => rpc("salvar_modo_teste", { p_ligado: ligado }),
   salvarMontador: (id: string | null, nome: string, telefone: string) => rpc("salvar_montador", { p_id: id, p_nome: nome, p_telefone: telefone }),
   ativarMontador: (id: string, ativo: boolean) => rpc("ativar_montador", { p_id: id, p_ativo: ativo }),
