@@ -1,0 +1,5 @@
+-- Ajustes nos avisos (aplicada via MCP, 25/09/2026):
+--  · Fechamento da loja (Gestão + Gerentes): 19h → 20:30.
+--  · Consultor: resumo do mês anterior no dia 1º às 9h — visitas pagas, vendas efetivadas, valor vendido e valor a receber
+--    (visitas × config.pagamento_visita + vendido × config.comissao_pct%). Chave 'consmes:AAAAMM' (1 por mês).
+-- Feito editando a definição de public.avisos_rotina_em(timestamp) (ver 0043) com replace() + execute.
