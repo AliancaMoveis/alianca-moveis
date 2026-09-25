@@ -213,6 +213,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeEditarAgenda = () => ehGestao() || temMarketing() || mySetores().includes("suporte_consultores");
   const podeMudarDataLoja = (c: Chamado) => podeEditarAgenda() || (c.consultorId && c.consultorId === currentUserId);
 
+  // gerente que negociou a venda (obrigatório no registro): Gerentes de Loja e Gestão
+  const gerentesVenda = () => state.usuarios.filter(u => u.ativo && ((u.setores || []).includes("gerente_loja") || (u.setores || []).includes("gestao")))
+    .sort((a, b) => Number((b.setores || []).includes("gerente_loja")) - Number((a.setores || []).includes("gerente_loja")) || a.nome.localeCompare(b.nome));
   const consultores = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("consultor_externo"));
   // ---------- agendamento na loja / vendedor ----------
   const ehDireto = (c: Chamado) => !!(TIPOS[c.tipo] && TIPOS[c.tipo].direto);
@@ -444,8 +447,15 @@ export function criarRegras(state: Estado, currentUserId: string) {
   function menuPerfil() {
     const G: any[] = [];
     // quem define vendedor (Suporte, Supervisão Marketing, Gerente de Loja) tem a tela logo abaixo das pendências
-    const defineVend = !ehGestao() && (mySetores().includes("suporte_consultores") || temMarketing());
-    G.push({ g: "Pessoal", ic: "◆", itens: [["dashboard", "Dashboard"], ["pendencias", "Minhas pendências"]].concat(defineVend ? [["definir", "Definir vendedor"]] : []) });
+    // Gestão e Supervisão Marketing: as atividades do dia a dia ficam juntas no "Pessoal" (não se perdem no menu)
+    const coord = ehGestao() || mySetores().includes("marketing_supervisao");
+    const defineVend = coord || mySetores().includes("suporte_consultores") || temMarketing();
+    const pessoal: string[][] = [["dashboard", "Dashboard"], ["pendencias", "Minhas pendências"]];
+    if (ehGestao()) pessoal.push(["aprovacoes", "Aprovações (vendas e transferências)"]);
+    if (defineVend) pessoal.push(["definir", "Definir vendedor"]);
+    if (coord) pessoal.push(["direcionamento", "Direcionar consultor"]);
+    if (coord) pessoal.push(["produtividade", "Produtividade e pagamento"]);
+    G.push({ g: "Pessoal", ic: "◆", itens: pessoal });
     const temCC = mySetores().some((x: string) => !ehSetorMarketing(x) && !["supervisao", "gestao"].includes(x));
     const temMkt = mySetores().some((x: string) => ehSetorMarketing(x));
     const cc: string[][] = [];
@@ -455,9 +465,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const mk: string[][] = [];
     if (podeCriarMkt()) mk.push(["novocli", "Novo cliente"]);
     if (temMarketing() || ehGestao()) {
-      mk.push(["acompmkt", "Acompanhamento"], ["direcionamento", "Direcionar consultor"]);
-      if (!defineVend) mk.push(["definir", "Definir vendedor"]);
-      mk.push(["agenda", "Agendamento loja"], ["operadoras", "Controle das operadoras"], ["produtividade", "Produtividade e pagamento"], ["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
+      mk.push(["acompmkt", "Acompanhamento"]);
+      if (!coord) mk.push(["direcionamento", "Direcionar consultor"]);
+      mk.push(["agenda", "Agendamento loja"], ["operadoras", "Controle das operadoras"]);
+      if (!coord) mk.push(["produtividade", "Produtividade e pagamento"]);
+      mk.push(["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
     } else if (temMkt) {
       mk.push(["acompmkt", "Minha fila"], ["carteira", "Minha carteira"], ["agenda", "Agendamento loja"]);
       if (mySetores().includes("suporte_consultores")) mk.push(["vendedores", "Vendedores"]);
@@ -466,7 +478,6 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     if (mk.length) { if (!cc.length) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
     const ge: string[][] = [];
-    if (ehGestao()) ge.push(["aprovacoes", "Aprovações"]);
     const ehProjetista = mySetores().includes("atendente_cliente");
     if (ehConsultorExterno() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : ehConsultorExterno() ? "Vendas e comissão" : ehProjetista ? "Minhas vendas" : "Vendas dos vendedores"]);
     if (verTudo()) ge.push(["relatorios", "Relatórios"]);
@@ -485,7 +496,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, gerentesVenda, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, compareceu, ancoraVisita,

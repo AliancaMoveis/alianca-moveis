@@ -385,7 +385,7 @@ function AcoesVendedor({ c }: any) {
   const t = c.tratativa || {};
   const sc = R.statusClienteDe(c);
   const [st, setSt] = useState(""); const [txt, setTxt] = useState(""); const [data, setData] = useState("");
-  const [num, setNum] = useState(""); const [val, setVal] = useState("");
+  const [num, setNum] = useState(""); const [val, setVal] = useState(""); const [ger, setGer] = useState("");
   if (c.setorDestino !== "atendente_cliente" || c.venda) return c.venda ? <div className="mv-ok">✓ Venda nº {c.venda.numero} registrada</div> : null;
   if (["reprovado", "nao_compareceu"].includes(sc)) return <div className="mv-bloco"><div className="mv-ok" style={{ color: "var(--danger)" }}>{STATUS_CLIENTE[sc]}</div>
     <button className="btn sm" onClick={() => sc === "reprovado" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>Reabrir atendimento</button></div>;
@@ -395,7 +395,8 @@ function AcoesVendedor({ c }: any) {
     if (st === "vendido") {
       if (!num.trim()) { toast("Informe o nº da venda"); return; }
       const v = parseMoeda(val); if (!v || v <= 0) { toast("Informe o valor da venda"); return; }
-      ex(() => A.registrarVenda(c.id, num.trim(), v, hojeISO(), R.me()?.nome || ""), "Venda registrada — a Gestão confirma").then((ok: boolean) => ok && setSt(""));
+      if (!ger) { toast("Informe o gerente que negociou"); return; }
+      ex(() => A.registrarVenda(c.id, num.trim(), v, hojeISO(), R.me()?.nome || "", ger), "Venda registrada — a Gestão confirma").then((ok: boolean) => ok && setSt(""));
       return;
     }
     if (st === "reagendado" && (!data || data.length < 16)) { toast("Escolha a nova data e horário"); return; }
@@ -415,6 +416,7 @@ function AcoesVendedor({ c }: any) {
       <div className="mv-3">{OPC.map(([k, l]) => <button key={k} className={"mv-op" + (st === k ? " on" : "") + (k === "vendido" ? " venda" : "")} onClick={() => setSt(k)}>{l}</button>)}</div>
       {st === "reagendado" && <input type="datetime-local" value={data} onChange={e => setData(e.target.value)} />}
       {st === "vendido" && <div className="mv-2"><input inputMode="numeric" placeholder="Nº da venda" value={num} onChange={e => setNum(e.target.value)} /><input inputMode="decimal" placeholder="Valor (R$)" value={val} onChange={e => setVal(e.target.value)} /></div>}
+      {st === "vendido" && <select className="mv-sel" value={ger} onChange={e => setGer(e.target.value)}><option value="">Gerente que negociou *</option>{R.gerentesVenda().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}
       {st && st !== "vendido" && <textarea rows={2} placeholder="Parecer: o que aconteceu, próximo passo…" value={txt} onChange={e => setTxt(e.target.value)} />}
       {st && <button className="mv-principal" onClick={salvar}>{st === "vendido" ? "Registrar venda" : "Salvar"}</button>}
       {t.parecerEm && <div className="mv-ult">Último parecer: <b>{STATUS_CLIENTE[t.parecerStatus] || t.parecerStatus}</b>{t.parecer ? " — " + t.parecer : ""}</div>}

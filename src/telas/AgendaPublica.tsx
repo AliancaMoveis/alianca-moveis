@@ -8,14 +8,17 @@ const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julh
 const iso = (d: Date) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 const soNome = (n: string) => (n || "").replace(/^(Consultora?|Vendedora?|Projetista|Suporte)\s+—\s+/, "");
 // situação resumida para quem está na loja
+// o banco já devolve a situação resumida (nunca "vendido"): sem_vendedor, com_vendedor, em_atendimento, finalizado, reagendado, nao_compareceu
 const SIT: Record<string, [string, string]> = {
-  agendado_loja: ["Aguardando", "agu"], com_vendedor: ["Com vendedor", "com"], orcamento: ["Orçamento", "atd"], sem_resposta: ["Em atendimento", "atd"], reagendado: ["Reagendado", "atd"],
-  vendido: ["Vendido", "ven"], vendido_promissoria: ["Vendido", "ven"], vendido_revisao: ["Vendido", "ven"], nao_compareceu: ["Não compareceu", "nao"], reprovado: ["Não fechou", "nao"], venda_cancelada: ["Não fechou", "nao"],
+  sem_vendedor: ["Aguardando", "agu"], com_vendedor: ["Com vendedor", "com"], em_atendimento: ["Em atendimento", "atd"],
+  finalizado: ["Atendimento finalizado", "fin"], reagendado: ["Reagendado", "nao"], nao_compareceu: ["Não compareceu", "nao"],
 };
+const FILTROS: [string, string][] = [["todos", "clientes"], ["sem_vendedor", "sem vendedor"], ["com_vendedor", "com vendedor"], ["em_atendimento", "em atendimento"], ["finalizado", "atendimento finalizado"]];
 
 export default function AgendaPublica() {
   const token = new URLSearchParams(location.search).get("k") || "";
   const [off, setOff] = useState(0);
+  const [filtro, setFiltro] = useState("todos");
   const [agora, setAgora] = useState(new Date());
   const [dados, setDados] = useState<any[] | null>(null);
   const [erro, setErro] = useState("");
@@ -49,9 +52,9 @@ export default function AgendaPublica() {
   const hhmm = agora.getHours() * 60 + agora.getMinutes();
   const min = (h: string) => { const [a, b] = (h || "0:0").split(":").map(Number); return a * 60 + b; };
   const ehHoje = off === 0;
-  const n = { total: l.length, fila: l.filter(x => !x.vendedor && !["vendido", "vendido_promissoria", "vendido_revisao", "nao_compareceu"].includes(x.situacao)).length,
-    atd: l.filter(x => ["com_vendedor", "orcamento", "sem_resposta", "reagendado"].includes(x.situacao)).length, ven: l.filter(x => (SIT[x.situacao] || [])[1] === "ven").length,
-    mkt: l.filter(x => x.origem === "marketing").length };
+  const cont = (k: string) => k === "todos" ? l.length : l.filter(x => x.situacao === k).length;
+  const mkt = l.filter(x => x.origem === "marketing").length;
+  const lv = filtro === "todos" ? l : l.filter(x => x.situacao === filtro);
   // "Cliente chegou": avisa o vendedor no celular (sem vendedor, avisa a coordenação). Repetir só depois de 3 min.
   const ESPERA = 180;
   const falta = (x: any) => x.avisado_em ? Math.max(0, ESPERA - Math.floor((agora.getTime() - new Date(x.avisado_em).getTime()) / 1000)) : 0;
@@ -81,8 +84,8 @@ export default function AgendaPublica() {
     } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível assumir" }); }
     finally { setEnviando(""); }
   };
-  const podeAvisar = (x: any) => ehHoje && !["vendido", "vendido_promissoria", "vendido_revisao", "nao_compareceu", "reprovado", "venda_cancelada"].includes(x.situacao);
-  const proximoIdx = ehHoje ? l.findIndex(x => min(x.hora) >= hhmm - 15) : -1;
+  const podeAvisar = (x: any) => ehHoje && ["sem_vendedor", "com_vendedor", "em_atendimento"].includes(x.situacao);
+  const proximoIdx = ehHoje ? lv.findIndex(x => min(x.hora) >= hhmm - 15 && podeAvisar(x)) : -1;
   return (
     <div className="ap">
       <header className="ap-top">
@@ -97,16 +100,13 @@ export default function AgendaPublica() {
         <button disabled={off >= 7} onClick={() => setOff(off + 1)}>›</button>
       </nav>
       <section className="ap-resumo">
-        <div><b>{n.total}</b><span>clientes {ehHoje ? "hoje" : "no dia"}</span></div>
-        <div className="fila"><b>{n.fila}</b><span>sem vendedor</span></div>
-        <div className="atd"><b>{n.atd}</b><span>em atendimento</span></div>
-        <div className="ven"><b>{n.ven}</b><span>vendidos</span></div>
-        <div className="mix"><span><i className="mk"></i>{n.mkt} marketing</span><span><i className="ex"></i>{n.total - n.mkt} consultor externo</span></div>
+        {FILTROS.map(([k, t]) => <button key={k} className={"f-" + k + (filtro === k ? " on" : "")} onClick={() => setFiltro(filtro === k && k !== "todos" ? "todos" : k)}><b>{cont(k)}</b><span>{k === "todos" ? (ehHoje ? "clientes hoje" : "clientes no dia") : t}</span></button>)}
+        <div className="mix"><span><i className="mk"></i>{mkt} marketing</span><span><i className="ex"></i>{l.length - mkt} consultor externo</span></div>
       </section>
       <div className="ap-lista">
-        {dados === null ? <div className="ap-vazio">Carregando…</div> : !l.length ? <div className="ap-vazio">Nenhum cliente agendado {ehHoje ? "para hoje" : "neste dia"}.</div> :
-          l.map((x, i) => {
-            const [sit, cls] = SIT[x.situacao] || ["Agendado", "agu"];
+        {dados === null ? <div className="ap-vazio">Carregando…</div> : !lv.length ? <div className="ap-vazio">{l.length ? "Nenhum cliente nesta situação." : "Nenhum cliente agendado " + (ehHoje ? "para hoje" : "neste dia") + "."}</div> :
+          lv.map((x, i) => {
+            const [sit, cls] = SIT[x.situacao] || ["Aguardando", "agu"];
             const passou = ehHoje && min(x.hora) < hhmm - 30 && cls === "agu" && !x.vendedor;
             return (
               <div key={i} className={"ap-item " + cls + (i === proximoIdx ? " agora" : "") + (passou ? " atrasado" : "")}>
@@ -116,7 +116,7 @@ export default function AgendaPublica() {
                   <span>{x.consultor ? "Consultor: " + soNome(x.consultor) : "Agendado pelo marketing"}{x.quer_projeto ? " · 📐 quer projeto" : ""}</span></div>
                 <div className="ap-vend">{x.vendedor ? <><small>{x.externo ? "Freelancer" : "Vendedor"}</small><b>{soNome(x.vendedor)}</b>{x.assumido ? <span className="ap-assumido">{x.externo ? "sem cadastro · assumiu na fila" : "assumiu na fila"}</span> : null}</>
                   : x.pedido_vendedor ? <><small>Aguardando aprovação</small><b className="pedido">{soNome(x.pedido_vendedor)}</b></>
-                  : cls === "agu" ? <b className="semv">Sem vendedor · fila</b> : <b>—</b>}</div>
+                  : x.situacao === "sem_vendedor" ? <b className="semv">Sem vendedor · fila</b> : <b>—</b>}</div>
                 <div className={"ap-sit " + cls}>{passou ? "Atrasado" : sit}</div>
                 <div className="ap-acao">{podeAvisar(x) && x.externo ? <small>freelancer — sem aviso no celular</small>
                   : podeAvisar(x) && !x.vendedor ? <><button className="ap-iniciar" disabled={enviando === x.id} onClick={() => abrirAssumir(x)}>✋ Assumir atendimento</button><small>{x.pedido_vendedor ? soNome(x.pedido_vendedor) + " pediu pelo sistema" : "selecione seu nome"}</small></>

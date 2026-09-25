@@ -133,6 +133,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
         venda: v ? {
           numero: v.numero, valor: valorDe[c.id] != null ? fmtValor(valorDe[c.id]) : "", valorNum: valorDe[c.id] ?? null,
           dataVenda: v.data_venda || "", vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: v.status,
+          gerenteId: v.gerente_id || "", gerenteNome: v.gerente_nome || "",
         } : null,
         transferencia: t ? { de: t.de_usuario, para: t.para_usuario, solicitadoPor: t.solicitado_por, quando: t.quando, status: "pendente" } : null,
         anexos: anxDe[c.id] || [],

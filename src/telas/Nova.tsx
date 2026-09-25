@@ -63,6 +63,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
     e.preventDefault();
     if (!f.tipo) { toast("Escolha o motivo do contato"); return; }
     if (!R.podeCriarTipo(f.tipo)) { toast("Você não tem permissão para abrir este motivo"); return; }
+    if (String(f.telefone || "").replace(/\D/g, "").length < 10) { toast("Informe o telefone do cliente com DDD"); (document.querySelector('input[name="telefone"]') as HTMLInputElement | null)?.focus(); return; }
     setEnviando(true);
     try {
       const vinc = origem || (dups.length ? dups[0].c.id : null);
@@ -129,7 +130,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
         <div className="grid">
           <div className="field"><label>Nome do cliente <span className="req-star">*</span></label><input name="cliente" required placeholder="Nome completo" value={f.cliente} onChange={set("cliente")} /></div>
           {!ehMkt && <div className="field" id="fieldClienteDoc"><label>CPF / CNPJ do cliente <span className="req-star">*</span></label><input name="clienteDoc" required placeholder="000.000.000-00" value={f.clienteDoc} onChange={set("clienteDoc")} /></div>}
-          <div className="field"><label>Telefone / contato</label><input name="telefone" placeholder="(00) 00000-0000" value={f.telefone} onChange={set("telefone")} /></div>
+          <div className="field"><label>Telefone / contato <span className="req-star">*</span></label><input name="telefone" placeholder="(00) 00000-0000" value={f.telefone} onChange={set("telefone")} /></div>
           {!ehMkt && <div className="field" id="fieldPedido"><label>Nº venda <span className="req-star">*</span></label><input name="pedido" required placeholder="Ex.: 48213" value={f.pedido} onChange={set("pedido")} /></div>}
           {!ehMkt && <div className="field" id="fieldDataVenda"><label>Data da venda</label><input name="dataVenda" type="date" value={f.dataVenda} onChange={set("dataVenda")} /></div>}
           {ehFab && <div className="field" id="fieldPedidoFabrica"><label>Nº do nosso pedido na fábrica <span className="hint">(opcional)</span></label><input name="pedidoFabrica" placeholder="Se souber" value={f.pedidoFabrica} onChange={set("pedidoFabrica")} /></div>}

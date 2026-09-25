@@ -42,8 +42,8 @@ export const A = {
   responderTransferencia: (id: string, aceitar: boolean, origem: "detalhe" | "aprovacoes" = "detalhe") =>
     rpc("responder_transferencia", { p_id: id, p_aceitar: aceitar, p_origem: origem }),
   cancelarTransferencia: (id: string) => rpc("cancelar_transferencia", { p_id: id }),
-  registrarVenda: (id: string, numero: string, valor: number, data: string, vendedor: string) =>
-    rpc("registrar_venda", { p_id: id, p_numero: numero, p_valor: valor, p_data: nz(data), p_vendedor: vendedor }),
+  registrarVenda: (id: string, numero: string, valor: number, data: string, vendedor: string, gerente: string) =>
+    rpc("registrar_venda", { p_id: id, p_numero: numero, p_valor: valor, p_data: nz(data), p_vendedor: vendedor, p_gerente: nz(gerente) }),
   decidirVenda: (id: string, novo: string, origem: "detalhe" | "aprovacoes" = "detalhe") => rpc("decidir_venda", { p_id: id, p_novo: novo, p_origem: origem }),
   corrigirVenda: (id: string, numero: string, valor: number, data: string, vendedor: string) =>
     rpc("corrigir_venda", { p_id: id, p_numero: numero, p_valor: valor, p_data: nz(data), p_vendedor: vendedor }),

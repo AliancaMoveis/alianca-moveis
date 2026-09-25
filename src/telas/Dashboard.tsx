@@ -3,6 +3,7 @@ import { useApp } from "../estado";
 import { PainelConsultor, PainelLoja, PainelVendedor } from "./DashLoja";
 import PainelOperadora from "./PainelOperadora";
 import PainelConsultorVisual from "./PainelConsultorVisual";
+import PainelGestao from "./PainelGestao";
 import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
@@ -108,7 +109,8 @@ export default function Dashboard() {
   return (
     <section className="view active" id="view-dashboard">
       {cabecalho}
-      {R.podeEditarAgenda() && (area !== "cc") && <PainelLoja de={de} ate={ate} />}
+      {R.ehGestao() && area !== "cc" && <PainelGestao de={de} ate={ate} />}
+      {!R.ehGestao() && R.podeEditarAgenda() && (area !== "cc") && <PainelLoja de={de} ate={ate} />}
       {R.mySetores().includes("atendente_cliente") && !R.ehGestao() && <PainelVendedor />}
       {verCC && veAmbos && area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Call center e pós-venda</div>}
       {verCC && <div className="kpis" id="kpis">
@@ -121,7 +123,7 @@ export default function Dashboard() {
         <Kpi n={inf} l="Informar o cliente" cor={inf ? "var(--st-informar)" : undefined} />
         <Kpi n={conc} l="Concluídos no período" />
       </div>}
-      {vejaMkt && veAmbos && <>
+      {vejaMkt && veAmbos && !R.ehGestao() && <>
         {area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Marketing</div>}
         <div className="kpis" id="kpisMkt">
           <Kpi n={mktNovos} l="Clientes novos no período" />
@@ -152,7 +154,7 @@ export default function Dashboard() {
           })}
         </div>
       )}
-      {vejaMkt && (
+      {vejaMkt && !R.ehGestao() && (
         <div className="panel-grid" id="painelMktWrap">
           <div className="panel"><h3>Agendamentos por operadora</h3><div id="mktPorOperadora">
             {rowsOp.length ? rowsOp.map(([nm, v]) => <div key={nm}><BarRow nm={nm} pct={v.total / Math.max(1, ...rowsOp.map(x => x[1].total)) * 100} v={v.total} /><div style={{ fontSize: 11.5, color: "var(--ink-faint)", margin: "-6px 0 8px 0" }}>{v.consultor} p/ consultor · {v.loja} direto na loja</div></div>) : <Nada t="Nenhum agendamento ainda." />}

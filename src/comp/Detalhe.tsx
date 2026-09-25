@@ -316,7 +316,7 @@ function Venda({ c }: any) {
   const { R, executar: ex, toast } = useApp();
   const [editando, setEditando] = useState(false);
   const v = c.venda || null;
-  const iniF = () => ({ numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || hojeISO(), vendedor: v?.vendedor || (c.atendenteId ? R.nomeUser(c.atendenteId) : "") || R.me()?.nome || "" });
+  const iniF = () => ({ numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || hojeISO(), vendedor: v?.vendedor || (c.atendenteId ? R.nomeUser(c.atendenteId) : "") || R.me()?.nome || "", gerente: v?.gerenteId || "" });
   const iniG = () => ({ status: v?.status || "registrada", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || "", vendedor: v?.vendedor || "" });
   const [f, setF] = useState<any>(iniF);
   const [g, setG] = useState<any>(iniG);
@@ -331,8 +331,9 @@ function Venda({ c }: any) {
     if (!f.numero.trim()) { toast("Informe o número da venda"); document.getElementById("tVendaNumero")?.focus(); return; }
     if (!String(f.valor).trim() || parseMoeda(f.valor) <= 0) { toast("Informe o valor da venda"); document.getElementById("tVendaValor")?.focus(); return; }
     if (!f.vendedor.trim()) { toast("Informe o vendedor da loja"); return; }
+    if (!f.gerente) { toast("Informe o gerente que negociou a venda"); document.getElementById("tVendaGerente")?.focus(); return; }
     const ed = !!c.venda;
-    await ex(() => A.registrarVenda(c.id, f.numero.trim(), parseMoeda(f.valor), f.data, f.vendedor.trim()), ed ? "Venda atualizada, aguardando validação" : "Venda registrada, aguardando confirmação da Gestão");
+    await ex(() => A.registrarVenda(c.id, f.numero.trim(), parseMoeda(f.valor), f.data, f.vendedor.trim(), f.gerente), ed ? "Venda atualizada, aguardando validação" : "Venda registrada, aguardando confirmação da Gestão");
   }
   const form = (
     <div className="resp-box"><h4>Dados da venda</h4>
@@ -342,6 +343,7 @@ function Venda({ c }: any) {
         <div className="field"><label>Valor da venda <span className="req-star">*</span></label><input id="tVendaValor" placeholder="Ex.: 8.500,00" value={f.valor || ""} onChange={s("valor")} /></div>
         <div className="field"><label>Data da venda</label><input type="date" value={f.data || ""} onChange={s("data")} /></div>
         <div className="field"><label>Vendedor na loja</label><input placeholder="Nome de quem vendeu" value={f.vendedor || ""} onChange={s("vendedor")} /></div>
+        <div className="field"><label>Gerente que negociou <span className="req-star">*</span></label><select id="tVendaGerente" value={f.gerente || ""} onChange={s("gerente")}><option value="">Selecione…</option>{R.gerentesVenda().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
       </div>
       <div style={{ marginTop: 12, display: "flex", gap: 9 }}><button className="btn primary sm" onClick={registrar}>Registrar venda</button>{editando && <button className="btn ghost sm" onClick={() => setEditando(false)}>Cancelar</button>}</div>
     </div>
@@ -357,6 +359,7 @@ function Venda({ c }: any) {
         {vejaVal && <RowSb k="Valor" pb="5px 0" bold>{v.valor ? "R$ " + v.valor : "—"}</RowSb>}
         <RowSb k="Data da venda" pb="5px 0">{v.dataVenda ? fmtDate(v.dataVenda) : "—"}</RowSb>
         <RowSb k="Vendedor na loja" pb="5px 0">{v.vendedor || v.atendenteNome || "—"}</RowSb>
+        <RowSb k="Gerente que negociou" pb="5px 0">{v.gerenteNome || "—"}</RowSb>
         {nota}
         {!R.ehGestao() && podeRegistrar && vs === "registrada" && <div style={{ marginTop: 12 }}><button className="btn sm" onClick={() => setEditando(true)}>Corrigir dados da venda</button></div>}
         {R.ehGestao() && (

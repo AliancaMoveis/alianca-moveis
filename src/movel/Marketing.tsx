@@ -154,7 +154,7 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
   async function enviar() {
     if (!tipo) { toast("Escolha o tipo de agendamento"); return; }
     if (!f.cliente.trim()) { toast("Informe o nome do cliente"); return; }
-    if (!soDigitos(f.telefone)) { toast("Informe o telefone"); return; }
+    if (soDigitos(f.telefone).length < 10) { toast("Informe o telefone com DDD"); return; }
     if (!f.produto.trim()) { toast("Informe o ambiente de interesse"); return; }
     if (direto && !f.dataVisita) { toast("Informe a data e o horário na loja"); return; }
     setEnv(true);
