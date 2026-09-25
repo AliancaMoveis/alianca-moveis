@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { PainelConsultor, PainelLoja, PainelVendedor } from "./DashLoja";
+import PainelOperadora from "./PainelOperadora";
 import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
@@ -78,8 +79,7 @@ export default function Dashboard() {
   const evs: any[] = []; todos.filter(naArea).forEach((c: any) => (c.historico || []).forEach((h: any) => evs.push({ id: c.id, quando: h.quando, quem: h.quem, texto: h.texto })));
   evs.sort((a, b) => +new Date(b.quando) - +new Date(a.quando));
 
-  return (
-    <section className="view active" id="view-dashboard">
+  const cabecalho = <>
       <div className="view-head"><div><h2>Dashboard</h2><p id="dashSub">{sub}</p></div></div>
       <div className="card" style={{ padding: "14px 18px", marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
@@ -98,6 +98,13 @@ export default function Dashboard() {
         </div>}
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Período {fmtDate(de)} a {fmtDate(ate)}: vale para novos, concluídos, agendamentos e vendas. O que está em aberto aparece sempre, de qualquer data.</div>
       </div>
+  </>;
+  // operadora do marketing: dashboard só visual (números e gráficos), sem lista de ações
+  const souOperadora = R.mySetores().includes("marketing_operadora") && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
+  if (souOperadora) return <section className="view active" id="view-dashboard">{cabecalho}<PainelOperadora de={de} ate={ate} /></section>;
+  return (
+    <section className="view active" id="view-dashboard">
+      {cabecalho}
       {R.podeEditarAgenda() && (area !== "cc") && <PainelLoja de={de} ate={ate} />}
       {R.mySetores().includes("atendente_cliente") && !R.ehGestao() && <PainelVendedor />}
       {verCC && veAmbos && area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Call center e pós-venda</div>}

@@ -93,18 +93,21 @@ export default function Produtividade() {
       <div className="kpis">
         <Kpi n={tot.agend} l="Agendamentos no mês" /><Kpi n={tot.vendas} l="Vendas fechadas" />
         <Kpi n={fmtMoeda(tot.vendas * valorVenda)} l={`Vendas × ${fmtMoeda(valorVenda)}`} /><Kpi n={fmtMoeda(tot.bonus)} l="Bônus de meta" />
-        {gestor ? <Kpi n={fmtMoeda(tot.total)} l="Total a pagar" cor="var(--st-concluida)" /> : <>
+        {gestor ? <>
+          <Kpi n={fmtMoeda(tot.total)} l="Total calculado" />
+          <Kpi n={fmtMoeda(aprovado)} l="Aprovado para pagar" cor={aprovado ? "var(--st-concluida)" : "var(--ink-faint)"} />
+          <Kpi n={fmtMoeda(pendente)} l="Falta aprovar" cor={pendente ? "var(--warn)" : "var(--ink-faint)"} /></> : <>
           <Kpi n={fmtMoeda(aprovado)} l="Aprovado para receber" cor={aprovado ? "var(--st-concluida)" : "var(--ink-faint)"} />
           <Kpi n={fmtMoeda(pendente)} l="Pendente de aprovação" cor={pendente ? "var(--warn)" : "var(--ink-faint)"} />
         </>}
       </div>
 
       <div className="panel" style={{ marginBottom: 16 }}><h3>{gestor ? "Pagamento por operadora" : "Meu pagamento"} — {titulo}</h3>
-        {linhas.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Operadora</th><th>Agendou</th><th>→ Consultor</th><th>→ Loja</th><th>Vieram</th><th>Vendas fechadas</th><th>Valor vendas</th><th>Metas batidas</th><th>Bônus</th><th>{gestor ? "Total" : "Previsto"}</th><th>Aprovação</th></tr></thead>
+        {linhas.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Operadora</th><th>Agendou</th><th>→ Consultor</th><th>→ Loja</th><th>Vieram</th><th>Vendas fechadas</th><th>Valor vendas</th><th>Metas batidas</th><th>Bônus</th><th>Total calculado</th><th>Valor aprovado</th><th>Aprovação</th></tr></thead>
           <tbody>{linhas.map(({ u, r, pag }: any) => (
             <tr key={u.id}><td><b>{u.nome}</b></td><td>{r.agend}</td><td>{r.cons}</td><td>{r.loja}</td><td>{r.vieram}</td>
               <td style={{ fontWeight: 700, color: "var(--st-concluida)" }}>{r.vendas}{r.pendentes ? <small style={{ color: "var(--warn)", fontWeight: 400 }}> (+{r.pendentes} aguardando)</small> : null}</td>
-              <td>{fmtMoeda(r.valorVendas)}</td><td>{r.batidos}/{r.diasMeta}</td><td>{fmtMoeda(r.bonus)}</td><td style={{ fontWeight: 800 }}>{fmtMoeda(r.total)}</td>
+              <td>{fmtMoeda(r.valorVendas)}</td><td>{r.batidos}/{r.diasMeta}</td><td>{fmtMoeda(r.bonus)}</td><td style={{ fontWeight: 800 }}>{fmtMoeda(r.total)}</td><td style={{ fontWeight: 800, color: pag ? "var(--st-concluida)" : "var(--ink-faint)" }}>{fmtMoeda(pag ? Number(pag.total) : 0)}</td>
               <td style={{ whiteSpace: "nowrap" }}>{pag ? <><span className="badge b-concluida">{gestor ? "Aprovado" : "Aprovado para receber"} {fmtMoeda(Number(pag.total))}</span><div style={{ fontSize: 11, color: "var(--ink-faint)" }}>{R.nomeUser(pag.aprovado_por)} · {fmtDateTime(pag.aprovado_em)}</div>
                 {Number(pag.total) !== r.total && <div style={{ fontSize: 11, color: "var(--warn)" }}>{gestor ? "valores mudaram depois da aprovação — reaprove" : "diferença de " + fmtMoeda(Math.abs(r.total - Number(pag.total))) + " pendente de aprovação"}</div>}</> : <span className="badge b-urgente" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>Pendente de aprovação</span>}
                 {gestor && <div style={{ marginTop: 4, display: "flex", gap: 6 }}>

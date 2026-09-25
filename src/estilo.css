@@ -809,3 +809,46 @@ button.mv-tile.sel{border-color:var(--primary);box-shadow:0 0 0 2px var(--primar
 .mv-anx button{position:absolute;top:0;right:0;border:0;background:rgba(0,0,0,.55);color:#fff;width:18px;height:18px;font-size:12px;line-height:1;border-radius:0 0 0 6px}
 .mv-tabs .ic.mais{background:var(--primary);color:#fff;filter:none;opacity:1;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:20px;margin-top:-4px}
 .mv-fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:41;border:0;background:#c0428a;color:#fff;font:inherit;font-weight:800;font-size:15px;padding:13px 18px;border-radius:28px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+/* dashboard visual da operadora (computador) */
+.po-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.po-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;gap:14px;align-items:flex-start}
+.po-ic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:22px;flex:none}
+.po-n{font-size:30px;font-weight:800;line-height:1.1;letter-spacing:-.02em}
+.po-l{font-size:13px;font-weight:700;color:var(--ink-soft);margin-top:2px}
+.po-s{font-size:12px;color:var(--ink-faint);margin-top:4px}
+.po-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:16px}
+.po-grid .panel{margin:0}
+.po-funil{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+.po-etapa{display:flex;flex-direction:column;gap:4px}
+.po-etapa span{font-size:13px;font-weight:600}
+.po-etapa small{font-weight:400;color:var(--ink-faint)}
+.po-barra{height:34px;border-radius:9px;display:flex;align-items:center;padding:0 12px;color:#fff;min-width:44px;transition:width .4s}
+.po-barra b{font-size:17px}
+.po-rosca{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.po-leg{display:flex;flex-direction:column;gap:8px;flex:1;min-width:180px}
+.po-leg div{display:flex;align-items:center;gap:8px;font-size:13px}
+.po-leg i{width:12px;height:12px;border-radius:3px;flex:none}
+.po-leg i.linha{height:0;border-top:2px dashed var(--danger);border-radius:0}
+.po-leg span{flex:1}
+.po-leg.h{flex-direction:row;flex-wrap:wrap;gap:16px;margin-top:10px}
+.po-leg.h span{flex:none}
+.po-dias{display:flex;gap:4px;align-items:flex-end;overflow-x:auto;padding-top:8px}
+.po-dia{flex:1;min-width:26px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.po-col{position:relative;width:100%;max-width:30px;height:150px;display:flex;flex-direction:column;justify-content:flex-end;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.po-seg.m{background:#c0428a}
+.po-seg.e{background:#5b7fc7;order:2}
+.po-meta{position:absolute;left:0;right:0;border-top:2px dashed var(--danger);z-index:2}
+.po-dia b{font-size:12px;min-height:15px}
+.po-dia small{font-size:10px;color:var(--ink-faint);text-align:center;line-height:1.2}
+.po-dia.hoje .po-col{outline:2px solid var(--primary);outline-offset:1px}
+.po-dia.hoje small{color:var(--primary);font-weight:700}
+.po-prox{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.po-prox:hover{background:var(--surface-2)}
+.po-prox b{display:block;font-size:13.5px}
+.po-prox small{display:block;font-size:11.5px;color:var(--ink-faint)}
+.po-data{width:52px;text-align:center;background:var(--primary-soft);border-radius:8px;padding:4px 0;color:var(--primary)}
+.po-com div{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+.po-com .tot{font-weight:800;border-bottom:1px solid var(--line)}
+.po-com .ok b{color:var(--st-concluida);font-size:17px}
+.po-com .pend b{color:var(--warn)}
+@media (max-width:1100px){.po-cards{grid-template-columns:1fr 1fr}.po-grid{grid-template-columns:1fr}}
