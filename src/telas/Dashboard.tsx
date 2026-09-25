@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApp } from "../estado";
 import { PainelConsultor, PainelLoja, PainelVendedor } from "./DashLoja";
 import PainelOperadora from "./PainelOperadora";
+import PainelConsultorVisual from "./PainelConsultorVisual";
 import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
@@ -101,6 +102,8 @@ export default function Dashboard() {
   </>;
   // operadora do marketing: dashboard só visual (números e gráficos), sem lista de ações
   const souOperadora = R.mySetores().includes("marketing_operadora") && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
+  const souConsultor = R.ehConsultorExterno() && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
+  if (souConsultor) return <section className="view active" id="view-dashboard">{cabecalho}<PainelConsultorVisual de={de} ate={ate} /></section>;
   if (souOperadora) return <section className="view active" id="view-dashboard">{cabecalho}<PainelOperadora de={de} ate={ate} /></section>;
   return (
     <section className="view active" id="view-dashboard">

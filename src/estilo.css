@@ -852,3 +852,10 @@ button.mv-tile.sel{border-color:var(--primary);box-shadow:0 0 0 2px var(--primar
 .po-com .ok b{color:var(--st-concluida);font-size:17px}
 .po-com .pend b{color:var(--warn)}
 @media (max-width:1100px){.po-cards{grid-template-columns:1fr 1fr}.po-grid{grid-template-columns:1fr}}
+.pc-alertas{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+.pc-alerta{background:var(--surface);border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.pc-alerta b{font-size:24px;font-weight:800}
+.pc-alerta span{font-size:12.5px;font-weight:600;line-height:1.2}
+.pc-alerta.zero{color:var(--ink-faint);cursor:default}
+@media (max-width:1100px){.pc-alertas{grid-template-columns:repeat(2,1fr)}}
+.po-n.din{font-size:24px;white-space:nowrap}

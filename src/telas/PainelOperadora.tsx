@@ -51,7 +51,7 @@ export default function PainelOperadora({ de, ate }: { de: string; ate: string }
   let acc = 0; const R0 = 60, C = 2 * Math.PI * R0;
   const proxLoja = meus.filter((c: any) => c.dataLoja && String(c.dataLoja).slice(0, 10) >= hoje && !c.venda).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja))).slice(0, 8);
 
-  const Card = ({ ic, n, l, sub, cor }: any) => <div className="po-card"><div className="po-ic" style={{ background: cor }}>{ic}</div><div><div className="po-n">{n}</div><div className="po-l">{l}</div>{sub && <div className="po-s">{sub}</div>}</div></div>;
+  const Card = ({ ic, n, l, sub, cor }: any) => <div className="po-card"><div className="po-ic" style={{ background: cor }}>{ic}</div><div><div className={"po-n" + (typeof n === "string" ? " din" : "")}>{n}</div><div className="po-l">{l}</div>{sub && <div className="po-s">{sub}</div>}</div></div>;
   return (
     <div className="po">
       <div className="po-cards">
