@@ -107,7 +107,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
   }));
 
   const tiposMap: Record<string, any> = {};
-  tipos.forEach((t: any) => (tiposMap[t.id] = { nome: t.nome, destino: t.setor_destino, anexos: t.anexos, presale: t.presale, direto: t.direto }));
+  tipos.forEach((t: any) => (tiposMap[t.id] = { nome: t.nome, destino: t.setor_destino, anexos: t.anexos, presale: t.presale, direto: t.direto, rapido: !!t.rapido }));
 
   const estado: Estado = {
     setores: setores.map((s: any) => ({

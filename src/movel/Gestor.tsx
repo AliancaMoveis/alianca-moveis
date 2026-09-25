@@ -231,7 +231,7 @@ function ResCC({ todos, noPer, P, L }: any) {
   const cc = todos.filter((c: any) => !R.domMarketing(c));
   const pr = (c: any) => R.prioridade(c);
   const T = (k: string, n: any, l: string, lista?: any[], cor?: string, sub?: string) => <Tile k={k} n={n} l={l} cor={cor} sub={sub} sel={L.sel} lista={lista ? () => L.abrirLista(k, l, R.ordenar(lista)) : undefined} />;
-  const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => String(x.texto).startsWith("Status → Concluída")); return h.length ? h[h.length - 1].quando : c.criadoEm; };
+  const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => (String(x.texto).startsWith("Status → Concluída") || String(x.texto).startsWith("✓ Atendimento finalizado"))); return h.length ? h[h.length - 1].quando : c.criadoEm; };
   const abertos = cc.filter((c: any) => c.status !== "concluida");
   const crit = cc.filter((c: any) => pr(c) === "critico"), atr = cc.filter((c: any) => pr(c) === "atrasado"), urg = cc.filter((c: any) => pr(c) === "urgente");
   const perto = cc.filter((c: any) => pr(c) === "perto"), inf = cc.filter((c: any) => c.status === "informar"), resp = cc.filter((c: any) => c.status === "respondida");

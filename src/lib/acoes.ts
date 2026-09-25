@@ -42,6 +42,7 @@ export const A = {
   },
   decidirReembolso: (id: string, aprovar: boolean, motivo = "") => rpc("decidir_reembolso", { p_id: id, p_aprovar: aprovar, p_motivo: motivo }),
   urlComprovante: async (path: string) => { const { data } = await sb.storage.from("reembolsos").createSignedUrl(path, 600); return data?.signedUrl || ""; },
+  finalizarAtendimento: (id: string, texto: string) => rpc("finalizar_atendimento", { p_id: id, p_texto: texto || "" }),
   cobrarParecer: (id: string) => rpc("cobrar_parecer", { p_id: id }),
   solicitarAtendimento: (id: string) => rpc("solicitar_atendimento", { p_id: id }),
   cancelarPedidoAtendimento: (id: string) => rpc("cancelar_pedido_atendimento", { p_id: id }),

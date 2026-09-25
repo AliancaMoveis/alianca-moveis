@@ -95,6 +95,7 @@ export default function Detalhe({ id }: { id: string }) {
           {tratar ? <AcoesGerais c={c} link={link} presale={presale} notaRef={notaRef} foco={focoDetalhe} />
             : R.podeAcompanhar(c) ? <AcompanhamentoCC c={c} link={link} notaRef={notaRef} foco={focoDetalhe} />
             : <div className="ro-note">Você tem acesso de leitura a este chamado. Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>.{anexar ? " Você pode anexar comprovações acima." : ""}</div>}
+          {!presale && <FinalizarAtend c={c} />}
           {!presale && <AcompSupervisao c={c} />}
           <div className="hist"><h4>Histórico</h4>{c.historico.slice().reverse().map((x: any, i: number) => <div className="h" key={i}><b>{fmtDateTime(x.quando)}</b> · {x.quem} — {x.texto}</div>)}</div>
           <Vinculados c={c} />
@@ -591,6 +592,26 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
     <div className="resp-box"><h4>Anotação interna</h4><div className="inline-2"><div className="field"><input ref={notaRef} placeholder={foco === "nota" ? "Cliente ligou de novo — descreva o que ele pediu agora" : "Ex.: Liguei 10h, sem retorno."} value={nota} onChange={e => setNota(e.target.value)} /></div>
       <button className="btn sm" onClick={async () => { const v = nota.trim(); if (!v) return; if (await ex(() => A.adicionarNota(c.id, v), "Anotação adicionada")) setNota(""); }}>Adicionar</button></div></div>
   </>;
+}
+
+// ✓ finalizar o atendimento (call center e setor responsável), em qualquer motivo — exceto medidas, que seguem o fluxo próprio
+function FinalizarAtend({ c }: any) {
+  const { R, executar: ex } = useApp() as any;
+  const [abrir, setAbrir] = useState(false);
+  const [tx, setTx] = useState("");
+  if (c.status === "concluida" || c.tipo === "medidas") return null;
+  if (!(R.podeTratar(c) || R.mySetores().includes("callcenter"))) return null;
+  return (
+    <div style={{ margin: "12px 0" }}>
+      {!abrir ? <button className="btn primary" onClick={() => setAbrir(true)}>✓ Finalizar atendimento</button>
+        : <div className="resp-box" style={{ borderColor: "var(--st-concluida)" }}><h4>✓ Finalizar atendimento</h4>
+          <div className="field"><textarea value={tx} onChange={e => setTx(e.target.value)} placeholder="O que foi resolvido / informado ao cliente (opcional, fica no histórico)" /></div>
+          <div className="row" style={{ gap: 8, marginTop: 8 }}>
+            <button className="btn primary sm" onClick={async () => { if (await ex(() => A.finalizarAtendimento(c.id, tx.trim()), "Atendimento finalizado")) { setAbrir(false); setTx(""); } }}>Confirmar e finalizar</button>
+            <button className="btn sm" onClick={() => setAbrir(false)}>Cancelar</button>
+          </div></div>}
+    </div>
+  );
 }
 
 // 📐 medidas: venda → medidas → checklist. Supervisora valida/direciona/libera; medidor (ou consultor) mede.

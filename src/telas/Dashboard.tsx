@@ -31,7 +31,7 @@ export default function Dashboard() {
   const naArea = (c: any) => area === "tudo" || (area === "mkt") === !!R.domMarketing(c);
   const todos = st.chamados.filter(R.podeVer);
   const vis = todos.filter((c: any) => noPeriodo(c.criadoEm));
-  const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => String(x.texto).startsWith("Status → Concluída")); return h.length ? h[h.length - 1].quando : c.criadoEm; };
+  const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => (String(x.texto).startsWith("Status → Concluída") || String(x.texto).startsWith("✓ Atendimento finalizado"))); return h.length ? h[h.length - 1].quando : c.criadoEm; };
   const periodoTxt = " · " + fmtDate(de) + " a " + fmtDate(ate);
   const sub = (R.verTudo() ? (R.ehGestao() ? "Visão consolidada de todos os setores, em tempo real." : "Visão consolidada dos setores do call center, em tempo real. Marketing e Consultoria externa têm supervisão própria.") : "Visão do seu setor (" + (R.mySetores().map(R.setorNome).join(", ") || "—") + "), em tempo real.") + periodoTxt;
   // indicadores do call center (pós-venda). Marketing não tem prazo de resposta e fica fora destes números.

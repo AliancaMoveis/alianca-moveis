@@ -947,3 +947,6 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .mv-sel{width:100%;padding:13px 12px;border-radius:12px;border:1px solid var(--line,#ccd);font:inherit;font-size:15px;background:var(--card,#fff);color:inherit;margin-top:8px}
 .pg-wrap .bar-row .v{white-space:nowrap}
 .sc-med-agendada{background:var(--warn-bg,#fff4d6);color:var(--warn,#b07a00)}.sc-med-realizada{background:#e6efff;color:#27468f}.sc-med-liberada{background:#e3f5ea;color:#1f7a44}.sc-med-validar{background:#eef0f4;color:#56627a}
+.acomp-cad{margin:14px 0 4px;padding:12px 14px;border:1px solid var(--danger);border-radius:10px;background:var(--critico-bg,#fdeeee);display:flex;flex-direction:column;gap:8px;font-size:13.5px}
+.acomp-cad label{display:flex;gap:8px;align-items:center;cursor:pointer}.acomp-cad input[type=text],.acomp-cad input:not([type]){border:1px solid var(--line,#ccd);border-radius:8px;padding:8px 10px;font:inherit}
+.acomp-cad input[type=checkbox]{width:18px!important;height:18px;flex:0 0 18px;margin:0;padding:0}.acomp-cad label{display:block}.acomp-cad label input[type=checkbox]{vertical-align:middle;margin-right:6px}
