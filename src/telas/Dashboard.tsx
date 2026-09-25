@@ -110,7 +110,7 @@ export default function Dashboard() {
   // operadora do marketing: dashboard só visual (números e gráficos), sem lista de ações
   const souOperadora = R.mySetores().includes("marketing_operadora") && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
   const souConsultor = R.ehConsultorExterno() && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
-  if (R.ehProprietario()) return <section className="view active" id="view-dashboard"><div className="view-head"><div><h2>Painel do dono</h2><p>Resultado do mês, loja ao vivo, quem vende e quanto custa vender. Só visualização — as tarefas ficam com a Gestão.</p></div></div><PainelDono /></section>;
+  if (R.ehProprietario()) return <section className="view active" id="view-dashboard"><div className="view-head"><div><h2>Painel do dono</h2><p>Resultado do dia (ou do período escolhido), loja ao vivo, quem vende e quanto custa vender. Só visualização — as tarefas ficam com a Gestão.</p></div></div><PainelDono /></section>;
   if (R.ehGestao()) return <section className="view active" id="view-dashboard">{cabecalho}<PainelBruno de={de} ate={ate} /></section>;
   if (souConsultor) return <section className="view active" id="view-dashboard">{cabecalho}<PainelConsultorVisual de={de} ate={ate} /></section>;
   if (souOperadora) return <section className="view active" id="view-dashboard">{cabecalho}<PainelOperadora de={de} ate={ate} /></section>;
