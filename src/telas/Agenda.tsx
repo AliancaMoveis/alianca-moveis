@@ -18,13 +18,13 @@ export default function Agenda() {
   const amanha = maisDias(dia, 1);
   return (
     <section className="view active" id="view-agenda">
-      <div className="view-head"><div><h2>Agendamento loja</h2><p id="agSub">{editar ? "Todos os clientes que vêm à loja no dia (e no dia seguinte, quando já houver). Clique para abrir a ficha e definir o vendedor. Pedidos de vendedores aparecem para aprovar." : "Todos os clientes que vêm à loja e quem vai atender cada um. Use \"Meus clientes\" para ver só os seus."}</p></div></div>
+      <div className="view-head"><div><h2>Agendamento loja</h2><p id="agSub">{editar ? "Todos os clientes que vêm à loja no dia (e no dia seguinte, quando já houver). Clique para abrir a ficha e definir o vendedor. Pedidos de vendedores aparecem para aprovar. Use \"Meus clientes\" para ver só os ligados a você." : "Todos os clientes que vêm à loja e quem vai atender cada um. Use \"Meus clientes\" para ver só os seus."}</p></div></div>
       <div className="ag-nav">
         <button className="btn sm" onClick={() => setDia(maisDias(dia, -1))}>‹ Dia anterior</button>
         <input type="date" value={dia} onChange={e => setDia(e.target.value || dia)} style={{ maxWidth: 180 }} />
         <button className="btn sm" onClick={() => setDia(maisDias(dia, 1))}>Próximo dia ›</button>
         <button className="btn ghost sm" onClick={() => setDia(hojeISO())}>Hoje</button>
-        {resumida && <span className="subnav" style={{ margin: 0 }}>
+        {<span className="subnav" style={{ margin: 0 }}>
           <button className={escopo === "loja" ? "on" : ""} onClick={() => setEscopo("loja")}>Toda a loja</button>
           <button className={escopo === "meus" ? "on" : ""} onClick={() => setEscopo("meus")}>Meus clientes</button>
         </span>}
@@ -63,7 +63,7 @@ function Dia({ iso, resumida, escopo, principal }: { iso: string; resumida: bool
     doDia = st.chamados.filter((c: any) => R.domMarketing(c) && c.dataLoja && R.podeVer(c) && String(c.dataLoja).slice(0, 10) === iso)
       .map((c: any) => ({ ...c, _pedidoVendedor: (c.tratativa && c.tratativa.pedidoAtend) || "" }));
   }
-  const arr = doDia.filter((c: any) => !resumida || escopo === "loja" || meuCliente(c)).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
+  const arr = doDia.filter((c: any) => escopo === "loja" || meuCliente(c)).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
   if (!principal && !arr.length) return null;
   const origem = (c: any) => (c.tipo === "__direto" || R.ehDireto(c)) ? "marketing" : "externo";
   const semAnexo = (c: any) => c._alheio ? c._semAnexo && !c.venda : R.semAnexo(c);
@@ -84,7 +84,7 @@ function Dia({ iso, resumida, escopo, principal }: { iso: string; resumida: bool
           <div className="ag-dia-sub">{nMkt} marketing · {nExt} externos{nFila ? <> · <b style={{ color: "var(--warn)" }}>{nFila} sem vendedor (fila)</b></> : null}{nSemAnexo ? <> · <b style={{ color: "#b07a00" }}>{nSemAnexo} sem anexo</b></> : null}</div></div>
         <div className="ag-dia-total"><b>{arr.length}</b><span>agendado{arr.length === 1 ? "" : "s"}</span></div>
       </div>
-      {!arr.length ? <div className="empty" style={{ padding: "20px 10px" }}>{resumida && loja === null ? "Carregando…" : <>Nenhum cliente {resumida && escopo === "meus" ? "seu " : ""}marcado neste dia.</>}</div> :
+      {!arr.length ? <div className="empty" style={{ padding: "20px 10px" }}>{resumida && loja === null ? "Carregando…" : <>Nenhum cliente {escopo === "meus" ? "seu " : ""}marcado neste dia.</>}</div> :
         Object.keys(porHora).sort().map(h => (
           <div className="ag-hora" key={h}><div className="hr">{h}</div><div className="slots">
             {porHora[h].map((c: any) => {
@@ -98,7 +98,7 @@ function Dia({ iso, resumida, escopo, principal }: { iso: string; resumida: bool
                   <div><div className="nm"><span className={"origem " + og}>{og === "marketing" ? "Marketing" : "Externo"}</span> {c.cliente}
                     {semAnexo(c) && <> <span className="badge b-semanexo">⚠️ Sem anexo</span></>}
                     {t.querProjeto === "sim" && <> <span className="marca-loja sim">📐 Quer projeto</span></>}
-                    {meu && resumida && <> <span className="marca-loja ok">seu cliente</span></>}</div>
+                    {meu && <> <span className="marca-loja ok">seu cliente</span></>}</div>
                     <div className="dt">{alheio ? null : <>{c.telefone || "sem telefone"}</>}{cons ? <>{alheio ? "" : " · "}consultor <b>{cons}</b></> : null}
                       {vend ? <>{(alheio && !cons) ? "" : " · "}vendedor <b style={meuAtend ? { color: "var(--st-concluida)" } : undefined}>{meuAtend ? "você" : vend}</b></>
                         : pedido ? <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "var(--primary)" }}>{pedido === eu ? "você pediu" : R.nomeUser(pedido) + " pediu"} — aguardando aprovação</b></>
