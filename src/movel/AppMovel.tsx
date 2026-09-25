@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import { EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume } from "../lib/regras";
-import { sair } from "../lib/teste";
+import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import Agenda from "../telas/Agenda";
 
@@ -39,6 +39,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         <img src="/logo.png" alt="" className="mv-logo" />
         <div className="mv-tit"><b>{papel} · Aliança Móveis</b><span>{u?.nome ? primeiro(u.nome) : ""}</span></div>
       </header>
+      <Simulando />
       <main className="mv-corpo" key={aba}>
         {perfil === "consultor" && aba === "hoje" && <ConsHoje abrir={setAberto} ir={setAba} />}
         {perfil === "consultor" && aba === "visitas" && <ConsVisitas abrir={setAberto} />}
@@ -384,6 +385,7 @@ function Eu({ perfil, completa }: any) {
       <div className="mv-tile" style={{ gridColumn: "1/-1" }}><b>{fmtMoeda(v.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0))}</b><span>Total vendido (comissão calculada no Tático)</span></div></div>;
   }
   return <>
+    <TrocarUsuario />
     <div className="mv-perfil"><div className="av">{(u?.nome || "?").replace(/^.*—\s*/, "").slice(0, 1)}</div><div><b>{u?.nome}</b><span>{R.setoresLabel(u)}</span></div></div>
     {bloco && <><div className="mv-sec">Este mês</div>{bloco}</>}
     <div className="mv-sec">Aplicativo</div>
@@ -404,4 +406,32 @@ export function Instalar() {
   if (inst) return <div className="mv-ok">✓ Aplicativo instalado neste aparelho</div>;
   if (promptInstalar) return <button className="mv-principal" onClick={async () => { promptInstalar.prompt(); await promptInstalar.userChoice; promptInstalar = null; set(x => x + 1); }}>📲 Instalar o aplicativo</button>;
   return <div className="mv-dica">{ios ? <>No iPhone: toque em <b>Compartilhar</b> (quadrado com seta) e depois em <b>Adicionar à Tela de Início</b>.</> : <>No Android: toque no menu <b>⋮</b> do Chrome e em <b>Instalar aplicativo</b> (ou "Adicionar à tela inicial").</>}</div>;
+}
+
+// ---------- modo de teste: a Gestão entra como outro usuário ----------
+function Simulando() {
+  const { toast } = useApp() as any;
+  const sim = simulacao();
+  const [ind, setInd] = useState(false);
+  if (!sim) return null;
+  return <div className="mv-sim">🧪 Teste: você está como <b>{sim.comoNome || "outro usuário"}</b>
+    <button disabled={ind} onClick={async () => { setInd(true); try { await voltarGestao(); } catch (e: any) { toast(e.message); setInd(false); } }}>{ind ? "Voltando…" : "Voltar para " + primeiro(sim.nome)}</button></div>;
+}
+function TrocarUsuario() {
+  const { R, st, toast } = useApp() as any;
+  const sim = simulacao();
+  const [ind, setInd] = useState(false);
+  const [q, setQ] = useState("");
+  if (!((R.ehGestao() || sim) && st.config.modoTeste !== false)) return null;
+  const lista = st.usuarios.filter((u: any) => u.ativo && u.id !== R.currentUserId && (!q || (u.nome + " " + R.setoresLabel(u)).toLowerCase().includes(q.toLowerCase())));
+  const trocar = async (u: any) => { setInd(true); try { await entrarComo(u.id, u.nome, R.me()?.nome || ""); } catch (e: any) { toast(e.message); setInd(false); } };
+  return (
+    <div className="mv-bloco" style={{ marginTop: 0, marginBottom: 12 }}>
+      <div className="mv-bloco-t">🧪 Entrar como outro usuário (teste)</div>
+      {sim && <button className="mv-principal" disabled={ind} onClick={async () => { setInd(true); try { await voltarGestao(); } catch (e: any) { toast(e.message); setInd(false); } }}>Voltar para {sim.nome}</button>}
+      <input placeholder="Buscar: consultor, vendedor, nome…" value={q} onChange={e => setQ(e.target.value)} />
+      <div className="mv-usuarios">{ind ? <div className="mv-status">Trocando…</div> : lista.map((u: any) => (
+        <button key={u.id} className="mv-linha" onClick={() => trocar(u)}><b>{u.nome}</b><span>{R.setoresLabel(u)}</span></button>))}</div>
+    </div>
+  );
 }

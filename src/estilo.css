@@ -715,3 +715,6 @@ button.dv-kpi{cursor:pointer}
 .mv-agenda .ag-hora{grid-template-columns:48px 1fr;gap:8px}
 .mv-agenda .ag-hora .hr{padding-right:6px;font-size:12px}
 .mv-agenda .ag-dia{padding:12px}
+.mv-sim{background:#f5d67a;color:#3a2c00;padding:8px 14px;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mv-sim button{margin-left:auto;border:0;background:#3a2c00;color:#fff;border-radius:16px;padding:6px 12px;font:inherit;font-weight:700;font-size:12.5px}
+.mv-usuarios{max-height:46vh;overflow-y:auto}
