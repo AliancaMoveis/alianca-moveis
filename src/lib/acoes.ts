@@ -59,6 +59,12 @@ export const A = {
   salvarUsuario: (id: string, nome: string, setores: string[], somente: boolean) => rpc("salvar_usuario", { p_id: id, p_nome: nome, p_setores: setores, p_somente: somente }),
   desativarUsuario: (id: string) => rpc("desativar_usuario", { p_id: id }),
   reativarUsuario: (id: string) => rpc("reativar_usuario", { p_id: id }),
+  linkAgendaPublica: () => rpc<any>("link_agenda_publica"),
+  gerarLinkAgendaPublica: (ativar: boolean) => rpc<string>("gerar_link_agenda_publica", { p_ativar: ativar }),
+  agendaPublicaDia: async (token: string, dia: string) => {
+    if ((import.meta as any).env?.VITE_MOCK) return ((window as any).__agendaPublicaMock || []) as any[];
+    return (await rpc<any[]>("agenda_publica_dia", { p_token: token, p_dia: dia })) || [];
+  },
   salvarModoTeste: (ligado: boolean) => rpc("salvar_modo_teste", { p_ligado: ligado }),
   salvarMontador: (id: string | null, nome: string, telefone: string) => rpc("salvar_montador", { p_id: id, p_nome: nome, p_telefone: telefone }),
   ativarMontador: (id: string, ativo: boolean) => rpc("ativar_montador", { p_id: id, p_ativo: ativo }),

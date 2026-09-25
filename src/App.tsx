@@ -6,8 +6,15 @@ import { AppProvider } from "./estado";
 import Login, { NovaSenha } from "./telas/Login";
 import Raiz from "./movel/Raiz";
 import { Overlays } from "./comp/Overlays";
+import AgendaPublica from "./telas/AgendaPublica";
 
+// /loja = agenda da loja em tela aberta (sem login, só com o link secreto); nada do sistema é carregado
 export default function App() {
+  if (location.pathname.replace(/\/+$/, "") === "/loja") return <AgendaPublica />;
+  return <AppLogado />;
+}
+
+function AppLogado() {
   const [sessao, setSessao] = useState<Session | null | undefined>(undefined);
   const [carga, setCarga] = useState<{ uid: string; e: Estado } | null>(null);
   const [erro, setErro] = useState("");

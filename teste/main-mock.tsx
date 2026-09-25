@@ -4,6 +4,7 @@ import { AppProvider } from "../src/estado";
 import Raiz from "../src/movel/Raiz";
 import { Overlays } from "../src/comp/Overlays";
 import { estadoMock } from "./mock";
+import AgendaPublica from "../src/telas/AgendaPublica";
 
 { const d = (n: number) => { const x = new Date(); x.setDate(x.getDate() - n); return x.toISOString().slice(0, 10); };
   (window as any).__metasMock = [{ dia: d(0), meta: 3, valor: 100, obs: "Meta do dia" }, { dia: d(2), meta: 2, valor: 100, obs: "" }, { dia: d(4), meta: 1, valor: 50, obs: "" }]; }
@@ -12,7 +13,17 @@ import { estadoMock } from "./mock";
   { id: "r2", categoria: "entrega", situacao: "Móvel disponível no depósito", cliente_diz: "Quando vocês entregam?", resposta: "Tenho terça ou quinta, manhã ou tarde.", no_sistema: "Colocar para entrega (Tático).", evitar: "", status: "aprovado", autor_id: "", autor_nome: "Treinamento inicial" },
   { id: "r3", categoria: "geral", situacao: "Sugestão da Rafaela", cliente_diz: "Teste", resposta: "Resposta", no_sistema: "", evitar: "", status: "sugestao", autor_id: "00000000-0000-4000-a000-000000000001", autor_nome: "Rafaela Lima" },
 ];
+(window as any).__agendaPublicaMock = [
+  { hora: "09:00", cliente: "Marina Kowalski", vendedor: "Vendedora — Giovanna", consultor: "", origem: "marketing", situacao: "vendido", quer_projeto: false, pedido_vendedor: "" },
+  { hora: "10:30", cliente: "Heloísa Brandt", vendedor: "Vendedor — Roy", consultor: "Consultor — Anderson", origem: "externo", situacao: "orcamento", quer_projeto: true, pedido_vendedor: "" },
+  { hora: "11:00", cliente: "Paulo Henrique Souza", vendedor: "", consultor: "", origem: "marketing", situacao: "agendado_loja", quer_projeto: false, pedido_vendedor: "" },
+  { hora: "14:00", cliente: "Douglas Reinert", vendedor: "Vendedora — Giovanna", consultor: "", origem: "marketing", situacao: "com_vendedor", quer_projeto: false, pedido_vendedor: "" },
+  { hora: "15:30", cliente: "Camila Duarte", vendedor: "", consultor: "Consultor — Priscila", origem: "externo", situacao: "agendado_loja", quer_projeto: true, pedido_vendedor: "Vendedor — Roy" },
+  { hora: "17:00", cliente: "Marcos Vinícius", vendedor: "", consultor: "", origem: "marketing", situacao: "agendado_loja", quer_projeto: false, pedido_vendedor: "" },
+  { hora: "18:30", cliente: "Rodrigo Mattos", vendedor: "Vendedor — Roy", consultor: "Consultor — Anderson", origem: "externo", situacao: "agendado_loja", quer_projeto: false, pedido_vendedor: "" },
+];
 const uid = new URLSearchParams(location.search).get("uid")!;
-ReactDOM.createRoot(document.getElementById("root")!).render(
+if (new URLSearchParams(location.search).get("loja") !== null) ReactDOM.createRoot(document.getElementById("root")!).render(<AgendaPublica />);
+else ReactDOM.createRoot(document.getElementById("root")!).render(
   <AppProvider uid={uid} inicial={estadoMock()} overlays={(o) => <Overlays {...o} />}><Raiz /></AppProvider>
 );

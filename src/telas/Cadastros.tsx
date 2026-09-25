@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { LIBS, inicial } from "../lib/regras";
@@ -75,7 +75,7 @@ export function Admin() {
   return (
     <section className="view active" id="view-admin">
       <div className="view-head"><div><h2>Administração</h2><p>Usuários, setores e roteamento. Acesso restrito a quem tem a liberação de Administração.</p></div></div>
-      <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
+      <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"], ["agendaloja", "Agenda da loja (tela aberta)"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
       {sub === "usuarios" && <div id="subUsuarios"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditUser id={null} />)}>Adicionar usuário</button></div>
         <div id="listaUser">{ativos.length ? ativos.map(linhaUser) : <div className="empty">Ninguém cadastrado.</div>}{inativos.length > 0 && <><div className="sec-label" style={{ marginTop: 18 }}>Desativados</div>{inativos.map(linhaUser)}</>}</div></div>}
       {sub === "setores" && <div id="subSetores"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditSetor id={null} />)}>Adicionar setor</button></div>
@@ -91,6 +91,7 @@ export function Admin() {
           <select style={{ width: "auto", padding: "6px 9px" }} value={t.destino} onChange={e => { const v = e.target.value; executar(() => A.salvarRoteamento(k, v), "Roteamento de \"" + t.nome + "\" atualizado para " + R.setorNome(v)); }}>
             {R.operacionais().map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
           </select>{t.anexos && <span className="pill" style={{ marginLeft: "auto" }}>com anexos</span>}</div>))}</div></div>}
+      {sub === "agendaloja" && <LinkAgendaLoja />}
       {sub === "comissoes" && <div id="subComissoes"><div className="card" style={{ padding: "18px 20px", maxWidth: 480 }}><div className="grid">
         <div className="field"><label>Comissão do consultor sobre a venda</label><div className="inline-2"><input type="number" step="0.1" style={{ maxWidth: 100 }} value={pct} onChange={e => setPct(e.target.value)} /><span>%</span></div></div>
         <div className="field"><label>Pagamento fixo por visita realizada + agendada</label><div className="inline-2"><span>R$</span><input type="number" step="1" style={{ maxWidth: 120 }} value={pag} onChange={e => setPag(e.target.value)} /></div></div>
@@ -155,5 +156,33 @@ function EditSetor({ id }: { id: string | null }) {
       </div></div>
       <button className="btn primary" onClick={async () => { if (!nome.trim()) { toast("Informe o nome"); return; } if (await executar(() => A.salvarSetor(id, nome, libs), "Setor salvo")) fechar(); }}>Salvar</button>
     </Modal>
+  );
+}
+
+// link da agenda da loja em tela aberta (sem login) — só a Gestão gera, troca ou desliga
+function LinkAgendaLoja() {
+  const { executar, toast } = useApp() as any;
+  const [info, setInfo] = useState<any>(null);
+  const carregar = () => A.linkAgendaPublica().then(setInfo).catch((e: any) => { setInfo({ ativo: false }); toast(e.message); });
+  useEffect(() => { carregar(); }, []);
+  const url = info && info.token ? location.origin + "/loja?k=" + info.token : "";
+  return (
+    <div className="card" style={{ padding: "18px 20px", maxWidth: 720 }}>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>Agenda da loja em tela aberta</div>
+      <div style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 12 }}>Link para deixar aberto nos computadores da loja, <b>sem login</b>. Mostra só a agenda: horário, nome do cliente, vendedor, consultor, origem e situação. <b>Não mostra</b> telefone, endereço, valores, observações nem anexos, e não dá acesso a nenhuma outra tela. Atualiza sozinho a cada minuto.</div>
+      {info === null ? <div className="empty">Carregando…</div> : url ? <>
+        <div className="field"><label>Link da agenda</label><input readOnly value={url} onFocus={e => e.target.select()} /></div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          <button className="btn primary sm" onClick={() => { navigator.clipboard?.writeText(url).then(() => toast("Link copiado"), () => toast("Selecione e copie o link")); }}>Copiar link</button>
+          <a className="btn sm" href={url} target="_blank" rel="noopener">Abrir</a>
+          <button className="btn ghost sm" onClick={() => { if (confirm("Gerar um link novo? O link atual para de funcionar em todos os computadores.")) executar(() => A.gerarLinkAgendaPublica(true), "Novo link gerado").then(() => carregar()); }}>Gerar novo link</button>
+          <button className="btn danger sm" onClick={() => { if (confirm("Desligar a agenda aberta? Os computadores da loja deixam de ver a agenda.")) executar(() => A.gerarLinkAgendaPublica(false), "Agenda aberta desligada").then(() => carregar()); }}>Desligar</button>
+        </div>
+        <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 10 }}>Quem tiver este link vê a agenda. Se o link sair da loja, gere um novo.</div>
+      </> : <>
+        <div className="empty" style={{ padding: "10px 0", textAlign: "left" }}>A agenda aberta está desligada.</div>
+        <button className="btn primary sm" onClick={() => executar(() => A.gerarLinkAgendaPublica(true), "Link da agenda criado").then(() => carregar())}>Criar link da agenda</button>
+      </>}
+    </div>
   );
 }
