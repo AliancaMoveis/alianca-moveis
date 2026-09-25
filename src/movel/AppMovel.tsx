@@ -8,6 +8,7 @@ import { EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import Agenda from "../telas/Agenda";
+import { GestAcao, GestEquipe, GestResumo } from "./Gestor";
 
 export type Perfil = "consultor" | "vendedor" | "gestor";
 export function perfilMovel(R: any): Perfil | null {
@@ -27,11 +28,11 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const { R, detalheId, modal } = useApp() as any;
   const abas: [string, string, string][] = perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
-    : [["resumo", "Resumo", "▦"], ["acao", "Ação", "⚑"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]];
+    : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]];
   const [aba, setAba] = useState(abas[0][0]);
   const [aberto, setAberto] = useState<string | null>(null);
   const u = R.me();
-  const papel = perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : "Gestão";
+  const papel = perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
   const pend = perfil === "vendedor" ? R.state.chamados.filter((c: any) => c.atendenteId === R.currentUserId && (R.parecerCobrado(c) || R.semParecer(c))).length : 0;
   return (
     <div className="mv">
@@ -47,6 +48,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "vendedor" && aba === "clientes" && <VendClientes abrir={setAberto} />}
         {perfil !== "gestor" && aba === "painel" && <Painel perfil={perfil} abrir={setAberto} />}
         {perfil === "gestor" && aba === "resumo" && <GestResumo />}
+        {perfil === "gestor" && aba === "equipe" && <GestEquipe />}
         {perfil === "gestor" && aba === "acao" && <GestAcao />}
         {aba === "loja" && <div className="mv-agenda"><Agenda /></div>}
         {aba === "eu" && <Eu perfil={perfil} completa={completa} />}
@@ -401,58 +403,6 @@ function AcoesVendedor({ c }: any) {
       {t.parecerEm && <div className="mv-ult">Último parecer: <b>{STATUS_CLIENTE[t.parecerStatus] || t.parecerStatus}</b>{t.parecer ? " — " + t.parecer : ""}</div>}
     </div>
   );
-}
-
-// ---------- gestão ----------
-function GestResumo() {
-  const { R, st } = useApp() as any;
-  const [per, setPer] = useState<"hoje" | "mes">("mes");
-  const hoje = hojeISO(), de = per === "hoje" ? hoje : hoje.slice(0, 8) + "01";
-  const noPer = (v: any) => !!v && String(isoLocal(parseData(v))) >= de && String(isoLocal(parseData(v))) <= hoje;
-  const todos = st.chamados.filter(R.podeVer);
-  const cc = todos.filter((c: any) => !R.domMarketing(c)), mk = todos.filter((c: any) => R.domMarketing(c));
-  const pr = (c: any) => R.prioridade(c);
-  const ccAb = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length;
-  const vendasPer = mk.filter((c: any) => vendaContaVolume(c.venda) && noPer(c.venda.dataVenda || c.venda.quando));
-  const valor = vendasPer.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0);
-  const visitas = mk.filter((c: any) => !R.ehDireto(c) && c.consultorId && noPer(R.ancoraVisita(c)));
-  const F = R.funil(visitas);
-  const lojaHoje = mk.filter((c: any) => dia(c.dataLoja) === hoje);
-  const Tile = ({ n, l, cor }: any) => <div className="mv-tile"><b style={cor ? { color: cor } : undefined}>{n}</b><span>{l}</span></div>;
-  const barra = (l: string, n: number, max: number, cor: string) => <div className="mv-barra"><span>{l}</span><i><em style={{ width: (max ? n / max * 100 : 0) + "%", background: cor }}></em></i><b>{n}</b></div>;
-  return <>
-    <div className="mv-seg"><button className={per === "hoje" ? "on" : ""} onClick={() => setPer("hoje")}>Hoje</button><button className={per === "mes" ? "on" : ""} onClick={() => setPer("mes")}>Mês atual</button></div>
-    <div className="mv-sec">Call center e pós-venda</div>
-    <div className="mv-tiles">
-      <Tile n={ccAb} l="Em aberto" /><Tile n={cc.filter((c: any) => pr(c) === "critico").length} l="Críticos" cor="var(--critico)" />
-      <Tile n={cc.filter((c: any) => pr(c) === "atrasado").length} l="Atrasados" cor="var(--danger)" /><Tile n={cc.filter((c: any) => c.status === "informar").length} l="Informar cliente" cor="var(--st-informar)" />
-    </div>
-    <div className="mv-sec">Marketing e loja</div>
-    <div className="mv-tiles">
-      <Tile n={mk.filter((c: any) => noPer(c.criadoEm)).length} l="Clientes novos" /><Tile n={lojaHoje.length} l="Na loja hoje" />
-      <Tile n={lojaHoje.filter((c: any) => !c.atendenteId).length} l="Sem vendedor hoje" cor="var(--warn)" /><Tile n={mk.filter((c: any) => R.semParecer(c)).length} l="Sem parecer" cor="var(--danger)" />
-      <Tile n={vendasPer.length} l="Vendas" cor="var(--st-concluida)" /><Tile n={mk.filter((c: any) => c.venda && c.venda.status === "registrada").length} l="Vendas a confirmar" cor="var(--warn)" />
-    </div>
-    {vendasPer.some((c: any) => R.podeVerValor(c)) ? <div className="mv-valor"><span>Valor vendido ({per === "hoje" ? "hoje" : "mês"})</span><b>{fmtMoeda(valor)}</b></div> : null}
-    <div className="mv-sec">Visitas → loja → venda</div>
-    <div className="mv-funil">
-      {barra("Visitas", F.total, F.total, "var(--primary)")}{barra("Realizadas", F.realizadas, F.total, "var(--st-respondida)")}
-      {barra("Agend. loja", F.agendadas, F.total, "var(--st-tratativa)")}{barra("Vieram", F.vieram, F.total, "var(--warn)")}{barra("Vendas", F.vendas, F.total, "var(--st-concluida)")}
-    </div>
-  </>;
-}
-function GestAcao() {
-  const { R, st, abrirDetalhe } = useApp() as any;
-  const todos = st.chamados.filter(R.podeVer);
-  const acao = R.ordenar(todos.filter((c: any) => ["critico", "atrasado", "urgente"].includes(R.prioridade(c)))).slice(0, 40);
-  const pend = R.minhasPendencias();
-  return <>
-    {pend.grupos.map((g: any) => <div key={g.chave} className="mv-grupo"><div className="mv-sec" style={{ color: g.cor }}>{g.titulo} <i>{g.itens.length}</i></div>
-      {g.itens.slice(0, 6).map((c: any) => <button key={c.id} className="mv-linha" onClick={() => abrirDetalhe(c.id)}><b>{c.cliente}</b><span>{c.id} · {R.setorNome(c.setorDestino)}</span></button>)}
-      {g.itens.length > 6 && <div className="mv-mais">+{g.itens.length - 6} na versão completa</div>}</div>)}
-    <div className="mv-sec">Precisam de ação</div>
-    {acao.length ? acao.map((c: any) => { const p = R.prioridade(c); return <button key={c.id} className="mv-linha" onClick={() => abrirDetalhe(c.id)} style={{ borderLeftColor: p === "critico" ? "var(--critico)" : "var(--danger)" }}><b>{c.cliente}</b><span>{c.id} · {R.setorNome(c.setorDestino)} · {R.domMarketing(c) ? "sem atualização" : p}</span></button>; }) : <Vazio t="Tudo sob controle." />}
-  </>;
 }
 
 // ---------- eu / mais ----------
