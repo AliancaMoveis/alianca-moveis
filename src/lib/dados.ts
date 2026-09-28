@@ -139,7 +139,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
         cliente: c.cliente, clienteDoc: c.cliente_doc, telefone: c.telefone, email: c.email, pedido: c.pedido,
         dataVenda: c.data_venda || "", pedidoFabrica: c.pedido_fabrica, produto: c.produto, fabrica: c.fabrica_id || "",
         prazoTatico: c.prazo_tatico || "", motivo: c.motivo, urgente: c.urgente, escalonadoAuto: c.escalonado_auto, escaladoEm: c.escalado_em,
-        vinculadoA: c.vinculado_a, consultorId: c.consultor_id || "", atendenteId: c.atendente_id || "",
+        vinculadoA: c.vinculado_a, origem: c.origem || "", consultorId: c.consultor_id || "", atendenteId: c.atendente_id || "",
         dataVisita: hora(c.data_visita), medidorId: c.medidor_id || "", dataMedida: hora(c.data_medida), endereco: c.endereco, dataLoja: hora(c.data_loja), statusCliente: c.status_cliente || "",
         tratativa: c.tratativa || {},
         resposta: c.resposta_quando ? { previsao: c.resposta_previsao || "", quem: c.resposta_quem, texto: c.resposta_texto, quando: c.resposta_quando } : null,

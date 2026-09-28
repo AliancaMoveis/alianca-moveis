@@ -49,7 +49,9 @@ export const A = {
   responderPedidoAtendimento: (id: string, aprovar: boolean) => rpc("responder_pedido_atendimento", { p_id: id, p_aprovar: aprovar }),
   designarProjetista: (id: string, atendente: string) => rpc("designar_projetista", { p_id: id, p_atendente: atendente }),
   marcarComparecimento: (id: string, acao: "chegou" | "nao_compareceu" | "voltou") => rpc("marcar_comparecimento", { p_id: id, p_acao: acao }),
-  reagendarLoja: (id: string, nova: string) => rpc("reagendar_loja", { p_id: id, p_nova: nz(nova) }),
+  reagendarLoja: (id: string, nova: string, motivo = "") => rpc("reagendar_loja", { p_id: id, p_nova: nz(nova), p_motivo: motivo }),
+  reagendarVisita: (id: string, nova: string, motivo = "") => rpc("reagendar_visita", { p_id: id, p_nova: nz(nova), p_motivo: motivo }),
+  editarCliente: (id: string, p: any) => rpc("editar_cliente", { p_id: id, p }),
   trocarVendedor: (id: string, novo: string) => rpc("trocar_vendedor", { p_id: id, p_novo: novo }),
   solicitarTransferencia: (id: string, para: string) => rpc<string>("solicitar_transferencia", { p_id: id, p_para: para }),
   responderTransferencia: (id: string, aceitar: boolean, origem: "detalhe" | "aprovacoes" = "detalhe") =>

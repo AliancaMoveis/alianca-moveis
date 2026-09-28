@@ -11,6 +11,7 @@ import { SinoAvisos } from "../comp/Avisos";
 import { SeloVenda } from "../comp/VendaValidar";
 import { SituacaoConsultor } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
+import { RemarcarData } from "../comp/Remarcar";
 import Agenda from "../telas/Agenda";
 import PainelDono from "../telas/PainelDono";
 import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
@@ -40,7 +41,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Comissão", "💰"], ["eu", "Eu", "👤"]]
     : perfil === "dono" ? [["painel", "Painel", "📊"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
-    : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
+    : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["time", "Time", "🎯"], ["equipe", "Equipe", "👥"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]];
@@ -49,7 +50,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const u = R.me();
   const gereMkt = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
   const { abrirDetalhe } = useApp() as any;
-  const podeRegistrar = perfil === "marketing" || (perfil === "gestor" && (R.ehGestao() || R.temMarketing()));
+  const podeRegistrar = perfil === "marketing" || perfil === "consultor" || (perfil === "gestor" && (R.ehGestao() || R.temMarketing()));
   const papel = perfil === "dono" ? "Proprietário" : perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
   const pend = perfil === "vendedor" ? R.state.chamados.filter((c: any) => c.atendenteId === R.currentUserId && (R.parecerCobrado(c) || R.semParecer(c))).length : 0;
   return (
@@ -72,7 +73,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "marketing" && aba === "hoje" && <MktHoje ir={setAba} abrir={abrirDetalhe} />}
         {perfil === "marketing" && aba === "clientes" && <MktClientes abrir={abrirDetalhe} />}
         {perfil === "marketing" && aba === "ganhos" && <MktGanhos abrir={abrirDetalhe} />}
-        {podeRegistrar && aba === "novo" && <>{perfil === "gestor" && <button className="mv-voltar" onClick={() => setAba("resumo")}>‹ Voltar</button>}<MktNovo pronto={id => { setAba(perfil === "marketing" ? "clientes" : "resumo"); abrirDetalhe(id); }} /></>}
+        {podeRegistrar && aba === "novo" && <>{perfil === "gestor" && <button className="mv-voltar" onClick={() => setAba("resumo")}>‹ Voltar</button>}<MktNovo pronto={id => { if (perfil === "consultor") { setAba("clientes"); setAberto(id); return; } setAba(perfil === "marketing" ? "clientes" : "resumo"); abrirDetalhe(id); }} /></>}
         {(perfil === "consultor" || perfil === "vendedor" || perfil === "medidor") && aba === "painel" && <Painel perfil={perfil} abrir={setAberto} />}
         {perfil === "gestor" && aba === "resumo" && <GestResumo />}
         {perfil === "gestor" && aba === "equipe" && <GestEquipe irTime={gereMkt ? () => setAba("time") : undefined} />}
@@ -335,7 +336,7 @@ function Folha({ id, fechar, perfil }: any) {
       <div className="mv-folha-top"><button className="mv-voltar" onClick={fechar}>‹ Voltar</button><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span></div>
       <div className="mv-folha-corpo">
         <div className="mv-cli">{c.cliente}</div>
-        <div className="mv-cli-s">{c.produto || "—"}{c.solicitante ? " · marcado por " + primeiro(c.solicitante) : ""}</div>
+        <div className="mv-cli-s">{c.produto || "—"}{R.ehProspeccao(c) ? " · 🧭 prospecção própria do consultor" : c.solicitante ? " · marcado por " + primeiro(c.solicitante) : ""}</div>
         <div className="mv-info">
           {c.dataVisita && perfil === "consultor" && <div><span>Visita</span><b>{fmtDateTime(c.dataVisita)}</b></div>}
           {c.dataLoja && <div><span>Na loja</span><b>{fmtDateTime(c.dataLoja)}</b></div>}
@@ -347,6 +348,8 @@ function Folha({ id, fechar, perfil }: any) {
           {t.obs && <div><span>Obs. do consultor</span><b>{t.obs}</b></div>}
           {t.parecer && <div><span>Parecer do vendedor</span><b>{t.parecer}</b></div>}
         </div>
+        {perfil === "consultor" && <RemarcarData c={c} tipo="visita" movel />}
+        {perfil !== "consultor" || c.dataLoja ? <RemarcarData c={c} tipo="loja" movel /> : null}
         <Contato c={c} rota={perfil === "consultor"} />
         {perfil === "consultor" && <SituacaoConsultor c={c} movel />}
         {perfil === "consultor" && <PassosConsultor c={c} />}

@@ -1,4 +1,5 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
+import { EditarCliente, RemarcarData } from "./Remarcar";
 import { SituacaoConsultor } from "./Situacao";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
@@ -68,7 +69,7 @@ export default function Detalhe({ id }: { id: string }) {
             <HistoricoCliente c={c} />
           </>}
           {!presale && <>
-            <Row k="Cliente">{c.cliente}{c.clienteDoc ? " · " + c.clienteDoc : ""}{c.telefone ? " · " + c.telefone : ""}</Row>
+            <Row k="Cliente">{c.cliente}{c.clienteDoc ? " · " + c.clienteDoc : ""}{c.telefone ? " · " + c.telefone : ""} <EditarCliente c={c} /></Row>
             <Row k="Pedido venda">{c.pedido}{c.dataVenda ? " · " + fmtDate(c.dataVenda) : ""}</Row>
             <Row k="Produto">{c.produto}</Row>
             {ehFab && <>
@@ -125,12 +126,14 @@ function ClienteCard({ c }: any) {
   return (
     <div className="cli-card">
       <div className="cli-card-nome">{c.cliente}</div>
-      <div className="cli-card-sub">{c.clienteDoc ? c.clienteDoc + " · " : ""}{c.id}</div>
+      <div className="cli-card-sub">{c.clienteDoc ? c.clienteDoc + " · " : ""}{c.id}{R.ehProspeccao(c) ? <span className="pill" style={{ marginLeft: 8, background: "#f3ece2", color: "#7a5324" }}>🧭 Prospecção própria do consultor · sem comissão do marketing</span> : null}</div>
       <div className="cli-card-grid">{itens.map(([k, v]) => <div className="item" key={k}><span className="k">{k}</span><span className="v">{v}</span></div>)}</div>
       <div className="cli-card-acoes">
         {wa ? <a className="btn wa sm" href={wa} target="_blank" rel="noopener">WhatsApp do cliente</a> : <button className="btn sm" disabled>Sem telefone</button>}
         {maps && <a className="btn sm" href={maps} target="_blank" rel="noopener">Abrir no Maps</a>}
         {waze && <a className="btn sm" href={waze} target="_blank" rel="noopener">Abrir no Waze</a>}
+        {!direto && <RemarcarData c={c} tipo="visita" />}
+        <EditarCliente c={c} />
       </div>
     </div>
   );
@@ -432,20 +435,21 @@ function Vendedor({ c }: any) {
 function DataLoja({ c }: any) {
   const { R, executar: ex, toast } = useApp();
   const val = c.dataLoja ? String(c.dataLoja).slice(0, 16) : "";
-  const [nova, setNova] = useState(val);
+  const [nova, setNova] = useState(val); const [mot, setMot] = useState("");
   useEffect(() => setNova(val), [val]);
   if (!c.dataLoja) return null;
   const quando = fmtDT(c.dataLoja);
   if (!R.podeMudarDataLoja(c)) return (
     <div className="resp-box"><h4>Agendamento na loja</h4><RowSb k="Data e hora" pb="5px 0" bold>{quando}</RowSb>
-      <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>Reagendamento feito pelo consultor, Suporte, Supervisão de Marketing ou Gestão.</div></div>
+      <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>Reagendamento feito pelo consultor, vendedor do cliente, Suporte, Supervisão de Marketing ou Gestão.</div></div>
   );
   return (
     <div className="resp-box"><h4>Reagendar vinda à loja</h4>
       <RowSb k="Data e hora atual" pb="5px 0" bold>{quando}</RowSb>
       <div className="inline-2" style={{ marginTop: 12 }}><div className="field"><label>Nova data e hora</label><input type="datetime-local" value={nova} onChange={e => setNova(e.target.value)} /></div>
-        <button className="btn sm" onClick={() => { if (!nova) { toast("Informe a nova data"); return; } if (nova === val) { toast("A data já é essa"); return; } ex(() => A.reagendarLoja(c.id, nova), "Vinda à loja reagendada"); }}>Reagendar</button></div>
-      <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 7 }}>Gera uma nova data de vinda à loja para este cliente e fica registrado no histórico.</div>
+        <button className="btn sm" onClick={() => { if (!nova) { toast("Informe a nova data"); return; } if (nova === val) { toast("A data já é essa"); return; } ex(() => A.reagendarLoja(c.id, nova, mot.trim()), "Vinda à loja reagendada").then(ok => ok && setMot("")); }}>Reagendar</button></div>
+      <input placeholder="Motivo (ex.: cliente pediu outro dia)" value={mot} onChange={e => setMot(e.target.value)} style={{ width: "100%", marginTop: 8 }} />
+      <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 7 }}>Fica registrado no histórico e o vendedor e o consultor são avisados. Se o cliente não tinha vindo, o atendimento é reaberto como “Reagendado”.</div>
     </div>
   );
 }

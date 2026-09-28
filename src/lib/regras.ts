@@ -212,7 +212,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     return podeTratar(c) || temLib("criar");
   }
-  const setoresCriaMkt = ["marketing_operadora", "marketing_supervisao"];
+  const setoresCriaMkt = ["marketing_operadora", "marketing_supervisao", "consultor_externo"];
   const podeCriarTipo = (k: string) => {
     const t = TIPOS[k]; if (!t) return false;
     if (!temLib("criar")) return false;
@@ -235,7 +235,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const medidores = () => state.usuarios.filter(u => (u.setores || []).includes("medidas"));
   const nomeMontador = (id: string) => ((state.montadores || []).find(m => m.id === id) || ({} as any)).nome || "—";
   const podeEditarAgenda = () => ehGestao() || temMarketing() || mySetores().includes("suporte_consultores");
-  const podeMudarDataLoja = (c: Chamado) => podeEditarAgenda() || (c.consultorId && c.consultorId === currentUserId);
+  const podeMudarDataLoja = (c: Chamado) => !(c.venda && c.venda.status !== "cancelada") && (podeEditarAgenda() || (c.consultorId && c.consultorId === currentUserId) || (c.setorDestino === "atendente_cliente" && c.atendenteId === currentUserId));
+  const podeMudarDataVisita = (c: Chamado) => ["marketing_supervisao", "consultor_externo"].includes(c.setorDestino) && (ehGestao() || temMarketing() || (!!c.consultorId && c.consultorId === currentUserId));
+  const podeEditarCliente = () => ehGestao() || mySetores().some((s: string) => ["supervisao", "marketing_supervisao"].includes(s));
+  const ehProspeccao = (c: Chamado) => (c as any).origem === "prospeccao_consultor";
 
   // gerente que negociou a venda (obrigatório no registro): Gerentes de Loja e Gestão
   const gerentesVenda = () => state.usuarios.filter(u => u.ativo && ["gerente_loja", "gestao", "proprietario"].some(s => (u.setores || []).includes(s)))
@@ -552,7 +555,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, compareceu, ancoraVisita,

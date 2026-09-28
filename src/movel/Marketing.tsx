@@ -174,7 +174,9 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
     } catch (e: any) { toast(e.message || "Não foi possível registrar"); }
     finally { setEnv(false); }
   }
+  const souConsultor = R.mySetores().includes("consultor_externo") && !R.ehGestao() && !R.temMarketing() && !R.mySetores().includes("marketing_operadora");
   return <div className="mv-novo">
+    {souConsultor && <div className="mv-dica" style={{ marginTop: 0 }}>🧭 <b>Cliente de prospecção própria.</b> Fica com você, entra no fluxo normal de atendimento e gera comissão para você e para o vendedor que atender — <b>não</b> gera comissão para o marketing.</div>}
     <div className="mv-sec" style={{ marginTop: 0 }}>Tipo de agendamento</div>
     <div className="mv-area">
       {tCons && <button className={tipo === tCons[0] ? "on" : ""} onClick={() => setTipo(tCons[0])}>📍 Visita do consultor</button>}
