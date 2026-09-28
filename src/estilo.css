@@ -1078,3 +1078,4 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .lote-res{font-size:13px;margin-right:auto;margin-left:6px}
 .lote-tab tr.on td{background:var(--primary-soft)}
 .lote-tab th{white-space:nowrap}.lote-tab td{white-space:normal}.lote-tab td:nth-child(-n+3),.lote-tab td:nth-child(9){white-space:nowrap}
+.sc-atendido{background:#e3f5ea;color:#1f7a44}

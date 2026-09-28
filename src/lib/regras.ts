@@ -9,7 +9,7 @@ export const STATUS: Record<string, { label: string; cls: string }> = {
 export const STATUS_CLIENTE: Record<string, string> = {
   aguardando_consultor: "Aguardando consultor", direcionado_consultor: "Direcionado ao consultor", visita_realizada: "Visita realizada",
   agendado_loja: "Agendado loja", com_vendedor: "Com vendedor", orcamento: "Orçamento", sem_resposta: "Sem resposta", reagendado: "Reagendado", reprovado: "Reprovado",
-  em_obras: "Em obras", standby: "Standby", em_analise: "Em análise", ausente_endereco: "Ausente no endereço", vendido_revisao: "Vendido — a confirmar",
+  em_obras: "Em obras", standby: "Standby", em_analise: "Em análise", ausente_endereco: "Ausente no endereço", atendido: "Atendimento finalizado", vendido_revisao: "Vendido — a confirmar",
   vendido_entrada: "Vendido — entrada + promissória", vendido_promissoria: "Vendido — 100% promissória", vendido: "Vendido — efetivado", venda_cancelada: "Venda cancelada", nao_compareceu: "Não compareceu",
 };
 // pareceres extras (menu "Mais opções")
@@ -32,7 +32,7 @@ export const MARKETING_SETORES = ["marketing_operadora", "marketing_supervisao",
 // status do cliente enquanto está com o vendedor (antes do desfecho)
 export const EM_ATENDIMENTO = ["com_vendedor", "orcamento", "sem_resposta", "reagendado", "em_obras", "standby", "em_analise"];
 export const LIMITE_INATIVIDADE_H = 24;
-export const statusFinalCliente = ["vendido", "vendido_promissoria", "vendido_entrada", "venda_cancelada", "nao_compareceu", "reprovado"];
+export const statusFinalCliente = ["vendido", "vendido_promissoria", "vendido_entrada", "venda_cancelada", "atendido", "nao_compareceu", "reprovado"];
 export const COR_SETOR: Record<string, string> = {
   callcenter: "#4b6bd6", prazo_fabrica: "#b8802a", montagem: "#2f8fa8", assistencia: "#c23b3b", checklist: "#7a5bb5", medidas: "#1f9c7a",
   marketing_operadora: "#d1478f", marketing_supervisao: "#8e44ad", consultor_externo: "#b8802a", suporte_consultores: "#0f8a8a",
@@ -153,7 +153,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (c.setorDestino === "marketing_supervisao") return "aguardando_consultor";
     if (c.setorDestino === "consultor_externo") return SITUACOES_CONSULTOR.includes(c.statusCliente) ? c.statusCliente : (c.tratativa && c.tratativa.realizada) ? "visita_realizada" : "direcionado_consultor";
     if (c.setorDestino === "suporte_consultores") return "agendado_loja";
-    if (c.setorDestino === "atendente_cliente") return ["orcamento", "sem_resposta", "reagendado", "reprovado", ...SITUACOES_EXTRA].includes(c.statusCliente) ? c.statusCliente : "com_vendedor";
+    if (c.setorDestino === "atendente_cliente") return ["orcamento", "sem_resposta", "reagendado", "reprovado", "atendido", ...SITUACOES_EXTRA].includes(c.statusCliente) ? c.statusCliente : "com_vendedor";
     return c.statusCliente || "aguardando_consultor";
   }
   function statusClienteDe(c: Chamado) { if (domMarketing(c)) return normalizarStatusCliente(c); if (c.statusCliente) return c.statusCliente; return "aguardando_consultor"; }
@@ -314,7 +314,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const ehImportado = (c: Chamado) => !!(c.tratativa && c.tratativa.importado);
   const vendaSemVisita = (c: Chamado) => ehImportado(c) && !(c.tratativa && c.tratativa.realizada);
   const visitaFeita = (c: Chamado) => !vendaSemVisita(c) && !!((c.tratativa && c.tratativa.realizada) || c.dataLoja || c.venda);
-  const compareceu = (c: Chamado) => !!c.venda || ["orcamento", "sem_resposta", "reprovado"].includes(statusClienteDe(c));
+  const compareceu = (c: Chamado) => !!c.venda || ["orcamento", "sem_resposta", "reprovado", "atendido"].includes(statusClienteDe(c));
   function funil(lista: Chamado[]) {
     const pct = cfg().comissaoPct;
     const L = lista.filter(c => !vendaSemVisita(c)); // visitas/clientes: sem as vendas importadas que não tiveram visita

@@ -194,8 +194,8 @@ export function PainelConsultor({ de, ate }: { de: string; ate: string }) {
     <div className="dl-wrap">
       <div className="dl-cab"><h3>Minhas visitas <span className="pill" style={{ marginLeft: 6, fontWeight: 500 }}>visitas com data no período</span></h3></div>
       <div className="kpis">
-        <Kpi n={f.total} l="Visitas recebidas" />
         <Kpi n={f.realizadas} l="Visitas realizadas" />
+        <Kpi n={f.total} l="Clientes direcionados" />
         <Kpi n={aVisitar.length} l="A realizar (agora)" cls={aVisitar.length ? "urg" : ""} />
         <Kpi n={f.agendadas} l="Agendados na loja" />
         <Kpi n={f.vieram} l="Vieram à loja" />

@@ -50,7 +50,7 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
   return (
     <div className="po">
       <div className="po-cards">
-        <Card ic="📍" n={F.total} l="Visitas recebidas" sub={<><b>{F.realizadas}</b> realizadas · <b>{F.pendentes}</b> a realizar</>} cor="#5b7fc7" />
+        <Card ic="📍" n={F.realizadas} l="Visitas realizadas" sub={<><b>{F.total}</b> clientes direcionados · <b>{F.pendentes}</b> a realizar</>} cor="#5b7fc7" />
         <Card ic="🏬" n={F.vieram} l="Vieram à loja" sub={<>{F.agendadas} agendados · presença {pc(F.vieram, F.vieram + F.faltaram)}%</>} cor="#d4a020" />
         <Card ic="🤝" n={F.vendas} l="Vendas" sub={<>{pc(F.vendas, F.realizadas)}% das visitas viraram venda</>} cor="#2f8f5b" />
         <Card ic="💰" n={fmtMoeda(ex.total)} l="Valor a receber" sub={<>{ex.visitas.length} visita(s) + comissão {pct}%</>} cor="#2d6a4f" />
@@ -68,7 +68,7 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
         <div className="panel">
           <h3>Da visita à venda <span className="hint">· {fmtDate(de)} a {fmtDate(ate)}</span></h3>
           <div className="po-funil">
-            {[["Visitas recebidas", F.total, "#5b7fc7"], ["Visitas realizadas", F.realizadas, "#2a9bb0"], ["Agendados na loja", F.agendadas, "#7a5cc2"], ["Vieram à loja", F.vieram, "#d4a020"], ["Compraram", F.vendas, "#2f8f5b"]].map(([l, n, cor]: any, i, arr: any) => (
+            {[["Clientes direcionados", F.total, "#5b7fc7"], ["Visitas realizadas", F.realizadas, "#2a9bb0"], ["Agendados na loja", F.agendadas, "#7a5cc2"], ["Vieram à loja", F.vieram, "#d4a020"], ["Compraram", F.vendas, "#2f8f5b"]].map(([l, n, cor]: any, i, arr: any) => (
               <div key={l} className="po-etapa">
                 <div className="po-barra" style={{ width: Math.max(8, pc(n, F.total)) + "%", background: cor }}><b>{n}</b></div>
                 <span>{l}{i > 0 && arr[i - 1][1] ? <small> · {pc(n, arr[i - 1][1])}% da etapa anterior</small> : null}</span>

@@ -247,6 +247,7 @@ function Tratativa({ c }: any) {
         </div>
       );
     }
+    if (sc === "atendido") return <div className="resp-box"><h4>Atendimento finalizado <ScBadge c={c} /></h4>{infoTop}{t.parecer && <RowSb k="Parecer">{t.parecer}</RowSb>}</div>;
     if (sc === "nao_compareceu" || sc === "reprovado") return <div className="resp-box"><h4>{sc === "reprovado" ? "Atendimento reprovado" : "Cliente não compareceu"} <ScBadge c={c} /></h4>{infoTop}
       {t.parecer && <RowSb k="Parecer">{t.parecer}</RowSb>}
       <button className="btn sm" onClick={() => sc === "reprovado" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>{sc === "reprovado" ? "Reabrir atendimento" : "Cliente veio afinal — reabrir"}</button></div>;
