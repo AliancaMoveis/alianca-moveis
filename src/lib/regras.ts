@@ -166,7 +166,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
   const horasSemAtualizar = (c: Chamado) => (+new Date() - +ultimaAtividade(c)) / 3600000;
   function clienteCriticoInatividade(c: Chamado) {
-    if (!domMarketing(c)) return false;
+    if (!domMarketing(c) || (c.tratativa && c.tratativa.importadoVisita)) return false;
     if (statusFinalCliente.includes(statusClienteDe(c))) return false;
     return horasSemAtualizar(c) >= LIMITE_INATIVIDADE_H;
   }
@@ -248,7 +248,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const ehDireto = (c: Chamado) => !!(TIPOS[c.tipo] && TIPOS[c.tipo].direto);
   const origemLoja = (c: Chamado) => ehDireto(c) ? "marketing" : "externo";
   // cliente que vem (ou veio) à loja sem planta/fotos anexadas
-  const semAnexo = (c: Chamado) => domMarketing(c) && !(c.anexos || []).length && !c.venda && !statusFinalCliente.includes(statusClienteDe(c))
+  const semAnexo = (c: Chamado) => domMarketing(c) && !(c.tratativa && c.tratativa.importadoVisita) && !(c.anexos || []).length && !c.venda && !statusFinalCliente.includes(statusClienteDe(c))
     && (!!c.dataLoja || !!(c.tratativa && c.tratativa.realizada));
   // o cliente já veio (data/hora da loja passou) e o vendedor ainda não deu parecer depois disso
   function semParecer(c: Chamado) {
@@ -312,11 +312,12 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // período pela data da visita (ou do cadastro, se não houver); agendamento direto pela data na loja
   // venda importada de planilha não é visita (as visitas sobem separadas)
   const ehImportado = (c: Chamado) => !!(c.tratativa && c.tratativa.importado);
-  const visitaFeita = (c: Chamado) => !ehImportado(c) && !!((c.tratativa && c.tratativa.realizada) || c.dataLoja || c.venda);
+  const vendaSemVisita = (c: Chamado) => ehImportado(c) && !(c.tratativa && c.tratativa.realizada);
+  const visitaFeita = (c: Chamado) => !vendaSemVisita(c) && !!((c.tratativa && c.tratativa.realizada) || c.dataLoja || c.venda);
   const compareceu = (c: Chamado) => !!c.venda || ["orcamento", "sem_resposta", "reprovado"].includes(statusClienteDe(c));
   function funil(lista: Chamado[]) {
     const pct = cfg().comissaoPct;
-    const L = lista.filter(c => !ehImportado(c)); // visitas/clientes: sem as vendas importadas
+    const L = lista.filter(c => !vendaSemVisita(c)); // visitas/clientes: sem as vendas importadas que não tiveram visita
     const realizadas = L.filter(visitaFeita), agendadas = L.filter(c => !!c.dataLoja);
     const vieram = L.filter(compareceu), faltaram = L.filter(c => statusClienteDe(c) === "nao_compareceu");
     const vendas = lista.filter(c => vendaContaVolume(c.venda)), aConfirmar = lista.filter(c => c.venda && c.venda.status === "registrada");

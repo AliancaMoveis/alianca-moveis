@@ -1,0 +1,4 @@
+-- Visitas realizadas de setembro importadas da planilha (CSV) — 554 visitas (5 linhas duplicadas descartadas)
+-- 151 marcadas em clientes que já estavam nas vendas importadas (tratativa.visitaImportada, realizada=true, data_visita)
+-- 403 clientes novos na etapa do consultor (visita_realizada; tratativa.importadoVisita)
+-- avisos_rotina_em: clientes com importadoVisita não entram em "sem anexo" nem "sem atualização" (migração visitas_importadas_sem_cobranca)
