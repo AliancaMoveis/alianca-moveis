@@ -114,7 +114,7 @@ export function ReembolsosGestao() {
     if (!confirm(`Aprovar ${marc.length} reembolso(s) · ${fmtMoeda(somaR)}?`)) return;
     executar(() => A.aprovarReembolsosLote(marc.map((r: any) => r.id)), marc.length + " reembolso(s) aprovado(s)").then((ok: boolean) => ok && setSel({}));
   };
-  const abrir = async (r: any) => { const u = await A.urlComprovante(r.path); if (u) { setVer(u); } else toast("Não foi possível abrir o comprovante"); };
+  const abrir = async (r: any) => { const u = await A.urlComprovante(r.path); if (!u) { toast("Não foi possível abrir o comprovante"); return; } if (/\.pdf$/i.test(r.path || "")) window.open(u, "_blank", "noopener"); else setVer(u); };
   return (
     <div className="ap-sec"><h3>Reembolsos <span className="badge b-tratativa">{lista.length}</span></h3>
       <div className="sub">Despesas de consultores e medidores (pedágio, estacionamento…). Aprovado entra no valor a receber do mês da despesa.</div>

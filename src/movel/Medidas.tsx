@@ -101,23 +101,31 @@ export function Reembolsos({ de, ate }: { de?: string; ate?: string }) {
   const { R, executar: ex, toast } = useApp() as any;
   const [abrir, setAbrir] = useState(false);
   const [tipo, setTipo] = useState(""); const [valor, setValor] = useState(""); const [data, setData] = useState(hojeISO()); const [desc, setDesc] = useState("");
-  const [foto, setFoto] = useState<Blob | null>(null); const [prev, setPrev] = useState(""); const [cli, setCli] = useState(""); const [env, setEnv] = useState(false);
+  const [foto, setFoto] = useState<Blob | null>(null); const [prev, setPrev] = useState(""); const [nomeArq, setNomeArq] = useState(""); const [cli, setCli] = useState(""); const [env, setEnv] = useState(false);
   useEffect(() => () => { if (prev) URL.revokeObjectURL(prev); }, [prev]);
   const meus = R.reembolsosDe(R.currentUserId).filter((r: any) => (!de || r.data >= de) && (!ate || r.data <= ate)).sort((a: any, b: any) => String(b.data).localeCompare(String(a.data)));
   const clientes = [...R.medidasDe(R.currentUserId), ...R.state.chamados.filter((c: any) => c.consultorId === R.currentUserId && R.domMarketing(c))]
     .sort((a: any, b: any) => String(b.dataMedida || b.dataVisita || "").localeCompare(String(a.dataMedida || a.dataVisita || ""))).slice(0, 40);
-  const escolherFoto = async (f?: File | null) => { if (!f) return; const b = await comprimir(f); if (!b) { toast("Envie uma foto do comprovante"); return; } setFoto(b); setPrev(URL.createObjectURL(b)); };
+  const escolherFoto = async (f?: File | null) => {
+    if (!f) return;
+    if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
+      if (f.size > 10 * 1024 * 1024) { toast("PDF muito grande (máx. 10 MB)"); return; }
+      setFoto(new Blob([f], { type: "application/pdf" })); setPrev(""); setNomeArq(f.name); return;
+    }
+    const b = await comprimir(f); if (!b) { toast("Envie uma foto ou PDF do comprovante"); return; }
+    setFoto(b); setPrev(URL.createObjectURL(b)); setNomeArq("");
+  };
   const enviar = async () => {
     const v = parseMoeda(valor);
     if (!tipo) { toast("Escolha o tipo de despesa"); return; }
     if (!v || v <= 0) { toast("Informe o valor"); return; }
     if (!data) { toast("Informe a data"); return; }
     if (tipo === "outro" && desc.trim().length < 3) { toast("Descreva a despesa"); return; }
-    if (!foto) { toast("Tire a foto do comprovante"); return; }
+    if (!foto) { toast("Tire a foto ou anexe o comprovante"); return; }
     setEnv(true);
     const ok = await ex(() => A.solicitarReembolso(R.currentUserId, tipo, v, data, desc.trim(), foto, cli || undefined), "Reembolso enviado — a Gestão vai aprovar");
     setEnv(false);
-    if (ok) { setAbrir(false); setTipo(""); setValor(""); setDesc(""); setFoto(null); setPrev(""); setCli(""); }
+    if (ok) { setAbrir(false); setTipo(""); setValor(""); setDesc(""); setFoto(null); setPrev(""); setNomeArq(""); setCli(""); }
   };
   const cor = (s: string) => s === "aprovado" ? "var(--st-concluida)" : s === "recusado" ? "var(--danger)" : "var(--warn)";
   return <>
@@ -130,7 +138,12 @@ export function Reembolsos({ de, ate }: { de?: string; ate?: string }) {
         <input placeholder={tipo === "outro" ? "Descreva a despesa *" : "Descrição (opcional)"} value={desc} onChange={e => setDesc(e.target.value)} />
         <select className="mv-sel" value={cli} onChange={e => setCli(e.target.value)}><option value="">Cliente relacionado (opcional)</option>{clientes.map((c: any) => <option key={c.id} value={c.id}>{c.tipo === "medidas" ? "📐 " : ""}{c.cliente} · {c.id}</option>)}</select>
         {prev ? <img src={prev} alt="comprovante" style={{ width: "100%", borderRadius: 10, marginTop: 8 }} /> : null}
-        <label className="mv-grande" style={{ marginTop: 8 }}>📷 {foto ? "Trocar foto do comprovante" : "Foto do comprovante *"}<input type="file" accept="image/*" capture="environment" hidden onChange={e => { escolherFoto(e.target.files && e.target.files[0]); e.target.value = ""; }} /></label>
+        {nomeArq ? <div className="mv-ok" style={{ marginTop: 8 }}>📄 {nomeArq}</div> : null}
+        <div className="mv-2" style={{ marginTop: 8 }}>
+          <label className="mv-grande">📷 {foto ? "Tirar outra foto" : "Tirar foto *"}<input type="file" accept="image/*" capture="environment" hidden onChange={e => { escolherFoto(e.target.files && e.target.files[0]); e.target.value = ""; }} /></label>
+          <label className="mv-grande">📎 {foto ? "Trocar arquivo" : "Anexar arquivo *"}<input type="file" accept="image/*,application/pdf,.pdf" hidden onChange={e => { escolherFoto(e.target.files && e.target.files[0]); e.target.value = ""; }} /></label>
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 4 }}>Foto da câmera, imagem da galeria ou PDF (nota, recibo, comprovante do app).</div>
         <div className="mv-2" style={{ marginTop: 8 }}><button className="mv-principal" disabled={env} onClick={enviar}>{env ? "Enviando…" : "Enviar pedido"}</button><button className="btn" onClick={() => setAbrir(false)}>Cancelar</button></div>
       </div>}
     {meus.map((r: any) => <div key={r.id} className="mv-card" style={{ cursor: "default" }}>

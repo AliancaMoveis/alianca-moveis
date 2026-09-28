@@ -35,8 +35,9 @@ export const A = {
   medidaRefazer: (id: string, motivo: string) => rpc("medida_refazer", { p_id: id, p_motivo: motivo }),
   medidaLiberar: (id: string, obs: string) => rpc<string>("medida_liberar", { p_id: id, p_obs: obs || "" }),
   solicitarReembolso: async (uid: string, tipo: string, valor: number, data: string, descricao: string, foto: Blob, chamado?: string) => {
-    const path = `${uid}/${crypto.randomUUID()}.jpg`;
-    const { error } = await sb.storage.from("reembolsos").upload(path, foto, { contentType: "image/jpeg" });
+    const pdf = foto.type === "application/pdf";
+    const path = `${uid}/${crypto.randomUUID()}.${pdf ? "pdf" : "jpg"}`;
+    const { error } = await sb.storage.from("reembolsos").upload(path, foto, { contentType: pdf ? "application/pdf" : "image/jpeg" });
     if (error) throw new Error("Não foi possível enviar a foto do comprovante");
     return rpc<string>("solicitar_reembolso", { p_tipo: tipo, p_valor: valor, p_data: data, p_descricao: descricao || "", p_comprovante: path, p_chamado: nz(chamado) });
   },
