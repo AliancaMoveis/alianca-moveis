@@ -42,21 +42,24 @@ export function FechamentoGestao() {
   const [aberto, setAberto] = useState("");
   const [loteAb, setLoteAb] = useState("");
   const [tick, setTick] = useState(0);
+  const [fora, setFora] = useState<Record<string, boolean>>({}); // pessoas desmarcadas (padrão: todas marcadas)
   useEffect(() => { let vivo = true; setRows(null); setErro("");
     Promise.all([previa(ate), fechamentos()]).then(([p, h]) => { if (vivo) { setRows(p); setHist(h); } }).catch(e => vivo && setErro(String(e?.message || e)));
     return () => { vivo = false; }; }, [ate, tick]);
   const porPessoa: Record<string, { nome: string; itens: any[]; total: number }> = {};
   (rows || []).forEach((r: any) => { const p = (porPessoa[r.usuario_id] = porPessoa[r.usuario_id] || { nome: r.nome, itens: [], total: 0 }); p.itens.push(r); p.total += r.valor; });
   const pessoas = Object.entries(porPessoa).sort((a, b) => b[1].total - a[1].total);
-  const total = pessoas.reduce((s, [, p]) => s + p.total, 0);
+  const escolhidas = pessoas.filter(([uid]) => !fora[uid]);
+  const total = escolhidas.reduce((s, [, p]) => s + p.total, 0);
   const lotes: Record<string, any> = {};
   hist.forEach((f: any) => { const l = (lotes[f.lote] = lotes[f.lote] || { lote: f.lote, quando: f.fechado_em, ate: f.ate, pagarEm: f.pagar_em, por: f.fechado_por, pessoas: [], total: 0 }); l.pessoas.push(f); l.total += f.total; });
   const listaLotes = Object.values(lotes).sort((a: any, b: any) => String(b.quando).localeCompare(String(a.quando)));
   const pagar = proxMes(ate);
   const confirmar = () => {
-    if (!pessoas.length) { toast("Nada pendente para confirmar"); return; }
-    if (!confirm(`Confirmar o fechamento até ${fmtDate(ate)}?\n\n${pessoas.length} pessoa(s) · ${fmtMoeda(total)}\nSerá pago em ${mesPt(pagar)}.\n\nConfira antes com o Financeiro as vendas canceladas.`)) return;
-    ex(async () => { const { error } = await sb.rpc("fechar_mes_campo", { p_ate: ate }); if (error) throw error; }, "Fechamento confirmado — cada um foi avisado").then(() => setTick(t => t + 1));
+    if (!escolhidas.length) { toast("Marque ao menos uma pessoa"); return; }
+    if (!confirm(`Confirmar o fechamento até ${fmtDate(ate)}?\n\n${escolhidas.map(([, p]) => "• " + p.nome + ": " + fmtMoeda(p.total)).join("\n")}\n\nTotal ${fmtMoeda(total)} · será pago em ${mesPt(pagar)}.\nConfira antes com o Financeiro as vendas canceladas.`)) return;
+    const todas = escolhidas.length === pessoas.length;
+    ex(async () => { const { error } = await sb.rpc("fechar_mes_campo", { p_ate: ate, p_usuarios: todas ? null : escolhidas.map(([u]) => u) }); if (error) throw error; }, "Fechamento confirmado — cada um foi avisado").then(() => { setFora({}); setTick(t => t + 1); });
   };
   const desfazer = (lote: string) => {
     if (!confirm("Desfazer este fechamento? Os valores voltam a ser previsão.")) return;
@@ -68,14 +71,14 @@ export function FechamentoGestao() {
       <div className="sub" style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 10 }}>Tudo abaixo ainda é <b>previsão</b>. Confira com o Financeiro (vendas canceladas → marque “Cancelada” na venda) e confirme, normalmente no penúltimo ou último dia do mês. O que for confirmado é pago no <b>mês seguinte</b>. Venda cancelada depois de confirmada vira <b>estorno</b> no próximo fechamento.</div>
       <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", marginBottom: 12 }}>
         <div className="field" style={{ margin: 0 }}><label>Confirmar tudo gerado até</label><input type="date" value={ate} max={hoje} onChange={e => setAte(e.target.value || hoje)} /></div>
-        <div className="kpi" style={{ minWidth: 150, padding: "8px 12px" }}><div className="n" style={{ fontSize: 20 }}>{fmtMoeda(total)}</div><div className="l">a confirmar · {pessoas.length} pessoa(s)</div></div>
-        <button className="btn primary" onClick={confirmar} disabled={!pessoas.length}>Confirmar fechamento — pagar em {mesPt(pagar)}</button>
+        <div className="kpi" style={{ minWidth: 150, padding: "8px 12px" }}><div className="n" style={{ fontSize: 20 }}>{fmtMoeda(total)}</div><div className="l">marcado · {escolhidas.length} de {pessoas.length} pessoa(s)</div></div>
+        <button className="btn primary" onClick={confirmar} disabled={!escolhidas.length}>Confirmar {escolhidas.length === pessoas.length ? "todos" : escolhidas.length + " marcado(s)"} — pagar em {mesPt(pagar)}</button>
       </div>
       {erro ? <div className="empty">Não foi possível carregar o fechamento ({erro}).</div> : rows === null ? <div className="empty">Carregando…</div> : !pessoas.length ? <div className="empty">Nada pendente até {fmtDate(ate)}.</div> :
-        <table className="dl-tab"><thead><tr><th>Pessoa</th><th>Itens</th><th>Visitas/medidas</th><th>Comissão</th><th>Reembolsos</th><th>Total</th></tr></thead><tbody>
+        <table className="dl-tab"><thead><tr><th><input type="checkbox" checked={escolhidas.length === pessoas.length} onChange={e => { const n: Record<string, boolean> = {}; if (!e.target.checked) pessoas.forEach(([u]) => (n[u] = true)); setFora(n); }} /></th><th>Pessoa</th><th>Itens</th><th>Visitas/medidas</th><th>Comissão</th><th>Reembolsos</th><th>Total</th></tr></thead><tbody>
           {pessoas.map(([uid, p]) => { const s = (t: string) => p.itens.filter((i: any) => t.split(",").includes(i.tipo)).reduce((x: number, i: any) => x + i.valor, 0); return [
-            <tr key={uid} onClick={() => setAberto(aberto === uid ? "" : uid)} style={{ cursor: "pointer" }}><td><b>{p.nome}</b> <span className="hint">{aberto === uid ? "▾" : "▸"}</span></td><td>{p.itens.length}</td><td>{fmtMoeda(s("visita,medida"))}</td><td>{fmtMoeda(s("comissao"))}</td><td>{fmtMoeda(s("reembolso"))}</td><td style={{ fontWeight: 800 }}>{fmtMoeda(p.total)}</td></tr>,
-            aberto === uid && <tr key={uid + "i"}><td colSpan={6}><Itens l={p.itens} /></td></tr>]; })}
+            <tr key={uid} onClick={() => setAberto(aberto === uid ? "" : uid)} style={{ cursor: "pointer", opacity: fora[uid] ? .5 : 1 }}><td onClick={e => e.stopPropagation()}><input type="checkbox" checked={!fora[uid]} onChange={() => setFora({ ...fora, [uid]: !fora[uid] })} /></td><td><b>{p.nome}</b> <span className="hint">{aberto === uid ? "▾" : "▸"}</span></td><td>{p.itens.length}</td><td>{fmtMoeda(s("visita,medida"))}</td><td>{fmtMoeda(s("comissao"))}</td><td>{fmtMoeda(s("reembolso"))}</td><td style={{ fontWeight: 800 }}>{fmtMoeda(p.total)}</td></tr>,
+            aberto === uid && <tr key={uid + "i"}><td colSpan={7}><Itens l={p.itens} /></td></tr>]; })}
         </tbody></table>}
       {listaLotes.length > 0 && <>
         <div className="sec-label" style={{ marginTop: 16 }}>Fechamentos confirmados</div>

@@ -40,6 +40,8 @@ export const A = {
     if (error) throw new Error("Não foi possível enviar a foto do comprovante");
     return rpc<string>("solicitar_reembolso", { p_tipo: tipo, p_valor: valor, p_data: data, p_descricao: descricao || "", p_comprovante: path, p_chamado: nz(chamado) });
   },
+  validarVendasLote: (ids: string[], status: "efetivada" | "cancelada") => rpc<number>("validar_vendas_lote", { p_ids: ids, p_status: status }),
+  aprovarReembolsosLote: (ids: string[]) => rpc<number>("aprovar_reembolsos_lote", { p_ids: ids }),
   decidirReembolso: (id: string, aprovar: boolean, motivo = "") => rpc("decidir_reembolso", { p_id: id, p_aprovar: aprovar, p_motivo: motivo }),
   urlComprovante: async (path: string) => { const { data } = await sb.storage.from("reembolsos").createSignedUrl(path, 600); return data?.signedUrl || ""; },
   finalizarAtendimento: (id: string, texto: string) => rpc("finalizar_atendimento", { p_id: id, p_texto: texto || "" }),

@@ -4,7 +4,7 @@ import { A } from "../lib/acoes";
 import { STATUS_CLIENTE, TIPO_REEMBOLSO, VENDA_STATUS, fmtDate, fmtDateTime, fmtMoeda } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { PromissoriasAbertas, ValidarVenda } from "../comp/VendaValidar";
-import { promAbertas } from "../lib/regras";
+import { promAbertas, TIPO_VENDA_INFORMADO, parseMoeda } from "../lib/regras";
 
 export function Pendencias() {
   const { R, abrirDetalhe } = useApp();
@@ -82,7 +82,7 @@ export function Aprovacoes() {
       <ReembolsosGestao />
       {!p.total && !reembPend.length && <div id="apVazio" className="empty"><div className="big">Nada pendente</div>Não há nenhuma decisão aguardando você.</div>}
       <div id="apSecoes">
-        {p.vendasConfirmar.length > 0 && <div className="ap-sec"><h3>Vendas pendentes de análise <span className="badge b-tratativa">{p.vendasConfirmar.length}</span></h3><div className="sub">Registradas pelo vendedor. Valide como efetivada, entrada + promissória, promissória ou cancelada.</div>{p.vendasConfirmar.map(c => linhaVenda(c, ""))}</div>}
+        {p.vendasConfirmar.length > 0 && <VendasLote lista={p.vendasConfirmar} linha={linhaVenda} />}
         <PromissoriasAbertas titulo="Promissórias em aberto — clique no cliente para registrar o pagamento" />
         {p.transferencias.length > 0 && <div className="ap-sec"><h3>Transferências de vendedor <span className="badge b-aberta">{p.transferencias.length}</span></h3>
           <div className="sub">Pedidos feitos <b>entre vendedores</b>. Gestão, Supervisão de Marketing e Suporte trocam direto, sem passar por aqui. Enquanto não houver aceite ou aprovação, o cliente segue com o vendedor atual.</div>
@@ -102,15 +102,31 @@ export function ReembolsosGestao() {
   const { R, executar, toast } = useApp() as any;
   const [motivo, setMotivo] = useState<Record<string, string>>({});
   const [ver, setVer] = useState<string>("");
-  const lista = (R.state.reembolsos || []).filter((r: any) => r.status === "pendente").sort((a: any, b: any) => String(a.criadoEm).localeCompare(String(b.criadoEm)));
-  if (!lista.length) return null;
+  const [sel, setSel] = useState<Record<string, boolean>>({}); const [quem, setQuem] = useState("");
+  const todos = (R.state.reembolsos || []).filter((r: any) => r.status === "pendente").sort((a: any, b: any) => String(a.criadoEm).localeCompare(String(b.criadoEm)));
+  if (!todos.length) return null;
+  const lista = todos.filter((r: any) => !quem || r.usuarioId === quem);
+  const pessoasR = Array.from(new Set(todos.map((r: any) => r.usuarioId))) as string[];
+  const marc = lista.filter((r: any) => sel[r.id]);
+  const somaR = marc.reduce((s: number, r: any) => s + r.valor, 0);
+  const aprovarMarc = () => {
+    if (!marc.length) { toast("Marque os reembolsos conferidos"); return; }
+    if (!confirm(`Aprovar ${marc.length} reembolso(s) · ${fmtMoeda(somaR)}?`)) return;
+    executar(() => A.aprovarReembolsosLote(marc.map((r: any) => r.id)), marc.length + " reembolso(s) aprovado(s)").then((ok: boolean) => ok && setSel({}));
+  };
   const abrir = async (r: any) => { const u = await A.urlComprovante(r.path); if (u) { setVer(u); } else toast("Não foi possível abrir o comprovante"); };
   return (
     <div className="ap-sec"><h3>Reembolsos <span className="badge b-tratativa">{lista.length}</span></h3>
       <div className="sub">Despesas de consultores e medidores (pedágio, estacionamento…). Aprovado entra no valor a receber do mês da despesa.</div>
+      <div className="lote-bar">
+        <select value={quem} onChange={e => { setQuem(e.target.value); setSel({}); }}><option value="">Todas as pessoas ({todos.length})</option>{pessoasR.map(u => <option key={u} value={u}>{R.nomeUser(u)} ({todos.filter((r: any) => r.usuarioId === u).length})</option>)}</select>
+        <label style={{ fontSize: 13 }}><input type="checkbox" checked={lista.length > 0 && lista.every((r: any) => sel[r.id])} onChange={e => { const n = { ...sel }; lista.forEach((r: any) => (n[r.id] = e.target.checked)); setSel(n); }} /> marcar todos</label>
+        <div className="lote-res"><b>{marc.length}</b> marcado(s) · <b>{fmtMoeda(somaR)}</b></div>
+        <button className="btn primary sm" disabled={!marc.length} onClick={aprovarMarc}>✅ Aprovar marcados</button>
+      </div>
       {lista.map((r: any) => (
         <div className="ap-item" key={r.id}>
-          <div><div className="nm">{R.nomeUser(r.usuarioId)} · {TIPO_REEMBOLSO[r.tipo] || r.tipo}</div>
+          <div><div className="nm"><input type="checkbox" checked={!!sel[r.id]} onChange={() => setSel({ ...sel, [r.id]: !sel[r.id] })} style={{ marginRight: 8 }} />{R.nomeUser(r.usuarioId)} · {TIPO_REEMBOLSO[r.tipo] || r.tipo}</div>
             <div className="meta">{fmtDate(r.data)}{r.descricao ? " · " + r.descricao : ""}{r.chamadoId ? " · cliente " + r.chamadoId : ""} · <a href="#" onClick={e => { e.preventDefault(); abrir(r); }}>ver comprovante</a></div></div>
           <div><div className="val">{fmtMoeda(r.valor)}</div>
             <div className="acoes">
@@ -120,6 +136,57 @@ export function ReembolsosGestao() {
             </div></div>
         </div>))}
       {ver && <div className="overlay on" onMouseDown={e => { if (e.target === e.currentTarget) setVer(""); }}><div className="modal" style={{ maxWidth: 560 }}><div className="mh"><b>Comprovante</b><button className="x" onClick={() => setVer("")}>&times;</button></div><div className="mb"><img src={ver} alt="comprovante" style={{ width: "100%", borderRadius: 8 }} /></div></div></div>}
+    </div>
+  );
+}
+
+// Vendas pendentes: conferência coletiva com filtro por pessoa e ação em massa
+function VendasLote({ lista, linha }: { lista: any[]; linha: (c: any, cl: string) => any }) {
+  const { R, executar, abrirDetalhe, toast } = useApp() as any;
+  const [quem, setQuem] = useState(""); const [sel, setSel] = useState<Record<string, boolean>>({}); const [modo, setModo] = useState<"tabela" | "cartoes">("tabela");
+  const vendedorDe = (c: any) => c.atendenteId ? R.nomeUser(c.atendenteId) : (c.venda.vendedor || "—");
+  const pessoas: Record<string, string> = {};
+  lista.forEach((c: any) => { pessoas["v:" + vendedorDe(c)] = "Vendedor · " + vendedorDe(c); if (c.consultorId) pessoas["c:" + c.consultorId] = "Consultor · " + R.nomeUser(c.consultorId); if (c.venda.gerenteNome) pessoas["g:" + c.venda.gerenteNome] = "Gerente · " + c.venda.gerenteNome; });
+  const filtra = (c: any) => !quem || (quem.startsWith("v:") ? "v:" + vendedorDe(c) === quem : quem.startsWith("c:") ? "c:" + c.consultorId === quem : "g:" + c.venda.gerenteNome === quem);
+  const vis = lista.filter(filtra).sort((a: any, b: any) => String(a.venda.dataVenda || a.venda.quando).localeCompare(String(b.venda.dataVenda || b.venda.quando)));
+  const individual = (c: any) => ["entrada", "promissoria"].includes(c.venda.tipoInformado);
+  const marcados = vis.filter((c: any) => sel[c.id]);
+  const val = (c: any) => c.venda.valorNum != null ? Number(c.venda.valorNum) : parseMoeda(c.venda.valor);
+  const soma = marcados.reduce((s: number, c: any) => s + val(c), 0);
+  const todosOk = vis.filter((c: any) => !individual(c));
+  const tudo = todosOk.length > 0 && todosOk.every((c: any) => sel[c.id]);
+  const alternarTudo = () => { const n = { ...sel }; todosOk.forEach((c: any) => (n[c.id] = !tudo)); setSel(n); };
+  const agir = (status: "efetivada" | "cancelada") => {
+    if (!marcados.length) { toast("Marque as vendas conferidas"); return; }
+    if (status === "efetivada" && marcados.some(individual)) { toast("Há venda com entrada/promissória marcada — valide essa individualmente"); return; }
+    const txt = status === "efetivada" ? "EFETIVAR" : "CANCELAR";
+    if (!confirm(`${txt} ${marcados.length} venda(s) · ${fmtMoeda(soma)}?\n\n${marcados.map((c: any) => "• " + c.venda.numero + " · " + c.cliente + " · " + fmtMoeda(val(c))).join("\n")}`)) return;
+    executar(() => A.validarVendasLote(marcados.map((c: any) => c.id), status), marcados.length + (status === "efetivada" ? " venda(s) efetivada(s)" : " venda(s) cancelada(s)")).then((ok: boolean) => ok && setSel({}));
+  };
+  return (
+    <div className="ap-sec"><h3>Vendas pendentes de análise <span className="badge b-tratativa">{lista.length}</span></h3>
+      <div className="sub">Confira em conjunto (por vendedor, consultor ou gerente), marque as conferidas e efetive de uma vez. <b>Entrada + promissória</b> e <b>100% promissória</b> são validadas uma a uma (botão Validar).</div>
+      <div className="lote-bar">
+        <select value={quem} onChange={e => { setQuem(e.target.value); setSel({}); }}><option value="">Todas as pessoas ({lista.length})</option>{Object.entries(pessoas).sort((a, b) => a[1].localeCompare(b[1])).map(([k, l]) => <option key={k} value={k}>{l} ({lista.filter((c: any) => (k.startsWith("v:") ? "v:" + vendedorDe(c) === k : k.startsWith("c:") ? "c:" + c.consultorId === k : "g:" + c.venda.gerenteNome === k)).length})</option>)}</select>
+        <div className="lote-res"><b>{marcados.length}</b> marcada(s) · <b>{fmtMoeda(soma)}</b></div>
+        <button className="btn primary sm" disabled={!marcados.length} onClick={() => agir("efetivada")}>✅ Efetivar marcadas</button>
+        <button className="btn danger sm" disabled={!marcados.length} onClick={() => agir("cancelada")}>❌ Cancelar marcadas</button>
+        <button className="btn ghost sm" onClick={() => setModo(modo === "tabela" ? "cartoes" : "tabela")}>{modo === "tabela" ? "Ver em cartões" : "Ver em tabela"}</button>
+      </div>
+      {modo === "cartoes" ? vis.map((c: any) => linha(c, "")) :
+        <div style={{ overflowX: "auto" }}><table className="dl-tab lote-tab"><thead><tr><th><input type="checkbox" checked={tudo} onChange={alternarTudo} title="Marcar todas" /></th><th>Venda</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Gerente</th><th>Consultor</th><th>Pagamento informado</th><th style={{ textAlign: "right" }}>Valor</th><th></th></tr></thead>
+          <tbody>{vis.map((c: any) => { const ind = individual(c); return (
+            <tr key={c.id} className={sel[c.id] ? "on" : ""}>
+              <td><input type="checkbox" disabled={ind} checked={!!sel[c.id]} onChange={() => setSel({ ...sel, [c.id]: !sel[c.id] })} /></td>
+              <td><b>{c.venda.numero}</b></td><td>{fmtDate(c.venda.dataVenda || c.venda.quando)}</td>
+              <td><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.id); }}>{c.cliente}</a>{R.ehProspeccao(c) ? " 🧭" : ""}</td>
+              <td>{vendedorDe(c)}</td><td>{c.venda.gerenteNome || "—"}</td><td>{c.consultorId ? R.nomeUser(c.consultorId) : "—"}</td>
+              <td>{c.venda.tipoInformado ? TIPO_VENDA_INFORMADO[c.venda.tipoInformado] : "—"}{c.venda.entradaInformada ? " · entrada " + fmtMoeda(c.venda.entradaInformada) : ""}</td>
+              <td style={{ textAlign: "right", fontWeight: 700 }}>{fmtMoeda(val(c))}</td>
+              <td>{ind ? <button className="btn sm" onClick={() => abrirDetalhe(c.id)}>Validar</button> : null}</td>
+            </tr>); })}</tbody>
+          <tfoot><tr><td colSpan={8}><b>Total na tela ({vis.length})</b></td><td style={{ textAlign: "right" }}><b>{fmtMoeda(vis.reduce((s: number, c: any) => s + val(c), 0))}</b></td><td></td></tr></tfoot>
+        </table></div>}
     </div>
   );
 }
