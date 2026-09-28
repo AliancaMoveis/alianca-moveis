@@ -20,7 +20,7 @@ export default function Detalhe({ id }: { id: string }) {
   useEffect(() => { if (focoDetalhe === "nota") setTimeout(() => notaRef.current?.focus(), 150); }, [focoDetalhe, id]);
   if (!c) return (
     <div className="overlay on" id="overlay" onMouseDown={e => { if (e.target === e.currentTarget) fecharDetalhe(); }}>
-      <div className="modal" id="modal"><div className="mh"><div className="tid">{id}</div><button className="x" onClick={fecharDetalhe}>&times;</button></div>
+      <div className="modal" id="modal"><div className="mh"><div className="tid">{id}</div><button className="x" onClick={fecharDetalhe}><span className="x-txt">Fechar </span>&times;</button></div>
         <div className="mb"><div className="ro-note">Este chamado não está mais visível para você.</div></div></div>
     </div>
   );
@@ -49,7 +49,7 @@ export default function Detalhe({ id }: { id: string }) {
             {presale ? (R.clienteCriticoInatividade(c) ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico — sem atualização</span> : null)
               : (prio === "critico" ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico</span> : prio === "atrasado" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⏰ Atrasado</span> : prio === "urgente" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⚠ Urgente</span> : null)}
           </div>
-          <button className="x" id="fechar" onClick={fecharDetalhe}>&times;</button>
+          <button className="x" id="fechar" onClick={fecharDetalhe}><span className="x-txt">Fechar </span>&times;</button>
         </div>
         <div className="mb">
           {presale ? <ClienteCard c={c} /> : <Row k="Motivo">{R.tipoNome(c.tipo)} <span className="pill setor" style={{ marginLeft: 6 }}>{R.setorNome(c.setorDestino)}</span></Row>}
