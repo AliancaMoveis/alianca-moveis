@@ -1,5 +1,6 @@
 // Dashboard da Gestão: visão do todo em números (período escolhido no topo) — vendas, funil da loja, origem e rankings.
 // Não mostra a agenda do dia (isso fica em "Agendamento loja").
+import { PromissoriasAbertas } from "../comp/VendaValidar";
 import { useApp } from "../estado";
 import { fmtDate, fmtMoeda, parseData, parseMoeda, vendaContaVolume } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
@@ -113,7 +114,8 @@ export default function PainelGestao({ de, ate }: { de: string; ate: string }) {
         <div className="panel"><h3>Vendas por operadora (quem agendou)</h3><Barras l={rOp} cor="#c0428a" /></div>
       </div>
 
-      <div className="panel" style={{ marginBottom: 16 }}><h3>Vendas aguardando sua confirmação</h3>
+      <PromissoriasAbertas titulo="Promissórias em aberto" />
+      <div className="panel" style={{ marginBottom: 16 }}><h3>Vendas pendentes de análise</h3>
         {aConfirmarTodas.length ? aConfirmarTodas.slice().sort((a: any, b: any) => String(a.venda.quando).localeCompare(String(b.venda.quando))).map((c: any) =>
           <div className="acao" key={c.id} style={{ borderLeftColor: conf24.includes(c) ? "var(--danger)" : "var(--warn)" }} onClick={() => abrirDetalhe(c.id)}>
             <span>{c.cliente} · venda {c.venda.numero} · {fmtMoeda(val(c))} · {c.atendenteId ? R.nomeUser(c.atendenteId) : c.venda.vendedor}{c.venda.gerenteNome ? " · ger. " + c.venda.gerenteNome : ""}</span>

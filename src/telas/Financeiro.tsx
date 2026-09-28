@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { TIPO_REEMBOLSO, fmtDate, fmtDateTime, fmtMoeda, parseMoeda, vendaContaVolume } from "../lib/regras";
+import { valorPendente } from "../lib/regras";
 import { Kpi } from "./Dashboard";
+import { PromissoriasAbertas } from "../comp/VendaValidar";
 
 export default function Financeiro() {
   const { R } = useApp();
@@ -85,6 +87,7 @@ function FinConsultor() {
     return (
       <section className="view active" id="view-financeiro">{cab}
         <div className="kpis" id="finKpis"><Kpi n={totVisitas} l="Visitas pagas" /><Kpi n={totMed} l="Medidas feitas" /><Kpi n={totVendas} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(totVendido)} l="Valor vendido" /><Kpi fs={22} n={fmtMoeda(totComissao)} l={`Comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(totReemb)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(totGeral)} l="Total a receber" cor="var(--st-concluida)" /></div>
+        <PromissoriasAbertas titulo="Promissórias em aberto (comissão futura)" />
         <div id="finResumoTodos" className="panel"><h3>Por consultor <span className="hint" style={{ marginLeft: 6 }}>clique para ver o extrato</span></h3>
           {resumos.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Nome</th><th>Visitas pagas</th><th>Medidas</th><th>Vendas efetivadas</th><th>Valor vendido</th><th>Visitas + medidas</th><th>Comissão ({pct}%)</th><th>Reembolsos</th><th>Valor a receber</th></tr></thead>
             <tbody>{resumos.sort((a, b) => b.r.total - a.r.total || b.r.totalVendido - a.r.totalVendido).map(({ u, r }) => (
@@ -98,21 +101,22 @@ function FinConsultor() {
   }
 
   const r = R.extratoConsultor(alvo, de, ate);
-  const pendVendas = st.chamados.filter(c => c.consultorId === alvo && c.venda && ["registrada", "promissoria"].includes(c.venda.status) && (R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, de, ate) || (!de && !ate)));
+  const pendVendas = st.chamados.filter(c => c.consultorId === alvo && c.venda && ["registrada"].includes(c.venda.status) && (R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, de, ate) || (!de && !ate)));
   const visOrd = r.visitas.slice().sort((a, b) => +new Date(b.dataLoja) - +new Date(a.dataLoja));
-  const vendOrd = r.vendas.slice().sort((a, b) => +new Date(b.venda.dataVenda || b.venda.quando) - +new Date(a.venda.dataVenda || a.venda.quando));
+  const pagOrd = r.pagamentos.slice().sort((a: any, b: any) => +new Date(b.data) - +new Date(a.data));
   return (
     <section className="view active" id="view-financeiro">{cab}
-      <div className="kpis" id="finKpis"><Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={r.medidas.length} l="Medidas feitas" /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(r.total)} l="Valor a receber" cor="var(--st-concluida)" /></div>
+      <div className="kpis" id="finKpis"><Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={r.medidas.length} l="Medidas feitas" /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas com pagamento" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(r.total)} l="Valor a receber" cor="var(--st-concluida)" /><Kpi fs={22} n={fmtMoeda(r.comissaoFutura)} l={`Comissão futura (${r.pendentes.length} em promissória)`} cor="var(--warn)" /></div>
       <div id="finDetalheWrap"><div className="panel-grid">
         <div className="panel"><h3>Pagamento por visitas <span className="pill" style={{ marginLeft: 8 }}>R$ {pagamentoVisita} por visita</span></h3><div id="finVisitas">
           {visOrd.length ? visOrd.map(c => <div className="fin-item" key={c.id}><div><div className="nm">{c.cliente}</div><div className="sub">Vinda à loja: {fmtDateTime(c.dataLoja)}</div></div><div className="val">{fmtMoeda(pagamentoVisita)}</div></div>) : <div className="empty" style={{ padding: "24px 10px" }}>Nenhuma visita paga no período.</div>}
         </div></div>
         <div className="panel"><h3>Vendas e comissão <span className="pill" style={{ marginLeft: 8 }}>{pct}% sobre vendas aprovadas</span></h3><div id="finVendas">
-          {vendOrd.length ? vendOrd.map(c => { const val = parseMoeda(c.venda.valor); const com = val * (pct / 100); return (
-            <div className="fin-item" key={c.id}><div><div className="nm">{c.cliente}</div><div className="sub">Venda nº {c.venda.numero} · {fmtDate(c.venda.dataVenda || c.venda.quando)}{c.venda.vendedor ? " · " + c.venda.vendedor : ""} · valor {fmtMoeda(val)}</div></div><div className="val">{fmtMoeda(com)}<span className="sub2">comissão</span></div></div>); })
+          {pagOrd.length ? pagOrd.map((p: any, i: number) => { const com = p.valor * (pct / 100); return (
+            <div className="fin-item" key={p.c.id + i}><div><div className="nm">{p.c.cliente}</div><div className="sub">{p.tipo} nº {p.numero} · {fmtDate(p.data)}{p.c.venda.vendedor ? " · " + p.c.venda.vendedor : ""} · valor {fmtMoeda(p.valor)}</div></div><div className="val">{fmtMoeda(com)}<span className="sub2">comissão</span></div></div>); })
             : <div className="empty" style={{ padding: "24px 10px" }}>Nenhuma venda efetivada no período.</div>}
-          {pendVendas.length > 0 && <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--warn)" }}>{pendVendas.length} venda(s) sem comissão ainda (aguardando confirmação ou em promissória).</div>}
+          {r.pendentes.length > 0 && <div style={{ marginTop: 12 }}><div className="sec-label">Comissão futura — promissórias em aberto</div>{r.pendentes.map((c: any) => <div className="fin-item" key={"p" + c.id}><div><div className="nm">{c.cliente}</div><div className="sub">Venda nº {c.venda.numero} · pendente {fmtMoeda(valorPendente(c.venda))}</div></div><div className="val" style={{ color: "var(--warn)" }}>{fmtMoeda(valorPendente(c.venda) * pct / 100)}<span className="sub2">quando pagar</span></div></div>)}</div>}
+          {pendVendas.length > 0 && <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--warn)" }}>{pendVendas.length} venda(s) pendentes de análise pela Gestão (ainda sem comissão).</div>}
         </div></div>
       </div>
       <div className="panel-grid">

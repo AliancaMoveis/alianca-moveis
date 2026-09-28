@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useApp } from "../estado";
-import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, STATUS_CLIENTE } from "../lib/regras";
+import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, STATUS_CLIENTE , numsVenda } from "../lib/regras";
 import { Ticket, Vazio } from "../comp/Ticket";
 
 const Busca = ({ id, ph, v, set }: any) => (
@@ -9,7 +9,7 @@ const Busca = ({ id, ph, v, set }: any) => (
 );
 
 // busca por qualquer dado que o cliente informa ao telefone
-const texto = (c: any) => [c.id, c.cliente, c.clienteDoc, c.telefone, c.pedido, c.pedidoFabrica, c.produto, c.venda && c.venda.numero].filter(Boolean).join(" ").toLowerCase();
+const texto = (c: any) => [c.id, c.cliente, c.clienteDoc, c.telefone, c.pedido, c.pedidoFabrica, c.produto, numsVenda(c)].filter(Boolean).join(" ").toLowerCase();
 const bate = (c: any, q: string) => { const t = q.trim().toLowerCase(); if (!t) return true; const dig = t.replace(/\D/g, ""); return texto(c).includes(t) || (dig.length >= 4 && texto(c).replace(/\D/g, "").includes(dig)); };
 
 // ---------- Fila (call center) ----------

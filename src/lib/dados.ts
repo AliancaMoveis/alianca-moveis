@@ -60,7 +60,7 @@ export async function carregarEstado(tentativa = 0): Promise<Estado> {
   }
 }
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda, reemb] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda, reemb, proms] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em", "criado_em"),
@@ -77,7 +77,11 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("montadores", "*", "nome"),
     todos("posvenda", "*"), // só o setor Pós-venda e a Gestão recebem linhas (RLS)
     todos("reembolsos", "*", "criado_em").catch(() => []), // o próprio pedido ou a Gestão (RLS)
+    todos("promissorias", "*", "criada_em").catch(() => []), // só quem vê o valor da venda (RLS)
   ]);
+  const promDe: Record<string, any[]> = {};
+  (proms as any[]).forEach((p: any) => (promDe[p.chamado_id] = promDe[p.chamado_id] || []).push({
+    id: p.id, numero: p.numero, valor: Number(p.valor), vencimento: p.vencimento || "", status: p.status, valorPago: Number(p.valor_pago) || 0, quitadaEm: p.quitada_em || "", origemId: p.origem_id || "" }));
   const pvDe: Record<string, any> = {};
   posvenda.forEach((p: any) => (pvDe[p.chamado_id] = {
     origem: p.origem, categoria: p.categoria, responsabilidade: p.responsabilidade || "analise", pecaAfetada: p.peca_afetada || "",
@@ -96,6 +100,8 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
   vendas.forEach((v: any) => (vendaDe[v.chamado_id] = v));
   const valorDe: Record<string, number> = {};
   valores.forEach((v: any) => (valorDe[v.chamado_id] = Number(v.valor)));
+  const entradaDe: Record<string, number> = {};
+  valores.forEach((v: any) => (entradaDe[v.chamado_id] = Number(v.entrada) || 0));
   const trDe: Record<string, any> = {};
   transf.forEach((t: any) => { if (t.status === "pendente") trDe[t.chamado_id] = t; });
   const histDe: Record<string, any[]> = {};
@@ -139,6 +145,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
           numero: v.numero, valor: valorDe[c.id] != null ? fmtValor(valorDe[c.id]) : "", valorNum: valorDe[c.id] ?? null,
           dataVenda: v.data_venda || "", vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: v.status,
           gerenteId: v.gerente_id || "", gerenteNome: v.gerente_nome || "",
+          entrada: entradaDe[c.id] || 0, promissorias: promDe[c.id] || [],
         } : null,
         transferencia: t ? { de: t.de_usuario, para: t.para_usuario, solicitadoPor: t.solicitado_por, quando: t.quando, status: "pendente" } : null,
         anexos: anxDe[c.id] || [],

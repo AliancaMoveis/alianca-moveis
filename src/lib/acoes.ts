@@ -57,6 +57,8 @@ export const A = {
   cancelarTransferencia: (id: string) => rpc("cancelar_transferencia", { p_id: id }),
   registrarVenda: (id: string, numero: string, valor: number, data: string, vendedor: string, gerente: string) =>
     rpc("registrar_venda", { p_id: id, p_numero: numero, p_valor: valor, p_data: nz(data), p_vendedor: vendedor, p_gerente: nz(gerente) }),
+  validarVenda: (id: string, status: string, entrada: number, promissorias: any[]) => rpc("validar_venda", { p_id: id, p_status: status, p_entrada: entrada || 0, p_promissorias: promissorias }),
+  quitarPromissoria: (id: string, valorPago: number, novoNumero: string, novoVenc: string | null) => rpc("quitar_promissoria", { p_id: id, p_valor_pago: valorPago, p_novo_numero: novoNumero || "", p_novo_venc: novoVenc }),
   decidirVenda: (id: string, novo: string, origem: "detalhe" | "aprovacoes" = "detalhe") => rpc("decidir_venda", { p_id: id, p_novo: novo, p_origem: origem }),
   corrigirVenda: (id: string, numero: string, valor: number, data: string, vendedor: string) =>
     rpc("corrigir_venda", { p_id: id, p_numero: numero, p_valor: valor, p_data: nz(data), p_vendedor: vendedor }),

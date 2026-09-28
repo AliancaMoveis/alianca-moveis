@@ -1024,3 +1024,23 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
   .x-txt{display:inline}
   .modal .mb{padding:16px 14px calc(24px + env(safe-area-inset-bottom,0px))}
 }
+.selo-venda{display:inline-block;font-size:11.5px;font-weight:700;border-radius:8px;padding:2px 8px;margin:2px 0;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.selo-venda.ok{background:#e3f5ea;color:#1f7a44}.selo-venda.prom{background:#fff4d6;color:#8a5b00}.selo-venda.venc{background:#fdeaea;color:#b3262d}.selo-venda.pend{background:#eef0f4;color:#56627a}.selo-venda.canc{background:#f3f3f3;color:#888;text-decoration:line-through}
+.vv-ops{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.vv-op{display:flex;flex-direction:column;gap:2px;text-align:left;border:1.5px solid var(--line,#dfe4ee);background:var(--surface,#fff);border-radius:10px;padding:9px 11px;cursor:pointer;font:inherit;color:inherit}
+.vv-op small{font-size:11.5px;color:var(--ink-soft,#56627a)}.vv-op.on{border-color:var(--primary);background:var(--primary-soft,#eef2fb)}.vv-op.canc.on{border-color:var(--danger);background:#fdeaea}
+.vv-form{margin-top:10px;display:flex;flex-direction:column;gap:8px}.vv-tot{font-size:13px}
+.vv-prom{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end}
+.vv-campo{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-soft,#56627a);font-weight:600}.vv-campo input{border:1px solid var(--line,#dfe4ee);border-radius:8px;padding:7px 9px;font:inherit;font-size:14px;color:var(--ink,#1a1d21);background:var(--surface,#fff)}
+.vv-soma,.vv-pend{font-size:12.5px}.vv-pend{margin-top:6px;color:#8a5b00}
+.vv-lista{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.vv-linha{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;border:1px solid var(--line,#e3e6ee);border-left:4px solid #8fd0a8;border-radius:10px;padding:8px 10px;font-size:13px}
+.vv-linha small{grid-column:1/-1;color:var(--ink-soft,#56627a)}.vv-linha .btn{grid-column:1/-1;justify-self:start}
+.vv-linha.aberta{border-left-color:#e8b04a}.vv-linha.vencida{border-left-color:#d23c3c;background:#fff6f5}
+.vv-quitar{border:1px dashed var(--line,#ccd);border-radius:10px;padding:10px;margin-top:6px;display:flex;flex-direction:column;gap:8px}
+.vv-res{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.vv-res button{border:1.5px solid var(--line,#dfe4ee);background:var(--surface,#fff);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column;align-items:flex-start;cursor:pointer;font:inherit;color:inherit}
+.vv-res button.on{border-color:var(--primary)}.vv-res b{font-size:18px}.vv-res span{font-size:12px;color:var(--ink-soft,#56627a)}.vv-res .r b{color:var(--danger)}
+@media (max-width:700px){.vv-prom{grid-template-columns:1fr}}
+/* Aprovações: evita conflito com .ap-item da tela da loja */
+.ap-sec .ap-item{grid-template-columns:1fr auto;grid-template-areas:none;gap:10px 16px;border-left-width:5px}
+@media(max-width:720px){.ap-sec .ap-item{grid-template-columns:1fr}}

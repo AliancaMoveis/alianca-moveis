@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import {
-  EM_ATENDIMENTO, ETAPA_MEDIDA, PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  EM_ATENDIMENTO, ETAPA_MEDIDA, valorPendente, PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
+import { Promissorias, SeloVenda, ValidarVenda } from "./VendaValidar";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
@@ -45,6 +46,7 @@ export default function Detalhe({ id }: { id: string }) {
           <div><span className="tid">{c.id}</span>{" "}
             {presale ? <span style={{ marginLeft: 8 }}><ScBadge c={c} /></span> : <span className={"badge " + st_.cls} style={{ marginLeft: 8 }}>{st_.label}</span>}{" "}
             {!presale && R.acompAtivo(c) && <span className="badge b-critico" style={{ marginLeft: 6 }}>🚨 {c.tratativa.acomp.status === "pendente" ? "Supervisão chamada" : "Em acompanhamento"}</span>}
+            {presale && c.venda && <span style={{ marginLeft: 6 }}><SeloVenda c={c} /></span>}
             {presale && R.semAnexo(c) && <span className="badge b-semanexo" style={{ marginLeft: 6 }}>⚠️ Sem anexo</span>}
             {presale ? (R.clienteCriticoInatividade(c) ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico — sem atualização</span> : null)
               : (prio === "critico" ? <span className="badge b-critico" style={{ marginLeft: 6 }}>🔴 Crítico</span> : prio === "atrasado" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⏰ Atrasado</span> : prio === "urgente" ? <span className="badge b-urgente" style={{ marginLeft: 6 }}>⚠ Urgente</span> : null)}
@@ -234,14 +236,7 @@ function Tratativa({ c }: any) {
       return (
         <div className="resp-box"><h4>Atendimento concluído <ScBadge c={c} /></h4>
           {vv.numero && <RowSb k="Venda">Nº {vv.numero}{R.podeVerValor(c) && vv.valor ? " · R$ " + vv.valor : ""}</RowSb>}
-          {R.ehGestao() ? (
-            <div style={{ marginTop: 12 }}><div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Situação da venda: <b>{VENDA_STATUS[vs2] || vs2}</b> — alterar para:</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {vs2 !== "efetivada" && <button className="btn primary sm" onClick={() => ex(() => A.decidirVenda(c.id, "efetivada"), "Situação atualizada")}>Efetivada</button>}
-                {vs2 !== "promissoria" && <button className="btn sm" onClick={() => ex(() => A.decidirVenda(c.id, "promissoria"), "Situação atualizada")}>Promissória</button>}
-                {vs2 !== "cancelada" && <button className="btn danger sm" onClick={() => ex(() => A.decidirVenda(c.id, "cancelada"), "Situação atualizada")}>Cancelar venda</button>}
-              </div></div>
-          ) : <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginTop: 8 }}>Situação da venda: <b>{VENDA_STATUS[vs2] || vs2}</b>. Só a Gestão altera.</div>}
+          <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginTop: 8 }}>Situação da venda: <b>{VENDA_STATUS[vs2] || vs2}</b>{R.ehGestao() ? " — valide ou registre pagamentos em \u201cDados da venda\u201d, abaixo." : ". Só a Gestão valida."}</div>
         </div>
       );
     }
@@ -317,6 +312,7 @@ function StatusCliente({ c }: any) {
 function Venda({ c }: any) {
   const { R, executar: ex, toast } = useApp();
   const [editando, setEditando] = useState(false);
+  const [validar, setValidar] = useState(false);
   const v = c.venda || null;
   const iniF = () => ({ numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || hojeISO(), vendedor: v?.vendedor || (c.atendenteId ? R.nomeUser(c.atendenteId) : "") || R.me()?.nome || "", gerente: v?.gerenteId || "" });
   const iniG = () => ({ status: v?.status || "registrada", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || "", vendedor: v?.vendedor || "" });
@@ -352,7 +348,7 @@ function Venda({ c }: any) {
   );
   if (v && !editando) {
     const vs = v.status || "registrada"; const cor = corVenda(vs);
-    const nota = vs === "promissoria" ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--st-tratativa-bg)", border: "1px solid var(--st-tratativa)", borderRadius: 9, fontSize: 12.5, color: "var(--st-tratativa)" }}><b>Venda sem pagamento.</b> Conta como venda, mas <b>não gera comissão</b> até ser efetivada.</div>
+    const nota = vs === "entrada" || (vs === "promissoria" && valorPendente(v) > 0) ? null : vs === "promissoria" ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--st-tratativa-bg)", border: "1px solid var(--st-tratativa)", borderRadius: 9, fontSize: 12.5, color: "var(--st-tratativa)" }}><b>Venda sem pagamento.</b> Conta como venda, mas <b>não gera comissão</b> até ser efetivada.</div>
       : vs === "registrada" ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--warn-bg)", border: "1px solid var(--warn)", borderRadius: 9, fontSize: 12.5, color: "var(--warn)" }}>Aguardando a Gestão confirmar. Não conta em nenhum relatório ainda.</div>
       : vs === "cancelada" ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--danger-bg)", border: "1px solid var(--danger)", borderRadius: 9, fontSize: 12.5, color: "var(--danger)" }}>Venda cancelada — não conta em relatórios nem em comissão.</div> : null;
     return (
@@ -362,14 +358,15 @@ function Venda({ c }: any) {
         <RowSb k="Data da venda" pb="5px 0">{v.dataVenda ? fmtDate(v.dataVenda) : "—"}</RowSb>
         <RowSb k="Vendedor na loja" pb="5px 0">{v.vendedor || v.atendenteNome || "—"}</RowSb>
         <RowSb k="Gerente que negociou" pb="5px 0">{v.gerenteNome || "—"}</RowSb>
+        {vejaVal && <Promissorias c={c} />}
         {nota}
+        {R.ehGestao() && (vs === "registrada" || validar) && <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--primary)" }}><h4>{vs === "registrada" ? "Validar a venda" : "Alterar a validação"}</h4><ValidarVenda c={c} onFeito={() => setValidar(false)} /></div>}
+        {R.ehGestao() && vs !== "registrada" && !validar && <button className="btn ghost sm" style={{ marginTop: 10 }} onClick={() => setValidar(true)}>Alterar a validação da venda</button>}
         {!R.ehGestao() && podeRegistrar && vs === "registrada" && <div style={{ marginTop: 12 }}><button className="btn sm" onClick={() => setEditando(true)}>Corrigir dados da venda</button></div>}
         {R.ehGestao() && (
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-faint)", marginBottom: 10 }}>Controle da Gestão</div>
-            <div className="inline-2"><div className="field"><label>Situação da venda</label><select value={g.status} onChange={sg("status")}>{Object.keys(VENDA_STATUS).map(k => <option key={k} value={k}>{VENDA_STATUS[k]}</option>)}</select></div>
-              <button className="btn primary sm" onClick={() => { if (g.status === vs) { toast("A situação já é essa"); return; } ex(() => A.decidirVenda(c.id, g.status), "Situação atualizada"); }}>Aplicar</button></div>
-            <div className="grid" style={{ marginTop: 12 }}>
+            <div className="grid" style={{ marginTop: 4 }}>
               <div className="field"><label>Nº da venda <span className="req-star">*</span></label><input value={g.numero} onChange={sg("numero")} /></div>
               <div className="field"><label>Valor <span className="req-star">*</span></label><input value={g.valor} onChange={sg("valor")} /></div>
               <div className="field"><label>Data da venda</label><input type="date" value={g.data} onChange={sg("data")} /></div>

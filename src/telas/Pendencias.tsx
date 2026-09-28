@@ -3,6 +3,8 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { STATUS_CLIENTE, TIPO_REEMBOLSO, VENDA_STATUS, fmtDate, fmtDateTime, fmtMoeda } from "../lib/regras";
 import { Kpi } from "./Dashboard";
+import { PromissoriasAbertas, ValidarVenda } from "../comp/VendaValidar";
+import { promAbertas } from "../lib/regras";
 
 export function Pendencias() {
   const { R, abrirDetalhe } = useApp();
@@ -48,6 +50,8 @@ export function Pendencias() {
 export function Aprovacoes() {
   const { R, abrirDetalhe, executar } = useApp();
   const p = R.pendenciasGestao();
+  const [abrindo, setAbrindo] = useState("");
+  const nProm = p.promissorias.reduce((n: number, c: any) => n + promAbertas(c.venda).length, 0);
   const reembPend = (R.state.reembolsos || []).filter((r: any) => r.status === "pendente");
   const decidirVenda = (id: string, ns: string) => executar(() => A.decidirVenda(id, ns, "aprovacoes"), "Venda " + VENDA_STATUS[ns].toLowerCase());
   const decidirTransf = (id: string, aceitar: boolean) => executar(() => A.responderTransferencia(id, aceitar, "aprovacoes"), aceitar ? "Transferência aprovada" : "Transferência recusada");
@@ -59,10 +63,9 @@ export function Aprovacoes() {
           <div className="meta">Venda <b>{v.numero || "—"}</b> · {v.dataVenda ? fmtDate(v.dataVenda) : "—"} · vendedor <b>{v.vendedor || "—"}</b>{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : " · origem Marketing"}</div></div>
         <div><div className="val">{v.valor ? "R$ " + v.valor : "—"}</div>
           <div className="acoes">
-            {v.status !== "efetivada" && <button className="btn primary sm" onClick={() => decidirVenda(c.id, "efetivada")}>Efetivar</button>}
-            {v.status !== "promissoria" && <button className="btn sm" onClick={() => decidirVenda(c.id, "promissoria")}>Promissória</button>}
-            <button className="btn danger sm" onClick={() => decidirVenda(c.id, "cancelada")}>Cancelar</button>
+            {abrindo !== c.id && <button className="btn primary sm" onClick={() => setAbrindo(c.id)}>Validar</button>}
           </div></div>
+        {abrindo === c.id && <div style={{ gridColumn: "1/-1", marginTop: 8 }}><ValidarVenda c={c} onFeito={() => setAbrindo("")} /><button className="btn ghost sm" style={{ marginTop: 6 }} onClick={() => setAbrindo("")}>Fechar</button></div>}
       </div>
     );
   };
@@ -70,8 +73,8 @@ export function Aprovacoes() {
     <section className="view active" id="view-aprovacoes">
       <div className="view-head"><div><h2>Aprovações</h2><p>Tudo que depende de uma decisão sua. Aja direto daqui, sem precisar abrir cada cliente.</p></div></div>
       <div className="kpis" id="apKpis">
-        <Kpi n={p.vendasConfirmar.length} l="Vendas a confirmar" cls={p.vendasConfirmar.length ? "alert" : ""} cor={p.vendasConfirmar.length ? "var(--warn)" : undefined} />
-        <Kpi n={p.promissorias.length} l="Promissórias em aberto" cor={p.promissorias.length ? "var(--st-tratativa)" : undefined} />
+        <Kpi n={p.vendasConfirmar.length} l="Pendentes de análise" cls={p.vendasConfirmar.length ? "alert" : ""} cor={p.vendasConfirmar.length ? "var(--warn)" : undefined} />
+        <Kpi n={nProm} l="Promissórias em aberto" cor={nProm ? "var(--st-tratativa)" : undefined} />
         <Kpi n={p.transferencias.length} l="Transferências" cor={p.transferencias.length ? "var(--primary)" : undefined} />
         <Kpi n={reembPend.length} l="Reembolsos" cor={reembPend.length ? "var(--warn)" : undefined} />
         <Kpi n={p.total + reembPend.length} l="Total pendente" />
@@ -79,8 +82,8 @@ export function Aprovacoes() {
       <ReembolsosGestao />
       {!p.total && !reembPend.length && <div id="apVazio" className="empty"><div className="big">Nada pendente</div>Não há nenhuma decisão aguardando você.</div>}
       <div id="apSecoes">
-        {p.vendasConfirmar.length > 0 && <div className="ap-sec"><h3>Vendas a confirmar <span className="badge b-tratativa">{p.vendasConfirmar.length}</span></h3><div className="sub">Registradas pelo vendedor. Não contam em nenhum relatório até você decidir.</div>{p.vendasConfirmar.map(c => linhaVenda(c, ""))}</div>}
-        {p.promissorias.length > 0 && <div className="ap-sec"><h3>Promissórias em aberto <span className="badge b-tratativa">{p.promissorias.length}</span></h3><div className="sub">Já contam como venda, mas <b>não geram comissão</b> enquanto não forem efetivadas.</div>{p.promissorias.map(c => linhaVenda(c, "prom"))}</div>}
+        {p.vendasConfirmar.length > 0 && <div className="ap-sec"><h3>Vendas pendentes de análise <span className="badge b-tratativa">{p.vendasConfirmar.length}</span></h3><div className="sub">Registradas pelo vendedor. Valide como efetivada, entrada + promissória, promissória ou cancelada.</div>{p.vendasConfirmar.map(c => linhaVenda(c, ""))}</div>}
+        <PromissoriasAbertas titulo="Promissórias em aberto — clique no cliente para registrar o pagamento" />
         {p.transferencias.length > 0 && <div className="ap-sec"><h3>Transferências de vendedor <span className="badge b-aberta">{p.transferencias.length}</span></h3>
           <div className="sub">Pedidos feitos <b>entre vendedores</b>. Gestão, Supervisão de Marketing e Suporte trocam direto, sem passar por aqui. Enquanto não houver aceite ou aprovação, o cliente segue com o vendedor atual.</div>
           {p.transferencias.map(c => { const tr = c.transferencia; return (

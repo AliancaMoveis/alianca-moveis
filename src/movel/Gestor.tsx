@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { A } from "../lib/acoes";
 import { useApp } from "../estado";
-import { STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume } from "../lib/regras";
+import { numsVenda, STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume } from "../lib/regras";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const dia = (v: any) => String(v || "").slice(0, 10);
@@ -106,7 +106,7 @@ function LinhaCliente({ c, abrir, R }: any) {
 function buscar(todos: any[], q: string) {
   const t = q.trim().toLowerCase(), dg = t.replace(/\D/g, "");
   if (t.length < 2) return [];
-  return todos.filter((c: any) => (c.cliente + " " + c.id + " " + (c.produto || "") + " " + (c.venda?.numero || "")).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))).slice(0, 60);
+  return todos.filter((c: any) => (c.cliente + " " + c.id + " " + (c.produto || "") + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))).slice(0, 60);
 }
 export function GestResumo() {
   const { R, st, abrirDetalhe } = useApp() as any;
@@ -357,7 +357,7 @@ export function GestAcao() {
   const grupos = pend.grupos.filter((g: any) => g.itens.some((c: any) => area === "mkt" ? R.domMarketing(c) : !R.domMarketing(c)))
     .map((g: any) => ({ ...g, itens: g.itens.filter((c: any) => area === "mkt" ? R.domMarketing(c) : !R.domMarketing(c)) }));
   const t = q.trim().toLowerCase(), dg = t.replace(/\D/g, "");
-  const achados = t.length >= 2 ? a.todos.filter((c: any) => (c.cliente + " " + c.id + " " + (c.produto || "") + " " + (c.venda?.numero || "")).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))).slice(0, 60) : [];
+  const achados = t.length >= 2 ? a.todos.filter((c: any) => (c.cliente + " " + c.id + " " + (c.produto || "") + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))).slice(0, 60) : [];
   const base = a.todos.filter((c: any) => area === "mkt" ? R.domMarketing(c) : !R.domMarketing(c));
   const urg = area === "mkt"
     ? base.filter((c: any) => R.emAberto(c) && (R.clienteCriticoInatividade(c) || (c.dataLoja && dia(c.dataLoja) >= hoje && !c.atendenteId) || R.semParecer(c)))

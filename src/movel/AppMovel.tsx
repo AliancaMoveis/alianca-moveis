@@ -4,10 +4,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
-import { EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume } from "../lib/regras";
+import { numsVenda, EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume } from "../lib/regras";
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import { SinoAvisos } from "../comp/Avisos";
+import { SeloVenda } from "../comp/VendaValidar";
 import Agenda from "../telas/Agenda";
 import PainelDono from "../telas/PainelDono";
 import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
@@ -97,7 +98,7 @@ function Cartao({ c, abrir, linha, destaque }: any) {
   return (
     <button className={"mv-card" + (destaque ? " dest" : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{linha?.hora || ""}</b><small>{linha?.dia || ""}</small></div>
-      <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""}</div><div className="sb">{linha?.sub || c.produto || "—"}</div></div>
+      <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""}</div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
       <span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>
     </button>
   );
@@ -145,7 +146,7 @@ function ConsHoje({ abrir, ir }: any) {
 }
 // busca por nome, telefone, produto, endereço ou nº do chamado
 const busca = (l: any[], q: string) => { const t = q.trim().toLowerCase(); if (!t) return l; const dg = t.replace(/\D/g, "");
-  return l.filter((c: any) => (c.cliente + " " + (c.produto || "") + " " + (c.endereco || "") + " " + c.id).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))); };
+  return l.filter((c: any) => (c.cliente + " " + (c.produto || "") + " " + (c.endereco || "") + " " + c.id + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))); };
 const Busca = ({ q, setQ }: any) => <input className="mv-busca" type="search" placeholder="🔎 Buscar cliente, telefone, produto…" value={q} onChange={e => setQ(e.target.value)} />;
 function ConsClientes({ abrir }: any) {
   const { R, st } = useApp() as any;
@@ -249,11 +250,12 @@ function Painel({ perfil, abrir }: any) {
     const cfg = R.cfg();
     const ex = R.extratoConsultor(eu, P.de, P.ate);
     const F = R.funilConsultor(eu, P.de, P.ate);
-    const aConfirmar = st.chamados.filter((c: any) => c.consultorId === eu && c.venda && ["registrada", "promissoria"].includes(c.venda.status) && R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, P.de, P.ate));
+    const aConfirmar = st.chamados.filter((c: any) => c.consultorId === eu && c.venda && ["registrada"].includes(c.venda.status) && R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, P.de, P.ate));
     const doPer = R.clientesConsultor(eu, P.de, P.ate);
     if (lista === "visitas") { itens = ex.visitas; tituloLista = "Visitas realizadas (pagas)"; }
     if (lista === "vendas") { itens = ex.vendas; tituloLista = "Vendas efetivadas"; }
     if (lista === "confirmar") { itens = aConfirmar; tituloLista = "Vendas aguardando confirmação"; }
+    if (lista === "futura") { itens = ex.pendentes; tituloLista = "Vendas com promissória em aberto (comissão quando pagar)"; }
     if (lista === "clientes") { itens = doPer; tituloLista = "Clientes do mês"; }
     if (lista === "medidas") { itens = ex.medidas; tituloLista = "Medidas feitas (pagas, sem comissão)"; }
     conteudo = <>
@@ -262,7 +264,7 @@ function Painel({ perfil, abrir }: any) {
         <Tile k="visitas" n={ex.visitas.length} l="Visitas realizadas" on={() => alternar("visitas")} /><Tile n={fmtMoeda(ex.pagamentoVisitas)} l="Pagamento por visitas" />
         <Tile k="medidas" n={ex.medidas.length} l="📐 Medidas feitas" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
         <Tile k="vendas" n={ex.vendas.length} l="Vendas efetivadas" cor="var(--st-concluida)" on={() => alternar("vendas")} /><Tile n={fmtMoeda(ex.totalVendido)} l="Total vendido" />
-        <Tile n={fmtMoeda(ex.comissao)} l={"Comissão (" + String(cfg.comissaoPct).replace(".", ",") + "%)"} cor="var(--st-concluida)" /><Tile k="confirmar" n={aConfirmar.length} l="Vendas a confirmar" cor={aConfirmar.length ? "var(--warn)" : undefined} on={() => alternar("confirmar")} />
+        <Tile n={fmtMoeda(ex.comissao)} l={"Comissão (" + String(cfg.comissaoPct).replace(".", ",") + "%)"} cor="var(--st-concluida)" /><Tile k="futura" n={fmtMoeda(ex.comissaoFutura)} l={"Comissão futura · " + ex.pendentes.length + " promissória(s)"} cor={ex.pendentes.length ? "var(--warn)" : undefined} on={() => alternar("futura")} /><Tile k="confirmar" n={aConfirmar.length} l="Vendas a confirmar" cor={aConfirmar.length ? "var(--warn)" : undefined} on={() => alternar("confirmar")} />
       </div>
       <div className="mv-sec">Seus clientes no mês: visita → loja → venda</div>
       <div className="mv-funil" onClick={() => alternar("clientes")}>
@@ -270,7 +272,7 @@ function Painel({ perfil, abrir }: any) {
         {barra("Agend. loja", F.agendadas, F.total, "var(--st-tratativa)")}{barra("Vieram", F.vieram, F.total, "var(--warn)")}{barra("Vendas", F.vendas, F.total, "var(--st-concluida)")}
         <div className="mv-taxas"><span>Presença <b>{pctTxt(F.pPresenca)}</b></span><span>Visita→venda <b>{pctTxt(F.pVisitaVenda)}</b></span><span>Loja→venda <b>{pctTxt(F.pLojaVenda)}</b></span></div>
       </div>
-      {aConfirmar.length > 0 && <div className="mv-dica">A comissão entra quando a venda é confirmada (efetivada). {aConfirmar.length} venda(s) ainda aguardando.</div>}
+      {aConfirmar.length > 0 && <div className="mv-dica">A comissão entra quando a Gestão valida a venda (efetivada ou entrada). {aConfirmar.length} venda(s) pendente(s) de análise.</div>}
       <Reembolsos de={P.de} ate={P.ate} />
     </>;
   } else {

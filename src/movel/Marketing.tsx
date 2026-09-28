@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
-import { STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, mesmaPessoa, parseData, soDigitos } from "../lib/regras";
+import { STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, mesmaPessoa, parseData, soDigitos , numsVenda } from "../lib/regras";
 import { useTimeMkt } from "./Gestor";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -64,7 +64,7 @@ export function MktClientes({ abrir }: any) {
   const abertos = l.filter((c: any) => R.emAberto(c) && !c.venda), loja = l.filter((c: any) => c.dataLoja && dia(c.dataLoja) >= hojeISO()), vendas = l.filter((c: any) => c.venda);
   const t = q.trim().toLowerCase(), dg = t.replace(/\D/g, "");
   const base = t ? l : f === "abertos" ? abertos : f === "loja" ? loja : f === "vendas" ? vendas : l;
-  const lista = t ? base.filter((c: any) => (c.cliente + " " + (c.produto || "") + " " + c.id).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))) : base;
+  const lista = t ? base.filter((c: any) => (c.cliente + " " + (c.produto || "") + " " + c.id + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))) : base;
   return <>
     <input className="mv-busca" type="search" placeholder="🔎 Buscar cliente, telefone…" value={q} onChange={e => setQ(e.target.value)} />
     {!t && <div className="mv-seg">{([["abertos", "Em andamento", abertos.length], ["loja", "Vêm à loja", loja.length], ["vendas", "Venderam", vendas.length], ["todos", "Todos", l.length]] as any[]).map(([k, n, x]) =>
