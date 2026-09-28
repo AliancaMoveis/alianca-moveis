@@ -178,7 +178,7 @@ function VendasLote({ lista, linha }: { lista: any[]; linha: (c: any, cl: string
           <tbody>{vis.map((c: any) => { const ind = individual(c); return (
             <tr key={c.id} className={sel[c.id] ? "on" : ""}>
               <td><input type="checkbox" disabled={ind} checked={!!sel[c.id]} onChange={() => setSel({ ...sel, [c.id]: !sel[c.id] })} /></td>
-              <td><b>{c.venda.numero}</b></td><td>{fmtDate(c.venda.dataVenda || c.venda.quando)}</td>
+              <td><b>{c.venda.numero}</b></td><td>{fmtDate(c.venda.dataVendaReal || c.venda.dataVenda || c.venda.quando)}{c.venda.dataVendaReal && c.venda.dataVendaReal !== c.venda.dataVenda ? <small title="Venda de mês anterior lançada agora: conta neste mês"> ↻</small> : null}</td>
               <td><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.id); }}>{c.cliente}</a>{R.ehProspeccao(c) ? " 🧭" : ""}</td>
               <td>{vendedorDe(c)}</td><td>{c.venda.gerenteNome || "—"}</td><td>{c.consultorId ? R.nomeUser(c.consultorId) : "—"}</td>
               <td>{c.venda.tipoInformado ? TIPO_VENDA_INFORMADO[c.venda.tipoInformado] : "—"}{c.venda.entradaInformada ? " · entrada " + fmtMoeda(c.venda.entradaInformada) : ""}</td>

@@ -20,6 +20,12 @@ export type Estado = {
 export type Reembolso = { id: string; usuarioId: string; chamadoId: string; data: string; tipo: string; valor: number; descricao: string; path: string; status: string; criadoEm: string; decididoEm: string; motivo: string };
 export type Montador = { id: string; nome: string; telefone: string; ativo: boolean };
 
+function competencia(dv: string, reg: string) {
+  if (!dv || !reg) return { dataVenda: dv, dataVendaReal: dv };
+  const r = new Date(reg); const regMes = `${r.getFullYear()}-${String(r.getMonth() + 1).padStart(2, "0")}`;
+  return dv.slice(0, 7) < regMes ? { dataVenda: regMes + "-01", dataVendaReal: dv } : { dataVenda: dv, dataVendaReal: dv };
+}
+
 async function todos<T = any>(tabela: string, colunas = "*", ordem?: string): Promise<T[]> {
   const out: T[] = [];
   const passo = 1000;
@@ -145,7 +151,8 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
         resposta: c.resposta_quando ? { previsao: c.resposta_previsao || "", quem: c.resposta_quem, texto: c.resposta_texto, quando: c.resposta_quando } : null,
         venda: v ? {
           numero: v.numero, valor: valorDe[c.id] != null ? fmtValor(valorDe[c.id]) : "", valorNum: valorDe[c.id] ?? null,
-          dataVenda: v.data_venda || "", vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: v.status,
+          // competência: só as vendas importadas da planilha de setembro — as de agosto contam em setembro (1º dia)
+          ...(c.tratativa && c.tratativa.importado ? competencia(v.data_venda || "", v.registrado_em) : { dataVenda: v.data_venda || "", dataVendaReal: v.data_venda || "" }), vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: v.status,
           gerenteId: v.gerente_id || "", gerenteNome: v.gerente_nome || "",
           entrada: entradaDe[c.id] || 0, promissorias: promDe[c.id] || [], tipoInformado: v.tipo_informado || "", entradaInformada: entInfDe[c.id] || 0,
         } : null,

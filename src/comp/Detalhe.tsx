@@ -323,8 +323,8 @@ function Venda({ c }: any) {
   const [editando, setEditando] = useState(false);
   const [validar, setValidar] = useState(false);
   const v = c.venda || null;
-  const iniF = () => ({ tipo: v?.tipoInformado || "", entrada: v?.entradaInformada ? String(v.entradaInformada).replace(".", ",") : "", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || hojeISO(), vendedor: v?.vendedor || (c.atendenteId ? R.nomeUser(c.atendenteId) : "") || R.me()?.nome || "", gerente: v?.gerenteId || "" });
-  const iniG = () => ({ status: v?.status || "registrada", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || "", vendedor: v?.vendedor || "" });
+  const iniF = () => ({ tipo: v?.tipoInformado || "", entrada: v?.entradaInformada ? String(v.entradaInformada).replace(".", ",") : "", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVendaReal || v?.dataVenda || hojeISO(), vendedor: v?.vendedor || (c.atendenteId ? R.nomeUser(c.atendenteId) : "") || R.me()?.nome || "", gerente: v?.gerenteId || "" });
+  const iniG = () => ({ status: v?.status || "registrada", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVendaReal || v?.dataVenda || "", vendedor: v?.vendedor || "" });
   const [f, setF] = useState<any>(iniF);
   const [g, setG] = useState<any>(iniG);
   useEffect(() => { setF(iniF()); setG(iniG()); setEditando(false); }, [c.id, JSON.stringify(v)]);
@@ -370,7 +370,7 @@ function Venda({ c }: any) {
       <div className="resp-box" style={{ borderColor: cor }}><h4>Dados da venda <span className="badge" style={{ background: cor, color: "#fff" }}>{VENDA_STATUS[vs] || vs}</span></h4>
         <RowSb k="Nº da venda" pb="5px 0">{v.numero || "—"}</RowSb>
         {vejaVal && <RowSb k="Valor" pb="5px 0" bold>{v.valor ? "R$ " + v.valor : "—"}</RowSb>}
-        <RowSb k="Data da venda" pb="5px 0">{v.dataVenda ? fmtDate(v.dataVenda) : "—"}</RowSb>
+        <RowSb k="Data da venda" pb="5px 0">{v.dataVendaReal ? fmtDate(v.dataVendaReal) : v.dataVenda ? fmtDate(v.dataVenda) : "—"}{v.dataVendaReal && v.dataVendaReal !== v.dataVenda ? <span className="pill" style={{ marginLeft: 6 }}>lançada depois · conta em {fmtDate(v.dataVenda).slice(3)}</span> : null}</RowSb>
         <RowSb k="Vendedor na loja" pb="5px 0">{v.vendedor || v.atendenteNome || "—"}</RowSb>
         <RowSb k="Gerente que negociou" pb="5px 0">{v.gerenteNome || "—"}</RowSb>
         {vejaVal && <Promissorias c={c} />}
