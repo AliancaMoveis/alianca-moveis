@@ -102,6 +102,8 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
   valores.forEach((v: any) => (valorDe[v.chamado_id] = Number(v.valor)));
   const entradaDe: Record<string, number> = {};
   valores.forEach((v: any) => (entradaDe[v.chamado_id] = Number(v.entrada) || 0));
+  const entInfDe: Record<string, number> = {};
+  valores.forEach((v: any) => (entInfDe[v.chamado_id] = Number(v.entrada_informada) || 0));
   const trDe: Record<string, any> = {};
   transf.forEach((t: any) => { if (t.status === "pendente") trDe[t.chamado_id] = t; });
   const histDe: Record<string, any[]> = {};
@@ -145,7 +147,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
           numero: v.numero, valor: valorDe[c.id] != null ? fmtValor(valorDe[c.id]) : "", valorNum: valorDe[c.id] ?? null,
           dataVenda: v.data_venda || "", vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: v.status,
           gerenteId: v.gerente_id || "", gerenteNome: v.gerente_nome || "",
-          entrada: entradaDe[c.id] || 0, promissorias: promDe[c.id] || [],
+          entrada: entradaDe[c.id] || 0, promissorias: promDe[c.id] || [], tipoInformado: v.tipo_informado || "", entradaInformada: entInfDe[c.id] || 0,
         } : null,
         transferencia: t ? { de: t.de_usuario, para: t.para_usuario, solicitadoPor: t.solicitado_por, quando: t.quando, status: "pendente" } : null,
         anexos: anxDe[c.id] || [],

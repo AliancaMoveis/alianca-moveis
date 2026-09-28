@@ -9,6 +9,8 @@ import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import { SinoAvisos } from "../comp/Avisos";
 import { SeloVenda } from "../comp/VendaValidar";
+import { SituacaoConsultor } from "../comp/Situacao";
+import { FechamentoMeu } from "../comp/Fechamento";
 import Agenda from "../telas/Agenda";
 import PainelDono from "../telas/PainelDono";
 import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
@@ -239,11 +241,12 @@ function Painel({ perfil, abrir }: any) {
     const ex = R.extratoConsultor(eu, P.de, P.ate);
     if (lista === "medidas") { itens = ex.medidas; tituloLista = "Medidas feitas (pagas)"; }
     conteudo = <>
-      <div className="mv-receber"><span>Valor a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + reembolsos aprovados {fmtMoeda(ex.totalReembolsos)}</small></div>
+      <div className="mv-receber"><span>Previsão a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + reembolsos aprovados {fmtMoeda(ex.totalReembolsos)}</small></div>
       <div className="mv-tiles">
         <Tile k="medidas" n={ex.medidas.length} l="Medidas feitas" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
         <Tile n={fmtMoeda(ex.totalReembolsos)} l="Reembolsos aprovados" /><Tile n={medDados(R).aFazer.length} l="Medidas a fazer" cor="var(--warn)" />
       </div>
+      <FechamentoMeu uid={eu} movel />
       <Reembolsos de={P.de} ate={P.ate} />
     </>;
   } else if (perfil === "consultor") {
@@ -259,13 +262,14 @@ function Painel({ perfil, abrir }: any) {
     if (lista === "clientes") { itens = doPer; tituloLista = "Clientes do mês"; }
     if (lista === "medidas") { itens = ex.medidas; tituloLista = "Medidas feitas (pagas, sem comissão)"; }
     conteudo = <>
-      <div className="mv-receber"><span>Valor a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.visitas.length} visita(s) + {ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + comissão {String(cfg.comissaoPct).replace(".", ",")}% das vendas efetivadas{ex.totalReembolsos ? " + reembolsos " + fmtMoeda(ex.totalReembolsos) : ""}</small></div>
+      <div className="mv-receber"><span>Previsão a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.visitas.length} visita(s) + {ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + comissão {String(cfg.comissaoPct).replace(".", ",")}% das vendas efetivadas{ex.totalReembolsos ? " + reembolsos " + fmtMoeda(ex.totalReembolsos) : ""}</small></div>
       <div className="mv-tiles">
         <Tile k="visitas" n={ex.visitas.length} l="Visitas realizadas" on={() => alternar("visitas")} /><Tile n={fmtMoeda(ex.pagamentoVisitas)} l="Pagamento por visitas" />
         <Tile k="medidas" n={ex.medidas.length} l="📐 Medidas feitas" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
         <Tile k="vendas" n={ex.vendas.length} l="Vendas efetivadas" cor="var(--st-concluida)" on={() => alternar("vendas")} /><Tile n={fmtMoeda(ex.totalVendido)} l="Total vendido" />
-        <Tile n={fmtMoeda(ex.comissao)} l={"Comissão (" + String(cfg.comissaoPct).replace(".", ",") + "%)"} cor="var(--st-concluida)" /><Tile k="futura" n={fmtMoeda(ex.comissaoFutura)} l={"Comissão futura · " + ex.pendentes.length + " promissória(s)"} cor={ex.pendentes.length ? "var(--warn)" : undefined} on={() => alternar("futura")} /><Tile k="confirmar" n={aConfirmar.length} l="Vendas a confirmar" cor={aConfirmar.length ? "var(--warn)" : undefined} on={() => alternar("confirmar")} />
+        <Tile n={fmtMoeda(ex.comissao)} l={"Previsão de comissão (" + String(cfg.comissaoPct).replace(".", ",") + "%)"} cor="var(--st-concluida)" /><Tile k="futura" n={fmtMoeda(ex.comissaoFutura)} l={"Comissão futura · " + ex.pendentes.length + " promissória(s)"} cor={ex.pendentes.length ? "var(--warn)" : undefined} on={() => alternar("futura")} /><Tile k="confirmar" n={aConfirmar.length} l="Vendas a confirmar" cor={aConfirmar.length ? "var(--warn)" : undefined} on={() => alternar("confirmar")} />
       </div>
+      <FechamentoMeu uid={eu} movel />
       <div className="mv-sec">Seus clientes no mês: visita → loja → venda</div>
       <div className="mv-funil" onClick={() => alternar("clientes")}>
         {barra("Clientes", F.total, F.total, "var(--primary)")}{barra("Visitados", F.realizadas, F.total, "var(--st-respondida)")}
@@ -344,6 +348,7 @@ function Folha({ id, fechar, perfil }: any) {
           {t.parecer && <div><span>Parecer do vendedor</span><b>{t.parecer}</b></div>}
         </div>
         <Contato c={c} rota={perfil === "consultor"} />
+        {perfil === "consultor" && <SituacaoConsultor c={c} movel />}
         {perfil === "consultor" && <PassosConsultor c={c} />}
         {perfil === "vendedor" && <AcoesVendedor c={c} />}
         <Anexar c={c} />
@@ -424,22 +429,27 @@ function AcoesVendedor({ c }: any) {
   const t = c.tratativa || {};
   const sc = R.statusClienteDe(c);
   const [st, setSt] = useState(""); const [txt, setTxt] = useState(""); const [data, setData] = useState("");
-  const [num, setNum] = useState(""); const [val, setVal] = useState(""); const [ger, setGer] = useState("");
+  const [num, setNum] = useState(""); const [val, setVal] = useState(""); const [ger, setGer] = useState(""); const [ent, setEnt] = useState("");
   if (c.setorDestino !== "atendente_cliente" || c.venda) return c.venda ? <div className="mv-ok">✓ Venda nº {c.venda.numero} registrada</div> : null;
   if (["reprovado", "nao_compareceu"].includes(sc)) return <div className="mv-bloco"><div className="mv-ok" style={{ color: "var(--danger)" }}>{STATUS_CLIENTE[sc]}</div>
     <button className="btn sm" onClick={() => sc === "reprovado" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>Reabrir atendimento</button></div>;
   const OPC: [string, string][] = [["orcamento", "Orçamento"], ["sem_resposta", "Sem resposta"], ["reagendado", "Reagendado"], ["reprovado", "Reprovado"], ["nao_compareceu", "Não veio"], ["vendido", "Vendido"]];
+  const MAIS: [string, string][] = [["vendido_entrada", "Vendido — entrada + promissória"], ["vendido_promissoria", "Vendido — 100% promissória"], ["em_obras", "Em obras"], ["standby", "Standby"], ["em_analise", "Em análise"], ["nao_compareceu", "Não compareceu"]];
+  const ehVenda = st === "vendido" || st === "vendido_entrada" || st === "vendido_promissoria";
+  const tipoVenda = st === "vendido_entrada" ? "entrada" : st === "vendido_promissoria" ? "promissoria" : "efetivada";
   const salvar = () => {
     if (!st) { toast("Escolha o status"); return; }
-    if (st === "vendido") {
+    if (ehVenda) {
       if (!num.trim()) { toast("Informe o nº da venda"); return; }
       const v = parseMoeda(val); if (!v || v <= 0) { toast("Informe o valor da venda"); return; }
+      const e = parseMoeda(ent);
+      if (tipoVenda === "entrada" && (!e || e <= 0 || e >= v)) { toast("Informe o valor da entrada (menor que o total)"); return; }
       if (!ger) { toast("Informe o gerente que negociou"); return; }
-      ex(() => A.registrarVenda(c.id, num.trim(), v, hojeISO(), R.me()?.nome || "", ger), "Venda registrada — a Gestão confirma").then((ok: boolean) => ok && setSt(""));
+      ex(() => A.registrarVenda(c.id, num.trim(), v, hojeISO(), R.me()?.nome || "", ger, tipoVenda, tipoVenda === "entrada" ? e : null), "Venda registrada — a Gestão analisa").then((ok: boolean) => ok && setSt(""));
       return;
     }
     if (st === "reagendado" && (!data || data.length < 16)) { toast("Escolha a nova data e horário"); return; }
-    if (["orcamento", "sem_resposta", "reprovado"].includes(st) && !txt.trim()) { toast("Escreva o parecer"); return; }
+    if (["orcamento", "sem_resposta", "reprovado", "em_obras", "standby", "em_analise"].includes(st) && !txt.trim()) { toast("Escreva o parecer"); return; }
     ex(() => A.vendedorStatus(c.id, st, st === "reagendado" ? data : "", txt.trim()), "Status salvo").then((ok: boolean) => { if (ok) { setSt(""); setTxt(""); setData(""); } });
   };
   return (
@@ -453,11 +463,14 @@ function AcoesVendedor({ c }: any) {
       </div>
       <div className="mv-bloco-t" style={{ marginTop: 12 }}>Como foi o atendimento?</div>
       <div className="mv-3">{OPC.map(([k, l]) => <button key={k} className={"mv-op" + (st === k ? " on" : "") + (k === "vendido" ? " venda" : "")} onClick={() => setSt(k)}>{l}</button>)}</div>
+      <select className={"mv-mais" + (MAIS.some(([k]) => k === st) ? " on" : "")} value={MAIS.some(([k]) => k === st) ? st : ""} onChange={e => setSt(e.target.value)}>
+        <option value="">Mais opções ▾</option>{MAIS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
       {st === "reagendado" && <input type="datetime-local" value={data} onChange={e => setData(e.target.value)} />}
-      {st === "vendido" && <div className="mv-2"><input inputMode="numeric" placeholder="Nº da venda" value={num} onChange={e => setNum(e.target.value)} /><input inputMode="decimal" placeholder="Valor (R$)" value={val} onChange={e => setVal(e.target.value)} /></div>}
-      {st === "vendido" && <select className="mv-sel" value={ger} onChange={e => setGer(e.target.value)}><option value="">Gerente que negociou *</option>{R.gerentesVenda().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}
-      {st && st !== "vendido" && <textarea rows={2} placeholder="Parecer: o que aconteceu, próximo passo…" value={txt} onChange={e => setTxt(e.target.value)} />}
-      {st && <button className="mv-principal" onClick={salvar}>{st === "vendido" ? "Registrar venda" : "Salvar"}</button>}
+      {ehVenda && <div className="mv-2"><input inputMode="numeric" placeholder="Nº da venda" value={num} onChange={e => setNum(e.target.value)} /><input inputMode="decimal" placeholder="Valor (R$)" value={val} onChange={e => setVal(e.target.value)} /></div>}
+      {tipoVenda === "entrada" && <input inputMode="decimal" placeholder="Valor da entrada (R$)" value={ent} onChange={e => setEnt(e.target.value)} />}
+      {ehVenda && <select className="mv-sel" value={ger} onChange={e => setGer(e.target.value)}><option value="">Gerente que negociou *</option>{R.gerentesVenda().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}
+      {st && !ehVenda && <textarea rows={2} placeholder="Parecer: o que aconteceu, próximo passo…" value={txt} onChange={e => setTxt(e.target.value)} />}
+      {st && <button className="mv-principal" onClick={salvar}>{ehVenda ? "Registrar venda" : "Salvar"}</button>}
       {t.parecerEm && <div className="mv-ult">Último parecer: <b>{STATUS_CLIENTE[t.parecerStatus] || t.parecerStatus}</b>{t.parecer ? " — " + t.parecer : ""}</div>}
     </div>
   );

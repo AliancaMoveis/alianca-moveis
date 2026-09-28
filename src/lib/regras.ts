@@ -8,15 +8,20 @@ export const STATUS: Record<string, { label: string; cls: string }> = {
 };
 export const STATUS_CLIENTE: Record<string, string> = {
   aguardando_consultor: "Aguardando consultor", direcionado_consultor: "Direcionado ao consultor", visita_realizada: "Visita realizada",
-  agendado_loja: "Agendado loja", com_vendedor: "Com vendedor", orcamento: "Orçamento", sem_resposta: "Sem resposta", reagendado: "Reagendado", reprovado: "Reprovado", vendido_revisao: "Vendido — a confirmar",
-  vendido_promissoria: "Vendido — promissória", vendido: "Vendido — efetivado", venda_cancelada: "Venda cancelada", nao_compareceu: "Não compareceu",
+  agendado_loja: "Agendado loja", com_vendedor: "Com vendedor", orcamento: "Orçamento", sem_resposta: "Sem resposta", reagendado: "Reagendado", reprovado: "Reprovado",
+  em_obras: "Em obras", standby: "Standby", em_analise: "Em análise", ausente_endereco: "Ausente no endereço", vendido_revisao: "Vendido — a confirmar",
+  vendido_entrada: "Vendido — entrada + promissória", vendido_promissoria: "Vendido — 100% promissória", vendido: "Vendido — efetivado", venda_cancelada: "Venda cancelada", nao_compareceu: "Não compareceu",
 };
+// pareceres extras (menu "Mais opções")
+export const SITUACOES_EXTRA = ["em_obras", "standby", "em_analise"];
+export const SITUACOES_CONSULTOR = ["ausente_endereco", "em_obras", "standby", "em_analise"];
+export const TIPO_VENDA_INFORMADO: Record<string, string> = { efetivada: "à vista (paga)", entrada: "entrada + promissória", promissoria: "100% promissória" };
 export const TIPO_REEMBOLSO: Record<string, string> = { pedagio: "Pedágio", estacionamento: "Estacionamento", combustivel: "Combustível", outro: "Outro" };
 export const ETAPA_MEDIDA: Record<string, string> = { validar: "Validar medidas", agendada: "Medição agendada", realizada: "Medida feita — conferir", liberada: "Liberada para o checklist" };
 export const VENDA_STATUS: Record<string, string> = {
   registrada: "Pendente de análise", efetivada: "Efetivada", entrada: "Entrada + promissória", promissoria: "Promissória", cancelada: "Cancelada",
 };
-export const VENDA_TO_CLIENTE: Record<string, string> = { registrada: "vendido_revisao", promissoria: "vendido_promissoria", efetivada: "vendido", cancelada: "venda_cancelada" };
+export const VENDA_TO_CLIENTE: Record<string, string> = { registrada: "vendido_revisao", promissoria: "vendido_promissoria", entrada: "vendido_entrada", efetivada: "vendido", cancelada: "venda_cancelada" };
 export const ORDEM = ["aberta", "tratativa", "respondida", "informar", "concluida"];
 export const LIBS: Record<string, string> = {
   criar: "Abrir solicitações", verTudo: "Ver todos os setores (visão global)", cadastros: "Acessar aba Fábricas",
@@ -25,9 +30,9 @@ export const LIBS: Record<string, string> = {
 };
 export const MARKETING_SETORES = ["marketing_operadora", "marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente", "gerente_loja"];
 // status do cliente enquanto está com o vendedor (antes do desfecho)
-export const EM_ATENDIMENTO = ["com_vendedor", "orcamento", "sem_resposta", "reagendado"];
+export const EM_ATENDIMENTO = ["com_vendedor", "orcamento", "sem_resposta", "reagendado", "em_obras", "standby", "em_analise"];
 export const LIMITE_INATIVIDADE_H = 24;
-export const statusFinalCliente = ["vendido", "vendido_promissoria", "venda_cancelada", "nao_compareceu", "reprovado"];
+export const statusFinalCliente = ["vendido", "vendido_promissoria", "vendido_entrada", "venda_cancelada", "nao_compareceu", "reprovado"];
 export const COR_SETOR: Record<string, string> = {
   callcenter: "#4b6bd6", prazo_fabrica: "#b8802a", montagem: "#2f8fa8", assistencia: "#c23b3b", checklist: "#7a5bb5", medidas: "#1f9c7a",
   marketing_operadora: "#d1478f", marketing_supervisao: "#8e44ad", consultor_externo: "#b8802a", suporte_consultores: "#0f8a8a",
@@ -146,9 +151,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (c.venda && c.venda.status) return VENDA_TO_CLIENTE[c.venda.status] || c.statusCliente;
     if (c.statusCliente === "nao_compareceu") return "nao_compareceu";
     if (c.setorDestino === "marketing_supervisao") return "aguardando_consultor";
-    if (c.setorDestino === "consultor_externo") return (c.tratativa && c.tratativa.realizada) ? "visita_realizada" : "direcionado_consultor";
+    if (c.setorDestino === "consultor_externo") return SITUACOES_CONSULTOR.includes(c.statusCliente) ? c.statusCliente : (c.tratativa && c.tratativa.realizada) ? "visita_realizada" : "direcionado_consultor";
     if (c.setorDestino === "suporte_consultores") return "agendado_loja";
-    if (c.setorDestino === "atendente_cliente") return ["orcamento", "sem_resposta", "reagendado", "reprovado"].includes(c.statusCliente) ? c.statusCliente : "com_vendedor";
+    if (c.setorDestino === "atendente_cliente") return ["orcamento", "sem_resposta", "reagendado", "reprovado", ...SITUACOES_EXTRA].includes(c.statusCliente) ? c.statusCliente : "com_vendedor";
     return c.statusCliente || "aguardando_consultor";
   }
   function statusClienteDe(c: Chamado) { if (domMarketing(c)) return normalizarStatusCliente(c); if (c.statusCliente) return c.statusCliente; return "aguardando_consultor"; }

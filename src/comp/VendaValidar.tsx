@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { VENDA_STATUS, fmtDate, fmtMoeda, hojeISO, parseMoeda, promAbertas, valorPendente } from "../lib/regras";
+import { TIPO_VENDA_INFORMADO } from "../lib/regras";
 
 type Prom = { numero: string; valor: string; vencimento: string };
 const total = (v: any) => (v.valorNum != null ? Number(v.valorNum) : parseMoeda(v.valor));
@@ -14,8 +15,8 @@ export function ValidarVenda({ c, onFeito }: { c: any; onFeito?: () => void }) {
   const v = c.venda || {};
   const T = total(v);
   const abertas = promAbertas(v);
-  const [st, setSt] = useState<string>(v.status === "registrada" ? "" : v.status);
-  const [ent, setEnt] = useState(v.entrada ? fmt(v.entrada) : "");
+  const [st, setSt] = useState<string>(v.status === "registrada" ? (v.tipoInformado || "") : v.status);
+  const [ent, setEnt] = useState(v.entrada ? fmt(v.entrada) : v.entradaInformada ? fmt(v.entradaInformada) : "");
   const [proms, setProms] = useState<Prom[]>(abertas.length ? abertas.map((p: any) => ({ numero: p.numero, valor: fmt(p.valor), vencimento: p.vencimento })) : [{ numero: "", valor: "", vencimento: "" }]);
   const entN = st === "entrada" ? parseMoeda(ent) : 0;
   const resto = Math.max(0, T - entN);
@@ -39,6 +40,7 @@ export function ValidarVenda({ c, onFeito }: { c: any; onFeito?: () => void }) {
   const Op = ({ k, l, d }: any) => <button type="button" className={"vv-op" + (st === k ? " on" : "") + (k === "cancelada" ? " canc" : "")} onClick={() => setSt(k)}><b>{l}</b><small>{d}</small></button>;
   return (
     <div className="vv">
+      {v.status === "registrada" && v.tipoInformado && <div className="vv-info">O vendedor informou: <b>{TIPO_VENDA_INFORMADO[v.tipoInformado]}</b>{v.entradaInformada ? <> · entrada <b>R$ {fmt(v.entradaInformada)}</b></> : null} — confira e valide.</div>}
       <div className="vv-ops">
         <Op k="efetivada" l="✅ Efetivada" d="pago — comissão sobre o total" />
         <Op k="entrada" l="🟡 Entrada + promissória" d="comissão sobre a entrada" />

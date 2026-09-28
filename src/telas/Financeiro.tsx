@@ -4,6 +4,7 @@ import { TIPO_REEMBOLSO, fmtDate, fmtDateTime, fmtMoeda, parseMoeda, vendaContaV
 import { valorPendente } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { PromissoriasAbertas } from "../comp/VendaValidar";
+import { FechamentoGestao, FechamentoMeu } from "../comp/Fechamento";
 
 export default function Financeiro() {
   const { R } = useApp();
@@ -86,7 +87,8 @@ function FinConsultor() {
     const totGeral = resumos.reduce((s, x) => s + x.r.total, 0);
     return (
       <section className="view active" id="view-financeiro">{cab}
-        <div className="kpis" id="finKpis"><Kpi n={totVisitas} l="Visitas pagas" /><Kpi n={totMed} l="Medidas feitas" /><Kpi n={totVendas} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(totVendido)} l="Valor vendido" /><Kpi fs={22} n={fmtMoeda(totComissao)} l={`Comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(totReemb)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(totGeral)} l="Total a receber" cor="var(--st-concluida)" /></div>
+        <div className="kpis" id="finKpis"><Kpi n={totVisitas} l="Visitas pagas" /><Kpi n={totMed} l="Medidas feitas" /><Kpi n={totVendas} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(totVendido)} l="Valor vendido" /><Kpi fs={22} n={fmtMoeda(totComissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(totReemb)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(totGeral)} l="Total a receber" cor="var(--st-concluida)" /></div>
+        <FechamentoGestao />
         <PromissoriasAbertas titulo="Promissórias em aberto (comissão futura)" />
         <div id="finResumoTodos" className="panel"><h3>Por consultor <span className="hint" style={{ marginLeft: 6 }}>clique para ver o extrato</span></h3>
           {resumos.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Nome</th><th>Visitas pagas</th><th>Medidas</th><th>Vendas efetivadas</th><th>Valor vendido</th><th>Visitas + medidas</th><th>Comissão ({pct}%)</th><th>Reembolsos</th><th>Valor a receber</th></tr></thead>
@@ -94,7 +96,7 @@ function FinConsultor() {
               <tr key={u.id} onClick={() => setCons(u.id)} style={{ cursor: "pointer" }}><td><b>{u.nome}</b>{(u.setores || []).includes("medidas") ? <span className="pill" style={{ marginLeft: 6 }}>medidor</span> : null}</td><td>{r.visitas.length}</td><td>{r.medidas.length}</td><td>{r.vendas.length}</td><td style={{ fontWeight: 700 }}>{fmtMoeda(r.totalVendido)}</td><td>{fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)}</td><td>{fmtMoeda(r.comissao)}</td><td>{fmtMoeda(r.totalReembolsos)}</td><td style={{ fontWeight: 800, color: "var(--st-concluida)" }}>{fmtMoeda(r.total)}</td></tr>))}</tbody>
             <tfoot><tr><td><b>Total</b></td><td><b>{totVisitas}</b></td><td><b>{totMed}</b></td><td><b>{totVendas}</b></td><td><b>{fmtMoeda(totVendido)}</b></td><td><b>{fmtMoeda(totVisitasR + totMedR)}</b></td><td><b>{fmtMoeda(totComissao)}</b></td><td><b>{fmtMoeda(totReemb)}</b></td><td style={{ fontWeight: 800, color: "var(--st-concluida)" }}>{fmtMoeda(totGeral)}</td></tr></tfoot></table></div>
             : <div className="empty">Nenhum consultor cadastrado.</div>}
-          <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Valor a receber = visitas realizadas e medidas feitas (R$ {pagamentoVisita} cada) + comissão de {pct}% sobre as vendas efetivadas (medida não gera comissão) + reembolsos aprovados. Vendas a confirmar e promissórias não entram.</div>
+          <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Previsão = visitas realizadas e medidas feitas (R$ {pagamentoVisita} cada) + comissão de {pct}% sobre as vendas efetivadas (medida não gera comissão) + reembolsos aprovados. Vendas a confirmar e promissórias não entram.</div>
         </div>
       </section>
     );
@@ -106,7 +108,8 @@ function FinConsultor() {
   const pagOrd = r.pagamentos.slice().sort((a: any, b: any) => +new Date(b.data) - +new Date(a.data));
   return (
     <section className="view active" id="view-financeiro">{cab}
-      <div className="kpis" id="finKpis"><Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={r.medidas.length} l="Medidas feitas" /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas com pagamento" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(r.total)} l="Valor a receber" cor="var(--st-concluida)" /><Kpi fs={22} n={fmtMoeda(r.comissaoFutura)} l={`Comissão futura (${r.pendentes.length} em promissória)`} cor="var(--warn)" /></div>
+      <div className="kpis" id="finKpis"><Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={r.medidas.length} l="Medidas feitas" /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas com pagamento" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(r.total)} l="Previsão a receber (a confirmar)" cor="var(--st-concluida)" /><Kpi fs={22} n={fmtMoeda(r.comissaoFutura)} l={`Comissão futura (${r.pendentes.length} em promissória)`} cor="var(--warn)" /></div>
+      <FechamentoMeu uid={alvo} />
       <div id="finDetalheWrap"><div className="panel-grid">
         <div className="panel"><h3>Pagamento por visitas <span className="pill" style={{ marginLeft: 8 }}>R$ {pagamentoVisita} por visita</span></h3><div id="finVisitas">
           {visOrd.length ? visOrd.map(c => <div className="fin-item" key={c.id}><div><div className="nm">{c.cliente}</div><div className="sub">Vinda à loja: {fmtDateTime(c.dataLoja)}</div></div><div className="val">{fmtMoeda(pagamentoVisita)}</div></div>) : <div className="empty" style={{ padding: "24px 10px" }}>Nenhuma visita paga no período.</div>}

@@ -1,4 +1,5 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
+import { SituacaoConsultor } from "./Situacao";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
@@ -11,7 +12,7 @@ import { Promissorias, SeloVenda, ValidarVenda } from "./VendaValidar";
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
 const corVenda = (vs: string) => vs === "efetivada" ? "var(--st-concluida)" : vs === "promissoria" ? "var(--st-tratativa)" : vs === "cancelada" ? "var(--danger)" : "var(--warn)";
-const VENDA_SC = ["vendido", "vendido_revisao", "vendido_promissoria", "venda_cancelada"];
+const VENDA_SC = ["vendido", "vendido_revisao", "vendido_promissoria", "vendido_entrada", "venda_cancelada"];
 
 export default function Detalhe({ id }: { id: string }) {
   const app = useApp();
@@ -193,6 +194,7 @@ function Tratativa({ c }: any) {
     return (
       <div className="resp-box"><h4>Tratativa — Visita do consultor {t.contatoIniciado && <span className="badge b-tratativa" style={{ marginLeft: 8 }}>Contato iniciado</span>}</h4>
         <div style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}><Btn on={t.contatoIniciado} campo="contatoIniciado" lOn="Contato iniciado ✓" lOff="Marcar contato iniciado" /></div>
+        <SituacaoConsultor c={c} />
         <div style={{ padding: "11px 13px", background: "var(--primary-soft)", border: "1px dashed var(--primary)", borderRadius: 9, marginBottom: 12, fontSize: 12.5, color: "var(--primary)" }}><b>Planta baixa e medidas:</b> anexe as fotos no bloco “Comprovações / anexos”, abaixo. Use o campo ao lado só para complementos.</div>
         <div className="grid">
           <div className="field full"><label>Complemento das medidas <span className="hint">(opcional — o oficial é a planta anexada)</span></label><textarea value={v.medidas} onChange={s("medidas")} placeholder="Ex.: cotas que não aparecem na planta"></textarea></div>
@@ -244,12 +246,13 @@ function Tratativa({ c }: any) {
       {t.parecer && <RowSb k="Parecer">{t.parecer}</RowSb>}
       <button className="btn sm" onClick={() => sc === "reprovado" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>{sc === "reprovado" ? "Reabrir atendimento" : "Cliente veio afinal — reabrir"}</button></div>;
     // status do atendimento do vendedor, com parecer
-    const OPC: [string, string][] = [["orcamento", "Orçamento"], ["sem_resposta", "Sem resposta"], ["reagendado", "Reagendado"], ["reprovado", "Reprovado"], ["nao_compareceu", "Não compareceu"], ["vendido", "Vendido — registrar a venda"], ["com_vendedor", "Em atendimento"]];
+    const OPC: [string, string][] = [["orcamento", "Orçamento"], ["sem_resposta", "Sem resposta"], ["reagendado", "Reagendado"], ["reprovado", "Reprovado"], ["nao_compareceu", "Não compareceu"], ["vendido", "Vendido — registrar a venda"], ["com_vendedor", "Em atendimento"],
+      ["em_obras", "Em obras"], ["standby", "Standby"], ["em_analise", "Em análise"], ["vendido_entrada", "Vendido — entrada + promissória"], ["vendido_promissoria", "Vendido — 100% promissória"]];
     const salvarStatus = () => {
       if (!vs) { toast("Escolha o status"); return; }
-      if (vs === "vendido") { const alvo = document.getElementById("tVendaNumero"); if (alvo) { alvo.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => (alvo as HTMLInputElement).focus(), 350); } toast("Registre o nº e o valor da venda no bloco Dados da venda"); return; }
+      if (vs.startsWith("vendido")) { const tp = vs === "vendido_entrada" ? "entrada" : vs === "vendido_promissoria" ? "promissoria" : "efetivada"; window.dispatchEvent(new CustomEvent("tipo-venda", { detail: tp })); const alvo = document.getElementById("tVendaNumero"); if (alvo) { alvo.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => (alvo as HTMLInputElement).focus(), 350); } toast("Registre o nº e o valor da venda no bloco Dados da venda"); return; }
       if (vs === "reagendado" && (!vsData || vsData.length < 16)) { toast("Informe a nova data e horário da vinda à loja"); return; }
-      if (["orcamento", "sem_resposta", "reprovado"].includes(vs) && !vsTxt.trim()) { toast("Escreva o parecer: o que aconteceu com o cliente"); return; }
+      if (["orcamento", "sem_resposta", "reprovado", "em_obras", "standby", "em_analise"].includes(vs) && !vsTxt.trim()) { toast("Escreva o parecer: o que aconteceu com o cliente"); return; }
       ex(() => A.vendedorStatus(c.id, vs, vs === "reagendado" ? vsData : "", vsTxt.trim()), "Status atualizado").then(ok => { if (ok) { setVs(""); setVsData(""); setVsTxt(""); } });
     };
     return (
@@ -264,7 +267,7 @@ function Tratativa({ c }: any) {
         <div className="grid">
           <div className="field"><label>Status do atendimento <span className="req-star">*</span></label><select value={vs} onChange={e => setVs(e.target.value)}><option value="">Selecione…</option>{OPC.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
           {vs === "reagendado" && <div className="field"><label>Nova data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={vsData} onChange={e => setVsData(e.target.value)} /></div>}
-          {vs && vs !== "vendido" && <div className="field full"><label>Parecer {["orcamento", "sem_resposta", "reprovado"].includes(vs) && <span className="req-star">*</span>}</label><textarea value={vsTxt} onChange={e => setVsTxt(e.target.value)} placeholder="O que aconteceu: valor do orçamento, próximo passo, motivo da recusa…" /></div>}
+          {vs && !vs.startsWith("vendido") && <div className="field full"><label>Parecer {["orcamento", "sem_resposta", "reprovado", "em_obras", "standby", "em_analise"].includes(vs) && <span className="req-star">*</span>}</label><textarea value={vsTxt} onChange={e => setVsTxt(e.target.value)} placeholder="O que aconteceu: valor do orçamento, próximo passo, motivo da recusa…" /></div>}
         </div>
         <div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={salvarStatus}>Salvar status</button></div>
       </div>
@@ -314,11 +317,12 @@ function Venda({ c }: any) {
   const [editando, setEditando] = useState(false);
   const [validar, setValidar] = useState(false);
   const v = c.venda || null;
-  const iniF = () => ({ numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || hojeISO(), vendedor: v?.vendedor || (c.atendenteId ? R.nomeUser(c.atendenteId) : "") || R.me()?.nome || "", gerente: v?.gerenteId || "" });
+  const iniF = () => ({ tipo: v?.tipoInformado || "", entrada: v?.entradaInformada ? String(v.entradaInformada).replace(".", ",") : "", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || hojeISO(), vendedor: v?.vendedor || (c.atendenteId ? R.nomeUser(c.atendenteId) : "") || R.me()?.nome || "", gerente: v?.gerenteId || "" });
   const iniG = () => ({ status: v?.status || "registrada", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVenda || "", vendedor: v?.vendedor || "" });
   const [f, setF] = useState<any>(iniF);
   const [g, setG] = useState<any>(iniG);
   useEffect(() => { setF(iniF()); setG(iniG()); setEditando(false); }, [c.id, JSON.stringify(v)]);
+  useEffect(() => { const h = (e: any) => setF((x: any) => ({ ...x, tipo: e.detail })); window.addEventListener("tipo-venda", h); return () => window.removeEventListener("tipo-venda", h); }, []);
   if (!c.venda && !c.dataLoja) return null;
   const podeRegistrar = R.podeTratar(c) || R.ehGestao();
   const vejaVal = R.podeVerValor(c);
@@ -330,18 +334,23 @@ function Venda({ c }: any) {
     if (!String(f.valor).trim() || parseMoeda(f.valor) <= 0) { toast("Informe o valor da venda"); document.getElementById("tVendaValor")?.focus(); return; }
     if (!f.vendedor.trim()) { toast("Informe o vendedor da loja"); return; }
     if (!f.gerente) { toast("Informe o gerente que negociou a venda"); document.getElementById("tVendaGerente")?.focus(); return; }
+    if (!f.tipo) { toast("Informe como foi o pagamento"); return; }
+    const entN = parseMoeda(f.entrada);
+    if (f.tipo === "entrada" && (!entN || entN >= parseMoeda(f.valor))) { toast("Informe o valor da entrada (menor que o total)"); return; }
     const ed = !!c.venda;
-    await ex(() => A.registrarVenda(c.id, f.numero.trim(), parseMoeda(f.valor), f.data, f.vendedor.trim(), f.gerente), ed ? "Venda atualizada, aguardando validação" : "Venda registrada, aguardando confirmação da Gestão");
+    await ex(() => A.registrarVenda(c.id, f.numero.trim(), parseMoeda(f.valor), f.data, f.vendedor.trim(), f.gerente, f.tipo, f.tipo === "entrada" ? entN : null), ed ? "Venda atualizada, aguardando validação" : "Venda registrada, aguardando confirmação da Gestão");
   }
   const form = (
     <div className="resp-box"><h4>Dados da venda</h4>
-      <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 12 }}>Preencha quando o cliente fechar a compra. A Gestão confirma depois se é promissória ou efetivada.</div>
+      <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 12 }}>Preencha quando o cliente fechar a compra. A Gestão analisa e confirma.</div>
       <div className="grid">
         <div className="field"><label>Nº da venda <span className="req-star">*</span></label><input id="tVendaNumero" placeholder="Ex.: 48310" value={f.numero || ""} onChange={s("numero")} /></div>
         <div className="field"><label>Valor da venda <span className="req-star">*</span></label><input id="tVendaValor" placeholder="Ex.: 8.500,00" value={f.valor || ""} onChange={s("valor")} /></div>
         <div className="field"><label>Data da venda</label><input type="date" value={f.data || ""} onChange={s("data")} /></div>
         <div className="field"><label>Vendedor na loja</label><input placeholder="Nome de quem vendeu" value={f.vendedor || ""} onChange={s("vendedor")} /></div>
         <div className="field"><label>Gerente que negociou <span className="req-star">*</span></label><select id="tVendaGerente" value={f.gerente || ""} onChange={s("gerente")}><option value="">Selecione…</option>{R.gerentesVenda().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
+        <div className="field"><label>Pagamento <span className="req-star">*</span></label><select value={f.tipo || ""} onChange={s("tipo")}><option value="">Selecione…</option><option value="efetivada">À vista (pago)</option><option value="entrada">Entrada + promissória</option><option value="promissoria">100% promissória</option></select></div>
+        {f.tipo === "entrada" && <div className="field"><label>Valor da entrada <span className="req-star">*</span></label><input placeholder="Ex.: 3.000,00" value={f.entrada || ""} onChange={s("entrada")} /></div>}
       </div>
       <div style={{ marginTop: 12, display: "flex", gap: 9 }}><button className="btn primary sm" onClick={registrar}>Registrar venda</button>{editando && <button className="btn ghost sm" onClick={() => setEditando(false)}>Cancelar</button>}</div>
     </div>
