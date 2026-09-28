@@ -1,0 +1,5 @@
+-- Vendas de setembro importadas da planilha (PDF) — 220 vendas, chamados com tratativa.importado = 'vendas_setembro_2026'
+-- (feito via SQL: chamado tipo visita_consultor, etapa atendente_cliente, venda 'registrada', sem vendedor/telefone/ambiente;
+--  avisos automáticos removidos e 1 aviso por venda enviado ao consultor)
+-- _trg_venda_cria_medida: vendas importadas não geram medida automática (migração importacao_sem_medida).
+-- No front, vendas importadas não contam como visita/cliente no funil (visitas sobem separadas).

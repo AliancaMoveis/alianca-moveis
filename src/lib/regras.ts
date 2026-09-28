@@ -310,19 +310,22 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   // ---------- funil do marketing: visita → loja → venda ----------
   // período pela data da visita (ou do cadastro, se não houver); agendamento direto pela data na loja
-  const visitaFeita = (c: Chamado) => !!((c.tratativa && c.tratativa.realizada) || c.dataLoja || c.venda);
+  // venda importada de planilha não é visita (as visitas sobem separadas)
+  const ehImportado = (c: Chamado) => !!(c.tratativa && c.tratativa.importado);
+  const visitaFeita = (c: Chamado) => !ehImportado(c) && !!((c.tratativa && c.tratativa.realizada) || c.dataLoja || c.venda);
   const compareceu = (c: Chamado) => !!c.venda || ["orcamento", "sem_resposta", "reprovado"].includes(statusClienteDe(c));
   function funil(lista: Chamado[]) {
     const pct = cfg().comissaoPct;
-    const realizadas = lista.filter(visitaFeita), agendadas = lista.filter(c => !!c.dataLoja);
-    const vieram = lista.filter(compareceu), faltaram = lista.filter(c => statusClienteDe(c) === "nao_compareceu");
+    const L = lista.filter(c => !ehImportado(c)); // visitas/clientes: sem as vendas importadas
+    const realizadas = L.filter(visitaFeita), agendadas = L.filter(c => !!c.dataLoja);
+    const vieram = L.filter(compareceu), faltaram = L.filter(c => statusClienteDe(c) === "nao_compareceu");
     const vendas = lista.filter(c => vendaContaVolume(c.venda)), aConfirmar = lista.filter(c => c.venda && c.venda.status === "registrada");
     const efetivadas = lista.filter(c => vendaContaComissao(c.venda));
     const valor = vendas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
     const comissao = efetivadas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0) * pct / 100;
     const pendentes = lista.filter(c => c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.realizada));
     const taxa = (a: number, b: number) => b ? Math.round(a / b * 100) : null;
-    return { total: lista.length, realizadas: realizadas.length, agendadas: agendadas.length, vieram: vieram.length, faltaram: faltaram.length,
+    return { total: L.length, realizadas: realizadas.length, agendadas: agendadas.length, vieram: vieram.length, faltaram: faltaram.length,
       vendas: vendas.length, aConfirmar: aConfirmar.length, valor, comissao, pendentes: pendentes.length,
       pPresenca: taxa(vieram.length, realizadas.length), pVisitaVenda: taxa(vendas.length, realizadas.length), pLojaVenda: taxa(vendas.length, vieram.length) };
   }
@@ -558,7 +561,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     acompAtivo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, temCadastros, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
-    funil, funilConsultor, clientesConsultor, visitaFeita, compareceu, ancoraVisita,
+    funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
     ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,

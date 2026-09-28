@@ -118,6 +118,7 @@ function ClienteCard({ c }: any) {
   const dataChave = direto ? c.dataLoja : c.dataVisita;
   const itens: [string, string][] = [["Telefone", c.telefone || "—"], ["E-mail", c.email || "—"], [direto ? "Data na loja" : "Data da visita", dataChave ? fmtDT(dataChave) : "—"], ["Ambiente de interesse", c.produto || "—"]];
   if (!direto) itens.splice(2, 0, ["Consultor", consultor ? consultor.nome : "—"], ["Endereço", c.endereco || "—"]);
+  if (R.ehImportado(c)) { const i = itens.findIndex(x => x[0] === "Data da visita"); if (i >= 0) itens[i] = ["Origem", "Venda importada (planilha) — não conta como visita"]; }
   const tt = c.tratativa || {};
   if (c.atendenteId) itens.push(["Vendedor", R.nomeUser(c.atendenteId) + (tt.assumidoFila ? " — assumiu da fila (tela da loja)" : "")]);
   else if (tt.atendenteExterno) itens.push(["Vendedor", tt.atendenteExterno + " — freelancer, assumiu da fila (sem cadastro)"]);
