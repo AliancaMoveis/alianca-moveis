@@ -2,7 +2,7 @@
 // Não mostra a agenda do dia (isso fica em "Agendamento loja").
 import { PromissoriasAbertas } from "../comp/VendaValidar";
 import { useApp } from "../estado";
-import { fmtDate, fmtMoeda, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, temPendenteGestao, valorPendente, itensPendentes } from "../lib/regras";
+import { fmtDate, fmtMoeda, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, negociadoPeriodo, temPendenteGestao, valorPendente, itensPendentes } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
 
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) + "%" : "—");
@@ -20,12 +20,15 @@ export default function PainelGestao({ de, ate }: { de: string; ate: string }) {
   const soma = (l: any[]) => l.reduce((s, c) => s + val(c), 0);
   // vendido: cada nº conta no mês em que foi efetivado (pagamento de promissória no mês em que foi pago)
   const vendidas = vendasDoPeriodo(mkt, de, ate);
-  const efet = vendidas.filter((c: any) => c.venda.status === "efetivada"), conf = por("registrada"), canc = por("cancelada");
+  const conf = por("registrada"), canc = por("cancelada");
   // promissória em aberto: saldo atual de todos os clientes (qualquer mês)
   const emProm = mkt.filter((c: any) => c.venda && c.venda.status !== "cancelada" && valorPendente(c.venda) > 0);
   const valProm = emProm.reduce((s: number, c: any) => s + valorPendente(c.venda), 0);
+  // só consulta: efetivado + promissória confirmada (não entra em pagamento nem relatórios)
+  const totNeg = mkt.reduce((s: number, c: any) => s + negociadoPeriodo(c.venda, de, ate), 0);
   const totalVend = soma(vendidas), ticket = vendidas.length ? totalVend / vendidas.length : 0;
   const maior = vendidas.slice().sort((a: any, b: any) => val(b) - val(a))[0];
+  const maiorReal = mkt.map((c: any) => ({ c, v: negociadoPeriodo(c.venda, de, ate) })).filter((x: any) => x.v > 0).sort((a: any, b: any) => b.v - a.v)[0];
   const aConfirmarTodas = mkt.filter((c: any) => c.venda && temPendenteGestao(c.venda));
   const conf24 = aConfirmarTodas.filter((c: any) => (itensPendentes(c.venda)[0]?.registradoEm || c.venda.quando) && Date.now() - new Date(itensPendentes(c.venda)[0]?.registradoEm || c.venda.quando).getTime() > 86400000);
 
@@ -72,14 +75,15 @@ export default function PainelGestao({ de, ate }: { de: string; ate: string }) {
     <div className="pg-wrap">
       <div className="sec-label" style={{ margin: "0 0 8px" }}>Vendas no período</div>
       <div className="kpis">
-        <Kpi fs={22} n={fmtMoeda(totalVend)} l={`Vendido (${vendidas.length} vendas)`} cor="var(--st-concluida)" />
-        <Kpi fs={22} n={fmtMoeda(soma(efet))} l={`Quitadas — sem promissória (${efet.length})`} />
+        <Kpi fs={22} n={fmtMoeda(totalVend)} l={`Vendido efetivado (${vendidas.length} vendas)`} cor="var(--st-concluida)" />
+        <Kpi fs={22} n={fmtMoeda(totNeg)} l="Total vendido no mês (efetivado + promissória) · só consulta" cor="var(--primary)" />
         <Kpi fs={22} n={fmtMoeda(valProm)} l={`Pendente em promissória (${emProm.length} clientes)`} cor={emProm.length ? "var(--st-tratativa)" : undefined} />
         <Kpi fs={22} n={fmtMoeda(ticket)} l="Ticket médio" />
         <Kpi n={conf.length} l={`A confirmar · ${fmtMoeda(soma(conf))}`} cls={conf.length ? "urg" : ""} />
         <Kpi n={conf24.length} l="A confirmar há +24h (todas)" cls={conf24.length ? "alert" : ""} cor={conf24.length ? "var(--danger)" : undefined} />
         <Kpi n={canc.length} l={`Canceladas · ${fmtMoeda(soma(canc))}`} />
-        <Kpi fs={22} n={maior ? fmtMoeda(val(maior)) : "—"} l={maior ? "Maior venda · " + maior.cliente : "Maior venda"} />
+        <Kpi fs={22} n={maior ? fmtMoeda(val(maior)) : "—"} l={maior ? "Maior venda efetivada · " + maior.cliente : "Maior venda efetivada"} />
+        <Kpi fs={22} n={maiorReal ? fmtMoeda(maiorReal.v) : "—"} l={maiorReal ? "Maior venda realizada (efetivado + promissória) · " + maiorReal.c.cliente : "Maior venda realizada"} />
       </div>
 
       <div className="sec-label" style={{ margin: "4px 0 8px" }}>Clientes e loja no período</div>

@@ -95,6 +95,14 @@ export function pagamentosVenda(v: any): { valor: number; data: string; tipo: st
 const noIntervalo = (d: string, de: string, ate: string) => !!d && (!de || d >= de) && (!ate || d <= String(ate).slice(0, 10));
 export const pagamentosNoPeriodo = (v: any, de: string, ate: string) => pagamentosVenda(v).filter(p => noIntervalo(p.data, de, ate));
 export const valorVendaPeriodo = (v: any, de: string, ate: string) => pagamentosNoPeriodo(v, de, ate).reduce((s, p) => s + p.valor, 0);
+// TOTAL NEGOCIADO no período (só consulta): nºs pagos efetivados + promissórias confirmadas (valor cheio), cada um no seu mês.
+// Pagamento de promissória não entra de novo (a promissória já foi contada inteira).
+export function negociadoPeriodo(v: any, de: string, ate: string): number {
+  if (!v || v.status === "cancelada") return 0;
+  if (!Array.isArray(v.itens)) return ["efetivada", "entrada", "promissoria"].includes(v.status) && noIntervalo(String(v.dataVenda || v.quando || "").slice(0, 10), de, ate) ? (v.valorNum != null ? Number(v.valorNum) : parseMoeda(v.valor)) : 0;
+  return v.itens.filter((i: any) => (i.tipo === "pago" || i.tipo === "promissoria") && i.status === "efetivada" && noIntervalo(competenciaItem(i.dataVenda, i.decididoEm, i.registradoEm), de, ate))
+    .reduce((s: number, i: any) => s + i.valor, 0);
+}
 // clientes com venda no período, com o valor (e a data) só do que entrou no período — use no lugar de "venda com data no período"
 export function vendasDoPeriodo(lista: any[], de: string, ate: string): any[] {
   return lista.filter(c => vendaContaVolume(c.venda)).map(c => {
