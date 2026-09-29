@@ -8,7 +8,7 @@ import { numsVenda, EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoe
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import { SinoAvisos } from "../comp/Avisos";
-import { SeloVenda } from "../comp/VendaValidar";
+import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
 import { SituacaoConsultor } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
 import { RemarcarData } from "../comp/Remarcar";
@@ -432,25 +432,33 @@ function AcoesVendedor({ c }: any) {
   const t = c.tratativa || {};
   const sc = R.statusClienteDe(c);
   const [st, setSt] = useState(""); const [txt, setTxt] = useState(""); const [data, setData] = useState("");
-  const [num, setNum] = useState(""); const [val, setVal] = useState(""); const [ger, setGer] = useState(""); const [ent, setEnt] = useState("");
+  const [ger, setGer] = useState(""); const [linhas, setLinhas] = useState<Linha[]>(() => linhasDoTipo("")); const [add, setAdd] = useState(false);
+  const lancar = (sub: boolean) => {
+    const r = conferirLinhas(linhas); if (r.erro) { toast(r.erro); return; }
+    if (!ger) { toast("Informe o gerente que negociou"); return; }
+    ex(() => A.registrarVendaItens(c.id, r.itens!, hojeISO(), R.me()?.nome || "", ger, sub), c.venda ? "Venda lançada — a Gestão analisa" : "Venda registrada — a Gestão analisa")
+      .then((ok: boolean) => { if (ok) { setSt(""); setAdd(false); setLinhas(linhasDoTipo("")); } });
+  };
+  const selGer = <select className="mv-sel" value={ger} onChange={e => setGer(e.target.value)}><option value="">Gerente que negociou *</option>{R.gerentesVenda().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>;
+  if (c.venda && (R.podeTratar(c) || R.ehGestao())) return <div className="mv-bloco">
+    <div className="mv-ok">✓ Venda registrada <SeloVenda c={c} /></div>
+    {!add ? <button className="btn sm" onClick={() => { setLinhas(linhasDoTipo("")); setAdd(true); }}>＋ Adicionar venda / promissória</button> : <>
+      <div className="mv-bloco-t" style={{ marginTop: 8 }}>Outro nº de venda deste cliente</div>
+      <LinhasVenda linhas={linhas} setLinhas={setLinhas} />{selGer}
+      <div className="mv-2"><button className="mv-principal" onClick={() => lancar(false)}>Lançar venda</button><button className="mv-op" onClick={() => setAdd(false)}>Cancelar</button></div>
+    </>}
+  </div>;
   if (c.setorDestino !== "atendente_cliente" || c.venda) return c.venda ? <div className="mv-ok">✓ Venda nº {c.venda.numero} registrada</div> : null;
   if (["reprovado", "nao_compareceu"].includes(sc)) return <div className="mv-bloco"><div className="mv-ok" style={{ color: "var(--danger)" }}>{STATUS_CLIENTE[sc]}</div>
     <button className="btn sm" onClick={() => sc === "reprovado" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>Reabrir atendimento</button></div>;
   const OPC: [string, string][] = [["orcamento", "Orçamento"], ["sem_resposta", "Sem resposta"], ["reagendado", "Reagendado"], ["reprovado", "Reprovado"], ["nao_compareceu", "Não veio"], ["vendido", "Vendido"]];
   const MAIS: [string, string][] = [["vendido_entrada", "Vendido — entrada + promissória"], ["vendido_promissoria", "Vendido — 100% promissória"], ["em_obras", "Em obras"], ["standby", "Standby"], ["em_analise", "Em análise"], ["nao_compareceu", "Não compareceu"]];
   const ehVenda = st === "vendido" || st === "vendido_entrada" || st === "vendido_promissoria";
-  const tipoVenda = st === "vendido_entrada" ? "entrada" : st === "vendido_promissoria" ? "promissoria" : "efetivada";
+  const tipoDe = (k: string) => k === "vendido_entrada" ? "entrada" : k === "vendido_promissoria" ? "promissoria" : "efetivada";
+  const escolher = (k: string) => { setSt(k); if (["vendido", "vendido_entrada", "vendido_promissoria"].includes(k) && !linhas.some(l => l.numero || l.valor)) setLinhas(linhasDoTipo(tipoDe(k))); };
   const salvar = () => {
     if (!st) { toast("Escolha o status"); return; }
-    if (ehVenda) {
-      if (!num.trim()) { toast("Informe o nº da venda"); return; }
-      const v = parseMoeda(val); if (!v || v <= 0) { toast("Informe o valor da venda"); return; }
-      const e = parseMoeda(ent);
-      if (tipoVenda === "entrada" && (!e || e <= 0 || e >= v)) { toast("Informe o valor da entrada (menor que o total)"); return; }
-      if (!ger) { toast("Informe o gerente que negociou"); return; }
-      ex(() => A.registrarVenda(c.id, num.trim(), v, hojeISO(), R.me()?.nome || "", ger, tipoVenda, tipoVenda === "entrada" ? e : null), "Venda registrada — a Gestão analisa").then((ok: boolean) => ok && setSt(""));
-      return;
-    }
+    if (ehVenda) { lancar(false); return; }
     if (st === "reagendado" && (!data || data.length < 16)) { toast("Escolha a nova data e horário"); return; }
     if (["orcamento", "sem_resposta", "reprovado", "em_obras", "standby", "em_analise"].includes(st) && !txt.trim()) { toast("Escreva o parecer"); return; }
     ex(() => A.vendedorStatus(c.id, st, st === "reagendado" ? data : "", txt.trim()), "Status salvo").then((ok: boolean) => { if (ok) { setSt(""); setTxt(""); setData(""); } });
@@ -465,13 +473,12 @@ function AcoesVendedor({ c }: any) {
         <button className={"mv-op" + (t.projetoSistema ? " on" : "")} onClick={() => ex(() => A.alternarMarcacao(c.id, "projetoSistema"), "Atualizado")}>{t.projetoSistema ? "✓ Projeto no sistema" : "Projeto pronto no sistema"}</button>
       </div>
       <div className="mv-bloco-t" style={{ marginTop: 12 }}>Como foi o atendimento?</div>
-      <div className="mv-3">{OPC.map(([k, l]) => <button key={k} className={"mv-op" + (st === k ? " on" : "") + (k === "vendido" ? " venda" : "")} onClick={() => setSt(k)}>{l}</button>)}</div>
-      <select className={"mv-mais" + (MAIS.some(([k]) => k === st) ? " on" : "")} value={MAIS.some(([k]) => k === st) ? st : ""} onChange={e => setSt(e.target.value)}>
+      <div className="mv-3">{OPC.map(([k, l]) => <button key={k} className={"mv-op" + (st === k ? " on" : "") + (k === "vendido" ? " venda" : "")} onClick={() => escolher(k)}>{l}</button>)}</div>
+      <select className={"mv-mais" + (MAIS.some(([k]) => k === st) ? " on" : "")} value={MAIS.some(([k]) => k === st) ? st : ""} onChange={e => escolher(e.target.value)}>
         <option value="">Mais opções ▾</option>{MAIS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
       {st === "reagendado" && <input type="datetime-local" value={data} onChange={e => setData(e.target.value)} />}
-      {ehVenda && <div className="mv-2"><input inputMode="numeric" placeholder="Nº da venda" value={num} onChange={e => setNum(e.target.value)} /><input inputMode="decimal" placeholder="Valor (R$)" value={val} onChange={e => setVal(e.target.value)} /></div>}
-      {tipoVenda === "entrada" && <input inputMode="decimal" placeholder="Valor da entrada (R$)" value={ent} onChange={e => setEnt(e.target.value)} />}
-      {ehVenda && <select className="mv-sel" value={ger} onChange={e => setGer(e.target.value)}><option value="">Gerente que negociou *</option>{R.gerentesVenda().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}
+      {ehVenda && <LinhasVenda linhas={linhas} setLinhas={setLinhas} />}
+      {ehVenda && selGer}
       {st && !ehVenda && <textarea rows={2} placeholder="Parecer: o que aconteceu, próximo passo…" value={txt} onChange={e => setTxt(e.target.value)} />}
       {st && <button className="mv-principal" onClick={salvar}>{ehVenda ? "Registrar venda" : "Salvar"}</button>}
       {t.parecerEm && <div className="mv-ult">Último parecer: <b>{STATUS_CLIENTE[t.parecerStatus] || t.parecerStatus}</b>{t.parecer ? " — " + t.parecer : ""}</div>}

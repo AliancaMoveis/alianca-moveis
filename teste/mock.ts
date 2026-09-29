@@ -50,7 +50,7 @@ const MEDIDAS = [
     tr: { medida: { etapa: "agendada" } }, h: [[-30, "Lucilene", "Medição direcionada para Consultor — Anderson"]] },
 ];
 export function estadoMock(): Estado {
-  return {
+  const est: Estado = {
     usuarios, setores, tipos,
     representantes: [{ id: "r1", nome: "Marcos Vieira", whats: "5541999990001", email: "" }, { id: "r2", nome: "Juliana Prado", whats: "5547999990002", email: "" }, { id: "r3", nome: "Carlos Nunes", whats: "5549999990003", email: "" }],
     fabricas: [1, 2, 3, 4].map(i => ({ id: `00000000-0000-4000-c000-00000000000${i}`, nome: ["Móveis Bartira", "Henn Estofados", "Madesa Indústria", "Kappesberg"][i - 1], emails: "", repId: ["r1", "r2", "r3", "r1"][i - 1] })),
@@ -71,5 +71,20 @@ export function estadoMock(): Estado {
       posvenda: c.pv || null,
     })).sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm)),
   };
+  // um cliente com vários nºs de venda + promissória parcialmente paga (para as telas novas)
+  const cm: any = (est.chamados as any[]).find((c: any) => c.venda && c.venda.status === "efetivada");
+  if (cm) {
+    const hj = new Date().toISOString().slice(0, 10), ag = new Date().toISOString();
+    cm.venda.itens = [
+      { id: "i1", tipo: "pago", numero: cm.venda.numero, valor: 7200, dataVenda: hj, status: "efetivada", valorPago: 0, promissoriaId: "", registradoEm: ag, decididoEm: ag },
+      { id: "i2", tipo: "pago", numero: "1308706", valor: 50000, dataVenda: hj, status: "efetivada", valorPago: 0, promissoriaId: "", registradoEm: ag, decididoEm: ag },
+      { id: "i3", tipo: "promissoria", numero: "1308770", valor: 150000, dataVenda: hj, vencimento: hj, status: "efetivada", valorPago: 50000, promissoriaId: "", registradoEm: ag, decididoEm: ag },
+      { id: "i4", tipo: "pagamento", numero: "1309059", valor: 50000, dataVenda: hj, status: "efetivada", valorPago: 0, promissoriaId: "i3", registradoEm: ag, decididoEm: ag },
+      { id: "i5", tipo: "pago", numero: "1309999", valor: 3000, dataVenda: hj, status: "registrada", valorPago: 0, promissoriaId: "", registradoEm: ag, decididoEm: "" },
+    ];
+    cm.venda.promissorias = [{ ...cm.venda.itens[2], saldo: 100000, status: "aberta", quitadaEm: hj }];
+    cm.venda.status = "entrada"; cm.venda.valorNum = 210200; cm.venda.valor = fmtValor(210200);
+  }
+  return est;
 }
 export const usuariosMock = usuarios;

@@ -52,22 +52,42 @@ export const PV_ENCAMINHAR: Record<string, string> = { vistoria: "Solicitar vist
 export const corDoSetor = (id: string) => COR_SETOR[id] || "#8b94a3";
 export const vendaContaVolume = (v: any) => !!v && ["promissoria", "entrada", "efetivada"].includes(v.status);
 export const vendaContaComissao = (v: any) => !!v && v.status === "efetivada";
-// promissórias ainda não pagas desta venda
+// lançamentos da venda (nºs pagos, promissórias e pagamentos). Sem a lista (sem acesso ao valor / dados antigos), um nº só.
+export function itensVenda(v: any): any[] {
+  if (!v) return [];
+  if (Array.isArray(v.itens)) return v.itens;
+  const val = v.valorNum != null ? Number(v.valorNum) : parseMoeda(v.valor);
+  return v.numero ? [{ id: "", tipo: "pago", numero: v.numero, valor: val || 0, dataVenda: v.dataVendaReal || v.dataVenda || "", status: v.status === "registrada" ? "registrada" : v.status === "cancelada" ? "cancelada" : "efetivada", valorPago: 0, decididoEm: "", registradoEm: v.quando }] : [];
+}
+// nºs de venda do cliente (pagos + promissórias), sem cancelados
+export const numerosVenda = (v: any) => itensVenda(v).filter(i => i.tipo !== "pagamento" && i.status !== "cancelada");
+// lançamentos aguardando a Gestão
+export const itensPendentes = (v: any) => itensVenda(v).filter(i => i.status === "registrada");
+export const temPendenteGestao = (v: any) => !!v && (v.status === "registrada" || itensPendentes(v).length > 0);
+// promissórias validadas com saldo a receber
 export const promAbertas = (v: any) => (v && v.promissorias ? v.promissorias.filter((p: any) => p.status === "aberta") : []);
 // números de venda e de promissória (para a busca)
-export const numsVenda = (c: any) => (c && c.venda ? [c.venda.numero, ...(c.venda.promissorias || []).map((p: any) => p.numero)].filter(Boolean).join(" ") : "");
-export const valorPendente = (v: any) => promAbertas(v).reduce((s: number, p: any) => s + p.valor, 0);
-// pagamentos que geram comissão: entrada (data da venda) + promissórias pagas (data da quitação); efetivada sem promissória = total
+export const numsVenda = (c: any) => (c && c.venda ? [c.venda.numero, ...itensVenda(c.venda).map((i: any) => i.numero)].filter(Boolean).join(" ") : "");
+export const valorPendente = (v: any) => promAbertas(v).reduce((s: number, p: any) => s + (p.saldo != null ? p.saldo : p.valor), 0);
+export const valorPago = (v: any) => itensVenda(v).filter(i => i.tipo !== "promissoria" && i.status === "efetivada").reduce((s, i) => s + i.valor, 0);
+// competência do lançamento: se a data é de mês anterior ao da aprovação, conta no 1º dia do mês da aprovação
+export function competenciaItem(data: string, decidido: string, registrado?: string) {
+  const d = String(data || registrado || "").slice(0, 10);
+  const ap = decidido || registrado;
+  if (!d || !ap) return d;
+  const r = new Date(ap); const m = `${r.getFullYear()}-${String(r.getMonth() + 1).padStart(2, "0")}`;
+  return d.slice(0, 7) < m ? m + "-01" : d;
+}
+// pagamentos que geram comissão: cada nº pago efetivado (mês da aprovação) + cada pagamento de promissória (data do pagamento)
 export function pagamentosVenda(v: any): { valor: number; data: string; tipo: string; numero: string }[] {
-  if (!v || v.status === "cancelada" || v.status === "registrada") return [];
-  const dataV = String(v.dataVenda || v.quando || "").slice(0, 10);
-  const proms = v.promissorias || [];
-  const total = v.valorNum != null ? Number(v.valorNum) : parseMoeda(v.valor);
-  if (!proms.length) return v.status === "efetivada" ? [{ valor: total, data: dataV, tipo: "total", numero: v.numero }] : [];
-  const out: any[] = [];
-  if (v.entrada > 0 && (v.status === "entrada" || v.status === "efetivada")) out.push({ valor: v.entrada, data: dataV, tipo: "entrada", numero: v.numero });
-  proms.filter((p: any) => p.valorPago > 0).forEach((p: any) => out.push({ valor: p.valorPago, data: String(p.quitadaEm).slice(0, 10), tipo: "promissoria", numero: p.numero }));
-  return out;
+  if (!v) return [];
+  if (!Array.isArray(v.itens)) {
+    if (v.status !== "efetivada") return [];
+    const total = v.valorNum != null ? Number(v.valorNum) : parseMoeda(v.valor);
+    return [{ valor: total, data: String(v.dataVenda || v.quando || "").slice(0, 10), tipo: "total", numero: v.numero }];
+  }
+  return v.itens.filter((i: any) => i.tipo !== "promissoria" && i.status === "efetivada")
+    .map((i: any) => ({ valor: i.valor, data: competenciaItem(i.dataVenda, i.decididoEm, i.registradoEm), tipo: i.tipo === "pagamento" ? "promissoria" : "venda", numero: i.numero }));
 }
 
 // ---------- datas ----------
@@ -323,14 +343,17 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const LV = lista.filter(c => !vendaFora.has(c)); // vendas: só as do período
     const realizadas = L.filter(visitaFeita), agendadas = L.filter(c => !!c.dataLoja);
     const vieram = L.filter(compareceu), faltaram = L.filter(c => statusClienteDe(c) === "nao_compareceu");
-    const vendas = LV.filter(c => vendaContaVolume(c.venda)), aConfirmar = LV.filter(c => c.venda && c.venda.status === "registrada");
-    const efetivadas = LV.filter(c => vendaContaComissao(c.venda));
+    const vendas = LV.filter(c => vendaContaVolume(c.venda)), aConfirmar = LV.filter(c => c.venda && temPendenteGestao(c.venda));
     const valor = vendas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
-    const comissao = efetivadas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0) * pct / 100;
+    const comissao = LV.flatMap(c => pagamentosVenda(c.venda)).reduce((s, p) => s + p.valor, 0) * pct / 100;
+    // promissórias em aberto dos clientes do período (valor ainda a receber — comissão futura)
+    const emPromissoria = LV.filter(c => c.venda && c.venda.status !== "cancelada" && valorPendente(c.venda) > 0);
+    const valorPromissoria = emPromissoria.reduce((s, c) => s + valorPendente(c.venda), 0);
     const pendentes = lista.filter(c => c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.realizada));
     const taxa = (a: number, b: number) => b ? Math.round(a / b * 100) : null;
     return { total: L.length, realizadas: realizadas.length, agendadas: agendadas.length, vieram: vieram.length, faltaram: faltaram.length,
       vendas: vendas.length, aConfirmar: aConfirmar.length, valor, comissao, pendentes: pendentes.length,
+      emPromissoria: emPromissoria.length, valorPromissoria, listaPromissoria: emPromissoria,
       pPresenca: taxa(vieram.length, realizadas.length), pVisitaVenda: taxa(vendas.length, realizadas.length), pLojaVenda: taxa(vendas.length, vieram.length) };
   }
   const ancoraVisita = (c: Chamado) => c.dataVisita || c.criadoEm;
@@ -451,7 +474,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   // pendências
   function pendenciasGestao() {
-    const vendasConfirmar = state.chamados.filter(c => c.venda && c.venda.status === "registrada");
+    const vendasConfirmar = state.chamados.filter(c => c.venda && temPendenteGestao(c.venda));
     const promissorias = state.chamados.filter(c => c.venda && c.venda.status !== "cancelada" && promAbertas(c.venda).length > 0);
     const transferencias = state.chamados.filter(c => c.transferencia && c.transferencia.status === "pendente");
     return { vendasConfirmar, promissorias, transferencias, total: vendasConfirmar.length + promissorias.length + transferencias.length };
@@ -482,7 +505,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ehGestao()) {
       const p = pendenciasGestao();
       add("apvendas", "Vendas a confirmar", "Decida se a venda é efetivada, promissória ou cancelada.", p.vendasConfirmar, "var(--warn)");
-      add("appromis", "Promissórias em aberto", "Contam como venda, mas não geram comissão até serem efetivadas.", p.promissorias, "var(--st-tratativa)");
+      add("appromis", "Promissórias em aberto", "Contam como venda, mas a comissão dessa parte só sai quando forem pagas.", p.promissorias, "var(--st-tratativa)");
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
     if (temMarketing()) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");

@@ -4,7 +4,7 @@ import { A } from "../lib/acoes";
 import { STATUS_CLIENTE, TIPO_REEMBOLSO, VENDA_STATUS, fmtDate, fmtDateTime, fmtMoeda } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { PromissoriasAbertas, ValidarVenda } from "../comp/VendaValidar";
-import { promAbertas, TIPO_VENDA_INFORMADO, parseMoeda } from "../lib/regras";
+import { promAbertas, itensPendentes, parseMoeda } from "../lib/regras";
 
 export function Pendencias() {
   const { R, abrirDetalhe } = useApp();
@@ -60,7 +60,7 @@ export function Aprovacoes() {
     return (
       <div className={"ap-item " + classe} key={c.id}>
         <div><div className="nm" onClick={() => abrirDetalhe(c.id)}>{c.cliente}</div>
-          <div className="meta">Venda <b>{v.numero || "—"}</b> · {v.dataVenda ? fmtDate(v.dataVenda) : "—"} · vendedor <b>{v.vendedor || "—"}</b>{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : " · origem Marketing"}</div></div>
+          <div className="meta">Venda <b>{(Array.isArray(v.itens) ? itensPendentes(v).map((i: any) => i.numero).join(", ") : "") || v.numero || "—"}</b> · {v.dataVenda ? fmtDate(v.dataVenda) : "—"} · vendedor <b>{v.vendedor || "—"}</b>{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : " · origem Marketing"}</div></div>
         <div><div className="val">{v.valor ? "R$ " + v.valor : "—"}</div>
           <div className="acoes">
             {abrindo !== c.id && <button className="btn primary sm" onClick={() => setAbrindo(c.id)}>Validar</button>}
@@ -149,23 +149,24 @@ function VendasLote({ lista, linha }: { lista: any[]; linha: (c: any, cl: string
   lista.forEach((c: any) => { pessoas["v:" + vendedorDe(c)] = "Vendedor · " + vendedorDe(c); if (c.consultorId) pessoas["c:" + c.consultorId] = "Consultor · " + R.nomeUser(c.consultorId); if (c.venda.gerenteNome) pessoas["g:" + c.venda.gerenteNome] = "Gerente · " + c.venda.gerenteNome; });
   const filtra = (c: any) => !quem || (quem.startsWith("v:") ? "v:" + vendedorDe(c) === quem : quem.startsWith("c:") ? "c:" + c.consultorId === quem : "g:" + c.venda.gerenteNome === quem);
   const vis = lista.filter(filtra).sort((a: any, b: any) => String(a.venda.dataVenda || a.venda.quando).localeCompare(String(b.venda.dataVenda || b.venda.quando)));
-  const individual = (c: any) => ["entrada", "promissoria"].includes(c.venda.tipoInformado);
   const marcados = vis.filter((c: any) => sel[c.id]);
-  const val = (c: any) => c.venda.valorNum != null ? Number(c.venda.valorNum) : parseMoeda(c.venda.valor);
+  // valor a confirmar: soma dos lançamentos pendentes (vendas pagas + promissórias)
+  const pend = (c: any) => itensPendentes(c.venda);
+  const val = (c: any) => Array.isArray(c.venda.itens) ? pend(c).reduce((s: number, i: any) => s + i.valor, 0) : c.venda.valorNum != null ? Number(c.venda.valorNum) : parseMoeda(c.venda.valor);
+  const nums = (c: any) => Array.isArray(c.venda.itens) ? pend(c).map((i: any) => i.numero).join(", ") : c.venda.numero;
   const soma = marcados.reduce((s: number, c: any) => s + val(c), 0);
-  const todosOk = vis.filter((c: any) => !individual(c));
+  const todosOk = vis;
   const tudo = todosOk.length > 0 && todosOk.every((c: any) => sel[c.id]);
   const alternarTudo = () => { const n = { ...sel }; todosOk.forEach((c: any) => (n[c.id] = !tudo)); setSel(n); };
   const agir = (status: "efetivada" | "cancelada") => {
     if (!marcados.length) { toast("Marque as vendas conferidas"); return; }
-    if (status === "efetivada" && marcados.some(individual)) { toast("Há venda com entrada/promissória marcada — valide essa individualmente"); return; }
     const txt = status === "efetivada" ? "EFETIVAR" : "CANCELAR";
-    if (!confirm(`${txt} ${marcados.length} venda(s) · ${fmtMoeda(soma)}?\n\n${marcados.map((c: any) => "• " + c.venda.numero + " · " + c.cliente + " · " + fmtMoeda(val(c))).join("\n")}`)) return;
+    if (!confirm(`${txt} ${marcados.length} venda(s) · ${fmtMoeda(soma)}?\n\n${marcados.map((c: any) => "• " + nums(c) + " · " + c.cliente + " · " + fmtMoeda(val(c))).join("\n")}`)) return;
     executar(() => A.validarVendasLote(marcados.map((c: any) => c.id), status), marcados.length + (status === "efetivada" ? " venda(s) efetivada(s)" : " venda(s) cancelada(s)")).then((ok: boolean) => ok && setSel({}));
   };
   return (
     <div className="ap-sec"><h3>Vendas pendentes de análise <span className="badge b-tratativa">{lista.length}</span></h3>
-      <div className="sub">Confira em conjunto (por vendedor, consultor ou gerente), marque as conferidas e efetive de uma vez. <b>Entrada + promissória</b> e <b>100% promissória</b> são validadas uma a uma (botão Validar).</div>
+      <div className="sub">Confira em conjunto (por vendedor, consultor ou gerente), marque as conferidas e efetive de uma vez. Venda paga gera comissão; <b>promissória</b> vira valor pendente (comissão quando for paga). Para decidir nº a nº, use Validar.</div>
       <div className="lote-bar">
         <select value={quem} onChange={e => { setQuem(e.target.value); setSel({}); }}><option value="">Todas as pessoas ({lista.length})</option>{Object.entries(pessoas).sort((a, b) => a[1].localeCompare(b[1])).map(([k, l]) => <option key={k} value={k}>{l} ({lista.filter((c: any) => (k.startsWith("v:") ? "v:" + vendedorDe(c) === k : k.startsWith("c:") ? "c:" + c.consultorId === k : "g:" + c.venda.gerenteNome === k)).length})</option>)}</select>
         <div className="lote-res"><b>{marcados.length}</b> marcada(s) · <b>{fmtMoeda(soma)}</b></div>
@@ -174,16 +175,16 @@ function VendasLote({ lista, linha }: { lista: any[]; linha: (c: any, cl: string
         <button className="btn ghost sm" onClick={() => setModo(modo === "tabela" ? "cartoes" : "tabela")}>{modo === "tabela" ? "Ver em cartões" : "Ver em tabela"}</button>
       </div>
       {modo === "cartoes" ? vis.map((c: any) => linha(c, "")) :
-        <div style={{ overflowX: "auto" }}><table className="dl-tab lote-tab"><thead><tr><th><input type="checkbox" checked={tudo} onChange={alternarTudo} title="Marcar todas" /></th><th>Venda</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Gerente</th><th>Consultor</th><th>Pagamento informado</th><th style={{ textAlign: "right" }}>Valor</th><th></th></tr></thead>
-          <tbody>{vis.map((c: any) => { const ind = individual(c); return (
+        <div style={{ overflowX: "auto" }}><table className="dl-tab lote-tab"><thead><tr><th><input type="checkbox" checked={tudo} onChange={alternarTudo} title="Marcar todas" /></th><th>Venda</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Gerente</th><th>Consultor</th><th>A confirmar</th><th style={{ textAlign: "right" }}>Valor</th><th></th></tr></thead>
+          <tbody>{vis.map((c: any) => { return (
             <tr key={c.id} className={sel[c.id] ? "on" : ""}>
-              <td><input type="checkbox" disabled={ind} checked={!!sel[c.id]} onChange={() => setSel({ ...sel, [c.id]: !sel[c.id] })} /></td>
-              <td><b>{c.venda.numero}</b></td><td>{fmtDate(c.venda.dataVendaReal || c.venda.dataVenda || c.venda.quando)}{c.venda.dataVendaReal && c.venda.dataVendaReal !== c.venda.dataVenda ? <small title="Venda de mês anterior: conta no mês da aprovação"> ↻</small> : null}</td>
+              <td><input type="checkbox" checked={!!sel[c.id]} onChange={() => setSel({ ...sel, [c.id]: !sel[c.id] })} /></td>
+              <td><b>{nums(c)}</b></td><td>{fmtDate(c.venda.dataVendaReal || c.venda.dataVenda || c.venda.quando)}{c.venda.dataVendaReal && c.venda.dataVendaReal !== c.venda.dataVenda ? <small title="Venda de mês anterior: conta no mês da aprovação"> ↻</small> : null}</td>
               <td><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.id); }}>{c.cliente}</a>{R.ehProspeccao(c) ? " 🧭" : ""}</td>
               <td>{vendedorDe(c)}</td><td>{c.venda.gerenteNome || "—"}</td><td>{c.consultorId ? R.nomeUser(c.consultorId) : "—"}</td>
-              <td>{c.venda.tipoInformado ? TIPO_VENDA_INFORMADO[c.venda.tipoInformado] : "—"}{c.venda.entradaInformada ? " · entrada " + fmtMoeda(c.venda.entradaInformada) : ""}</td>
+              <td>{Array.isArray(c.venda.itens) ? pend(c).map((i: any) => <div key={i.id}>{i.tipo === "promissoria" ? "📄 promissória " : "💵 paga "}{fmtMoeda(i.valor)}</div>) : "—"}{c.venda.status !== "registrada" ? <small style={{ color: "var(--ink-faint)" }}>+ cliente já com venda efetivada</small> : null}</td>
               <td style={{ textAlign: "right", fontWeight: 700 }}>{fmtMoeda(val(c))}</td>
-              <td>{ind ? <button className="btn sm" onClick={() => abrirDetalhe(c.id)}>Validar</button> : null}</td>
+              <td><button className="btn ghost sm" onClick={() => abrirDetalhe(c.id)}>Validar</button></td>
             </tr>); })}</tbody>
           <tfoot><tr><td colSpan={8}><b>Total na tela ({vis.length})</b></td><td style={{ textAlign: "right" }}><b>{fmtMoeda(vis.reduce((s: number, c: any) => s + val(c), 0))}</b></td><td></td></tr></tfoot>
         </table></div>}

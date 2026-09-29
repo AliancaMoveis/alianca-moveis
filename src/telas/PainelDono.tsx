@@ -91,7 +91,7 @@ export default function PainelDono() {
         <div className="dn-g"><span>Ticket médio</span><b>{V.length ? fmtMoeda(tk) : "—"}</b><Var atual={tk} antes={tkA} dinheiro txt={P.cmp} /></div>
       </div>
       {(() => { const ab = st.chamados.filter((c: any) => c.venda && c.venda.status !== "cancelada").flatMap((c: any) => promAbertas(c.venda)); const hj = hojeISO(); const venc = ab.filter((p: any) => p.vencimento && p.vencimento < hj);
-        return ab.length ? <div className="dn-nota">💳 A receber em promissórias: <b>{fmtMoeda(ab.reduce((s: number, p: any) => s + p.valor, 0))}</b> ({ab.length}){venc.length ? <> · <b style={{ color: "var(--danger)" }}>{venc.length} vencida(s) {fmtMoeda(venc.reduce((s: number, p: any) => s + p.valor, 0))}</b></> : null}</div> : null; })()}
+        return ab.length ? <div className="dn-nota">💳 A receber em promissórias: <b>{fmtMoeda(ab.reduce((s: number, p: any) => s + (p.saldo ?? p.valor), 0))}</b> ({ab.length}){venc.length ? <> · <b style={{ color: "var(--danger)" }}>{venc.length} vencida(s) {fmtMoeda(venc.reduce((s: number, p: any) => s + (p.saldo ?? p.valor), 0))}</b></> : null}</div> : null; })()}
       {aConfirmar.length > 0 && <div className="dn-nota">{aConfirmar.length} venda(s) registrada(s) aguardando confirmação da Gestão ({fmtMoeda(soma(aConfirmar))}) — ainda não entram nos números.</div>}
 
       {<div className="dn-bloco">

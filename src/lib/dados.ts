@@ -83,11 +83,19 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("montadores", "*", "nome"),
     todos("posvenda", "*"), // só o setor Pós-venda e a Gestão recebem linhas (RLS)
     todos("reembolsos", "*", "criado_em").catch(() => []), // o próprio pedido ou a Gestão (RLS)
-    todos("promissorias", "*", "criada_em").catch(() => []), // só quem vê o valor da venda (RLS)
+    todos("venda_itens", "*", "registrado_em").catch(() => []), // nºs de venda, promissórias e pagamentos — só quem vê o valor (RLS)
   ]);
+  // lançamentos da venda: nºs pagos, promissórias (com saldo) e pagamentos de promissória
+  const itensDe: Record<string, any[]> = {};
+  (proms as any[]).forEach((i: any) => (itensDe[i.chamado_id] = itensDe[i.chamado_id] || []).push({
+    id: i.id, tipo: i.tipo, numero: i.numero, valor: Number(i.valor), dataVenda: i.data_venda || "", vencimento: i.vencimento || "", status: i.status,
+    valorPago: Number(i.valor_pago) || 0, promissoriaId: i.promissoria_id || "", registradoEm: i.registrado_em, decididoEm: i.decidido_em || "" }));
+  // promissórias no formato usado pelas telas: aberta (validada com saldo), quitada, pendente (a validar), cancelada
   const promDe: Record<string, any[]> = {};
-  (proms as any[]).forEach((p: any) => (promDe[p.chamado_id] = promDe[p.chamado_id] || []).push({
-    id: p.id, numero: p.numero, valor: Number(p.valor), vencimento: p.vencimento || "", status: p.status, valorPago: Number(p.valor_pago) || 0, quitadaEm: p.quitada_em || "", origemId: p.origem_id || "" }));
+  Object.entries(itensDe).forEach(([k, l]) => (promDe[k] = l.filter(i => i.tipo === "promissoria").map(i => ({
+    ...i, saldo: Math.max(0, i.valor - i.valorPago),
+    status: i.status === "cancelada" ? "cancelada" : i.status === "registrada" ? "pendente" : i.valor - i.valorPago > 0.004 ? "aberta" : "quitada",
+    quitadaEm: (l.filter(x => x.promissoriaId === i.id && x.status === "efetivada").map(x => x.dataVenda).sort().pop()) || "" }))));
   const pvDe: Record<string, any> = {};
   posvenda.forEach((p: any) => (pvDe[p.chamado_id] = {
     origem: p.origem, categoria: p.categoria, responsabilidade: p.responsabilidade || "analise", pecaAfetada: p.peca_afetada || "",
@@ -154,7 +162,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
           // competência: a venda conta no mês em que a Gestão aprovou; se a data da venda é de mês anterior, vai para o 1º dia do mês da aprovação
           ...competencia(v.data_venda || "", v.decidido_em || v.registrado_em), vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: v.status,
           gerenteId: v.gerente_id || "", gerenteNome: v.gerente_nome || "",
-          entrada: entradaDe[c.id] || 0, promissorias: promDe[c.id] || [], tipoInformado: v.tipo_informado || "", entradaInformada: entInfDe[c.id] || 0,
+          entrada: entradaDe[c.id] || 0, promissorias: promDe[c.id] || [], itens: itensDe[c.id] || null, tipoInformado: v.tipo_informado || "", entradaInformada: entInfDe[c.id] || 0,
         } : null,
         transferencia: t ? { de: t.de_usuario, para: t.para_usuario, solicitadoPor: t.solicitado_por, quando: t.quando, status: "pendente" } : null,
         anexos: anxDe[c.id] || [],

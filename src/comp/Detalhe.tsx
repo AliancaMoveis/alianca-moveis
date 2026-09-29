@@ -5,10 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import {
-  EM_ATENDIMENTO, ETAPA_MEDIDA, valorPendente, PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
-import { Promissorias, SeloVenda, ValidarVenda } from "./VendaValidar";
+import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
@@ -320,77 +320,79 @@ function StatusCliente({ c }: any) {
 
 function Venda({ c }: any) {
   const { R, executar: ex, toast } = useApp();
-  const [editando, setEditando] = useState(false);
-  const [validar, setValidar] = useState(false);
+  const [modo, setModo] = useState<"" | "corrigir" | "adicionar">("");
   const v = c.venda || null;
-  const iniF = () => ({ tipo: v?.tipoInformado || "", entrada: v?.entradaInformada ? String(v.entradaInformada).replace(".", ",") : "", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVendaReal || v?.dataVenda || hojeISO(), vendedor: v?.vendedor || (c.atendenteId ? R.nomeUser(c.atendenteId) : "") || R.me()?.nome || "", gerente: v?.gerenteId || "" });
-  const iniG = () => ({ status: v?.status || "registrada", numero: v?.numero || "", valor: v?.valor || "", data: v?.dataVendaReal || v?.dataVenda || "", vendedor: v?.vendedor || "" });
+  const itensAtuais = (): Linha[] => itensVenda(v).filter((i: any) => i.tipo !== "pagamento" && i.status !== "cancelada")
+    .map((i: any) => ({ tipo: i.tipo, numero: i.numero, valor: i.valor ? String(i.valor.toFixed(2)).replace(".", ",") : "", vencimento: i.vencimento || "" }));
+  const iniF = () => ({ data: v?.dataVendaReal || v?.dataVenda || hojeISO(), vendedor: v?.vendedor && v.vendedor !== "Não informado" ? v.vendedor : (c.atendenteId ? R.nomeUser(c.atendenteId) : "") || R.me()?.nome || "", gerente: v?.gerenteId || "" });
+  const iniG = () => ({ data: v?.dataVendaReal || v?.dataVenda || "", vendedor: v?.vendedor || "" });
   const [f, setF] = useState<any>(iniF);
   const [g, setG] = useState<any>(iniG);
-  useEffect(() => { setF(iniF()); setG(iniG()); setEditando(false); }, [c.id, JSON.stringify(v)]);
-  useEffect(() => { const h = (e: any) => setF((x: any) => ({ ...x, tipo: e.detail })); window.addEventListener("tipo-venda", h); return () => window.removeEventListener("tipo-venda", h); }, []);
+  const [linhas, setLinhas] = useState<Linha[]>(() => linhasDoTipo(""));
+  useEffect(() => { setF(iniF()); setG(iniG()); setModo(""); setLinhas(linhasDoTipo("")); }, [c.id, JSON.stringify(v)]);
+  useEffect(() => { const h = (e: any) => setLinhas(l => (l.some(x => x.numero || x.valor) ? l : linhasDoTipo(e.detail))); window.addEventListener("tipo-venda", h); return () => window.removeEventListener("tipo-venda", h); }, []);
   if (!c.venda && !c.dataLoja) return null;
   const podeRegistrar = R.podeTratar(c) || R.ehGestao();
   const vejaVal = R.podeVerValor(c);
   const s = (k: string) => (e: any) => setF((x: any) => ({ ...x, [k]: e.target.value }));
   const sg = (k: string) => (e: any) => setG((x: any) => ({ ...x, [k]: e.target.value }));
+  const tudoPendente = !!v && itensVenda(v).every((i: any) => i.status === "registrada");
 
   async function registrar() {
-    if (!f.numero.trim()) { toast("Informe o número da venda"); document.getElementById("tVendaNumero")?.focus(); return; }
-    if (!String(f.valor).trim() || parseMoeda(f.valor) <= 0) { toast("Informe o valor da venda"); document.getElementById("tVendaValor")?.focus(); return; }
+    const r = conferirLinhas(linhas);
+    if (r.erro) { toast(r.erro); return; }
     if (!f.vendedor.trim()) { toast("Informe o vendedor da loja"); return; }
     if (!f.gerente) { toast("Informe o gerente que negociou a venda"); document.getElementById("tVendaGerente")?.focus(); return; }
-    if (!f.tipo) { toast("Informe como foi o pagamento"); return; }
-    const entN = parseMoeda(f.entrada);
-    if (f.tipo === "entrada" && (!entN || entN >= parseMoeda(f.valor))) { toast("Informe o valor da entrada (menor que o total)"); return; }
-    const ed = !!c.venda;
-    await ex(() => A.registrarVenda(c.id, f.numero.trim(), parseMoeda(f.valor), f.data, f.vendedor.trim(), f.gerente, f.tipo, f.tipo === "entrada" ? entN : null), ed ? "Venda atualizada, aguardando validação" : "Venda registrada, aguardando confirmação da Gestão");
+    const sub = modo === "corrigir";
+    const ok = await ex(() => A.registrarVendaItens(c.id, r.itens!, f.data, f.vendedor.trim(), f.gerente, sub),
+      !v ? "Venda registrada, aguardando confirmação da Gestão" : sub ? "Venda corrigida, aguardando validação" : "Nova venda lançada, aguardando a Gestão");
+    if (ok) { setModo(""); setLinhas(linhasDoTipo("")); }
   }
-  const form = (
-    <div className="resp-box"><h4>Dados da venda</h4>
-      <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 12 }}>Preencha quando o cliente fechar a compra. A Gestão analisa e confirma.</div>
-      <div className="grid">
-        <div className="field"><label>Nº da venda <span className="req-star">*</span></label><input id="tVendaNumero" placeholder="Ex.: 48310" value={f.numero || ""} onChange={s("numero")} /></div>
-        <div className="field"><label>Valor da venda <span className="req-star">*</span></label><input id="tVendaValor" placeholder="Ex.: 8.500,00" value={f.valor || ""} onChange={s("valor")} /></div>
+  const form = (tit: string) => (
+    <div className="resp-box"><h4>{tit}</h4>
+      <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 12 }}>{modo === "adicionar"
+        ? "Lance aqui outro nº de venda deste mesmo cliente (nova compra, novo pagamento ou promissória). A Gestão analisa e confirma."
+        : "Informe cada nº de venda com o valor. Se parte ficou em promissória, lance a promissória com o nº e o valor pendente. A Gestão analisa e confirma."}</div>
+      <LinhasVenda linhas={linhas} setLinhas={setLinhas} />
+      <div className="grid" style={{ marginTop: 10 }}>
         <div className="field"><label>Data da venda</label><input type="date" value={f.data || ""} onChange={s("data")} /></div>
         <div className="field"><label>Vendedor na loja</label><input placeholder="Nome de quem vendeu" value={f.vendedor || ""} onChange={s("vendedor")} /></div>
         <div className="field"><label>Gerente que negociou <span className="req-star">*</span></label><select id="tVendaGerente" value={f.gerente || ""} onChange={s("gerente")}><option value="">Selecione…</option>{R.gerentesVenda().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
-        <div className="field"><label>Pagamento <span className="req-star">*</span></label><select value={f.tipo || ""} onChange={s("tipo")}><option value="">Selecione…</option><option value="efetivada">À vista (pago)</option><option value="entrada">Entrada + promissória</option><option value="promissoria">100% promissória</option></select></div>
-        {f.tipo === "entrada" && <div className="field"><label>Valor da entrada <span className="req-star">*</span></label><input placeholder="Ex.: 3.000,00" value={f.entrada || ""} onChange={s("entrada")} /></div>}
       </div>
-      <div style={{ marginTop: 12, display: "flex", gap: 9 }}><button className="btn primary sm" onClick={registrar}>Registrar venda</button>{editando && <button className="btn ghost sm" onClick={() => setEditando(false)}>Cancelar</button>}</div>
+      <div style={{ marginTop: 12, display: "flex", gap: 9 }}><button className="btn primary sm" onClick={registrar}>{modo === "adicionar" ? "Lançar venda" : "Registrar venda"}</button>{modo && <button className="btn ghost sm" onClick={() => setModo("")}>Cancelar</button>}</div>
     </div>
   );
-  if (v && !editando) {
+  if (v && !modo) {
     const vs = v.status || "registrada"; const cor = corVenda(vs);
-    const nota = vs === "entrada" || (vs === "promissoria" && valorPendente(v) > 0) ? null : vs === "promissoria" ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--st-tratativa-bg)", border: "1px solid var(--st-tratativa)", borderRadius: 9, fontSize: 12.5, color: "var(--st-tratativa)" }}><b>Venda sem pagamento.</b> Conta como venda, mas <b>não gera comissão</b> até ser efetivada.</div>
-      : vs === "registrada" ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--warn-bg)", border: "1px solid var(--warn)", borderRadius: 9, fontSize: 12.5, color: "var(--warn)" }}>Aguardando a Gestão confirmar. Não conta em nenhum relatório ainda.</div>
-      : vs === "cancelada" ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--danger-bg)", border: "1px solid var(--danger)", borderRadius: 9, fontSize: 12.5, color: "var(--danger)" }}>Venda cancelada — não conta em relatórios nem em comissão.</div> : null;
+    const pendG = itensVenda(v).filter((i: any) => i.status === "registrada").length;
+    const nota = vs === "registrada" ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--warn-bg)", border: "1px solid var(--warn)", borderRadius: 9, fontSize: 12.5, color: "var(--warn)" }}>Aguardando a Gestão confirmar. Não conta em nenhum relatório ainda.</div>
+      : vs === "cancelada" ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--danger-bg)", border: "1px solid var(--danger)", borderRadius: 9, fontSize: 12.5, color: "var(--danger)" }}>Venda cancelada — não conta em relatórios nem em comissão.</div>
+      : pendG ? <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--warn-bg)", border: "1px solid var(--warn)", borderRadius: 9, fontSize: 12.5, color: "var(--warn)" }}>{pendG} lançamento(s) novo(s) aguardando a Gestão.</div> : null;
+    const nums = itensVenda(v).filter((i: any) => i.tipo !== "pagamento" && i.status !== "cancelada").map((i: any) => i.numero);
     return (
-      <div className="resp-box" style={{ borderColor: cor }}><h4>Dados da venda <span className="badge" style={{ background: cor, color: "#fff" }}>{VENDA_STATUS[vs] || vs}</span></h4>
-        <RowSb k="Nº da venda" pb="5px 0">{v.numero || "—"}</RowSb>
-        {vejaVal && <RowSb k="Valor" pb="5px 0" bold>{v.valor ? "R$ " + v.valor : "—"}</RowSb>}
+      <div className="resp-box" style={{ borderColor: cor }}><h4>Vendas do cliente <span className="badge" style={{ background: cor, color: "#fff" }}>{VENDA_STATUS[vs] || vs}</span></h4>
+        <RowSb k={nums.length > 1 ? "Nºs da venda" : "Nº da venda"} pb="5px 0">{nums.join(" · ") || v.numero || "—"}</RowSb>
+        {vejaVal && !Array.isArray(v.itens) && <RowSb k="Valor" pb="5px 0" bold>{v.valor ? "R$ " + v.valor : "—"}</RowSb>}
         <RowSb k="Data da venda" pb="5px 0">{v.dataVendaReal ? fmtDate(v.dataVendaReal) : v.dataVenda ? fmtDate(v.dataVenda) : "—"}{v.dataVendaReal && v.dataVendaReal !== v.dataVenda ? <span className="pill" style={{ marginLeft: 6 }}>aprovada depois · conta em {fmtDate(v.dataVenda).slice(3)}</span> : null}</RowSb>
         <RowSb k="Vendedor na loja" pb="5px 0">{v.vendedor || v.atendenteNome || "—"}</RowSb>
         <RowSb k="Gerente que negociou" pb="5px 0">{v.gerenteNome || "—"}</RowSb>
         {vejaVal && <Promissorias c={c} />}
         {nota}
-        {R.ehGestao() && (vs === "registrada" || validar) && <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--primary)" }}><h4>{vs === "registrada" ? "Validar a venda" : "Alterar a validação"}</h4><ValidarVenda c={c} onFeito={() => setValidar(false)} /></div>}
-        {R.ehGestao() && vs !== "registrada" && !validar && <button className="btn ghost sm" style={{ marginTop: 10 }} onClick={() => setValidar(true)}>Alterar a validação da venda</button>}
-        {!R.ehGestao() && podeRegistrar && vs === "registrada" && <div style={{ marginTop: 12 }}><button className="btn sm" onClick={() => setEditando(true)}>Corrigir dados da venda</button></div>}
-        {R.ehGestao() && (
+        {R.ehGestao() && pendG > 0 && <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--primary)" }}><h4>Validar lançamentos</h4><ValidarVenda c={c} /></div>}
+        {podeRegistrar && <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn sm" onClick={() => { setLinhas(linhasDoTipo("")); setModo("adicionar"); }}>＋ Adicionar venda / promissória</button>
+          {tudoPendente && <button className="btn ghost sm" onClick={() => { setLinhas(itensAtuais()); setModo("corrigir"); }}>Corrigir dados da venda</button>}
+        </div>}
+        {R.ehGestao() && nums.length === 1 && (
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-faint)", marginBottom: 10 }}>Controle da Gestão</div>
             <div className="grid" style={{ marginTop: 4 }}>
-              <div className="field"><label>Nº da venda <span className="req-star">*</span></label><input value={g.numero} onChange={sg("numero")} /></div>
-              <div className="field"><label>Valor <span className="req-star">*</span></label><input value={g.valor} onChange={sg("valor")} /></div>
               <div className="field"><label>Data da venda</label><input type="date" value={g.data} onChange={sg("data")} /></div>
               <div className="field"><label>Vendedor</label><input value={g.vendedor} onChange={sg("vendedor")} /></div>
             </div>
             <div style={{ marginTop: 12 }}><button className="btn sm" onClick={() => {
-              if (!g.numero.trim()) { toast("Informe o número da venda"); return; }
-              if (!String(g.valor).trim() || parseMoeda(g.valor) <= 0) { toast("Informe o valor da venda"); return; }
-              ex(() => A.corrigirVenda(c.id, g.numero.trim(), parseMoeda(g.valor), g.data, g.vendedor.trim()), "Correções salvas");
+              const it = itensVenda(v).find((i: any) => i.tipo !== "pagamento" && i.status !== "cancelada");
+              ex(() => A.corrigirVenda(c.id, it ? it.numero : v.numero, it ? it.valor : parseMoeda(v.valor), g.data, g.vendedor.trim()), "Correções salvas");
             }}>Salvar correções</button></div>
           </div>
         )}
@@ -398,7 +400,7 @@ function Venda({ c }: any) {
     );
   }
   if (!podeRegistrar) return <div className="resp-box"><h4>Dados da venda</h4><div style={{ fontSize: 12.5, color: "var(--ink-faint)" }}>Nenhuma venda registrada para este cliente ainda.</div></div>;
-  return form;
+  return form(modo === "adicionar" ? "Adicionar venda neste cliente" : modo === "corrigir" ? "Corrigir dados da venda" : "Dados da venda");
 }
 
 function Vendedor({ c }: any) {

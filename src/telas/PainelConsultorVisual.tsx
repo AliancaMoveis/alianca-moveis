@@ -1,6 +1,7 @@
 // Dashboard visual do consultor externo (computador): visitas, loja, vendas e valor a receber.
 import { useApp } from "../estado";
-import { STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData } from "../lib/regras";
+import { STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, temPendenteGestao, valorPendente } from "../lib/regras";
+import { PromissoriasAbertas } from "../comp/VendaValidar";
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 const diaLocal = (v: any) => { const x = parseData(v); return isNaN(+x) ? "" : isoLocal(x); };
@@ -27,7 +28,10 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
   const atrasadas = aVisitar.filter((c: any) => c.dataVisita && String(c.dataVisita).slice(0, 10) < hoje);
   const faltaLoja = meus.filter((c: any) => c.setorDestino === "consultor_externo" && c.tratativa && c.tratativa.realizada && !c.dataLoja);
   const semAnexo = meus.filter((c: any) => R.semAnexo(c));
-  const aConf = meus.filter((c: any) => c.venda && ["registrada", "promissoria"].includes(c.venda.status) && R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, de, ate));
+  const aConf = meus.filter((c: any) => c.venda && temPendenteGestao(c.venda));
+  // promissórias em aberto (saldo atual, de qualquer mês)
+  const emProm = meus.filter((c: any) => c.venda && c.venda.status !== "cancelada" && valorPendente(c.venda) > 0);
+  const valProm = emProm.reduce((s: number, c: any) => s + valorPendente(c.venda), 0);
   // visitas por dia (data da visita): realizadas x a realizar
   const dias: string[] = []; for (let d = parseData(de + "T12:00"); isoLocal(d) <= ate; d.setDate(d.getDate() + 1)) { if (dias.length > 62) break; dias.push(isoLocal(d)); }
   const porDia: Record<string, { r: number; p: number }> = {};
@@ -55,6 +59,7 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
         <Card ic="🏬" n={F.vieram} l="Vieram à loja" sub={<>{F.agendadas} agendados · presença {pc(F.vieram, F.vieram + F.faltaram)}%</>} cor="#d4a020" />
         <Card ic="🤝" n={F.vendas} l="Vendas" sub={<>{pc(F.vendas, F.realizadas)}% das visitas viraram venda</>} cor="#2f8f5b" />
         <Card ic="💰" n={fmtMoeda(ex.total)} l="Valor a receber" sub={<>{ex.visitas.length} visita(s) + comissão {pct}%</>} cor="#2d6a4f" />
+        <Card ic="📄" n={fmtMoeda(valProm)} l="Pendente em promissória" sub={<>{emProm.length} cliente(s) · comissão futura {fmtMoeda(valProm * cfg.comissaoPct / 100)}</>} cor="#a0661a" />
       </div>
 
       <div className="pc-alertas">
@@ -63,6 +68,7 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
         <Alerta n={faltaLoja.length} l="visitados sem data na loja" cor="var(--warn)" lista={faltaLoja} />
         <Alerta n={semAnexo.length} l="sem planta/fotos" cor="#b07a00" lista={semAnexo} />
         <Alerta n={aConf.length} l="vendas a confirmar" cor="var(--warn)" lista={aConf} />
+        <Alerta n={emProm.length} l="clientes com promissória" cor="#a0661a" lista={emProm} />
       </div>
 
       <div className="po-grid">
@@ -89,6 +95,8 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
           </div>
         </div>
       </div>
+
+      {emProm.length > 0 && <PromissoriasAbertas titulo="Seus clientes com promissória em aberto" consultorId={eu} />}
 
       <div className="panel" style={{ marginBottom: 16 }}>
         <h3>Visitas por dia <span className="hint">· pela data da visita</span></h3>

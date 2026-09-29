@@ -2,7 +2,7 @@
 // Não mostra a agenda do dia (isso fica em "Agendamento loja").
 import { PromissoriasAbertas } from "../comp/VendaValidar";
 import { useApp } from "../estado";
-import { fmtDate, fmtMoeda, parseData, parseMoeda, vendaContaVolume } from "../lib/regras";
+import { fmtDate, fmtMoeda, parseData, parseMoeda, vendaContaVolume, temPendenteGestao, valorPendente, itensPendentes } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
 
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) + "%" : "—");
@@ -19,11 +19,14 @@ export default function PainelGestao({ de, ate }: { de: string; ate: string }) {
   const por = (s: string) => vendasPer.filter((c: any) => c.venda.status === s);
   const soma = (l: any[]) => l.reduce((s, c) => s + val(c), 0);
   const vendidas = vendasPer.filter((c: any) => vendaContaVolume(c.venda));
-  const efet = por("efetivada"), prom = por("promissoria"), conf = por("registrada"), canc = por("cancelada");
+  const efet = por("efetivada"), conf = por("registrada"), canc = por("cancelada");
+  // promissória em aberto: saldo atual de todos os clientes (qualquer mês)
+  const emProm = mkt.filter((c: any) => c.venda && c.venda.status !== "cancelada" && valorPendente(c.venda) > 0);
+  const valProm = emProm.reduce((s: number, c: any) => s + valorPendente(c.venda), 0);
   const totalVend = soma(vendidas), ticket = vendidas.length ? totalVend / vendidas.length : 0;
   const maior = vendidas.slice().sort((a: any, b: any) => val(b) - val(a))[0];
-  const aConfirmarTodas = mkt.filter((c: any) => c.venda && c.venda.status === "registrada");
-  const conf24 = aConfirmarTodas.filter((c: any) => c.venda.quando && Date.now() - new Date(c.venda.quando).getTime() > 86400000);
+  const aConfirmarTodas = mkt.filter((c: any) => c.venda && temPendenteGestao(c.venda));
+  const conf24 = aConfirmarTodas.filter((c: any) => (itensPendentes(c.venda)[0]?.registradoEm || c.venda.quando) && Date.now() - new Date(itensPendentes(c.venda)[0]?.registradoEm || c.venda.quando).getTime() > 86400000);
 
   // ---- funil da loja (pela data na loja) ----
   const loja = mkt.filter((c: any) => c.dataLoja && noPer(c.dataLoja));
@@ -70,7 +73,7 @@ export default function PainelGestao({ de, ate }: { de: string; ate: string }) {
       <div className="kpis">
         <Kpi fs={22} n={fmtMoeda(totalVend)} l={`Vendido (${vendidas.length} vendas)`} cor="var(--st-concluida)" />
         <Kpi fs={22} n={fmtMoeda(soma(efet))} l={`Efetivadas (${efet.length})`} />
-        <Kpi fs={22} n={fmtMoeda(soma(prom))} l={`Promissórias (${prom.length})`} cor={prom.length ? "var(--st-tratativa)" : undefined} />
+        <Kpi fs={22} n={fmtMoeda(valProm)} l={`Pendente em promissória (${emProm.length} clientes)`} cor={emProm.length ? "var(--st-tratativa)" : undefined} />
         <Kpi fs={22} n={fmtMoeda(ticket)} l="Ticket médio" />
         <Kpi n={conf.length} l={`A confirmar · ${fmtMoeda(soma(conf))}`} cls={conf.length ? "urg" : ""} />
         <Kpi n={conf24.length} l="A confirmar há +24h (todas)" cls={conf24.length ? "alert" : ""} cor={conf24.length ? "var(--danger)" : undefined} />

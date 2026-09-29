@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { A } from "../lib/acoes";
 import { useApp } from "../estado";
-import { numsVenda, STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume } from "../lib/regras";
+import { numsVenda, temPendenteGestao, STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume } from "../lib/regras";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const dia = (v: any) => String(v || "").slice(0, 10);
@@ -53,7 +53,7 @@ export function useTimeMkt(P: { de: string; ate: string }, tick = 0) {
     const ag = l.filter((c: any) => { const d = diaLocal(c.criadoEm); return d >= P.de && d <= P.ate; });
     const porDia: Record<string, number> = {}; ag.forEach((c: any) => { const d = diaLocal(c.criadoEm); porDia[d] = (porDia[d] || 0) + 1; });
     const vendas = l.filter((c: any) => c.venda && c.venda.status === "efetivada" && (() => { const d = String(c.venda.dataVenda || c.venda.quando || "").slice(0, 10); return d >= P.de && d <= P.ate; })());
-    const aConf = l.filter((c: any) => c.venda && ["registrada", "promissoria"].includes(c.venda.status));
+    const aConf = l.filter((c: any) => c.venda && temPendenteGestao(c.venda));
     const dm = metas.filter((m: any) => m.dia <= hoje), bat = dm.filter((m: any) => (porDia[m.dia] || 0) >= m.meta);
     const bonus = bat.reduce((x: number, m: any) => x + Number(m.valor), 0);
     return { u, ag, mkt: ag.filter((c: any) => R.ehDireto(c)), ext: ag.filter((c: any) => !R.ehDireto(c)), vieram: ag.filter(R.compareceu), vendas, aConf,

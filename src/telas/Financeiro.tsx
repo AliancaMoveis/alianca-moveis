@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { TIPO_REEMBOLSO, fmtDate, fmtDateTime, fmtMoeda, parseMoeda, vendaContaVolume } from "../lib/regras";
-import { valorPendente } from "../lib/regras";
+import { valorPendente, promAbertas } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { PromissoriasAbertas } from "../comp/VendaValidar";
 import { FechamentoGestao, FechamentoMeu } from "../comp/Fechamento";
@@ -128,9 +128,9 @@ function FinConsultor() {
         </div></div>
         <div className="panel"><h3>Vendas e comissão <span className="pill" style={{ marginLeft: 8 }}>{pct}% sobre vendas aprovadas</span></h3><div id="finVendas">
           {pagOrd.length ? pagOrd.map((p: any, i: number) => { const com = p.valor * (pct / 100); return (
-            <div className="fin-item" key={p.c.id + i}><div><div className="nm">{p.c.cliente}</div><div className="sub">{p.tipo} nº {p.numero} · {fmtDate(p.data)}{p.c.venda.vendedor ? " · " + p.c.venda.vendedor : ""} · valor {fmtMoeda(p.valor)}</div></div><div className="val">{fmtMoeda(com)}<span className="sub2">comissão</span></div></div>); })
+            <div className="fin-item" key={p.c.id + i}><div><div className="nm">{p.c.cliente}</div><div className="sub">{p.tipo === "promissoria" ? "pagamento de promissória" : "venda"} nº {p.numero} · {fmtDate(p.data)}{p.c.venda.vendedor ? " · " + p.c.venda.vendedor : ""} · valor {fmtMoeda(p.valor)}</div></div><div className="val">{fmtMoeda(com)}<span className="sub2">comissão</span></div></div>); })
             : <div className="empty" style={{ padding: "24px 10px" }}>Nenhuma venda efetivada no período.</div>}
-          {r.pendentes.length > 0 && <div style={{ marginTop: 12 }}><div className="sec-label">Comissão futura — promissórias em aberto</div>{r.pendentes.map((c: any) => <div className="fin-item" key={"p" + c.id}><div><div className="nm">{c.cliente}</div><div className="sub">Venda nº {c.venda.numero} · pendente {fmtMoeda(valorPendente(c.venda))}</div></div><div className="val" style={{ color: "var(--warn)" }}>{fmtMoeda(valorPendente(c.venda) * pct / 100)}<span className="sub2">quando pagar</span></div></div>)}</div>}
+          {r.pendentes.length > 0 && <div style={{ marginTop: 12 }}><div className="sec-label">Comissão futura — promissórias em aberto</div>{r.pendentes.map((c: any) => <div className="fin-item" key={"p" + c.id}><div><div className="nm">{c.cliente}</div><div className="sub">Promissória nº {promAbertas(c.venda).map((x: any) => x.numero).join(", ")} · pendente {fmtMoeda(valorPendente(c.venda))}</div></div><div className="val" style={{ color: "var(--warn)" }}>{fmtMoeda(valorPendente(c.venda) * pct / 100)}<span className="sub2">quando pagar</span></div></div>)}</div>}
           {pendVendas.length > 0 && <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--warn)" }}>{pendVendas.length} venda(s) pendentes de análise pela Gestão (ainda sem comissão).</div>}
         </div></div>
       </div>
