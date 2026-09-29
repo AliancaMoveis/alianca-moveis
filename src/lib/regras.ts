@@ -593,7 +593,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (podeCriarCC()) cc.push(["nova", "Nova solicitação"]);
     if (verTudo()) cc.push(["fila", "Acompanhamento"]); else if (temCC) cc.push(["fila", "Minha fila"]);
     if (cc.length) { cc.push(["consulta", "Consulta"]); if (podeTreinamento()) cc.push(["treino", "Treinamento"]); G.push({ g: "Call center", ic: "☎", itens: cc }); }
-    const mk: string[][] = [];
+    const mk: string[][] = []; let soMeusClientes = false;
     if (podeCriarMkt()) mk.push(["novocli", "Novo cliente"]);
     if (temMarketing() || ehGestao()) {
       mk.push(["acompmkt", "Acompanhamento"]);
@@ -603,14 +603,16 @@ export function criarRegras(state: Estado, currentUserId: string) {
       if (!coord) mk.push(["produtividade", "Produtividade e pagamento"]);
       mk.push(["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
     } else if (temMkt) {
+      // consultor e vendedor (só esse papel no marketing): menu enxuto — "Meus clientes" já tem busca, status, período e cancelamentos
+      soMeusClientes = (ehConsultorExterno() || mySetores().includes("atendente_cliente")) && !mySetores().some((x: string) => ["suporte_consultores", "marketing_operadora"].includes(x));
       // consultor e vendedor: "Minha fila" e "Minha carteira" viraram uma tela só ("Meus clientes"), com filtros
       if (ehConsultorExterno() || mySetores().includes("atendente_cliente")) mk.push(["carteira", "Meus clientes"], ["agenda", "Agendamento loja"]);
       else mk.push(["acompmkt", "Minha fila"], ["carteira", "Minha carteira"], ["agenda", "Agendamento loja"]);
       if (mySetores().includes("suporte_consultores")) mk.push(["vendedores", "Vendedores"]);
-      mk.push(["clientes", "Clientes"]);
+      if (!soMeusClientes) mk.push(["clientes", "Clientes"]);
       if (mySetores().includes("marketing_operadora")) mk.push(["produtividade", "Minha produtividade"]);
     }
-    if (mk.length) { if (!cc.length) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
+    if (mk.length) { if (!cc.length && !soMeusClientes) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
     const ge: string[][] = [];
     const ehProjetista = mySetores().includes("atendente_cliente");
     if (ehConsultorExterno() || ehMedidor() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : ehConsultorExterno() ? "Vendas e comissão" : ehMedidor() ? "Minhas medidas e reembolsos" : ehProjetista ? "Minhas vendas" : "Vendas dos vendedores"]);
