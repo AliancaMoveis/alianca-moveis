@@ -58,7 +58,7 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
         <Card ic="📍" n={F.realizadas} l="Visitas realizadas" sub={<><b>{F.total}</b> clientes direcionados · <b>{F.pendentes}</b> a realizar</>} cor="#5b7fc7" />
         <Card ic="🏬" n={F.vieram} l="Vieram à loja" sub={<>{F.agendadas} agendados · presença {pc(F.vieram, F.vieram + F.faltaram)}%</>} cor="#d4a020" />
         <Card ic="🤝" n={F.vendas} l="Vendas" sub={<>{pc(F.vendas, F.realizadas)}% das visitas viraram venda</>} cor="#2f8f5b" />
-        <Card ic="💰" n={fmtMoeda(ex.total)} l="Valor a receber" sub={<>{ex.visitas.length} visita(s) + comissão {pct}%</>} cor="#2d6a4f" />
+        <Card ic="💰" n={fmtMoeda(ex.total)} l="Valor a receber" sub={<>{ex.visitas.length} visita(s) + comissão {pct}%{ex.auxilio ? " + auxílio" : ""}</>} cor="#2d6a4f" />
         <Card ic="📄" n={fmtMoeda(valProm)} l="Pendente em promissória" sub={<>{emProm.length} cliente(s) · comissão futura {fmtMoeda(valProm * cfg.comissaoPct / 100)}</>} cor="#a0661a" />
       </div>
 
@@ -129,6 +129,8 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
             <div><span>Vendas efetivadas</span><b>{ex.vendas.length}</b></div>
             <div><span>Total vendido</span><b>{fmtMoeda(ex.totalVendido)}</b></div>
             <div><span>Comissão ({pct}%)</span><b>{fmtMoeda(ex.comissao)}</b></div>
+            {ex.totalReembolsos > 0 && <div><span>Reembolsos aprovados</span><b>{fmtMoeda(ex.totalReembolsos)}</b></div>}
+            {ex.auxilio > 0 && <div><span>Auxílio fixo (pago dia {cfg.diaAuxilio || 15})</span><b>{fmtMoeda(ex.auxilio)}</b></div>}
             <div className="ok"><span>Valor a receber</span><b>{fmtMoeda(ex.total)}</b></div>
             {aConf.length > 0 && <div className="pend"><span>⏳ Vendas aguardando confirmação</span><b>{aConf.length}</b></div>}
           </div>

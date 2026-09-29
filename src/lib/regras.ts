@@ -351,7 +351,21 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const pagamentoMedidas = medidas.length * pagamentoVisita;
     const reembolsos = reembolsosDe(consultorId).filter(r => r.status === "aprovado" && (dentroPeriodo(r.data, de, ate) || (!de && !ate)));
     const totalReembolsos = reembolsos.reduce((s, r) => s + r.valor, 0);
-    return { visitas, vendas, pagamentos, pendentes, comissaoFutura, pagamentoVisitas, totalVendido, comissao, medidas, pagamentoMedidas, reembolsos, totalReembolsos, total: pagamentoVisitas + comissao + pagamentoMedidas + totalReembolsos };
+    // auxílio fixo (consultor e medidor): um por mês, pago no dia 15 — conta quando o dia 15 cai dentro do período
+    const u = state.usuarios.find(x => x.id === consultorId);
+    const temAux = !!u && (u.setores || []).some((x: string) => x === "consultor_externo" || x === "medidas");
+    const cf: any = cfg(); const valAux = cf.auxilioFixo != null ? cf.auxilioFixo : 1500, diaAux = cf.diaAuxilio || 15;
+    const datasAux: string[] = [];
+    if (temAux && de && ate) {
+      for (let d = new Date(de.slice(0, 7) + "-01T12:00"); isoLocal(d).slice(0, 7) <= ate.slice(0, 7); d.setMonth(d.getMonth() + 1)) {
+        const dia = isoLocal(d).slice(0, 8) + String(diaAux).padStart(2, "0");
+        if (dia >= de && dia <= ate.slice(0, 10)) datasAux.push(dia);
+        if (datasAux.length > 24) break;
+      }
+    }
+    const auxilio = datasAux.length * valAux;
+    return { visitas, vendas, pagamentos, pendentes, comissaoFutura, pagamentoVisitas, totalVendido, comissao, medidas, pagamentoMedidas, reembolsos, totalReembolsos,
+      auxilio, datasAuxilio: datasAux, valorAuxilio: valAux, total: pagamentoVisitas + comissao + pagamentoMedidas + totalReembolsos + auxilio };
   }
 
   // ---------- funil do marketing: visita → loja → venda ----------

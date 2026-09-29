@@ -244,7 +244,7 @@ function Painel({ perfil, abrir }: any) {
     const ex = R.extratoConsultor(eu, P.de, P.ate);
     if (lista === "medidas") { itens = ex.medidas; tituloLista = "Medidas feitas (pagas)"; }
     conteudo = <>
-      <div className="mv-receber"><span>Previsão a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + reembolsos aprovados {fmtMoeda(ex.totalReembolsos)}</small></div>
+      <div className="mv-receber"><span>Previsão a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + reembolsos aprovados {fmtMoeda(ex.totalReembolsos)}{ex.auxilio ? " + auxílio fixo " + fmtMoeda(ex.auxilio) + " (dia " + (cfg.diaAuxilio || 15) + ")" : ""}</small></div>
       <div className="mv-tiles">
         <Tile k="medidas" n={ex.medidas.length} l="Medidas feitas" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
         <Tile n={fmtMoeda(ex.totalReembolsos)} l="Reembolsos aprovados" /><Tile n={medDados(R).aFazer.length} l="Medidas a fazer" cor="var(--warn)" />
@@ -265,7 +265,7 @@ function Painel({ perfil, abrir }: any) {
     if (lista === "clientes") { itens = doPer; tituloLista = "Clientes do mês"; }
     if (lista === "medidas") { itens = ex.medidas; tituloLista = "Medidas feitas (pagas, sem comissão)"; }
     conteudo = <>
-      <div className="mv-receber"><span>Previsão a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.visitas.length} visita(s) + {ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + comissão {String(cfg.comissaoPct).replace(".", ",")}% das vendas efetivadas{ex.totalReembolsos ? " + reembolsos " + fmtMoeda(ex.totalReembolsos) : ""}</small></div>
+      <div className="mv-receber"><span>Previsão a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.visitas.length} visita(s) + {ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + comissão {String(cfg.comissaoPct).replace(".", ",")}% das vendas efetivadas{ex.totalReembolsos ? " + reembolsos " + fmtMoeda(ex.totalReembolsos) : ""}{ex.auxilio ? " + auxílio fixo " + fmtMoeda(ex.auxilio) + " (dia " + (cfg.diaAuxilio || 15) + ")" : ""}</small></div>
       <div className="mv-tiles">
         <Tile k="visitas" n={ex.visitas.length} l="Visitas realizadas" on={() => alternar("visitas")} /><Tile n={fmtMoeda(ex.pagamentoVisitas)} l="Pagamento por visitas" />
         <Tile k="medidas" n={ex.medidas.length} l="📐 Medidas feitas" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
