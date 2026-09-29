@@ -1,0 +1,7 @@
+-- Vendedores reais das vendas de setembro (planilha VENDAS_CONSULTORES_com_vendedor.xlsx), aplicado via SQL:
+--  · vendas.vendedor = nome completo do relatório; chamados.atendente_id = usuário vendedor correspondente
+--  · 12 vendedores novos (atendente_cliente, senha inicial Alianca@2026): Wellington, João Vitor, Marcos, Juliana Cabral, Misael,
+--    Ana Maria, Rauanna, André, Vicente, Sandra, Sonia Almeida, Leandro Barreto
+--  · Salete Simone de Souza Radachinski e Sonia Roberta Pinheiro Emrich Pinto: só o nome (sem usuário) — a confirmar
+--  · nºs corrigidos: 1204432 → 1304432 (Daiane Floriano) · 1306071 → 1306371 (Antônio Carlos Borges)
+--  · canceladas (cliente cancelou): 1305696 Joseli Santos · 1303503 Roseani Carlos de Oliveira · 1307256 Maria Zoraide · 1309652 Bianca Fernandes Desidério
