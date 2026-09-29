@@ -1,0 +1,5 @@
+-- Agenda da loja de setembro (planilha "clientes na loja em setembro"), aplicada via função temporária _imp_loja (já removida):
+-- 33 vendedores criados (setor atendente_cliente, senha inicial Alianca@2026); ROY → Roibis; GRAZI/GRAZIELA → Graziela; YURE → Yuri.
+-- 408 fichas existentes atualizadas (data na loja, vendedor, telefone, ambiente de interesse = produto, observações do lead = motivo);
+-- 39 fichas novas (visita em mês anterior: tratativa.semVisita, sem pagamento de visita), status "Atendimento finalizado".
+-- Vindas futuras (8) voltaram a agendamento normal (com vendedor ou agendado loja).

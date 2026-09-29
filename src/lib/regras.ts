@@ -312,7 +312,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // período pela data da visita (ou do cadastro, se não houver); agendamento direto pela data na loja
   // venda importada de planilha não é visita (as visitas sobem separadas)
   const ehImportado = (c: Chamado) => !!(c.tratativa && c.tratativa.importado);
-  const vendaSemVisita = (c: Chamado) => ehImportado(c) && !(c.tratativa && c.tratativa.realizada);
+  // importados sem visita no mês: vendas da planilha sem visita e agendamentos na loja cuja visita foi no mês anterior
+  const vendaSemVisita = (c: Chamado) => !!(c.tratativa && ((c.tratativa.importado && !c.tratativa.realizada) || c.tratativa.semVisita));
   const visitaFeita = (c: Chamado) => !vendaSemVisita(c) && !!((c.tratativa && c.tratativa.realizada) || c.dataLoja || c.venda);
   const compareceu = (c: Chamado) => !!c.venda || ["orcamento", "sem_resposta", "reprovado", "atendido"].includes(statusClienteDe(c));
   function funil(lista: Chamado[]) {
