@@ -50,7 +50,8 @@ export const PV_RESP: Record<string, string> = {
 export const PV_ORIGEM: Record<string, string> = { cliente: "Cliente reclamou", montador: "Montador pediu suporte na obra" };
 export const PV_ENCAMINHAR: Record<string, string> = { vistoria: "Solicitar vistoria", assistencia: "Solicitar assistência (peça + montador)", montagem: "Nova montagem / retorno do montador", medidas: "Conferir medidas", checklist: "Revisar projeto (checklist)", prazo_fabrica: "Cobrar fábrica (prazo)" };
 export const corDoSetor = (id: string) => COR_SETOR[id] || "#8b94a3";
-export const vendaContaVolume = (v: any) => !!v && ["promissoria", "entrada", "efetivada"].includes(v.status);
+// conta como venda: o que já foi pago e efetivado (100% promissória ainda não pago não conta; entrada + promissória conta a parte paga)
+export const vendaContaVolume = (v: any) => !!v && ["entrada", "efetivada"].includes(v.status);
 export const vendaContaComissao = (v: any) => !!v && v.status === "efetivada";
 // lançamentos da venda (nºs pagos, promissórias e pagamentos). Sem a lista (sem acesso ao valor / dados antigos), um nº só.
 export function itensVenda(v: any): any[] {

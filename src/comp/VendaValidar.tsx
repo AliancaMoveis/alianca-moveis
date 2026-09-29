@@ -76,12 +76,12 @@ export function ValidarVenda({ c, onFeito }: { c: any; onFeito?: () => void }) {
           <span>nº <b>{i.numero}</b></span><b>{fmtMoeda(i.valor)}</b>
           <small>{i.dataVenda ? fmtDate(i.dataVenda) : ""}{i.tipo === "promissoria" && i.vencimento ? " · vence " + fmtDate(i.vencimento) : ""}</small>
           <span className="vi-acoes">
-            <button className="btn sm" onClick={() => decidir([{ id: i.id, status: "efetivada" }], "Nº " + i.numero + " efetivado")}>✅ Efetivar</button>
+            <button className="btn sm" onClick={() => decidir([{ id: i.id, status: "efetivada" }], i.tipo === "promissoria" ? "Promissória " + i.numero + " confirmada — fica pendente até o pagamento" : "Nº " + i.numero + " efetivado")}>{i.tipo === "promissoria" ? "✅ Confirmar promissória" : "✅ Efetivar"}</button>
             <button className="btn ghost sm" style={{ color: "var(--danger)" }} onClick={() => decidir([{ id: i.id, status: "cancelada" }], "Nº " + i.numero + " cancelado")}>❌ Cancelar</button>
           </span>
         </div>)}
       </div>
-      <div style={{ fontSize: 12, color: "var(--ink-soft)", margin: "8px 0" }}>Venda paga gera comissão no mês da aprovação. Promissória fica como valor pendente — a comissão sai quando for paga.</div>
+      <div style={{ fontSize: 12, color: "var(--ink-soft)", margin: "8px 0" }}><b>Venda paga</b>: ao efetivar, conta como venda e gera comissão no mês da aprovação. <b>Promissória</b>: ao confirmar, fica como <b>valor pendente</b> — não conta como venda nem gera comissão. Quando o cliente pagar, use "💰 Registrar pagamento" na promissória: o valor pago vira venda efetivada.</div>
       {pend.length > 1 && <button className="btn primary sm" onClick={() => decidir(pend.map((i: any) => ({ id: i.id, status: "efetivada" })), pend.length + " nº(s) efetivado(s)")}>✅ Efetivar todos ({pend.length})</button>}
     </div>
   );
@@ -128,8 +128,8 @@ export function Promissorias({ c }: { c: any }) {
   return (
     <div className="vv-lista">
       <div className="vc-res">
-        <div><span>Total da venda</span><b>{fmtMoeda(total)}</b></div>
-        <div className="ok"><span>Pago</span><b>{fmtMoeda(pago)}</b></div>
+        <div><span>Total negociado</span><b>{fmtMoeda(total)}</b></div>
+        <div className="ok"><span>Vendido (pago)</span><b>{fmtMoeda(pago)}</b></div>
         <div className={pend > 0 ? "pend" : ""}><span>Pendente em promissória</span><b>{fmtMoeda(pend)}</b></div>
       </div>
       {principais.map((i: any) => {

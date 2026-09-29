@@ -1,0 +1,4 @@
+-- Valor vendido = só o que foi pago e efetivado. Promissória confirmada fica como valor pendente (não conta como venda nem comissão);
+-- quando paga ("Registrar pagamento"), o valor pago entra como venda efetivada. _recalc_venda: tot := pago quando há algo efetivado.
+-- Dados (via SQL): venda 1305126 → Alessandra Viana Vasconcellos (Gabriela); Alessandra Rodrigues da Silva (Luiz) não comprou;
+-- 1301840 Romulo = R$ 6.370,00; Bruna da Silva Beserra sem venda; Yasmin → Angela; Ricardo Padilha → só Kauam; 1308363 → Julia Yumi (Angela).
