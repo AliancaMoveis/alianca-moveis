@@ -151,8 +151,8 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
         resposta: c.resposta_quando ? { previsao: c.resposta_previsao || "", quem: c.resposta_quem, texto: c.resposta_texto, quando: c.resposta_quando } : null,
         venda: v ? {
           numero: v.numero, valor: valorDe[c.id] != null ? fmtValor(valorDe[c.id]) : "", valorNum: valorDe[c.id] ?? null,
-          // competência: só as vendas importadas da planilha de setembro — as de agosto contam em setembro (1º dia)
-          ...(c.tratativa && c.tratativa.importado ? competencia(v.data_venda || "", v.registrado_em) : { dataVenda: v.data_venda || "", dataVendaReal: v.data_venda || "" }), vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: v.status,
+          // competência: a venda conta no mês em que a Gestão aprovou; se a data da venda é de mês anterior, vai para o 1º dia do mês da aprovação
+          ...competencia(v.data_venda || "", v.decidido_em || v.registrado_em), vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: v.status,
           gerenteId: v.gerente_id || "", gerenteNome: v.gerente_nome || "",
           entrada: entradaDe[c.id] || 0, promissorias: promDe[c.id] || [], tipoInformado: v.tipo_informado || "", entradaInformada: entInfDe[c.id] || 0,
         } : null,

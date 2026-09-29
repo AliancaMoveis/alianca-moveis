@@ -370,7 +370,7 @@ function Venda({ c }: any) {
       <div className="resp-box" style={{ borderColor: cor }}><h4>Dados da venda <span className="badge" style={{ background: cor, color: "#fff" }}>{VENDA_STATUS[vs] || vs}</span></h4>
         <RowSb k="Nº da venda" pb="5px 0">{v.numero || "—"}</RowSb>
         {vejaVal && <RowSb k="Valor" pb="5px 0" bold>{v.valor ? "R$ " + v.valor : "—"}</RowSb>}
-        <RowSb k="Data da venda" pb="5px 0">{v.dataVendaReal ? fmtDate(v.dataVendaReal) : v.dataVenda ? fmtDate(v.dataVenda) : "—"}{v.dataVendaReal && v.dataVendaReal !== v.dataVenda ? <span className="pill" style={{ marginLeft: 6 }}>lançada depois · conta em {fmtDate(v.dataVenda).slice(3)}</span> : null}</RowSb>
+        <RowSb k="Data da venda" pb="5px 0">{v.dataVendaReal ? fmtDate(v.dataVendaReal) : v.dataVenda ? fmtDate(v.dataVenda) : "—"}{v.dataVendaReal && v.dataVendaReal !== v.dataVenda ? <span className="pill" style={{ marginLeft: 6 }}>aprovada depois · conta em {fmtDate(v.dataVenda).slice(3)}</span> : null}</RowSb>
         <RowSb k="Vendedor na loja" pb="5px 0">{v.vendedor || v.atendenteNome || "—"}</RowSb>
         <RowSb k="Gerente que negociou" pb="5px 0">{v.gerenteNome || "—"}</RowSb>
         {vejaVal && <Promissorias c={c} />}
