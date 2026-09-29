@@ -1,0 +1,5 @@
+-- Agenda da loja dos consultores externos (PDF "agendamento loja externos", 29/09 a 17/10), aplicado via SQL:
+--  · 54 clientes existentes (achados por telefone ou nome): data na loja atualizada, volta a "Agendado loja" (ou "Com vendedor"),
+--    marcas de importação de visita retiradas (voltam a aparecer na agenda e nas pendências); tratativa.agendLojaImportado = 'agenda_29_09'
+--  · 19 clientes novos (solicitante "Importação — agenda loja externos", semVisita = true, sem visita paga)
+--  · vendedores do PDF: EVARISTO, ROY→Roibis, TONY, SUELY, LUIZA, THIAGO LIMA, THALENA
