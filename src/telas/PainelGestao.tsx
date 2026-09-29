@@ -73,7 +73,7 @@ export default function PainelGestao({ de, ate }: { de: string; ate: string }) {
       <div className="sec-label" style={{ margin: "0 0 8px" }}>Vendas no período</div>
       <div className="kpis">
         <Kpi fs={22} n={fmtMoeda(totalVend)} l={`Vendido (${vendidas.length} vendas)`} cor="var(--st-concluida)" />
-        <Kpi fs={22} n={fmtMoeda(soma(efet))} l={`Efetivadas (${efet.length})`} />
+        <Kpi fs={22} n={fmtMoeda(soma(efet))} l={`Quitadas — sem promissória (${efet.length})`} />
         <Kpi fs={22} n={fmtMoeda(valProm)} l={`Pendente em promissória (${emProm.length} clientes)`} cor={emProm.length ? "var(--st-tratativa)" : undefined} />
         <Kpi fs={22} n={fmtMoeda(ticket)} l="Ticket médio" />
         <Kpi n={conf.length} l={`A confirmar · ${fmtMoeda(soma(conf))}`} cls={conf.length ? "urg" : ""} />
