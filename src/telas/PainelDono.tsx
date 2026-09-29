@@ -68,7 +68,7 @@ export default function PainelDono() {
   // custo comercial do mês (o que se paga para vender)
   const cfg = R.cfg();
   const noMes = (d: any) => { const s = String(d || "").slice(0, 10); return s >= P.de && s <= P.ate; };
-  const visitas = mkt.filter((c: any) => c.consultorId && c.tratativa && c.tratativa.realizada && noMes(c.dataLoja)).length;
+  const visitas = mkt.filter((c: any) => c.consultorId && c.tratativa && c.tratativa.realizada && c.dataLoja && noMes(c.dataVisita || c.dataLoja)).length;
   const medidas = st.chamados.filter((c: any) => c.tipo === "medidas" && c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && noMes(c.tratativa.medida.realizadaEm)).length;
   const comConsultor = V.filter((c: any) => c.consultorId && vendaContaVolume(c.venda)).reduce((s, c) => s + val(c), 0) * cfg.comissaoPct / 100;
   const comMkt = V.filter((c: any) => R.ehDireto(c) && vendaContaComissao(c.venda)).length * (cfg.valorVendaMkt ?? 10);

@@ -1,0 +1,3 @@
+-- Visita do consultor é paga no mês em que foi feita (data da visita); sem data da visita, vale a data na loja.
+-- (_extrato_campo e _itens_campo: coalesce(c.data_visita, c.data_loja)) — continua exigindo visita realizada e data na loja.
+-- Assim, remarcar a loja para outro mês não muda o mês de pagamento da visita.

@@ -333,7 +333,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     return true;
   }
   function extratoConsultor(consultorId: string, de: string, ate: string) {
-    const visitas = visitasPagas(consultorId).filter(c => dentroPeriodo(c.dataLoja, de, ate) || (!de && !ate));
+    // visita paga no mês em que foi feita (data da visita); sem data da visita, vale a data na loja
+    const visitas = visitasPagas(consultorId).filter(c => dentroPeriodo(c.dataVisita || c.dataLoja, de, ate) || (!de && !ate));
     // comissão pelos pagamentos: entrada na data da venda, promissórias na data em que foram pagas
     const meusVend = state.chamados.filter(c => c.consultorId === consultorId && c.venda);
     const pagamentos = meusVend.flatMap(c => pagamentosVenda(c.venda).map(p => ({ ...p, c }))).filter(p => dentroPeriodo(p.data, de, ate) || (!de && !ate));

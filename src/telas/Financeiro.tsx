@@ -115,7 +115,7 @@ function FinConsultor() {
 
   const r = R.extratoConsultor(alvo, de, ate);
   const pendVendas = st.chamados.filter(c => c.consultorId === alvo && c.venda && ["registrada"].includes(c.venda.status) && (R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, de, ate) || (!de && !ate)));
-  const visOrd = r.visitas.slice().sort((a, b) => +new Date(b.dataLoja) - +new Date(a.dataLoja));
+  const visOrd = r.visitas.slice().sort((a, b) => +new Date(b.dataVisita || b.dataLoja) - +new Date(a.dataVisita || a.dataLoja));
   const pagOrd = r.pagamentos.slice().sort((a: any, b: any) => +new Date(b.data) - +new Date(a.data));
   return (
     <section className="view active" id="view-financeiro">{cab}
@@ -123,7 +123,7 @@ function FinConsultor() {
       <FechamentoMeu uid={alvo} />
       <div id="finDetalheWrap"><div className="panel-grid">
         <div className="panel"><h3>Pagamento por visitas <span className="pill" style={{ marginLeft: 8 }}>R$ {pagamentoVisita} por visita</span></h3><div id="finVisitas">
-          {visOrd.length ? visOrd.map(c => <div className="fin-item" key={c.id}><div><div className="nm">{c.cliente}</div><div className="sub">Vinda à loja: {fmtDateTime(c.dataLoja)}</div></div><div className="val">{fmtMoeda(pagamentoVisita)}</div></div>) : <div className="empty" style={{ padding: "24px 10px" }}>Nenhuma visita paga no período.</div>}
+          {visOrd.length ? visOrd.map(c => <div className="fin-item" key={c.id}><div><div className="nm">{c.cliente}</div><div className="sub">{c.dataVisita ? "Visita: " + fmtDateTime(c.dataVisita) + " · " : ""}Loja: {fmtDateTime(c.dataLoja)}</div></div><div className="val">{fmtMoeda(pagamentoVisita)}</div></div>) : <div className="empty" style={{ padding: "24px 10px" }}>Nenhuma visita paga no período.</div>}
         </div></div>
         <div className="panel"><h3>Vendas e comissão <span className="pill" style={{ marginLeft: 8 }}>{pct}% sobre vendas aprovadas</span></h3><div id="finVendas">
           {pagOrd.length ? pagOrd.map((p: any, i: number) => { const com = p.valor * (pct / 100); return (
