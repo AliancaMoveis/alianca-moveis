@@ -1,0 +1,6 @@
+-- Lote 3 de vendas de setembro (via SQL, função interna _imp_venda: cria/atualiza o cliente, venda 'registrada', 1 aviso ao consultor)
+-- Novos: Lourdes Bandeira Bueno do Espirito Santo 1287985 (Kauam) · Liliane Maria Matos Ferreira 1301996 (Gabriela)
+--        Débora Rodrigues Dos Santos 1309640 (Alan) · Valeria Dias 1303176 (Thiago)
+-- Em clientes existentes: Maria auzeni dos Santos Araújo 1306379 (ALM-0252, Alan) · Sueli de Souza Santos 1309869 (ALM-0565, consultor Rosangela → Angela)
+-- Já existiam (ignorados): 1309140, 1309669, 1307573, 1309591, 1309456, 1306606, 1309781, 1309942
+-- Não lançado: 1301875 (Thiago Strapasson R$ 55.000) — nº já é da venda de Rosa Maria Busato (R$ 40.000, Alan)
