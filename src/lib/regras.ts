@@ -64,6 +64,8 @@ export function itensVenda(v: any): any[] {
 export const numerosVenda = (v: any) => itensVenda(v).filter(i => i.tipo !== "pagamento" && i.status !== "cancelada");
 // lançamentos aguardando a Gestão
 export const itensPendentes = (v: any) => itensVenda(v).filter(i => i.status === "registrada");
+// cliente com venda cancelada (inteira) ou com algum nº de venda cancelado
+export const temCancelamento = (c: any) => !!c && (String(c.statusCliente || "") === "venda_cancelada" || (!!c.venda && (c.venda.status === "cancelada" || itensVenda(c.venda).some((i: any) => i.status === "cancelada" && i.tipo !== "pagamento"))));
 export const temPendenteGestao = (v: any) => !!v && (v.status === "registrada" || itensPendentes(v).length > 0);
 // promissórias validadas com saldo a receber
 export const promAbertas = (v: any) => (v && v.promissorias ? v.promissorias.filter((p: any) => p.status === "aberta") : []);
@@ -565,7 +567,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const ativos = meus.filter(c => ["aguardando_consultor", "direcionado_consultor", "visita_realizada", "agendado_loja", ...EM_ATENDIMENTO].includes(statusClienteDe(c))).length;
     const vend = meus.filter(c => vendaContaVolume(c.venda));
     const total = vend.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
-    const fechados = meus.filter(c => ["vendido", "vendido_promissoria", "nao_compareceu", "venda_cancelada", "reprovado"].includes(statusClienteDe(c))).length;
+    // conversão: vendas ÷ clientes já decididos (vendidos + os que não compraram)
+    const fechados = meus.filter(c => vendaContaVolume(c.venda) || ["nao_compareceu", "venda_cancelada", "reprovado", "atendido"].includes(statusClienteDe(c))).length;
     const conv = fechados ? Math.round(vend.length / fechados * 100) : 0;
     return { meus, ativos, vendas: vend.length, total, conv };
   }
@@ -600,7 +603,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
       if (!coord) mk.push(["produtividade", "Produtividade e pagamento"]);
       mk.push(["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
     } else if (temMkt) {
-      mk.push(["acompmkt", "Minha fila"], ["carteira", "Minha carteira"], ["agenda", "Agendamento loja"]);
+      // consultor e vendedor: "Minha fila" e "Minha carteira" viraram uma tela só ("Meus clientes"), com filtros
+      if (ehConsultorExterno() || mySetores().includes("atendente_cliente")) mk.push(["carteira", "Meus clientes"], ["agenda", "Agendamento loja"]);
+      else mk.push(["acompmkt", "Minha fila"], ["carteira", "Minha carteira"], ["agenda", "Agendamento loja"]);
       if (mySetores().includes("suporte_consultores")) mk.push(["vendedores", "Vendedores"]);
       mk.push(["clientes", "Clientes"]);
       if (mySetores().includes("marketing_operadora")) mk.push(["produtividade", "Minha produtividade"]);

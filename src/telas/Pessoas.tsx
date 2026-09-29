@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../estado";
-import { STATUS_CLIENTE, VENDA_STATUS, corDoSetor, fmtDate, fmtMoeda, inicial, parseMoeda, vendaContaComissao, vendaContaVolume } from "../lib/regras";
+import { STATUS_CLIENTE, VENDA_STATUS, corDoSetor, fmtDate, fmtMoeda, inicial, numsVenda, parseMoeda, temCancelamento, temPendenteGestao, valorPendente, vendaContaComissao, vendaContaVolume } from "../lib/regras";
 import { ScBadge, Ticket } from "../comp/Ticket";
 import { Kpi } from "./Dashboard";
 
@@ -38,16 +38,45 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
   );
 }
 
+// Meus clientes (consultor / vendedor): a fila (em andamento) e a carteira (todos) numa tela só, com busca e filtros
 export function Carteira() {
   const { R } = useApp();
   const ehVend = R.mySetores().includes("atendente_cliente");
   const d = R.statsPessoa(R.currentUserId, ehVend);
-  const arr = R.ordenar(d.meus.slice());
+  const [f, setF] = useState("andamento"); const [stF, setStF] = useState(""); const [q, setQ] = useState(""); const [de, setDe] = useState(""); const [ate, setAte] = useState("");
+  const sc = (c: any) => R.statusClienteDe(c);
+  const FILTROS: Record<string, [string, (c: any) => boolean]> = {
+    andamento: ["Em andamento", c => R.emAberto(c)],
+    criticos: ["Críticos — sem atualização", c => R.prioridade(c) === "critico"],
+    ...(ehVend ? { semparecer: ["Sem parecer", (c: any) => R.semParecer(c)] } : { semanexo: ["⚠️ Sem anexo", (c: any) => R.semAnexo(c)] }),
+    aconfirmar: ["Venda a confirmar", c => !!c.venda && temPendenteGestao(c.venda)],
+    vendidos: ["Vendidos", c => vendaContaVolume(c.venda)],
+    promissoria: ["Com promissória", c => !!c.venda && c.venda.status !== "cancelada" && valorPendente(c.venda) > 0],
+    cancelados: ["❌ Cancelamentos", c => temCancelamento(c)],
+    naocomprou: ["Não comprou", c => ["atendido", "reprovado", "nao_compareceu", "ausente_endereco"].includes(sc(c)) && !c.venda],
+    todos: ["Todos", () => true],
+  };
+  const noPer = (c: any) => { const x = String(c.dataLoja || c.dataVisita || c.criadoEm || "").slice(0, 10); return (!de || x >= de) && (!ate || x <= ate); };
+  const t = q.trim().toLowerCase(), dg = t.replace(/\D/g, "");
+  const bate = (c: any) => !t || (c.cliente + " " + (c.produto || "") + " " + (c.endereco || "") + " " + c.id + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg));
+  const base = d.meus.filter((c: any) => bate(c) && noPer(c) && (!stF || sc(c) === stF));
+  const cont: Record<string, number> = {}; Object.keys(FILTROS).forEach(k => (cont[k] = base.filter(FILTROS[k][1]).length));
+  const lista = base.filter((FILTROS[f] || FILTROS.todos)[1]);
+  const arr = f === "andamento" || f === "criticos" ? R.ordenar(lista.slice()) : lista.slice().sort((a: any, b: any) => String(b.dataLoja || b.criadoEm).localeCompare(String(a.dataLoja || a.criadoEm)));
+  const stsUsados = Array.from(new Set(d.meus.map(sc))) as string[];
   return (
     <section className="view active" id="view-carteira">
-      <div className="view-head"><div><h2 id="carTitulo">Minha carteira</h2><p id="carSub">{ehVend ? "Seus clientes na loja e seus resultados." : "Seus clientes de visita e seus resultados."}</p></div></div>
+      <div className="view-head"><div><h2 id="carTitulo">Meus clientes</h2><p id="carSub">{ehVend ? "Seus clientes na loja" : "Seus clientes de visita"} — “Em andamento” é a sua fila (os parados há mais tempo primeiro); use os filtros para consultar vendidos, promissórias, cancelamentos e o histórico.</p></div></div>
       <div className="kpis" id="carKpis"><Kpi n={d.ativos} l="Clientes ativos" /><Kpi n={d.vendas} l="Vendas" /><Kpi n={fmtMoeda(d.total)} l="Vendido" fs={22} /><Kpi n={d.conv + "%"} l="Conversão" /></div>
-      <div className="list" id="carLista">{arr.length ? arr.map(c => <Ticket key={c.id} c={c} />) : <div className="empty"><div className="big">Nenhum cliente</div>Você ainda não tem clientes atribuídos.</div>}</div>
+      <div className="toolbar">
+        <div className="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg><input placeholder="Buscar cliente, telefone, ambiente, endereço ou nº da venda" value={q} onChange={e => setQ(e.target.value)} /></div>
+        <select value={stF} onChange={e => setStF(e.target.value)} style={{ maxWidth: 230 }}><option value="">Todos os status</option>{stsUsados.filter(k => STATUS_CLIENTE[k]).map(k => <option key={k} value={k}>{STATUS_CLIENTE[k]}</option>)}</select>
+        <input type="date" style={{ maxWidth: 160 }} title="De (data na loja / visita)" value={de} onChange={e => setDe(e.target.value)} />
+        <input type="date" style={{ maxWidth: 160 }} title="Até" value={ate} onChange={e => setAte(e.target.value)} />
+        {(q || stF || de || ate) && <button className="btn ghost sm" onClick={() => { setQ(""); setStF(""); setDe(""); setAte(""); }}>Limpar</button>}
+      </div>
+      <div className="chips">{Object.entries(FILTROS).filter(([k]) => ["andamento", "cancelados", "todos", f].includes(k) || cont[k]).map(([k, [l]]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
+      <div className="list" id="carLista">{arr.length ? arr.map((c: any) => <Ticket key={c.id} c={c} />) : <div className="empty"><div className="big">Nenhum cliente</div>{d.meus.length ? "Nada neste filtro." : "Você ainda não tem clientes atribuídos."}</div>}</div>
     </section>
   );
 }
@@ -59,13 +88,14 @@ export function Clientes() {
   const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c));
   const cont: Record<string, number> = { todos: base.length };
   Object.keys(STATUS_CLIENTE).forEach(k => (cont[k] = base.filter(c => R.statusClienteDe(c) === k).length));
-  const chips = [["todos", "Todos"]].concat(Object.keys(STATUS_CLIENTE).map(k => [k, STATUS_CLIENTE[k]]));
+  cont.cancelamentos = base.filter(temCancelamento).length;
+  const chips = [["todos", "Todos"], ["cancelamentos", "❌ Cancelamentos"]].concat(Object.keys(STATUS_CLIENTE).map(k => [k, STATUS_CLIENTE[k]]));
   const vendidos = base.filter(c => vendaContaVolume(c.venda));
   const aprov = vendidos.filter(c => vendaContaComissao(c.venda));
-  const totalVendido = aprov.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
+  const totalVendido = vendidos.reduce((s, c) => s + parseMoeda(c.venda.valor), 0); void aprov;
   const vejaVal = R.ehGestao() || R.temMarketing() || R.ehConsultorExterno();
   let arr = base.slice();
-  if (filtro !== "todos") arr = arr.filter(c => R.statusClienteDe(c) === filtro);
+  if (filtro === "cancelamentos") arr = arr.filter(temCancelamento); else if (filtro !== "todos") arr = arr.filter(c => R.statusClienteDe(c) === filtro);
   if (de) arr = arr.filter(c => new Date(c.criadoEm) >= new Date(de + "T00:00:00"));
   if (ate) arr = arr.filter(c => new Date(c.criadoEm) <= new Date(ate + "T23:59:59"));
   if (q) arr = arr.filter(c => ((c.cliente || "") + " " + (c.telefone || "") + " " + ((c.venda && c.venda.numero) || "")).toLowerCase().includes(q.toLowerCase()));

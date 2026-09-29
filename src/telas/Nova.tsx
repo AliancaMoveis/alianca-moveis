@@ -96,7 +96,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
       toast(finalizar ? "Atendimento " + id + " registrado e finalizado" : acionar ? "Solicitação " + id + " aberta — supervisão avisada" : "Solicitação " + id + " aberta");
       setResposta(""); setAcionar(false); setMotivoSup(""); modo.current = "aberto";
       const menu = R.menuPerfil().flatMap((g: any) => g.itens.map((i: string[]) => i[0]));
-      irPara(menu.includes("fila") && !presale ? "fila" : menu.includes("acompmkt") && presale ? "acompmkt" : "dashboard");
+      irPara(menu.includes("fila") && !presale ? "fila" : menu.includes("acompmkt") && presale ? "acompmkt" : menu.includes("carteira") && presale ? "carteira" : "dashboard");
       if (escopo === "pv") abrirDetalhe(id);
     } catch (err: any) { toast(err.message || "Não foi possível abrir"); }
     finally { setEnviando(false); }
