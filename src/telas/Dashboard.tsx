@@ -6,7 +6,7 @@ import PainelConsultorVisual from "./PainelConsultorVisual";
 import PainelGestao from "./PainelGestao";
 import PainelDono from "./PainelDono";
 import PainelBruno from "./PainelBruno";
-import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume } from "../lib/regras";
+import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume, pagamentosVenda } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
   <div className="bar-row"><span className="nm">{nm}</span><span className="track"><span className="fill" style={{ width: pct + "%", ...(cor ? { background: cor } : {}) }}></span></span><span className="v">{v}</span>{extra}</div>
@@ -52,7 +52,7 @@ export default function Dashboard() {
   const mktTodos = todos.filter(R.domMarketing);
   const mktCrit = mktTodos.filter((c: any) => R.prioridade(c) === "critico").length;
   const mktNovos = vis.filter(R.domMarketing).length;
-  const mktVendasPer = mktTodos.filter((c: any) => vendaContaVolume(c.venda) && noPeriodo(c.venda.dataVenda || c.venda.quando)).length;
+  const mktVendasPer = mktTodos.filter((c: any) => vendaContaVolume(c.venda) && pagamentosVenda(c.venda).some(p => noPeriodo(p.data + "T12:00"))).length;
   const mktAConfirmar = mktTodos.filter((c: any) => c.venda && c.venda.status === "registrada").length;
   const mktVisitasPer = mktTodos.filter((c: any) => !R.ehDireto(c) && R.visitaFeita(c) && noPeriodo(c.dataVisita || c.criadoEm)).length;
   const mktAgendPer = mktTodos.filter((c: any) => c.dataLoja && noPeriodo(c.dataLoja)).length;

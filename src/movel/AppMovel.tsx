@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
-import { numsVenda, EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume } from "../lib/regras";
+import { numsVenda, EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import { SinoAvisos } from "../comp/Avisos";
@@ -286,7 +286,7 @@ function Painel({ perfil, abrir }: any) {
     const atendidos = meus.filter((c: any) => noPer(c.dataLoja));
     const vieram = atendidos.filter(R.compareceu);
     const faltaram = atendidos.filter((c: any) => R.statusClienteDe(c) === "nao_compareceu");
-    const vendas = meus.filter((c: any) => vendaContaVolume(c.venda) && noPer(c.venda.dataVenda || c.venda.quando));
+    const vendas = vendasDoPeriodo(meus, P.de, P.ate);
     const total = vendas.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0);
     const orc = atendidos.filter((c: any) => ["orcamento", "sem_resposta", "reagendado"].includes(R.statusClienteDe(c)) && !c.venda);
     const conv = vieram.length ? Math.round(vendas.length / vieram.length * 100) : null;

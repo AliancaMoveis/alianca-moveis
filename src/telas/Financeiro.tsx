@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { TIPO_REEMBOLSO, fmtDate, fmtDateTime, fmtMoeda, parseMoeda, vendaContaVolume } from "../lib/regras";
-import { valorPendente, promAbertas } from "../lib/regras";
+import { valorPendente, promAbertas, vendasDoPeriodo } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { PromissoriasAbertas } from "../comp/VendaValidar";
 import { FechamentoGestao, FechamentoMeu } from "../comp/Fechamento";
@@ -34,8 +34,7 @@ function VendasVendedores() {
   const souVend = R.mySetores().includes("atendente_cliente") && !R.ehGestao();
   const [de, setDe] = useState(mesAtual()[0]); const [ate, setAte] = useState(mesAtual()[1]); const [vend, setVend] = useState("");
   const alvo = souVend ? R.currentUserId : vend;
-  const vendas = st.chamados.filter((c: any) => R.domMarketing(c) && c.atendenteId && vendaContaVolume(c.venda) && (!alvo || c.atendenteId === alvo)
-    && (R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, de, ate) || (!de && !ate)));
+  const vendas = vendasDoPeriodo(st.chamados.filter((c: any) => R.domMarketing(c) && c.atendenteId && (!alvo || c.atendenteId === alvo)), de, ate);
   const aConfirmar = st.chamados.filter((c: any) => R.domMarketing(c) && c.venda && c.venda.status === "registrada" && (!alvo || c.atendenteId === alvo)).length;
   const ext = vendas.filter((c: any) => R.origemLoja(c) === "externo"), mkt = vendas.filter((c: any) => R.origemLoja(c) === "marketing");
   const soma = (arr: any[]) => arr.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);

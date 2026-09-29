@@ -91,6 +91,20 @@ export function pagamentosVenda(v: any): { valor: number; data: string; tipo: st
     .map((i: any) => ({ valor: i.valor, data: competenciaItem(i.dataVenda, i.decididoEm, i.registradoEm), tipo: i.tipo === "pagamento" ? "promissoria" : "venda", numero: i.numero }));
 }
 
+// VALOR VENDIDO NO PERÍODO: cada nº pago conta no mês em que foi efetivado; pagamento de promissória conta no mês em que foi pago.
+const noIntervalo = (d: string, de: string, ate: string) => !!d && (!de || d >= de) && (!ate || d <= String(ate).slice(0, 10));
+export const pagamentosNoPeriodo = (v: any, de: string, ate: string) => pagamentosVenda(v).filter(p => noIntervalo(p.data, de, ate));
+export const valorVendaPeriodo = (v: any, de: string, ate: string) => pagamentosNoPeriodo(v, de, ate).reduce((s, p) => s + p.valor, 0);
+// clientes com venda no período, com o valor (e a data) só do que entrou no período — use no lugar de "venda com data no período"
+export function vendasDoPeriodo(lista: any[], de: string, ate: string): any[] {
+  return lista.filter(c => vendaContaVolume(c.venda)).map(c => {
+    const ps = pagamentosNoPeriodo(c.venda, de, ate);
+    if (!ps.length) return null;
+    const val = ps.reduce((s, p) => s + p.valor, 0);
+    return { ...c, venda: { ...c.venda, valorNum: val, valor: val.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), dataVenda: ps.map(p => p.data).sort()[0] } };
+  }).filter(Boolean);
+}
+
 // ---------- datas ----------
 // datas só com dia ("2026-09-24") são tratadas como data local (o protótipo as lia em UTC e mostrava o dia anterior)
 export const parseData = (v: any): Date => {
@@ -333,6 +347,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // período pela data da visita (ou do cadastro, se não houver); agendamento direto pela data na loja
   // venda importada de planilha não é visita (as visitas sobem separadas)
   const soVenda = new WeakSet<object>(), vendaFora = new WeakSet<object>();
+  const perVenda = new WeakMap<object, { de: string; ate: string }>(); // período em que o valor vendido é contado
   const ehImportado = (c: Chamado) => !!(c.tratativa && c.tratativa.importado);
   // importados sem visita no mês: vendas da planilha sem visita e agendamentos na loja cuja visita foi no mês anterior
   const vendaSemVisita = (c: Chamado) => !!(c.tratativa && ((c.tratativa.importado && !c.tratativa.realizada) || c.tratativa.semVisita));
@@ -345,8 +360,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const realizadas = L.filter(visitaFeita), agendadas = L.filter(c => !!c.dataLoja);
     const vieram = L.filter(compareceu), faltaram = L.filter(c => statusClienteDe(c) === "nao_compareceu");
     const vendas = LV.filter(c => vendaContaVolume(c.venda)), aConfirmar = LV.filter(c => c.venda && temPendenteGestao(c.venda));
-    const valor = vendas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
-    const comissao = LV.flatMap(c => pagamentosVenda(c.venda)).reduce((s, p) => s + p.valor, 0) * pct / 100;
+    // valor: cada nº conta no mês em que foi efetivado (promissória paga conta no mês do pagamento)
+    const pagsPer = (c: Chamado) => { const p = perVenda.get(c); return p ? pagamentosNoPeriodo(c.venda, p.de, p.ate) : pagamentosVenda(c.venda); };
+    const valor = vendas.reduce((s, c) => s + (perVenda.has(c) || Array.isArray(c.venda.itens) ? pagsPer(c).reduce((x, p) => x + p.valor, 0) : parseMoeda(c.venda.valor)), 0);
+    const comissao = LV.flatMap(pagsPer).reduce((s, p) => s + p.valor, 0) * pct / 100;
     // promissórias em aberto dos clientes do período (valor ainda a receber — comissão futura)
     const emPromissoria = LV.filter(c => c.venda && c.venda.status !== "cancelada" && valorPendente(c.venda) > 0);
     const valorPromissoria = emPromissoria.reduce((s, c) => s + valorPendente(c.venda), 0);
@@ -365,7 +382,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     return state.chamados.filter(c => {
       if (!(domMarketing(c) && !ehDireto(c) && c.consultorId === uid)) return false;
       const visNoPer = todos || dentroPeriodo(ancoraVisita(c), de, ate);
-      const vendaNoPer = !!c.venda && (todos || dentroPeriodo(c.venda.dataVenda || c.venda.quando, de, ate));
+      const vendaNoPer = !!c.venda && (todos || (vendaContaVolume(c.venda) ? pagamentosNoPeriodo(c.venda, de, ate).length > 0 : dentroPeriodo(c.venda.dataVenda || c.venda.quando, de, ate)));
+      if (todos) perVenda.delete(c); else perVenda.set(c, { de, ate });
       if (!visNoPer && !vendaNoPer) return false;
       if (visNoPer) soVenda.delete(c); else soVenda.add(c);
       if (c.venda && !vendaNoPer) vendaFora.add(c); else vendaFora.delete(c);

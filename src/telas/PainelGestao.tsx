@@ -2,7 +2,7 @@
 // Não mostra a agenda do dia (isso fica em "Agendamento loja").
 import { PromissoriasAbertas } from "../comp/VendaValidar";
 import { useApp } from "../estado";
-import { fmtDate, fmtMoeda, parseData, parseMoeda, vendaContaVolume, temPendenteGestao, valorPendente, itensPendentes } from "../lib/regras";
+import { fmtDate, fmtMoeda, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, temPendenteGestao, valorPendente, itensPendentes } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
 
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) + "%" : "—");
@@ -18,8 +18,9 @@ export default function PainelGestao({ de, ate }: { de: string; ate: string }) {
   const vendasPer = mkt.filter((c: any) => c.venda && noPer(c.venda.dataVenda || c.venda.quando));
   const por = (s: string) => vendasPer.filter((c: any) => c.venda.status === s);
   const soma = (l: any[]) => l.reduce((s, c) => s + val(c), 0);
-  const vendidas = vendasPer.filter((c: any) => vendaContaVolume(c.venda));
-  const efet = por("efetivada"), conf = por("registrada"), canc = por("cancelada");
+  // vendido: cada nº conta no mês em que foi efetivado (pagamento de promissória no mês em que foi pago)
+  const vendidas = vendasDoPeriodo(mkt, de, ate);
+  const efet = vendidas.filter((c: any) => c.venda.status === "efetivada"), conf = por("registrada"), canc = por("cancelada");
   // promissória em aberto: saldo atual de todos os clientes (qualquer mês)
   const emProm = mkt.filter((c: any) => c.venda && c.venda.status !== "cancelada" && valorPendente(c.venda) > 0);
   const valProm = emProm.reduce((s: number, c: any) => s + valorPendente(c.venda), 0);

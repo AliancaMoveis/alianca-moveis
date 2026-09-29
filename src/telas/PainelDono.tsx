@@ -1,7 +1,7 @@
 // Painel do PROPRIETÁRIO: só números (sem ações). Resultado do mês, loja ao vivo, quem vende, de onde vem o cliente e quanto custa vender.
 import { useState } from "react";
 import { useApp } from "../estado";
-import { promAbertas, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume } from "../lib/regras";
+import { promAbertas, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
 import { BarRow } from "./Dashboard";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -38,7 +38,7 @@ export default function PainelDono() {
   const mkt = st.chamados.filter((c: any) => R.domMarketing(c));
   const val = (c: any) => (c.venda && c.venda.valorNum != null ? Number(c.venda.valorNum) : parseMoeda(c.venda && c.venda.valor));
   const dataV = (c: any) => String(c.venda.dataVenda || c.venda.quando || "").slice(0, 10);
-  const vendidas = (de: string, ate: string) => mkt.filter((c: any) => vendaContaVolume(c.venda) && dataV(c) >= de && dataV(c) <= ate);
+  const vendidas = (de: string, ate: string) => vendasDoPeriodo(mkt, de, ate);
   const V = vendidas(P.de, P.ate), VA = vendidas(P.pDe, P.pAte);
   const soma = (l: any[]) => l.reduce((s, c) => s + val(c), 0);
   const tot = soma(V), totA = soma(VA), tk = V.length ? tot / V.length : 0, tkA = VA.length ? totA / VA.length : 0;
@@ -70,7 +70,7 @@ export default function PainelDono() {
   const noMes = (d: any) => { const s = String(d || "").slice(0, 10); return s >= P.de && s <= P.ate; };
   const visitas = mkt.filter((c: any) => c.consultorId && c.tratativa && c.tratativa.realizada && noMes(c.dataLoja)).length;
   const medidas = st.chamados.filter((c: any) => c.tipo === "medidas" && c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && noMes(c.tratativa.medida.realizadaEm)).length;
-  const comConsultor = V.filter((c: any) => c.consultorId && vendaContaComissao(c.venda)).reduce((s, c) => s + val(c), 0) * cfg.comissaoPct / 100;
+  const comConsultor = V.filter((c: any) => c.consultorId && vendaContaVolume(c.venda)).reduce((s, c) => s + val(c), 0) * cfg.comissaoPct / 100;
   const comMkt = V.filter((c: any) => R.ehDireto(c) && vendaContaComissao(c.venda)).length * (cfg.valorVendaMkt ?? 10);
   const reemb = (st.reembolsos || []).filter((r: any) => r.status === "aprovado" && noMes(r.data)).reduce((s: number, r: any) => s + r.valor, 0);
   const comVend = tot * 0.02;

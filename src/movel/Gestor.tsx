@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { A } from "../lib/acoes";
 import { useApp } from "../estado";
-import { numsVenda, temPendenteGestao, STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume } from "../lib/regras";
+import { numsVenda, temPendenteGestao, STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const dia = (v: any) => String(v || "").slice(0, 10);
@@ -136,7 +136,7 @@ function ResMkt({ todos, noPer, P, L }: any) {
   const mk = todos.filter((c: any) => R.domMarketing(c));
   const T = (k: string, n: any, l: string, lista?: any[], cor?: string, sub?: string) => <Tile k={k} n={n} l={l} cor={cor} sub={sub} sel={L.sel} lista={lista ? () => L.abrirLista(k, l, lista) : undefined} />;
   // vendas
-  const vendas = mk.filter((c: any) => vendaContaVolume(c.venda) && noPer(c.venda.dataVenda || c.venda.quando));
+  const vendas = vendasDoPeriodo(mk, P.de, P.ate);
   const efet = vendas.filter((c: any) => vendaContaComissao(c.venda));
   const aConf = mk.filter((c: any) => c.venda && c.venda.status === "registrada");
   const veValor = veValorLoja(R);
@@ -302,7 +302,7 @@ export function GestEquipe({ irTime }: { irTime?: () => void }) {
     linhas = R.projetistas().map((u: any) => {
       const meus = mk.filter((c: any) => c.atendenteId === u.id);
       const ag = meus.filter((c: any) => noPer(c.dataLoja)), vi = ag.filter(R.compareceu);
-      const vd = meus.filter((c: any) => vendaContaVolume(c.venda) && noPer(c.venda.dataVenda || c.venda.quando));
+      const vd = vendasDoPeriodo(meus, P.de, P.ate);
       const sp = meus.filter((c: any) => R.semParecer(c) || R.parecerCobrado(c));
       const orc = meus.filter((c: any) => ["orcamento", "sem_resposta", "reagendado"].includes(R.statusClienteDe(c)) && !c.venda);
       return { u, l: ag, chave: soma(vd), nums: [["Agendados", ag.length], ["Vieram", vi.length], ["Vendas", vd.length], ["Sem parecer", sp.length]],
