@@ -311,6 +311,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // ---------- funil do marketing: visita → loja → venda ----------
   // período pela data da visita (ou do cadastro, se não houver); agendamento direto pela data na loja
   // venda importada de planilha não é visita (as visitas sobem separadas)
+  const soVenda = new WeakSet<object>(), vendaFora = new WeakSet<object>();
   const ehImportado = (c: Chamado) => !!(c.tratativa && c.tratativa.importado);
   // importados sem visita no mês: vendas da planilha sem visita e agendamentos na loja cuja visita foi no mês anterior
   const vendaSemVisita = (c: Chamado) => !!(c.tratativa && ((c.tratativa.importado && !c.tratativa.realizada) || c.tratativa.semVisita));
@@ -318,11 +319,12 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const compareceu = (c: Chamado) => !!c.venda || ["orcamento", "sem_resposta", "reprovado", "atendido"].includes(statusClienteDe(c));
   function funil(lista: Chamado[]) {
     const pct = cfg().comissaoPct;
-    const L = lista.filter(c => !vendaSemVisita(c)); // visitas/clientes: sem as vendas importadas que não tiveram visita
+    const L = lista.filter(c => !vendaSemVisita(c) && !soVenda.has(c)); // visitas/clientes: sem vendas sem visita e sem quem só comprou no período
+    const LV = lista.filter(c => !vendaFora.has(c)); // vendas: só as do período
     const realizadas = L.filter(visitaFeita), agendadas = L.filter(c => !!c.dataLoja);
     const vieram = L.filter(compareceu), faltaram = L.filter(c => statusClienteDe(c) === "nao_compareceu");
-    const vendas = lista.filter(c => vendaContaVolume(c.venda)), aConfirmar = lista.filter(c => c.venda && c.venda.status === "registrada");
-    const efetivadas = lista.filter(c => vendaContaComissao(c.venda));
+    const vendas = LV.filter(c => vendaContaVolume(c.venda)), aConfirmar = LV.filter(c => c.venda && c.venda.status === "registrada");
+    const efetivadas = LV.filter(c => vendaContaComissao(c.venda));
     const valor = vendas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
     const comissao = efetivadas.reduce((s, c) => s + parseMoeda(c.venda.valor), 0) * pct / 100;
     const pendentes = lista.filter(c => c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.realizada));
@@ -332,7 +334,20 @@ export function criarRegras(state: Estado, currentUserId: string) {
       pPresenca: taxa(vieram.length, realizadas.length), pVisitaVenda: taxa(vendas.length, realizadas.length), pLojaVenda: taxa(vendas.length, vieram.length) };
   }
   const ancoraVisita = (c: Chamado) => c.dataVisita || c.criadoEm;
-  const clientesConsultor = (uid: string, de: string, ate: string) => state.chamados.filter(c => domMarketing(c) && !ehDireto(c) && c.consultorId === uid && (!de && !ate || dentroPeriodo(ancoraVisita(c), de, ate)));
+  // clientes do consultor no período: visitas pela data da visita; vendas pelo mês de competência (aprovação).
+  // Quem foi visitado em outro período mas comprou neste entra só como venda; quem comprou fora do período não conta a venda aqui.
+  const clientesConsultor = (uid: string, de: string, ate: string) => {
+    const todos = !de && !ate;
+    return state.chamados.filter(c => {
+      if (!(domMarketing(c) && !ehDireto(c) && c.consultorId === uid)) return false;
+      const visNoPer = todos || dentroPeriodo(ancoraVisita(c), de, ate);
+      const vendaNoPer = !!c.venda && (todos || dentroPeriodo(c.venda.dataVenda || c.venda.quando, de, ate));
+      if (!visNoPer && !vendaNoPer) return false;
+      if (visNoPer) soVenda.delete(c); else soVenda.add(c);
+      if (c.venda && !vendaNoPer) vendaFora.add(c); else vendaFora.delete(c);
+      return true;
+    });
+  };
   const funilConsultor = (uid: string, de: string, ate: string) => funil(clientesConsultor(uid, de, ate));
 
   // ---------- prioridade única por chamado (cada chamado cai em UMA faixa, sem duplicidade) ----------

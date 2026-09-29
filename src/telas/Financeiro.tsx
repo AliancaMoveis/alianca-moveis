@@ -5,6 +5,17 @@ import { valorPendente } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { PromissoriasAbertas } from "../comp/VendaValidar";
 import { FechamentoGestao, FechamentoMeu } from "../comp/Fechamento";
+import { hojeISO } from "../lib/regras";
+
+// períodos rápidos: mês atual, mês passado, tudo (ou datas livres)
+const mesAtual = () => { const h = hojeISO(); return [h.slice(0, 8) + "01", h]; };
+const mesPassado = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"); const fim = new Date(y, d.getMonth() + 1, 0).getDate(); return [`${y}-${m}-01`, `${y}-${m}-${String(fim).padStart(2, "0")}`]; };
+function Periodos({ de, ate, setDe, setAte }: any) {
+  const [a1, a2] = mesAtual(), [p1, p2] = mesPassado();
+  const on = (x: string, y: string) => de === x && ate === y;
+  const b = (l: string, x: string, y: string) => <button className={"chip" + (on(x, y) ? " on" : "")} onClick={() => { setDe(x); setAte(y); }}>{l}</button>;
+  return <div className="chips" style={{ marginBottom: 10 }}>{b("Mês atual", a1, a2)}{b("Mês passado", p1, p2)}{b("Tudo", "", "")}</div>;
+}
 
 export default function Financeiro() {
   const { R } = useApp();
@@ -21,7 +32,7 @@ export default function Financeiro() {
 function VendasVendedores() {
   const { R, st, abrirDetalhe } = useApp() as any;
   const souVend = R.mySetores().includes("atendente_cliente") && !R.ehGestao();
-  const [de, setDe] = useState(""); const [ate, setAte] = useState(""); const [vend, setVend] = useState("");
+  const [de, setDe] = useState(mesAtual()[0]); const [ate, setAte] = useState(mesAtual()[1]); const [vend, setVend] = useState("");
   const alvo = souVend ? R.currentUserId : vend;
   const vendas = st.chamados.filter((c: any) => R.domMarketing(c) && c.atendenteId && vendaContaVolume(c.venda) && (!alvo || c.atendenteId === alvo)
     && (R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, de, ate) || (!de && !ate)));
@@ -37,7 +48,7 @@ function VendasVendedores() {
     <section className="view active" id="view-financeiro">
       <div className="view-head"><div><h2>{souVend ? "Minhas vendas" : "Vendas dos vendedores"}</h2><p>Total das vendas vindas dos atendimentos, separado por origem: <b>consultores externos</b> e <b>marketing</b>.</p></div></div>
       <div className="aviso-anexo" style={{ marginBottom: 14, background: "var(--primary-soft)", borderColor: "var(--primary)", color: "var(--primary)" }}><b>A comissão do vendedor (2%) é calculada no Tático, no usuário de cada vendedor</b> — não neste painel. Aqui não há pagamento por visita: só o total vendido.</div>
-      <div className="card" style={{ padding: "16px 18px", marginBottom: 16 }}><div className="grid">
+      <div className="card" style={{ padding: "16px 18px", marginBottom: 16 }}><Periodos de={de} ate={ate} setDe={setDe} setAte={setAte} /><div className="grid">
         <div className="field"><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
         <div className="field"><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
         {!souVend && <div className="field"><label>Vendedor</label><select value={vend} onChange={e => setVend(e.target.value)}><option value="">Todos os vendedores</option>{R.vendedores().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>}
@@ -58,7 +69,7 @@ function VendasVendedores() {
 
 function FinConsultor() {
   const { R, st } = useApp();
-  const [de, setDe] = useState(""); const [ate, setAte] = useState(""); const [cons, setCons] = useState("");
+  const [de, setDe] = useState(mesAtual()[0]); const [ate, setAte] = useState(mesAtual()[1]); const [cons, setCons] = useState("");
   const souGestor = R.ehGestao();
   const consultores = st.usuarios.filter(u => u.somenteAtribuidos && ((u.setores || []).includes("consultor_externo") || (u.setores || []).includes("medidas")));
   const { pagamentoVisita, comissaoPct: pct } = R.cfg();
@@ -68,12 +79,13 @@ function FinConsultor() {
     <>
       <div className="view-head"><div><h2 id="finTitulo">{souGestor ? "Financeiro — Consultores e medidores" : "Financeiro"}</h2><p id="finSub">{souGestor && alvo ? "Extrato de " + R.nomeUser(alvo) + ". Filtre por período." : sub}</p></div></div>
       <div className="card" style={{ padding: "16px 18px", marginBottom: 16 }}>
+        <Periodos de={de} ate={ate} setDe={setDe} setAte={setAte} />
         <div className="grid">
           <div className="field"><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
           <div className="field"><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
           {souGestor && <div className="field" id="finConsultorField"><label>Consultor / medidor</label><select value={cons} onChange={e => setCons(e.target.value)}><option value="">Todos</option>{consultores.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>}
         </div>
-        <div style={{ marginTop: 12 }}><button className="btn ghost sm" onClick={() => { setDe(""); setAte(""); setCons(""); }}>Limpar filtros</button></div>
+        <div style={{ marginTop: 12 }}><button className="btn ghost sm" onClick={() => { setDe(mesAtual()[0]); setAte(mesAtual()[1]); setCons(""); }}>Limpar filtros</button></div>
       </div>
     </>
   );

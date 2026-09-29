@@ -9,9 +9,10 @@ const GRUPOS: [string, string, string[], string][] = [
   ["visitar", "A visitar", ["aguardando_consultor", "direcionado_consultor"], "#5b7fc7"],
   ["visitado", "Visitado — falta agendar loja", ["visita_realizada"], "#2a9bb0"],
   ["agendado", "Agendado na loja", ["agendado_loja"], "#7a5cc2"],
-  ["atendimento", "Em atendimento na loja", ["com_vendedor", "orcamento", "sem_resposta", "reagendado"], "#d4a020"],
-  ["vendido", "Vendido", ["vendido", "vendido_promissoria", "vendido_revisao"], "#2f8f5b"],
-  ["perdido", "Não veio / perdido", ["nao_compareceu", "reprovado", "venda_cancelada"], "#c24a4a"],
+  ["atendimento", "Em atendimento na loja", ["com_vendedor", "orcamento", "sem_resposta", "reagendado", "em_obras", "standby", "em_analise"], "#d4a020"],
+  ["vendido", "Vendido", ["vendido", "vendido_promissoria", "vendido_entrada", "vendido_revisao"], "#2f8f5b"],
+  ["finalizado", "Atendido — não comprou", ["atendido"], "#8a94a6"],
+  ["perdido", "Não veio / perdido", ["nao_compareceu", "reprovado", "venda_cancelada", "ausente_endereco"], "#c24a4a"],
 ];
 
 export default function PainelConsultorVisual({ de, ate }: { de: string; ate: string }) {
@@ -33,7 +34,7 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
   cli.forEach((c: any) => { const d = diaLocal(c.dataVisita || c.criadoEm); if (!d) return; porDia[d] = porDia[d] || { r: 0, p: 0 }; R.visitaFeita(c) ? porDia[d].r++ : porDia[d].p++; });
   const maxDia = Math.max(1, ...dias.map(d => (porDia[d]?.r || 0) + (porDia[d]?.p || 0)));
   const grupos = GRUPOS.map(([k, l, sts, cor]) => ({ k, l, cor, n: cli.filter((c: any) => sts.includes(R.statusClienteDe(c))).length }));
-  const resto = cli.length - grupos.reduce((s, g) => s + g.n, 0); if (resto > 0) grupos[0].n += resto;
+  const resto = cli.length - grupos.reduce((s, g) => s + g.n, 0); if (resto > 0) grupos[grupos.length - 2].n += resto;
   let acc = 0; const R0 = 60, C = 2 * Math.PI * R0;
   const proxVisitas = aVisitar.slice().sort((a: any, b: any) => String(a.dataVisita || "9").localeCompare(String(b.dataVisita || "9"))).slice(0, 7);
   const proxLoja = meus.filter((c: any) => c.dataLoja && String(c.dataLoja).slice(0, 10) >= hoje && !c.venda).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja))).slice(0, 7);
