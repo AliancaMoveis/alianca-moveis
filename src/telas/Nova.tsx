@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
-import { fmtDateTime, inicial, mesmaPessoa, soDigitos } from "../lib/regras";
+import { PV_TIPOS, fmtDateTime, inicial, mesmaPessoa, soDigitos } from "../lib/regras";
 import { EditFab } from "./Cadastros";
 
-const VAZIO = { pvOrigem: "cliente", pvPeca: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
+const VAZIO: any = { pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
 type NovoAnexo = { tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; blob?: Blob };
 
 export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
@@ -71,6 +71,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
     e.preventDefault();
     if (!f.tipo) { toast("Escolha o motivo do contato"); return; }
     if (!R.podeCriarTipo(f.tipo)) { toast("Você não tem permissão para abrir este motivo"); return; }
+    if (ehPv && f.pvOrigem === "montador" && !f.pvMontador) { toast("Informe qual montador pediu suporte"); return; }
     const finalizar = modo.current === "finalizar" && podeFinalizarJa;
     if (finalizar && resposta.trim().length < 3) { toast("Escreva o que foi informado ao cliente"); return; }
     if (acionar && !finalizar && (motivoSup.trim() || f.motivo || "").trim().length < 5) { toast("Escreva por que a supervisão precisa acompanhar"); return; }
@@ -84,7 +85,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
       const id = await A.criarChamado({ ...base, fabrica: ehMkt ? "" : ehFab || ehPv ? f.fabrica : "", pedidoFabrica: ehFab ? f.pedidoFabrica : "", prazoTatico: ehFab || f.tipo === "entrega" ? f.prazoTatico : "", vinculadoA: vinc,
         ...(!ehMkt && finalizar ? { finalizar: true, resposta: resposta.trim() } : {}),
         ...(!ehMkt && acionar && !finalizar ? { acionarSupervisao: true, motivoSupervisao: motivoSup.trim() } : {}) });
-      if (ehPv) await A.posvendaRelato(id, f.pvOrigem, f.pvPeca).catch(() => null);
+      if (ehPv) await A.posvendaAbertura(id, { origem: f.pvOrigem, peca: f.pvPeca, montadorId: f.pvMontador, paradoObra: f.pvParado, categoria: f.pvTipo }).catch((e: any) => toast("Atendimento aberto, mas: " + e.message));
       const fotos = anexos.filter(a => a.tipo === "img");
       const itens = fotos.length ? await enviarFotos(id, fotos.map(a => ({ nome: a.nome, blob: a.blob! }))) : [];
       const outros = anexos.filter(a => a.tipo === "video" || a.tipo === "pdf");
@@ -162,6 +163,9 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
           {(ehFab || f.tipo === "entrega") && <div className="field" id="fieldPrazoTatico"><label>Prazo de entrega no Tático <span className="hint">(prazo original)</span></label><input name="prazoTatico" type="date" value={f.prazoTatico} onChange={set("prazoTatico")} /></div>}
           {!ehMkt && !rapido && <div className="field"><label>Prazo para responder <span className="hint">(vazio = 2 dias úteis)</span></label><input name="slaManual" type="date" value={f.slaManual} onChange={set("slaManual")} /></div>}
           {ehPv && <div className="field"><label>Quem acionou <span className="req-star">*</span></label><select value={f.pvOrigem} onChange={set("pvOrigem")}><option value="cliente">Cliente reclamou</option><option value="montador">Montador pediu suporte na obra</option></select></div>}
+          {ehPv && <div className="field"><label>Montador {f.pvOrigem === "montador" ? <span className="req-star">*</span> : <span className="hint">(se souber)</span>}</label><select value={f.pvMontador} onChange={set("pvMontador")}><option value="">{f.pvOrigem === "montador" ? "Selecione…" : "Não informado"}</option>{(st.montadores || []).filter((m: any) => m.ativo).map((m: any) => <option key={m.id} value={m.id}>{m.nome}</option>)}</select></div>}
+          {ehPv && <div className="field"><label>Tipo de problema <span className="hint">(se já souber)</span></label><select value={f.pvTipo} onChange={set("pvTipo")}><option value="">Definir na análise</option>{Object.entries(PV_TIPOS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>}
+          {ehPv && f.pvOrigem === "montador" && <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={!!f.pvParado} onChange={e => setF((x: any) => ({ ...x, pvParado: e.target.checked }))} /><span><b>🚨 Montador parado na obra</b> — avisa o Pós-venda na hora</span></label>}
           {ehPv && <div className="field"><label>Ambiente / peça afetada</label><input placeholder="Ex.: Cozinha — porta do aéreo" value={f.pvPeca} onChange={set("pvPeca")} /></div>}
           <div className="field full"><label>{ehPv ? "Relato do problema" : ehMkt ? "Observações do lead" : "Detalhe do atendimento"} <span className="req-star">*</span></label><textarea name="motivo" required placeholder={ehPv ? "Como o cliente/montador contou: o que aconteceu, quando, o que está afetado." : ehMkt ? "O que o cliente procura, melhor horário para contato, observações para o consultor." : "O que o cliente precisa / relatou."} value={f.motivo} onChange={set("motivo")}></textarea></div>
         </div>

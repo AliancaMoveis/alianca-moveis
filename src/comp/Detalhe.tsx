@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import {
-  EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, PV_ENCAMINHAR, PV_ORIGEM, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, PV_DESFECHO, PV_ENCAMINHAR, PV_ORIGEM, PV_REEMB, pvPrazo, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
@@ -758,14 +758,18 @@ function Vinculados({ c }: any) {
   );
 }
 
+const paraLocal = (iso: string) => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 // Pós-venda Projetados: Relato (fato, como foi contado) · Análise (tipo + responsabilidade) · Custo e solução · Encaminhar
 function TratPosvenda({ c }: any) {
-  const { R, st, executar: ex, toast, recarregar } = useApp() as any;
+  const { R, st, executar: ex, toast, recarregar, abrirDetalhe } = useApp() as any;
   const p = c.posvenda || {};
+  const venda = c.vinculadoA ? st.chamados.find((x: any) => x.id === c.vinculadoA) : null;
   const ini = () => ({
     categoria: p.categoria || "", responsabilidade: p.responsabilidade || "analise", montadorId: p.montadorId || "", medidorResp: p.medidorResp || "",
     checklistResp: p.checklistResp || "", ocorrido: p.ocorrido || "", solucao: p.solucao || "",
     custo: p.custo ? String(p.custo).replace(".", ",") : "", custoDesc: p.custoDesc || "", descontoMontador: p.descontoMontador ? String(p.descontoMontador).replace(".", ",") : "",
+    prazo: p.prazo ? paraLocal(p.prazo) : "", desfecho: p.desfecho || "", paradoObra: !!p.paradoObra, descontoStatus: p.descontoStatus || "",
+    reembolsoStatus: p.reembolsoStatus || "", reembolsoValor: p.reembolsoValor ? String(p.reembolsoValor).replace(".", ",") : "", reembolsoPagoEm: p.reembolsoPagoEm || "",
   });
   const [v, setV] = useState<any>(ini);
   useEffect(() => { setV(ini()); }, [c.id, JSON.stringify(p)]);
@@ -780,7 +784,12 @@ function TratPosvenda({ c }: any) {
     if (r === "medida" && !v.medidorResp) { toast("Informe quem fez a medição"); return; }
     if (r === "checklist" && !v.checklistResp) { toast("Informe quem fez o checklist"); return; }
     const desc = r === "montador" ? parseMoeda(v.descontoMontador) : 0;
-    ex(() => A.salvarPosvenda(c.id, { ...v, custo: parseMoeda(v.custo), descontoMontador: desc }), "Análise salva");
+    const rs = v.categoria === "dano_obra" ? v.reembolsoStatus : "";
+    if (rs === "procedente" && !parseMoeda(v.reembolsoValor)) { toast("Informe o valor do reembolso ao cliente"); return; }
+    if (v.desfecho === "reembolso_cliente" && rs !== "procedente") { toast("Para o desfecho “reembolso ao cliente”, marque o reembolso como procedente"); return; }
+    ex(() => A.salvarPosvenda(c.id, { ...v, custo: parseMoeda(v.custo), descontoMontador: desc, descontoStatus: desc ? v.descontoStatus : "",
+      prazo: v.prazo ? new Date(v.prazo).toISOString() : "", reembolsoStatus: rs,
+      reembolsoValor: rs === "procedente" ? parseMoeda(v.reembolsoValor) : 0, reembolsoPagoEm: rs === "procedente" ? v.reembolsoPagoEm : "" }), "Análise salva");
   };
   const encaminhar = async () => {
     if (!encTxt.trim()) { toast("Descreva o que precisa ser feito"); return; }
@@ -791,7 +800,8 @@ function TratPosvenda({ c }: any) {
   return (
     <>
       <div className="resp-box"><h4>1 · Relato do problema</h4>
-        <RowSb k="Quem acionou">{PV_ORIGEM[p.origem || "cliente"]}</RowSb>
+        <RowSb k="Quem acionou">{PV_ORIGEM[p.origem || "cliente"]}{p.origem === "montador" && p.montadorId ? " · " + R.nomeMontador(p.montadorId) : ""}{p.paradoObra && c.status !== "concluida" ? <span className="badge b-urgente" style={{ marginLeft: 8 }}>🚨 parado na obra</span> : null}</RowSb>
+        {venda && <RowSb k="Venda ligada"><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(venda.id); }}>{venda.cliente}</a>{venda.pedido ? " · nº " + venda.pedido : ""}{[venda.atendenteId && "vendedor " + R.nomeUser(venda.atendenteId), venda.consultorId && "consultor " + R.nomeUser(venda.consultorId), venda.medidorId && "medidor " + R.nomeUser(venda.medidorId)].filter(Boolean).map((x: any) => " · " + x).join("")}</RowSb>}
         {p.pecaAfetada && <RowSb k="Ambiente / peça">{p.pecaAfetada}</RowSb>}
         <RowSb k="Relato">{c.motivo}</RowSb>
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>O relato fica como foi registrado na abertura. Fotos e vídeos do cliente: bloco “Comprovações / anexos”, abaixo.</div>
@@ -803,16 +813,28 @@ function TratPosvenda({ c }: any) {
           <Sel k="montadorId" label={r === "montador" ? "Montador responsável" : "Montador que montou"} req={r === "montador"}><option value="">Não informado</option>{montadores.map((m: any) => <option key={m.id} value={m.id}>{m.nome}{m.ativo ? "" : " (inativo)"}</option>)}</Sel>
           {(r === "medida" || v.medidorResp) && <Sel k="medidorResp" label="Quem fez a medição" req={r === "medida"}><option value="">Não informado</option>{R.medidores().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</Sel>}
           <Sel k="checklistResp" label="Quem fez o checklist" req={r === "checklist"}><option value="">Não informado</option>{R.responsaveisChecklist().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</Sel>
+          <div className="field"><label>Resolver até <span className="hint">(prazo que você define)</span></label><input type="datetime-local" value={v.prazo} onChange={s("prazo")} />{pvPrazo(c) === "vencido" && <span className="hint" style={{ color: "var(--danger)" }}>Prazo vencido — cobre ou redefina.</span>}</div>
+          {(p.origem === "montador" || v.paradoObra) && <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={!!v.paradoObra} onChange={e => setV((x: any) => ({ ...x, paradoObra: e.target.checked }))} /><span>🚨 Montador parado na obra</span></label>}
           <div className="field full"><label>O que foi constatado</label><textarea value={v.ocorrido} onChange={s("ocorrido")} placeholder="Depois de falar com o cliente/montador ou da vistoria: o que de fato aconteceu e por quê"></textarea></div>
         </div>
-        {!montadores.length && <div className="hint" style={{ marginTop: 6 }}>Cadastre os montadores em Pós-venda → Números e montadores → Montadores.</div>}
+        {!montadores.length && <div className="hint" style={{ marginTop: 6 }}>Cadastre os montadores em Painel do pós-venda → Montadores.</div>}
       </div>
+      {(v.categoria === "dano_obra" || p.reembolsoStatus) && <div className="resp-box"><h4>Pedido de reembolso do cliente {v.reembolsoStatus && <span className={"badge " + (v.reembolsoStatus === "procedente" ? "b-concluida" : v.reembolsoStatus === "improcedente" ? "b-aberta" : "b-tratativa")} style={{ marginLeft: 8 }}>{PV_REEMB[v.reembolsoStatus]}</span>}</h4>
+        <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 10px" }}>Dano no imóvel que o cliente atribui à montagem (ex.: cano furado). Confirme se é real (fotos, vistoria, conversa com o montador) antes de decidir. Se for culpa do montador, marque a responsabilidade “Montador” acima e lance o desconto abaixo.</p>
+        <div className="grid">
+          <Sel k="reembolsoStatus" label="Avaliação do pedido"><option value="">Cliente não pediu reembolso</option>{Object.entries(PV_REEMB).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel>
+          {v.reembolsoStatus === "procedente" && <div className="field"><label>Valor reembolsado ao cliente (R$) <span className="req-star">*</span></label><input inputMode="decimal" value={v.reembolsoValor} onChange={s("reembolsoValor")} placeholder="0,00" /></div>}
+          {v.reembolsoStatus === "procedente" && <div className="field"><label>Pago ao cliente em</label><input type="date" value={v.reembolsoPagoEm} max={new Date().toISOString().slice(0, 10)} onChange={s("reembolsoPagoEm")} /><span className="hint">Deixe vazio enquanto não pagar — o atendimento só conclui depois do pagamento.</span></div>}
+        </div>
+      </div>}
       <div className="resp-box"><h4>3 · Custo e solução</h4>
         <div className="grid">
           <div className="field full"><label>Solução / o que será feito</label><textarea value={v.solucao} onChange={s("solucao")} placeholder="Ex.: troca da porta, retorno do montador, peça pedida à fábrica"></textarea></div>
           <div className="field"><label>Custo para a loja (R$)</label><input inputMode="decimal" value={v.custo} onChange={s("custo")} placeholder="0,00" /></div>
           <div className="field"><label>Do que é o custo</label><input value={v.custoDesc} onChange={s("custoDesc")} placeholder="Ex.: peça, frete, retorno do montador" /></div>
           {r === "montador" && <div className="field"><label>Desconto do montador (R$)</label><input inputMode="decimal" value={v.descontoMontador} onChange={s("descontoMontador")} placeholder="0,00" /><span className="hint">Vai para desconto do montador.</span></div>}
+          {r === "montador" && parseMoeda(v.descontoMontador) > 0 && <Sel k="descontoStatus" label="Desconto do montador"><option value="a_descontar">A descontar</option><option value="descontado">Já descontado</option></Sel>}
+          <Sel k="desfecho" label="Desfecho (obrigatório para concluir)"><option value="">Ainda em andamento</option>{Object.entries(PV_DESFECHO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel>
         </div>
         <div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
           <button className="btn primary sm" onClick={salvar}>Salvar análise</button>

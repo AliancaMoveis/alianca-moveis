@@ -102,6 +102,9 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     montadorId: p.montador_id || "", medidorResp: p.medidor_resp || "", checklistResp: p.checklist_resp || "",
     ocorrido: p.ocorrido, solucao: p.solucao, custo: Number(p.custo) || 0, custoDesc: p.custo_desc, descontoMontador: Number(p.desconto_montador) || 0,
     atualizadoEm: p.atualizado_em, atualizadoPor: p.atualizado_por,
+    paradoObra: !!p.parado_obra, prazo: p.prazo || "", desfecho: p.desfecho || "",
+    reembolsoStatus: p.reembolso_status || "", reembolsoValor: Number(p.reembolso_valor) || 0, reembolsoPagoEm: p.reembolso_pago_em || "",
+    descontoStatus: p.desconto_status || "", descontoEm: p.desconto_em || "",
   }));
 
   const paths = anexos.filter((a: any) => a.storage_path).map((a: any) => a.storage_path);

@@ -112,6 +112,7 @@ export const A = {
   salvarMontador: (id: string | null, nome: string, telefone: string) => rpc("salvar_montador", { p_id: id, p_nome: nome, p_telefone: telefone }),
   ativarMontador: (id: string, ativo: boolean) => rpc("ativar_montador", { p_id: id, p_ativo: ativo }),
   posvendaRelato: (id: string, origem: string, peca: string) => rpc("posvenda_relato", { p_id: id, p_origem: origem, p_peca: peca }),
+  posvendaAbertura: (id: string, p: any) => rpc("posvenda_abertura", { p_id: id, p }),
   salvarPosvenda: (id: string, p: any) => rpc("salvar_posvenda", { p_id: id, p }),
   posvendaEncaminhar: (id: string, tipo: string, motivo: string) => rpc<string>("posvenda_encaminhar", { p_id: id, p_tipo: tipo, p_motivo: motivo }),
   listarMetasMkt: async (de: string, ate: string) => {

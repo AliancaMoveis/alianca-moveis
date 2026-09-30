@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { PV_ORIGEM, PV_RESP, PV_TIPOS, STATUS, fmtMoeda, inicial } from "../lib/regras";
+import { PV_DESC, PV_DESFECHO, PV_ORIGEM, PV_REEMB, PV_RESP, PV_TIPOS, STATUS, fmtDateTime, fmtMoeda, inicial, pvPrazo } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
 
@@ -10,14 +10,14 @@ const Nada = ({ t }: { t: string }) => <div style={{ color: "var(--ink-faint)", 
 
 export default function PosVenda() {
   const { R } = useApp();
-  const [sub, setSub] = useState("numeros");
+  const [sub, setSub] = useState("abertos");
   return (
     <section className="view active" id="view-posvenda">
       <div className="view-head"><div><h2>Pós-venda Projetados</h2>
-        <p>Reclamações e ocorrências de projetos: o que aconteceu, quanto custou, quais montadores e qual o impacto do checklist.</p></div></div>
-      <div className="subnav"><button className={sub === "numeros" ? "on" : ""} onClick={() => setSub("numeros")}>Números</button>
+        <p>Reclamações de clientes e suporte aos montadores: prazos, montador parado na obra, reembolsos a clientes e descontos de montadores.</p></div></div>
+      <div className="subnav"><button className={sub === "abertos" ? "on" : ""} onClick={() => setSub("abertos")}>Em aberto</button><button className={sub === "numeros" ? "on" : ""} onClick={() => setSub("numeros")}>Números</button>
         {R.podeMontadores() && <button className={sub === "montadores" ? "on" : ""} onClick={() => setSub("montadores")}>Montadores</button>}</div>
-      {sub === "numeros" ? <Numeros /> : <Montadores />}
+      {sub === "abertos" ? <Abertos /> : sub === "numeros" ? <Numeros /> : <Montadores />}
     </section>
   );
 }
@@ -33,6 +33,9 @@ function Numeros() {
   const emAnalise = arr.filter((c: any) => pv(c).responsabilidade === "analise" && c.status !== "concluida");
   const custo = arr.reduce((t: number, c: any) => t + (pv(c).custo || 0), 0);
   const desconto = arr.reduce((t: number, c: any) => t + (pv(c).descontoMontador || 0), 0);
+  const aDescontar = arr.filter((c: any) => pv(c).descontoStatus === "a_descontar").reduce((t: number, c: any) => t + (pv(c).descontoMontador || 0), 0);
+  const reemb = arr.filter((c: any) => pv(c).reembolsoStatus);
+  const reembPago = reemb.reduce((t: number, c: any) => t + (pv(c).reembolsoValor || 0), 0);
   const definidos = arr.filter((c: any) => pv(c).responsabilidade !== "analise");
   const projeto = definidos.filter((c: any) => ["medida", "checklist"].includes(pv(c).responsabilidade)).length;
 
@@ -69,7 +72,8 @@ function Numeros() {
         <Kpi n={abertos.length} l="Em aberto" />
         <Kpi n={emAnalise.length} l="Aguardando análise" cls={emAnalise.length ? "alert" : ""} />
         <Kpi n={fmtMoeda(custo)} l="Custo para a loja" fs={20} />
-        <Kpi n={fmtMoeda(desconto)} l="Descontos de montadores" fs={20} />
+        <Kpi n={fmtMoeda(desconto)} l={"Descontos de montadores" + (aDescontar ? " · " + fmtMoeda(aDescontar) + " a descontar" : "")} fs={20} cls={aDescontar ? "alert" : ""} />
+        <Kpi n={fmtMoeda(reembPago)} l={`Reembolsos a clientes (${reemb.filter((c: any) => pv(c).reembolsoStatus === "procedente").length} procedentes · ${reemb.filter((c: any) => pv(c).reembolsoStatus === "improcedente").length} improcedentes)`} fs={20} />
         <Kpi n={definidos.length ? Math.round(projeto / definidos.length * 100) + "%" : "—"} l={`Erros de projeto — medição/checklist (${projeto} de ${definidos.length} analisados)`} cls={projeto ? "alert" : ""} />
       </div>
       <div className="panel-grid">
@@ -94,6 +98,14 @@ function Numeros() {
         <div className="panel"><h3>Fábricas responsáveis</h3>
           {porFab.length ? porFab.map(([k, g]) => <div key={k}><BarRow nm={R.nomeFab(k)} pct={g.n / mx(porFab) * 100} v={g.n} cor="var(--primary)" />{sub(g)}</div>) : <Nada t="Nenhuma ocorrência atribuída a fábrica." />}
         </div>
+        <div className="panel"><h3>Desfecho dos concluídos</h3>
+          {(() => { const g = agrupar(arr.filter((c: any) => c.status === "concluida"), (c: any) => pv(c).desfecho || "sem"); return g.length ? g.map(([k, x]) => <div key={k}><BarRow nm={PV_DESFECHO[k] || "Sem desfecho (antigos)"} pct={x.n / mx(g) * 100} v={x.n} />{sub(x)}</div>) : <Nada t="Nenhum atendimento concluído no período." />; })()}
+        </div>
+        <div className="panel"><h3>Suporte pedido por montador</h3>
+          {(() => { const g = agrupar(arr.filter((c: any) => pv(c).origem === "montador"), (c: any) => pv(c).montadorId || "?"); return g.length ? g.map(([k, x]) => <BarRow key={k} nm={k === "?" ? "Não informado" : R.nomeMontador(k)} pct={x.n / mx(g) * 100} v={x.n} cor="var(--st-respondida)" />) : <Nada t="Nenhum pedido de suporte de montador." />; })()}
+        </div>
+      </div>
+      <div className="panel-grid">
         <div className="panel"><h3>Quem acionou e encaminhamentos</h3>
           {agrupar(arr, (c: any) => pv(c).origem || "cliente").map(([k, g]) => <BarRow key={k} nm={PV_ORIGEM[k] || k} pct={g.n / Math.max(1, arr.length) * 100} v={g.n} cor="var(--st-respondida)" />)}
           <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--ink-soft)" }}>{Object.keys(porEnc).length ? <>Encaminhados a outros setores: {Object.entries(porEnc).map(([t, n]) => `${R.tipoNome(t)} (${n})`).join(" · ")}</> : "Nenhum encaminhamento a outro setor."}</div>
@@ -110,6 +122,56 @@ function Numeros() {
           );
         }) : <Nada t="Nenhum atendimento de pós-venda no período." />}
       </div>
+    </>
+  );
+}
+
+// Painel do dia do Pós-venda: montador parado primeiro, depois prazo vencido, prazo de hoje, sem prazo; e pendências de dinheiro
+function Abertos() {
+  const { R, st, abrirDetalhe, irPara } = useApp() as any;
+  const todos = st.chamados.filter((c: any) => c.tipo === "posvenda" && R.podeVer(c));
+  const abertos = todos.filter((c: any) => c.status !== "concluida");
+  const pv = (c: any) => c.posvenda || {};
+  const peso = (c: any) => (pv(c).paradoObra ? 0 : pvPrazo(c) === "vencido" ? 1 : pvPrazo(c) === "hoje" ? 2 : !pv(c).prazo ? 3 : 4);
+  const lista = abertos.slice().sort((a: any, b: any) => peso(a) - peso(b) || +new Date(pv(a).prazo || a.criadoEm) - +new Date(pv(b).prazo || b.criadoEm));
+  const reembAnalise = todos.filter((c: any) => pv(c).reembolsoStatus === "em_analise");
+  const reembPagar = todos.filter((c: any) => pv(c).reembolsoStatus === "procedente" && !pv(c).reembolsoPagoEm);
+  const aDescontar = todos.filter((c: any) => pv(c).descontoStatus === "a_descontar");
+  const dias = (iso: string) => Math.max(0, Math.floor((Date.now() - +new Date(iso)) / 864e5));
+  const Linha = ({ c, extra }: any) => {
+    const p = pv(c); const pz = pvPrazo(c);
+    const cor = p.paradoObra ? "var(--danger)" : pz === "vencido" ? "var(--danger)" : pz === "hoje" ? "var(--warn)" : "var(--line)";
+    return (
+      <div className="acao" style={{ borderLeftColor: cor }} onClick={() => abrirDetalhe(c.id)}>
+        <span>{p.paradoObra && <b style={{ color: "var(--danger)" }}>🚨 PARADO NA OBRA · </b>}{c.id} · <b>{c.cliente}</b>
+          {p.origem === "montador" ? " · 🔧 " + (p.montadorId ? R.nomeMontador(p.montadorId) : "montador") : " · cliente"}
+          {p.categoria ? " · " + PV_TIPOS[p.categoria] : ""}{p.pecaAfetada ? " · " + p.pecaAfetada : ""}{extra}</span>
+        <span className="g" style={pz === "vencido" ? { color: "var(--danger)", fontWeight: 600 } : { color: pz === "hoje" ? "var(--warn)" : "var(--ink-faint)" }}>
+          {p.prazo ? (pz === "vencido" ? "venceu " : "até ") + fmtDateTime(p.prazo) : "sem prazo"} · {dias(c.criadoEm)}d aberto</span>
+      </div>
+    );
+  };
+  return (
+    <>
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "14px 0 0" }}>{R.ehPosvenda() && <button className="btn primary sm" onClick={() => irPara("novopv")}>+ Novo atendimento / suporte ao montador</button>}</div>
+      <div className="kpis" style={{ marginTop: 12 }}>
+        <Kpi n={abertos.length} l="Em aberto" />
+        <Kpi n={abertos.filter((c: any) => pv(c).paradoObra).length} l="Montador parado na obra" cls={abertos.some((c: any) => pv(c).paradoObra) ? "alert" : ""} />
+        <Kpi n={abertos.filter((c: any) => pvPrazo(c) === "vencido").length} l="Prazo vencido" cls={abertos.some((c: any) => pvPrazo(c) === "vencido") ? "alert" : ""} />
+        <Kpi n={abertos.filter((c: any) => !pv(c).prazo).length} l="Sem prazo definido" />
+        <Kpi n={reembAnalise.length + reembPagar.length} l="Reembolsos a decidir / pagar" cls={reembAnalise.length + reembPagar.length ? "alert" : ""} />
+        <Kpi n={fmtMoeda(aDescontar.reduce((t: number, c: any) => t + (pv(c).descontoMontador || 0), 0))} l={aDescontar.length + " desconto(s) de montador a fazer"} fs={20} />
+      </div>
+      <div className="panel" style={{ marginTop: 16 }}><h3>Fila do pós-venda</h3>
+        {lista.length ? lista.map((c: any) => <Linha key={c.id} c={c} />) : <Nada t="Nada em aberto. 👏" />}
+      </div>
+      {(reembAnalise.length > 0 || reembPagar.length > 0) && <div className="panel" style={{ marginTop: 16 }}><h3>Reembolsos pedidos por clientes</h3>
+        {reembAnalise.map((c: any) => <Linha key={c.id} c={c} extra={<> · <b style={{ color: "var(--warn)" }}>{PV_REEMB.em_analise}</b></>} />)}
+        {reembPagar.map((c: any) => <Linha key={c.id} c={c} extra={<> · <b style={{ color: "var(--danger)" }}>a pagar {fmtMoeda(pv(c).reembolsoValor)}</b></>} />)}
+      </div>}
+      {aDescontar.length > 0 && <div className="panel" style={{ marginTop: 16 }}><h3>Descontos de montador a fazer</h3>
+        {aDescontar.map((c: any) => <Linha key={c.id} c={c} extra={<> · <b>{R.nomeMontador(pv(c).montadorId)}</b> · {PV_DESC.a_descontar} {fmtMoeda(pv(c).descontoMontador)}</>} />)}
+      </div>}
     </>
   );
 }

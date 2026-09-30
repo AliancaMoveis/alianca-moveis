@@ -41,8 +41,22 @@ export const COR_SETOR: Record<string, string> = {
 // Pós-venda Projetados
 export const PV_TIPOS: Record<string, string> = {
   avaria: "Avaria / dano", peca_faltante: "Peça faltante", peca_defeito: "Peça com defeito", medida: "Medida / peça não encaixa",
-  montagem: "Montagem mal feita", acabamento: "Acabamento", outro: "Outro",
+  montagem: "Montagem mal feita", acabamento: "Acabamento", dano_obra: "Dano no imóvel na montagem (ex.: furou cano)",
+  duvida_projeto: "Dúvida de projeto / suporte ao montador", outro: "Outro",
 };
+export const PV_DESFECHO: Record<string, string> = {
+  resolvido_telefone: "Resolvido por telefone / orientação", assistencia: "Assistência (peça)", retorno_montador: "Retorno do montador",
+  erro_medida_projeto: "Erro de medida / projeto", reembolso_cliente: "Reembolso ao cliente", improcedente: "Improcedente (não era problema nosso)", outro: "Outro",
+};
+export const PV_REEMB: Record<string, string> = { em_analise: "Em análise", procedente: "Procedente — loja reembolsa", improcedente: "Improcedente — não reembolsa" };
+export const PV_DESC: Record<string, string> = { a_descontar: "A descontar", descontado: "Descontado" };
+/** Prazo do pós-venda: "vencido" | "hoje" | "ok" | "" (sem prazo ou concluído) */
+export function pvPrazo(c: any): string {
+  const p = c.posvenda; if (!p || !p.prazo || c.status === "concluida") return "";
+  const d = new Date(p.prazo); const agora = new Date();
+  if (d < agora) return "vencido";
+  return d.toDateString() === agora.toDateString() ? "hoje" : "ok";
+}
 export const PV_RESP: Record<string, string> = {
   analise: "Em análise", montador: "Montador", medida: "Projeto — erro de medição", checklist: "Projeto — falha no checklist",
   fabrica: "Fábrica", transporte: "Transporte / entrega", cliente: "Cliente (mau uso)", nenhum: "Sem responsável",
@@ -637,7 +651,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // Pós-venda Projetados: grupo próprio (Vânia, Jurídico e Gestão)
     const pv: string[][] = [];
     if (ehPosvenda() || ehGestao()) pv.push(["novopv", "Novo atendimento"]);
-    if (podeVerPosvenda()) pv.push(["posvenda", "Números e montadores"]);
+    if (podeVerPosvenda()) pv.push(["posvenda", "Painel do pós-venda"]);
     if (pv.length) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Pós-venda", ic: "✚", itens: pv });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
