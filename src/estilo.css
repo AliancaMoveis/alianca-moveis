@@ -71,7 +71,7 @@ html,body{height:100%}
 /* ===== SISTEMA ===== */
 
   :root{
-    --bg:#eef0f2; --surface:#ffffff; --surface-2:#f7f8f9;
+    --bg:#eef0f2; --surface:#ffffff; --surface-2:#f7f8f9; --card:var(--surface);
     --ink:#1a1d21; --ink-soft:#5a6270; --ink-faint:#8b94a3;
     --line:#e0e3e8; --line-soft:#eceef1;
     --primary:#284b8f; --primary-ink:#ffffff; --primary-soft:#eaf0fb;
@@ -959,7 +959,7 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .avisos-cab b{font-size:16px;margin-right:auto}.avisos-cab .x{border:0;background:none;font-size:24px;cursor:pointer;margin-left:auto;color:inherit}
 .avisos-lista{overflow:auto;flex:1;padding:8px}
 .aviso-item{display:flex;flex-direction:column;gap:2px;text-align:left;width:100%;border:0;border-left:4px solid transparent;background:none;padding:10px 12px;border-radius:10px;cursor:pointer;font:inherit;color:inherit}
-.aviso-item:hover{background:var(--bg,#f3f5f9)}.aviso-item.nova{border-left-color:#27468f;background:#eef2fb}
+.aviso-item{border-bottom:1px solid var(--line-soft,#eceef1)}.aviso-item:hover{background:var(--surface-2,#f3f5f9)}.aviso-item.nova{border-left-color:var(--primary,#27468f);background:var(--primary-soft,#eef2fb)}.aviso-item.nova b{color:var(--ink)}
 .aviso-item b{font-size:14px}.aviso-item span{font-size:13px;color:var(--ink-soft,#56627a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.aviso-item small{font-size:11px;color:var(--ink-faint,#8a94a8)}
 .aviso-ler{padding:18px;overflow:auto}.aviso-ler h3{margin:0 0 4px;font-size:19px}.aviso-ler small{color:var(--ink-faint,#8a94a8)}
 .aviso-ler p{white-space:pre-line;font-size:15.5px;line-height:1.6;margin:14px 0 18px}
