@@ -43,7 +43,7 @@ export function dataPlanilha(v: string): string {
     const d = new Date(Math.round((n - 25569) * 864e5)); const iso = d.toISOString();
     return n % 1 ? iso.slice(0, 16) : iso.slice(0, 10);
   }
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:,?\s*(\d{1,2}):(\d{2}))?/);
   if (!m) return "";
   const ano = m[3].length === 2 ? "20" + m[3] : m[3];
   const d = `${ano}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;

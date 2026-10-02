@@ -71,6 +71,8 @@ export default function Checklist() {
   const ordem = (c: any) => { const k = ck(c); return String(etapaCk(c) === "agendado" ? k.agendadoPara : k.retornarEm || c.dataVenda || c.criadoEm || ""); };
   lista = lista.slice().sort((a: any, b: any) => ordem(a).localeCompare(ordem(b)));
 
+  const modoImp = useRef<"agendar" | "agendados">("agendar");
+  const escolher = (m: "agendar" | "agendados") => { modoImp.current = m; arq.current?.click(); };
   async function importar(file: File | undefined) {
     if (!file) return;
     setImportando(true);
@@ -80,14 +82,17 @@ export default function Checklist() {
       if (!("Título" in linhas[0]) || !("Contato" in linhas[0])) throw new Error("Não reconheci a planilha: preciso das colunas “Título” (Venda nº) e “Contato”");
       const dados = linhas.map(l => ({
         numero: l["Título"], cliente: l["Contato"], telefone: l["Telefone 1"], telefone2: l["Telefone 2"], vendedor: l["Vendedor"], medidor: l["Medidor"],
-        inclusao: dataPlanilha(l["Inclusão"]).slice(0, 10), agendadoPara: dataPlanilha(l["Data do Agendamento"]).length > 10 ? dataPlanilha(l["Data do Agendamento"]) : (dataPlanilha(l["Data do Agendamento"]) ? dataPlanilha(l["Data do Agendamento"]) + "T00:00" : ""),
+        inclusao: dataPlanilha(l["Inclusão"]).slice(0, 10), agendadoPara: ((x: string) => x.length > 10 ? x : x ? x + "T00:00" : "")(dataPlanilha(l["Data do Agendamento"])),
         valor: l["Valor Negociado"], cupom: l["Valor dos Cupons"], minhaVisita: l["Cliente Minha Visita"], situacao: l["Situação"],
-        descricao: (l["Descrição"] || "").trim() === "Venda realizada e encaminhada para Checklist" ? "" : l["Descrição"],
+        descricao: (l["Descrição"] || "").replace(/Venda realizada e encaminhada para Checklist/gi, "").trim(),
       }));
+      const comData = dados.filter(d => d.agendadoPara).length;
+      if (modoImp.current === "agendados" && !comData) throw new Error("Nenhuma linha com “Data do Agendamento” — essa parece ser a planilha de clientes a agendar");
+      if (modoImp.current === "agendar" && comData > dados.length / 2 && !confirm(`${comData} das ${dados.length} linhas já têm data de agendamento — parece a planilha de AGENDADOS. Importar mesmo assim? (os que têm data entram em Agendados)`)) return;
       const r = await A.checklistImportar(dados);
       await recarregar();
-      toast(`${r.novos} cliente(s) novo(s) na fila · ${r.ignorados} já estavam no sistema (ignorados)`);
-      setF("a_contatar");
+      toast(`${r.novos} cliente(s) novo(s)${r.agendados ? " (" + r.agendados + " já agendados)" : ""} · ${r.ignorados} já estavam no sistema (ignorados)`);
+      setF(modoImp.current === "agendados" ? "agendado" : "a_contatar");
     } catch (e: any) { toast(e.message || "Não foi possível importar"); }
     finally { setImportando(false); if (arq.current) arq.current.value = ""; }
   }
@@ -98,7 +103,8 @@ export default function Checklist() {
         <p>Clientes com venda encaminhada para a revisão do projeto. Chame no WhatsApp com a mensagem pronta e registre o resultado. O agendamento continua sendo lançado no sistema interno.</p></div>
         <div><input ref={arq} type="file" accept=".xlsx" style={{ display: "none" }} onChange={e => importar(e.target.files?.[0])} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button className="btn" onClick={() => setModal(<ModalIncluir />)}>＋ Incluir cliente</button>
-          <button className="btn primary" disabled={importando} onClick={() => arq.current?.click()}>{importando ? "Importando…" : "📥 Importar planilha (.xlsx)"}</button></div></div></div>
+          <button className="btn primary" disabled={importando} onClick={() => escolher("agendar")}>{importando ? "Importando…" : "📥 Importar a agendar"}</button>
+          <button className="btn primary" disabled={importando} onClick={() => escolher("agendados")}>📅 Importar agendados (aguardando checklist)</button></div></div></div>
       <div className="kpis" style={{ marginTop: 6 }}>
         <Kpi n={cont.hoje} l="Para fazer hoje" cls={cont.hoje ? "alert" : ""} />
         <Kpi n={cont.a_contatar} l="Ainda não contatados" />
@@ -129,6 +135,7 @@ export default function Checklist() {
           {cs.map((c: any) => <CartaoCk key={c.id} c={c} />)}
         </div>) :
       lista.length ? lista.map((c: any) => <CartaoCk key={c.id} c={c} />) : <div className="empty">{todos.length ? "Nenhum cliente neste filtro." : "Nenhum cliente ainda — importe a planilha do sistema interno."}</div>}
+      {R.ehGestao() && lista.length > 1 && <div style={{ marginTop: 12 }}><button className="btn danger sm" onClick={() => setModal(<ConfirmaExcluir ids={lista.map((c: any) => c.id)} rotulo={`os ${lista.length} clientes deste filtro`} forte />)}>🗑 Excluir os {lista.length} clientes deste filtro</button></div>}
       {abertos.length > 0 && <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 10 }}>{abertos.length} checklist(s) em aberto no total.</div>}
     </section>
   );
@@ -157,6 +164,7 @@ function CartaoCk({ c }: any) {
           {c.status !== "concluida" && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
           <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : "Registrar resultado"}</button>
           <button className="btn ghost sm" onClick={() => abrirDetalhe(c.id)}>Ficha</button>
+          <button className="btn ghost sm" title="Excluir cliente do checklist" style={{ color: "var(--danger)" }} onClick={() => setModal(<ConfirmaExcluir ids={[c.id]} rotulo={c.cliente + " (venda " + c.pedido + ")"} />)}>🗑</button>
         </div>
       </div>
     </div>
@@ -232,6 +240,28 @@ function ModalIncluir() {
       </div>
       <div className="hint" style={{ marginTop: 8 }}>Se o nº da venda já estiver no checklist, o cliente existente é mantido e nada é alterado.</div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}><button className="btn primary" onClick={salvar}>Incluir</button><button className="btn ghost" onClick={fechar}>Cancelar</button></div>
+    </Modal>
+  );
+}
+
+export function ConfirmaExcluir({ ids, rotulo, forte }: { ids: string[]; rotulo: string; forte?: boolean }) {
+  const { setModal, toast, recarregar, fecharDetalhe } = useApp() as any;
+  const [txt, setTxt] = useState(""); const [ind, setInd] = useState(false);
+  const fechar = () => setModal(null);
+  async function excluir() {
+    setInd(true);
+    try { const n = await A.checklistExcluir(ids); await recarregar(); fechar(); if (fecharDetalhe) fecharDetalhe(); toast(n + " cliente(s) excluído(s) do checklist"); }
+    catch (x: any) { toast(x.message); setInd(false); }
+  }
+  return (
+    <Modal titulo="Tem certeza?" onFechar={fechar}>
+      <p style={{ fontSize: 14.5, margin: "0 0 10px" }}>Excluir <b>{rotulo}</b> do checklist?</p>
+      <p style={{ fontSize: 13, color: "var(--danger)", margin: "0 0 14px" }}>O cliente e todo o histórico de contato dele no checklist serão apagados. Essa ação não pode ser desfeita.</p>
+      {forte && <div className="field" style={{ marginBottom: 14 }}><label>Para confirmar, digite EXCLUIR</label><input value={txt} onChange={e => setTxt(e.target.value)} /></div>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn danger" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} disabled={ind || (forte && txt.trim().toUpperCase() !== "EXCLUIR")} onClick={excluir}>{ind ? "Excluindo…" : "Sim, excluir"}</button>
+        <button className="btn ghost" onClick={fechar}>Não, voltar</button>
+      </div>
     </Modal>
   );
 }

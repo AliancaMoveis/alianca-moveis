@@ -9,7 +9,7 @@ import {
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
-import { ETAPA_CK, ModalResultado, ModalWhats, ck, etapaCk } from "../telas/Checklist";
+import { ConfirmaExcluir, ETAPA_CK, ModalResultado, ModalWhats, ck, etapaCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
@@ -774,6 +774,7 @@ function BlocoChecklist({ c }: any) {
       {R.podeChecklist() && <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
         {c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
         <button className="btn primary sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : "Registrar resultado"}</button>
+        <button className="btn ghost sm" style={{ color: "var(--danger)", marginLeft: "auto" }} onClick={() => setModal(<ConfirmaExcluir ids={[c.id]} rotulo={c.cliente + " (venda " + c.pedido + ")"} />)}>🗑 Excluir do checklist</button>
       </div>}
     </div>
   );
