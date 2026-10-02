@@ -769,6 +769,7 @@ function BlocoChecklist({ c }: any) {
       <RowSb k="Medidor">{p.medidor || "não informado na planilha"}{k.medidaId ? (k.medidaOk ? " · medidas conferidas" : " · aguardando o setor de Medidas (" + k.medidaId + ")") : ""}</RowSb>
       {k.proposta && <RowSb k="Data oferecida">{fmtDT(k.proposta)}</RowSb>}
       {k.agendadoPara && <RowSb k="Agendado para">{fmtDT(k.agendadoPara)}{k.ambiente === "pronto" ? " · ambiente pronto" : ""}</RowSb>}
+      {k.agendadoPara && <RowSb k="Projetista">{k.projetista || "não informado"}</RowSb>}
       {k.retornarEm && <RowSb k="Retornar em">{fmtDate(String(k.retornarEm).slice(0, 10))}</RowSb>}
       <RowSb k="Contatos">{k.contatos || 0}{k.ultimoContato ? " · último em " + fmtDT(k.ultimoContato) : ""}</RowSb>
       {R.podeChecklist() && <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
