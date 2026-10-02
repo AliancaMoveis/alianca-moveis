@@ -25,7 +25,7 @@ export function aFazerHoje(c: any) {
   if (k.retornarEm && String(k.retornarEm).slice(0, 10) <= hoje()) return true;
   return e === "aguardando" && diasDesde(k.ultimoContato) >= 2;
 }
-const semMedida = (c: any) => !ck(c).medidaOk && !((ck(c).planilha || {}).medidor);
+const semMedida = (c: any) => !ck(c).medidaOk && !((ck(c).planilha || {}).medidor) && !((ck(c).planilha || {}).minhaVisita);
 const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 const dataLonga = (v: string) => { if (!v) return "(data)"; const d = parseData(v); return `${DIAS[d.getDay()]}, ${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}, às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`; };
 const nomeCli = (c: any) => primeiroNome(String(c.cliente || "").toLowerCase().replace(/(^|\s)\S/g, s => s.toUpperCase()));
@@ -42,7 +42,7 @@ export function mensagemCk(tipo: string, c: any, data: string, remetente: string
 }
 
 export default function Checklist() {
-  const { R, st, toast, recarregar } = useApp() as any;
+  const { R, st, toast, recarregar, setModal } = useApp() as any;
   const [f, setF] = useState("hoje"); const [q, setQ] = useState("");
   const [importando, setImportando] = useState(false);
   const arq = useRef<HTMLInputElement>(null);
@@ -78,7 +78,7 @@ export default function Checklist() {
       const dados = linhas.map(l => ({
         numero: l["Título"], cliente: l["Contato"], telefone: l["Telefone 1"], telefone2: l["Telefone 2"], vendedor: l["Vendedor"], medidor: l["Medidor"],
         inclusao: dataPlanilha(l["Inclusão"]).slice(0, 10), agendadoPara: dataPlanilha(l["Data do Agendamento"]).length > 10 ? dataPlanilha(l["Data do Agendamento"]) : (dataPlanilha(l["Data do Agendamento"]) ? dataPlanilha(l["Data do Agendamento"]) + "T00:00" : ""),
-        valor: l["Valor Negociado"], minhaVisita: l["Cliente Minha Visita"], situacao: l["Situação"],
+        valor: l["Valor Negociado"], cupom: l["Valor dos Cupons"], minhaVisita: l["Cliente Minha Visita"], situacao: l["Situação"],
         descricao: (l["Descrição"] || "").trim() === "Venda realizada e encaminhada para Checklist" ? "" : l["Descrição"],
       }));
       const r = await A.checklistImportar(dados);
@@ -94,7 +94,8 @@ export default function Checklist() {
       <div className="view-head"><div><h2>Agendar checklist</h2>
         <p>Clientes com venda encaminhada para a revisão do projeto. Chame no WhatsApp com a mensagem pronta e registre o resultado. O agendamento continua sendo lançado no sistema interno.</p></div>
         <div><input ref={arq} type="file" accept=".xlsx" style={{ display: "none" }} onChange={e => importar(e.target.files?.[0])} />
-          <button className="btn primary" disabled={importando} onClick={() => arq.current?.click()}>{importando ? "Importando…" : "📥 Importar planilha (.xlsx)"}</button></div></div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button className="btn" onClick={() => setModal(<ModalIncluir />)}>＋ Incluir cliente</button>
+          <button className="btn primary" disabled={importando} onClick={() => arq.current?.click()}>{importando ? "Importando…" : "📥 Importar planilha (.xlsx)"}</button></div></div></div>
       <div className="kpis" style={{ marginTop: 6 }}>
         <Kpi n={cont.hoje} l="Para fazer hoje" cls={cont.hoje ? "alert" : ""} />
         <Kpi n={cont.a_contatar} l="Ainda não contatados" />
@@ -103,12 +104,23 @@ export default function Checklist() {
         <Kpi n={cont.agendado} l="Agendados" />
         <Kpi n={todos.filter((c: any) => etapaCk(c) === "realizado" && String(ck(c).realizadoEm || "").slice(0, 7) === mes).length} l="Realizados no mês" />
       </div>
+      <div className="subnav" style={{ marginTop: 14 }}>
+        <button className={f !== "agendado" ? "on" : ""} onClick={() => setF("hoje")}>📋 A agendar</button>
+        <button className={f === "agendado" ? "on" : ""} onClick={() => setF("agendado")}>📅 Agendados ({cont.agendado})</button>
+      </div>
       <div className="card" style={{ padding: "12px 16px", margin: "14px 0" }}>
         <input className="busca" style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 10, font: "inherit", background: "var(--surface)", color: "var(--ink)" }}
           placeholder="Buscar por nome, nº da venda ou telefone" value={q} onChange={e => setQ(e.target.value)} />
         <div className="chips" style={{ marginTop: 10 }}>{Object.entries(FILTROS).map(([k, [l]]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
       </div>
-      {lista.length ? lista.map((c: any) => <CartaoCk key={c.id} c={c} />) : <div className="empty">{todos.length ? "Nenhum cliente neste filtro." : "Nenhum cliente ainda — importe a planilha do sistema interno."}</div>}
+      {f === "agendado" && lista.length > 0 && <div className="hint" style={{ marginBottom: 8 }}>Agenda do checklist — clientes que aceitaram a data (ambiente pronto). Envie a confirmação no WhatsApp e, depois da revisão, marque “Checklist realizado”.</div>}
+      {f === "agendado" && lista.length ? Object.entries(lista.reduce((g: any, c: any) => { const d = String(ck(c).agendadoPara || "").slice(0, 10); (g[d] = g[d] || []).push(c); return g; }, {})).map(([d, cs]: any) =>
+        <div key={d} style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, fontSize: 16, margin: "6px 0 8px", color: d < hoje() ? "var(--danger)" : d === hoje() ? "var(--st-concluida)" : "var(--ink)" }}>
+            {d === hoje() ? "HOJE · " : ""}{d ? DIAS[parseData(d).getDay()] + ", " + fmtDate(d) : "Sem data"}{d && d < hoje() ? " — passou: marque como realizado ou reagende" : ""} <span style={{ fontWeight: 400, fontSize: 13, color: "var(--ink-faint)" }}>· {cs.length} cliente(s)</span></div>
+          {cs.map((c: any) => <CartaoCk key={c.id} c={c} />)}
+        </div>) :
+      lista.length ? lista.map((c: any) => <CartaoCk key={c.id} c={c} />) : <div className="empty">{todos.length ? "Nenhum cliente neste filtro." : "Nenhum cliente ainda — importe a planilha do sistema interno."}</div>}
       {abertos.length > 0 && <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 10 }}>{abertos.length} checklist(s) em aberto no total.</div>}
     </section>
   );
@@ -120,15 +132,13 @@ function CartaoCk({ c }: any) {
   const atrasado = k.retornarEm && String(k.retornarEm).slice(0, 10) < hoje() && c.status !== "concluida";
   return (
     <div className="card" style={{ padding: "12px 16px", marginBottom: 10, borderLeft: `5px solid ${cor}` }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+        {e === "agendado" && k.agendadoPara && <DataGrande v={k.agendadoPara} />}
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontWeight: 700, fontSize: 15 }}>{c.cliente} <span style={{ fontWeight: 400, color: "var(--ink-faint)", fontSize: 12.5 }}>· venda {c.pedido}</span></div>
-          <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginTop: 2 }}>
-            {[p.vendedor && "vendedor " + p.vendedor, p.medidor ? "medidor " + p.medidor : "sem medidor na planilha", c.dataVenda && "desde " + fmtDate(c.dataVenda) + " (" + diasDesde(c.dataVenda) + "d)", c.telefone && c.telefone].filter(Boolean).join(" · ")}
-          </div>
+          <DadosCk c={c} />
           <div style={{ fontSize: 12.5, marginTop: 5, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             <span className="badge" style={{ background: cor, color: "#fff" }}>{nome}</span>
-            {e === "agendado" && k.agendadoPara && <b>📅 {fmtDateTime(k.agendadoPara)}</b>}
             {e === "aguardando" && <span>oferecido {fmtDateTime(k.proposta)} · {k.contatos || 1}º contato · há {diasDesde(k.ultimoContato)}d</span>}
             {k.retornarEm && ["outra_data", "em_obras", "sem_resposta"].includes(e) && <span style={atrasado ? { color: "var(--danger)", fontWeight: 600 } : undefined}>retornar em {fmtDate(String(k.retornarEm).slice(0, 10))}</span>}
             {k.medidaId && <span className="pill">{k.medidaOk ? "📐 medidas conferidas" : "📐 aguardando Medidas"}</span>}
@@ -142,6 +152,79 @@ function CartaoCk({ c }: any) {
         </div>
       </div>
     </div>
+  );
+}
+
+// data e hora do checklist em destaque
+function DataGrande({ v }: { v: string }) {
+  const d = parseData(v), dia = String(v).slice(0, 10), passou = dia < hoje(), ehHoje = dia === hoje();
+  const cor = passou ? "var(--danger)" : ehHoje ? "var(--st-concluida)" : "var(--primary)";
+  return (
+    <div style={{ minWidth: 96, textAlign: "center", borderRadius: 12, padding: "8px 10px", background: cor, color: "#fff", lineHeight: 1.15 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: .5 }}>{ehHoje ? "HOJE" : DIAS[d.getDay()].split("-")[0]}</div>
+      <div style={{ fontSize: 26, fontWeight: 800 }}>{d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</div>
+      <div style={{ fontSize: 18, fontWeight: 700 }}>{d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+    </div>
+  );
+}
+
+// dados do cliente vindos da planilha (ou da inclusão manual)
+function DadosCk({ c }: any) {
+  const { R, st } = useApp() as any;
+  const k = ck(c), p = k.planilha || {};
+  const venda = c.vinculadoA ? st.chamados.find((x: any) => x.id === c.vinculadoA) : null;
+  const consultor = venda && venda.consultorId ? R.nomeUser(venda.consultorId) : "";
+  const tels = [c.telefone, k.telefone2].filter(Boolean);
+  const it = (l: string, v: any) => v ? <span><span style={{ color: "var(--ink-faint)" }}>{l}</span> {v}</span> : null;
+  return (
+    <>
+      <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginTop: 3, display: "flex", gap: "3px 14px", flexWrap: "wrap" }}>
+        {it("Inclusão", c.dataVenda ? fmtDate(c.dataVenda) + " (" + diasDesde(c.dataVenda) + "d)" : "")}
+        {it("Status", p.situacao)}
+        {it("Vendedor", p.vendedor)}
+        {it("Medidor", p.medidor || (p.minhaVisita ? "" : "—"))}
+        {it("Cupom", p.cupom)}
+        {it("Negociado", p.valor)}
+        {it("Tel.", tels.join(" / "))}
+      </div>
+      {p.minhaVisita && <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 8, background: "var(--st-respondida-bg)", color: "var(--st-respondida)", fontSize: 12.5, fontWeight: 600 }}>
+        🏠 Cliente Minha Visita: {p.minhaVisita}{consultor ? " · consultor " + consultor : ""} — o consultor já esteve no local (medidas feitas na visita).
+        {String(p.minhaVisita).trim().toLowerCase() !== String(c.cliente).trim().toLowerCase() && " Atenção: nome do orçamento diferente do cliente pagador."}
+      </div>}
+    </>
+  );
+}
+
+function ModalIncluir() {
+  const { setModal, toast, recarregar } = useApp() as any;
+  const [v, setV] = useState<any>({ numero: "", cliente: "", telefone: "", telefone2: "", inclusao: hoje(), situacao: "", vendedor: "", medidor: "", cupom: "", valor: "", minhaVisita: "", descricao: "" });
+  const s = (k: string) => (e: any) => setV((x: any) => ({ ...x, [k]: e.target.value }));
+  const fechar = () => setModal(null);
+  async function salvar() {
+    if (!v.numero.replace(/\D/g, "")) { toast("Informe o nº da venda"); return; }
+    if (!v.cliente.trim()) { toast("Informe o nome do cliente"); return; }
+    if ((v.telefone || v.telefone2).replace(/\D/g, "").length < 10) { toast("Informe o telefone com DDD"); return; }
+    try {
+      const r = await A.checklistImportar([{ ...v, manual: true }]);
+      if (!r.novos) { toast("Já existe um cliente com a venda " + v.numero + " no checklist — nada foi alterado"); return; }
+      await recarregar(); fechar(); toast("Cliente incluído no checklist");
+    } catch (x: any) { toast(x.message); }
+  }
+  const F = ({ k, l, req, tipo, full }: any) => <div className={"field" + (full ? " full" : "")}><label>{l}{req && <span className="req-star"> *</span>}</label><input type={tipo || "text"} value={v[k]} onChange={s(k)} /></div>;
+  return (
+    <Modal titulo="Incluir cliente no checklist" onFechar={fechar}>
+      <div className="grid">
+        {F({ k: "cliente", l: "Nome do cliente (pagador)", req: true })}{F({ k: "numero", l: "Nº da venda", req: true })}
+        {F({ k: "telefone", l: "Telefone 1", req: true })}{F({ k: "telefone2", l: "Telefone 2" })}
+        {F({ k: "inclusao", l: "Data de inclusão", tipo: "date" })}{F({ k: "situacao", l: "Status" })}
+        {F({ k: "vendedor", l: "Vendedor" })}{F({ k: "medidor", l: "Medidor (se tiver)" })}
+        {F({ k: "cupom", l: "Valor do cupom" })}{F({ k: "valor", l: "Valor negociado" })}
+        {F({ k: "minhaVisita", l: "Cliente Minha Visita (nome do orçamento)", full: true })}
+        <div className="field full"><label>Observação</label><textarea value={v.descricao} onChange={s("descricao")} /></div>
+      </div>
+      <div className="hint" style={{ marginTop: 8 }}>Se o nº da venda já estiver no checklist, o cliente existente é mantido e nada é alterado.</div>
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}><button className="btn primary" onClick={salvar}>Incluir</button><button className="btn ghost" onClick={fechar}>Cancelar</button></div>
+    </Modal>
   );
 }
 
@@ -203,7 +286,7 @@ export function ModalResultado({ c }: any) {
     try {
       if (acao === "medida") await A.checklistPedirMedida(c.id, obs);
       else await A.checklistRegistrar(c.id, { acao, data, retornarEm: ret, ambiente: pronto ? "pronto" : "", obs });
-      await recarregar(); fechar(); toast("Registrado");
+      await recarregar(); fechar(); toast(acao === "agendado" ? "Agendado — o cliente foi para 📅 Agendados" : "Registrado");
     } catch (x: any) { toast(x.message); }
   }
   return (

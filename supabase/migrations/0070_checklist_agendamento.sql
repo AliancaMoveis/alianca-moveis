@@ -170,3 +170,11 @@ do $do$ declare d text; begin
   if d not like '%chkdia%' then raise exception 'avisos'; end if;
   execute d;
 end $do$;
+
+-- (ajuste) importação guarda também o valor do cupom e marca inclusão manual
+do $do$ declare d text; begin
+  d := pg_get_functiondef('public.checklist_importar(jsonb)'::regprocedure);
+  d := replace(d, $x$'valor', coalesce(r->>'valor', ''),$x$, $x$'valor', coalesce(r->>'valor', ''), 'cupom', coalesce(r->>'cupom', ''), 'manual', coalesce((r->>'manual')::boolean, false),$x$);
+  d := replace(d, $x$'📥 Importado da planilha do checklist (venda ' || num || ')'$x$, $x$case when coalesce((r->>'manual')::boolean, false) then '✍️ Incluído manualmente no checklist (venda ' || num || ')' else '📥 Importado da planilha do checklist (venda ' || num || ')' end$x$);
+  execute d;
+end $do$;
