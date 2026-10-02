@@ -115,6 +115,7 @@ export const A = {
   posvendaAbertura: (id: string, p: any) => rpc("posvenda_abertura", { p_id: id, p }),
   checklistImportar: (linhas: any[]) => rpc<{ novos: number; ignorados: number; agendados?: number }>("checklist_importar", { p: linhas }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),
+  salvarChecklistAgenda: (p: any) => rpc("salvar_checklist_agenda", { p }),
   checklistExcluir: (ids: string[]) => rpc<number>("checklist_excluir", { p_ids: ids }),
   checklistPedirMedida: (id: string, obs: string) => rpc<string>("checklist_pedir_medida", { p_id: id, p_obs: obs }),
   salvarPosvenda: (id: string, p: any) => rpc("salvar_posvenda", { p_id: id, p }),

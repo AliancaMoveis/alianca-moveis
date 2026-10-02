@@ -109,7 +109,7 @@ export default function Checklist() {
       <div className="view-head"><div><h2>Agendar checklist</h2>
         <p>Clientes com venda encaminhada para a revisão do projeto. Chame no WhatsApp com a mensagem pronta e registre o resultado. O agendamento continua sendo lançado no sistema interno.</p></div>
         <div><input ref={arq} type="file" accept=".xlsx" style={{ display: "none" }} onChange={e => importar(e.target.files?.[0])} />
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button className="btn" onClick={() => setModal(<ModalIncluir />)}>＋ Incluir cliente</button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button className="btn ghost" onClick={() => setModal(<ModalHorarios />)}>⚙ Horários</button><button className="btn" onClick={() => setModal(<ModalIncluir />)}>＋ Incluir cliente</button>
           <button className="btn primary" disabled={importando} onClick={() => escolher("agendar")}>{importando ? "Importando…" : "📥 Importar a agendar"}</button>
           <button className="btn primary" disabled={importando} onClick={() => escolher("agendados")}>📅 Importar agendados (aguardando checklist)</button></div></div></div>
       <div className="kpis" style={{ marginTop: 6 }}>
@@ -171,7 +171,9 @@ function CartaoCk({ c }: any) {
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {c.status !== "concluida" && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
-          <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : "Registrar resultado"}</button>
+          {e === "agendado" && c.status !== "concluida" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="reagendar" />)}>🔁 Alterar data</button>}
+          {e === "agendado" && c.status !== "concluida" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="desmarcar" />)}>❌ Desmarcar</button>}
+          <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : e === "agendado" ? "Realizado / outros" : "Registrar resultado"}</button>
           <button className="btn ghost sm" onClick={() => abrirDetalhe(c.id)}>Ficha</button>
           <button className="btn ghost sm" title="Excluir cliente do checklist" style={{ color: "var(--danger)" }} onClick={() => setModal(<ConfirmaExcluir ids={[c.id]} rotulo={c.cliente + " (venda " + c.pedido + ")"} />)}>🗑</button>
         </div>
@@ -275,13 +277,91 @@ export function ConfirmaExcluir({ ids, rotulo, forte }: { ids: string[]; rotulo:
   );
 }
 
+// ---------- sugestão de dias e horários livres ----------
+export const AGENDA_PADRAO = { dias: [1, 2, 3, 4, 5], horarios: ["09:00", "10:30", "14:00", "15:30", "17:00"], vagas: 1, seguraDias: 2 };
+const isoDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** ocupação de cada horário: agendados + datas oferecidas a clientes que ainda não responderam (seguradas por alguns dias) */
+export function ocupacao(st: any, excluirId?: string): Record<string, string[]> {
+  const cfg = { ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) };
+  const m: Record<string, string[]> = {};
+  st.chamados.forEach((c: any) => {
+    if (c.tipo !== "checklist" || c.status === "concluida" || c.id === excluirId) return;
+    const k = ck(c), e = etapaCk(c);
+    let slot = "";
+    if (e === "agendado" && k.agendadoPara) slot = String(k.agendadoPara).slice(0, 16);
+    else if (e === "aguardando" && k.proposta && diasDesde(k.ultimoContato) <= cfg.seguraDias) slot = String(k.proposta).slice(0, 16);
+    if (slot) (m[slot] = m[slot] || []).push(c.cliente + (e === "aguardando" ? " (aguardando resposta)" : ""));
+  });
+  return m;
+}
+export function sugestoes(st: any, excluirId?: string, n = 8): string[] {
+  const cfg = { ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) };
+  const occ = ocupacao(st, excluirId), out: string[] = [], agora = Date.now() + 2 * 36e5;
+  for (let i = 0; i < 45 && out.length < n; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    if (!cfg.dias.includes(d.getDay())) continue;
+    for (const h of [...cfg.horarios].sort()) {
+      const slot = isoDia(d) + "T" + h;
+      if (+parseData(slot) < agora) continue;
+      if ((occ[slot] || []).length < cfg.vagas) out.push(slot);
+      if (out.length >= n) break;
+    }
+  }
+  return out;
+}
+export function Sugestoes({ valor, onPick, excluirId }: { valor: string; onPick: (v: string) => void; excluirId?: string }) {
+  const { st } = useApp() as any;
+  const lst = sugestoes(st, excluirId), occ = ocupacao(st, excluirId);
+  const cfg = { ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) };
+  const ocupado = valor && (occ[valor.slice(0, 16)] || []).length >= cfg.vagas ? occ[valor.slice(0, 16)] : null;
+  return (
+    <div className="field full">
+      <label>Horários livres sugeridos</label>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {lst.length ? lst.map(v => { const d = parseData(v); return (
+          <button type="button" key={v} className={"chip" + (valor.slice(0, 16) === v ? " on" : "")} onClick={() => onPick(v)}>
+            {DIAS[d.getDay()].slice(0, 3)} {d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · <b>{v.slice(11, 16)}</b></button>); })
+          : <span className="hint">Nenhum horário livre nas próximas semanas — revise os horários em ⚙ Horários.</span>}
+      </div>
+      {ocupado && <span className="hint" style={{ color: "var(--danger)" }}>⚠️ Esse horário já está ocupado: {ocupado.join(", ")}</span>}
+    </div>
+  );
+}
+
+function ModalHorarios() {
+  const { st, setModal, toast, recarregar } = useApp() as any;
+  const cfg = { ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) };
+  const [dias, setDias] = useState<number[]>(cfg.dias); const [hs, setHs] = useState(cfg.horarios.join(", "));
+  const [vagas, setVagas] = useState(String(cfg.vagas)); const [seg, setSeg] = useState(String(cfg.seguraDias));
+  const fechar = () => setModal(null);
+  async function salvar() {
+    const horarios = hs.split(/[,;\s]+/).map((x: string) => x.trim()).filter(Boolean).map((x: string) => x.length === 4 ? "0" + x : x);
+    try { await A.salvarChecklistAgenda({ dias, horarios, vagas: Number(vagas), seguraDias: Number(seg) }); await recarregar(); fechar(); toast("Horários do checklist salvos"); }
+    catch (x: any) { toast(x.message); }
+  }
+  return (
+    <Modal titulo="Horários do checklist" onFechar={fechar}>
+      <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 12px" }}>Usados para sugerir dias e horários livres. Um horário fica ocupado quando tem cliente agendado ou quando foi oferecido a um cliente que ainda não respondeu.</p>
+      <div className="field" style={{ marginBottom: 12 }}><label>Dias de atendimento</label>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{[1, 2, 3, 4, 5, 6, 0].map(d => <label key={d} style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 14 }}><input type="checkbox" style={{ width: "auto" }} checked={dias.includes(d)} onChange={e => setDias(x => e.target.checked ? [...x, d] : x.filter(y => y !== d))} />{DIAS[d].split("-")[0]}</label>)}</div></div>
+      <div className="grid">
+        <div className="field full"><label>Horários (separados por vírgula)</label><input value={hs} onChange={e => setHs(e.target.value)} placeholder="09:00, 10:30, 14:00, 15:30" /></div>
+        <div className="field"><label>Clientes por horário</label><input type="number" min={1} max={20} value={vagas} onChange={e => setVagas(e.target.value)} /></div>
+        <div className="field"><label>Segurar a data oferecida por (dias)</label><input type="number" min={0} max={15} value={seg} onChange={e => setSeg(e.target.value)} /><span className="hint">Enquanto o cliente não responde, o horário oferecido não é sugerido para outro.</span></div>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}><button className="btn primary" onClick={salvar}>Salvar</button><button className="btn ghost" onClick={fechar}>Cancelar</button></div>
+    </Modal>
+  );
+}
+
 const proximoDiaUtil = () => { const d = new Date(); d.setDate(d.getDate() + 1); while ([0, 6].includes(d.getDay())) d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T10:00`; };
 
 export function ModalWhats({ c }: any) {
   const { R, setModal, toast, recarregar } = useApp() as any;
   const k = ck(c), e = etapaCk(c);
   const [tipo, setTipo] = useState(e === "agendado" ? "confirmacao" : e === "aguardando" || e === "sem_resposta" ? "cobranca" : ["em_obras", "outra_data"].includes(e) ? "retorno" : "primeiro");
-  const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : k.proposta) || proximoDiaUtil()).slice(0, 16));
+  const { st } = useApp() as any;
+  const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : k.proposta) || sugestoes(st, c.id, 1)[0] || proximoDiaUtil()).slice(0, 16));
   const [med, setMed] = useState(semMedida(c) && !k.medidaId);
   const tels = [c.telefone, k.telefone2].filter((t: string) => t && t.replace(/\D/g, "").length >= 10);
   const [tel, setTel] = useState(tels[0] || "");
@@ -305,6 +385,7 @@ export function ModalWhats({ c }: any) {
       <div className="grid">
         <div className="field"><label>Mensagem</label><select value={tipo} onChange={ev => { setTipo(ev.target.value); setEditado(false); }}>{Object.entries(MODELOS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
         <div className="field"><label>{tipo === "confirmacao" ? "Data agendada" : "Data e horário oferecidos"} <span className="req-star">*</span></label><input type="datetime-local" value={data} onChange={ev => { setData(ev.target.value); setEditado(false); }} /></div>
+        {tipo !== "confirmacao" && <Sugestoes valor={data} excluirId={c.id} onPick={v => { setData(v); setEditado(false); }} />}
         <div className="field"><label>Telefone</label>{tels.length > 1 ? <select value={tel} onChange={ev => setTel(ev.target.value)}>{tels.map((t: string) => <option key={t} value={t}>{t}</option>)}</select> : <input value={tel} onChange={ev => setTel(ev.target.value)} placeholder="DDD + número" />}</div>
         {tipo !== "confirmacao" && <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={med} onChange={ev => { setMed(ev.target.checked); setEditado(false); }} /><span>Ainda sem medição — avisar que o setor de Medidas vai ligar</span></label>}
         <div className="field full"><label>Texto (pode editar antes de enviar)</label><textarea rows={14} value={texto} onChange={ev => { setTxt(ev.target.value); setEditado(true); }} /></div>
@@ -322,39 +403,54 @@ const ACOES: Record<string, string> = {
   agendado: "✅ Aceitou — checklist agendado", outra_data: "🔄 Pediu outra data", em_obras: "🚧 Ambiente em obra", sem_resposta: "📵 Não respondeu",
   medida: "📐 Precisa de medida (pedir ao setor de Medidas)", realizado: "☑️ Checklist realizado", desistiu: "⛔ Encerrar sem checklist",
 };
-export function ModalResultado({ c }: any) {
+const ACOES_AGENDADO: Record<string, string> = {
+  realizado: "☑️ Checklist realizado", reagendar: "🔁 Alterar agendamento (nova data)", desmarcar: "❌ Desmarcar agendamento", desistiu: "⛔ Encerrar sem checklist",
+};
+export function ModalResultado({ c, inicial }: any) {
   const { setModal, toast, recarregar } = useApp() as any;
-  const k = ck(c), fechado = c.status === "concluida";
-  const [acao, setAcao] = useState(fechado ? "reabrir" : etapaCk(c) === "agendado" ? "realizado" : "agendado");
-  const [data, setData] = useState<string>(String(k.proposta || k.agendadoPara || "").slice(0, 16));
+  const k = ck(c), fechado = c.status === "concluida", agendado = etapaCk(c) === "agendado";
+  const [acao, setAcao] = useState(inicial || (fechado ? "reabrir" : agendado ? "realizado" : "agendado"));
+  const [data, setData] = useState<string>(inicial === "reagendar" ? "" : String(k.proposta || k.agendadoPara || "").slice(0, 16));
   const [ret, setRet] = useState(""); const [pronto, setPronto] = useState(false); const [obs, setObs] = useState("");
   const fechar = () => setModal(null);
   async function salvar() {
     try {
       if (acao === "medida") await A.checklistPedirMedida(c.id, obs);
       else await A.checklistRegistrar(c.id, { acao, data, retornarEm: ret, ambiente: pronto ? "pronto" : "", obs });
-      await recarregar(); fechar(); toast(acao === "agendado" ? "Agendado — o cliente foi para 📅 Agendados" : "Registrado");
+      await recarregar(); fechar(); toast(acao === "agendado" ? "Agendado — o cliente foi para 📅 Agendados" : acao === "reagendar" ? "Data alterada — altere também no sistema interno" : acao === "desmarcar" ? "Agendamento desmarcado — o cliente voltou para contato" : "Registrado");
     } catch (x: any) { toast(x.message); }
   }
   return (
     <Modal titulo={"Resultado do contato · " + c.cliente} onFechar={fechar}>
       {fechado ? <p style={{ fontSize: 13.5 }}>Este checklist está encerrado. Reabrir volta o cliente para “A contatar”.</p> :
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          {Object.entries(ACOES).filter(([v]) => v !== "medida" || !k.medidaId || k.medidaOk).map(([v, l]) => <label key={v} style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer", fontSize: 14 }}><input type="radio" style={{ width: "auto" }} checked={acao === v} onChange={() => setAcao(v)} />{l}</label>)}
+          {Object.entries(agendado ? ACOES_AGENDADO : ACOES).filter(([v]) => v !== "medida" || !k.medidaId || k.medidaOk).map(([v, l]) => <label key={v} style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer", fontSize: 14 }}><input type="radio" style={{ width: "auto" }} checked={acao === v} onChange={() => setAcao(v)} />{l}</label>)}
         </div>}
       <div className="grid">
+        {agendado && k.agendadoPara && ["reagendar", "desmarcar"].includes(acao) && <div className="field full"><label>Agendamento atual</label><div style={{ fontWeight: 700, fontSize: 15 }}>📅 {dataLonga(String(k.agendadoPara))}</div></div>}
+        {acao === "reagendar" && <>
+          <div className="field"><label>Nova data e horário <span className="req-star">*</span></label><input type="datetime-local" value={data} onChange={e => setData(e.target.value)} /></div>
+          <Sugestoes valor={data} excluirId={c.id} onPick={setData} />
+          <div className="hint full">Depois de salvar, altere também no sistema interno. Use “Confirmar o agendamento” no WhatsApp para avisar o cliente da nova data.</div>
+        </>}
+        {acao === "desmarcar" && <>
+          <div className="field"><label>Retornar o contato em <span className="hint">(vazio = volta para “A contatar”)</span></label><input type="date" min={hoje()} value={ret} onChange={e => setRet(e.target.value)} /></div>
+          <div className="hint full">O horário fica livre para outro cliente. Desmarque também no sistema interno.</div>
+        </>}
         {acao === "agendado" && <>
           <div className="field"><label>Data e horário agendados <span className="req-star">*</span></label><input type="datetime-local" value={data} onChange={e => setData(e.target.value)} /></div>
+          <Sugestoes valor={data} excluirId={c.id} onPick={setData} />
           <label className="field full" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={pronto} onChange={e => setPronto(e.target.checked)} /><span>Cliente confirmou que o <b>ambiente está pronto</b> para a montagem (sem obra, acabamentos feitos) <span className="req-star">*</span></span></label>
           <div className="hint full">Ambiente ainda em obra não pode ser finalizado — nesse caso use “Ambiente em obra”. Depois de registrar aqui, lance o agendamento no sistema interno.</div>
         </>}
         {acao === "outra_data" && <>
           <div className="field"><label>Data e horário que o cliente pediu</label><input type="datetime-local" value={data} onChange={e => setData(e.target.value)} /></div>
+          <Sugestoes valor={data} excluirId={c.id} onPick={setData} />
           <div className="field"><label>Ou: retornar o contato em</label><input type="date" min={hoje()} value={ret} onChange={e => setRet(e.target.value)} /></div>
         </>}
         {acao === "em_obras" && <div className="field"><label>Previsão de fim da obra — retornar em <span className="req-star">*</span></label><input type="date" min={hoje()} value={ret} onChange={e => setRet(e.target.value)} /></div>}
         {acao === "sem_resposta" && <div className="field"><label>Tentar de novo em <span className="hint">(vazio = 2 dias)</span></label><input type="date" min={hoje()} value={ret} onChange={e => setRet(e.target.value)} /></div>}
-        <div className="field full"><label>Observação {acao === "desistiu" && <span className="req-star">*</span>}</label><textarea value={obs} onChange={e => setObs(e.target.value)} placeholder={acao === "medida" ? "Ex.: cliente disse que mudou a parede da cozinha" : "O que o cliente disse"} /></div>
+        <div className="field full"><label>{acao === "desmarcar" ? "Motivo" : "Observação"} {["desistiu", "desmarcar"].includes(acao) && <span className="req-star">*</span>}</label><textarea value={obs} onChange={e => setObs(e.target.value)} placeholder={acao === "medida" ? "Ex.: cliente disse que mudou a parede da cozinha" : "O que o cliente disse"} /></div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}><button className="btn primary" onClick={salvar}>{fechado ? "Reabrir" : "Salvar"}</button><button className="btn ghost" onClick={fechar}>Cancelar</button></div>
     </Modal>
