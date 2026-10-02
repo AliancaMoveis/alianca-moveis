@@ -9,6 +9,7 @@ import {
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
+import { ETAPA_CK, ModalResultado, ModalWhats, ck, etapaCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
@@ -169,7 +170,7 @@ function Tratativa({ c }: any) {
   if (c.tipo === "assistencia") return <div className="resp-box"><h4>Tratativa — Assistência (peça + montador)</h4><div className="grid"><div className="field"><label>Peça solicitada</label><input value={v.peca} onChange={s("peca")} placeholder="Ex.: puxador, dobradiça…" /></div><div className="field"><label>Montador designado</label><input value={v.montador} onChange={s("montador")} /></div></div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => salvar(["peca", "montador"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "vistoria") return <div className="resp-box"><h4>Tratativa — Vistoria (aprovar e designar)</h4><div className="grid"><div className="field"><label>Montador de vistoria</label><input value={v.montador} onChange={s("montador")} /></div><div className="field"><label>Data da vistoria</label><input type="date" value={v.data} onChange={s("data")} /></div></div><div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.aprovada} campo="aprovada" lOn="Vistoria aprovada ✓" lOff="Aprovar vistoria" /><button className="btn primary sm" onClick={() => salvar(["montador", "data"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "entrega") return <div className="resp-box"><h4>Tratativa — Entrega (Tático)</h4><p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 12px" }}>Se há disponibilidade, coloque para entrega no Tático. Se não houver, encaminhe para Prazo de fábrica.</p><div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.entregaTatico} campo="entregaTatico" lOn="Enviado ao Tático ✓" lOff="Colocar para entrega (Tático)" /><button className="btn sm" onClick={() => ex(() => A.entregaParaFabrica(c.id), "Encaminhado para Prazo de fábrica")}>Sem disponibilidade → Prazo de fábrica</button></div></div>;
-  if (c.tipo === "checklist") return <div className="resp-box"><h4>Tratativa — Checklist (revisão do projeto)</h4><div className="grid"><div className="field"><label>Data do checklist</label><input type="date" value={v.agenda} onChange={s("agenda")} /></div><div className="field"><label>Responsável pela revisão</label><input value={v.montador} onChange={s("montador")} placeholder="Nome de quem revisa" /></div></div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => salvar(["agenda", "montador"])}>Salvar tratativa</button></div></div>;
+  if (c.tipo === "checklist") return <BlocoChecklist c={c} />;
   if (c.tipo === "medidas") return <div className="resp-box"><h4>Tratativa — Medidas</h4><div className="grid"><div className="field full"><label>Medidas informadas ao cliente</label><textarea value={v.medidas} onChange={s("medidas")} placeholder="Ex.: Largura 2,40m x altura 2,60m x profundidade 0,60m"></textarea></div></div><div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.confirmado} campo="confirmado" lOn="Confirmado com o cliente ✓" lOff="Confirmar com o cliente" /><button className="btn primary sm" onClick={() => salvar(["medidas"])}>Salvar tratativa</button></div></div>;
   if (!R.domMarketing(c)) return null;
 
@@ -759,6 +760,25 @@ function Vinculados({ c }: any) {
 }
 
 const paraLocal = (iso: string) => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+function BlocoChecklist({ c }: any) {
+  const { R, setModal } = useApp() as any;
+  const k = ck(c), e = etapaCk(c), [nome, cor] = ETAPA_CK[e] || [e, "var(--line)"], p = k.planilha || {};
+  return (
+    <div className="resp-box" style={{ borderColor: cor }}><h4>Checklist (revisão do projeto) <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{nome}</span></h4>
+      {p.vendedor && <RowSb k="Vendedor">{p.vendedor}</RowSb>}
+      <RowSb k="Medidor">{p.medidor || "não informado na planilha"}{k.medidaId ? (k.medidaOk ? " · medidas conferidas" : " · aguardando o setor de Medidas (" + k.medidaId + ")") : ""}</RowSb>
+      {k.proposta && <RowSb k="Data oferecida">{fmtDT(k.proposta)}</RowSb>}
+      {k.agendadoPara && <RowSb k="Agendado para">{fmtDT(k.agendadoPara)}{k.ambiente === "pronto" ? " · ambiente pronto" : ""}</RowSb>}
+      {k.retornarEm && <RowSb k="Retornar em">{fmtDate(String(k.retornarEm).slice(0, 10))}</RowSb>}
+      <RowSb k="Contatos">{k.contatos || 0}{k.ultimoContato ? " · último em " + fmtDT(k.ultimoContato) : ""}</RowSb>
+      {R.podeChecklist() && <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
+        <button className="btn primary sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : "Registrar resultado"}</button>
+      </div>}
+    </div>
+  );
+}
+
 // Pós-venda Projetados: Relato (fato, como foi contado) · Análise (tipo + responsabilidade) · Custo e solução · Encaminhar
 function TratPosvenda({ c }: any) {
   const { R, st, executar: ex, toast, recarregar, abrirDetalhe } = useApp() as any;

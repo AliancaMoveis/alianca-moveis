@@ -41,6 +41,14 @@ const POSVENDA = [
     h: [[-5, "Vânia", "Solicitação aberta (Pós-venda projetados) → Pós-venda Projetados"]],
     pv: { origem: "montador", categoria: "", responsabilidade: "analise", pecaAfetada: "Dormitório — nicho da cama", paradoObra: true, prazo: new Date(Date.now() - 36e5).toISOString(), montadorId: "m1", medidorResp: "", checklistResp: "", ocorrido: "", solucao: "", custo: 0, custoDesc: "", descontoMontador: 0 } },
 ];
+const CHECKLIST = [
+  { id: "ALM-0120", tipo: "checklist", sd: "checklist", st: "aberta", cr: -48, sla: 40, sol: U(8), soln: "Fernanda Melo", sols: "Importação checklist", cli: "Vanessa De Souza Borges", doc: "", tel: "41997563175", em: "", ped: "1101903", dv: "2026-09-12", pf: "", pr: "Projetados", mo: "Venda encaminhada para o checklist", urg: false,
+    tr: { checklist: { etapa: "a_contatar", contatos: 0, telefone2: "41985115542", planilha: { vendedor: "SANDRIELY MARTINS DE MOURA", medidor: "" } } }, h: [[-48, "Fernanda Melo", "📥 Importado da planilha do checklist"]] },
+  { id: "ALM-0121", tipo: "checklist", sd: "checklist", st: "tratativa", cr: -96, sla: 40, sol: U(8), soln: "Fernanda Melo", sols: "Importação checklist", cli: "Anderson Luiz Polli", doc: "", tel: "41985125542", em: "", ped: "1306605", dv: "2026-09-16", pf: "", pr: "Projetados", mo: "Venda encaminhada para o checklist", urg: false,
+    tr: { checklist: { etapa: "aguardando", contatos: 1, proposta: "2026-10-06T14:00", ultimoContato: new Date(Date.now() - 3 * 864e5).toISOString(), planilha: { vendedor: "THALENA", medidor: "Gilberto Andrade" } } }, h: [[-96, "Fernanda Melo", "📥 Importado"]] },
+  { id: "ALM-0122", tipo: "checklist", sd: "checklist", st: "tratativa", cr: -120, sla: 40, sol: U(8), soln: "Fernanda Melo", sols: "Importação checklist", cli: "Yanara Rosa Da Silva", doc: "", tel: "41999377120", em: "", ped: "1307214", dv: "2026-09-19", pf: "", pr: "Projetados", mo: "Venda encaminhada para o checklist", urg: false,
+    tr: { checklist: { etapa: "agendado", contatos: 2, agendadoPara: "2026-10-08T10:00", ambiente: "pronto", planilha: { vendedor: "MERILYS PRUSSAK", medidor: "Lider.medidas" } } }, h: [[-120, "Fernanda Melo", "📥 Importado"]] },
+];
 const MEDIDAS = [
   { id: "ALM-0095", tipo: "medidas", sd: "medidas", st: "aberta", cr: -3, sla: 40, sol: null, soln: "Sistema", sols: "Venda confirmada", cli: "Helena Duarte", doc: "", tel: "41988887777", em: "", ped: "48250", pf: "", pr: "Cozinha planejada", mo: "Venda nº 48250 confirmada. Validar as medidas do consultor ou direcionar a medição.", urg: false, end: "Rua XV, 100", vinc: "ALM-0023",
     tr: { medida: { etapa: "validar", consultorVisita: U(11), medidasConsultor: "Cozinha 3,80m x 2,40m" } }, h: [[-3, "Sistema", "Medida criada automaticamente pela venda 48250"]] },
@@ -57,7 +65,7 @@ export function estadoMock(): Estado {
     config: { comissaoPct: 1.5, pagamentoVisita: 40 },
     reembolsos: [],
     montadores: [{ id: "m1", nome: "João Montador", telefone: "41999990011", ativo: true }, { id: "m2", nome: "Carlos Montador", telefone: "", ativo: true }],
-    chamados: (seed as any[]).concat(POSVENDA).concat(MEDIDAS).map(c => ({
+    chamados: (seed as any[]).concat(POSVENDA).concat(MEDIDAS).concat(CHECKLIST).map(c => ({
       id: c.id, tipo: c.tipo, setorDestino: c.sd, status: c.st, criadoEm: H(c.cr).toISOString(), slaResposta: H(c.sla).toISOString(),
       solicitanteId: c.sol, solicitante: c.soln, setor: c.sols, cliente: c.cli, clienteDoc: c.doc, telefone: c.tel, email: c.em, pedido: c.ped,
       dataVenda: c.dv || "", pedidoFabrica: c.pf, produto: c.pr, fabrica: c.fab || "", prazoTatico: c.pt || "", motivo: c.mo, urgente: c.urg,

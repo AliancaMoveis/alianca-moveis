@@ -288,6 +288,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const ehConsultorExterno = () => mySetores().includes("consultor_externo");
   const ehPosvenda = () => mySetores().includes("posvenda");
   const ehJuridico = () => mySetores().includes("juridico");
+  const podeChecklist = () => ehGestao() || mySetores().includes("checklist");
   const podeVerPosvenda = () => ehGestao() || ehPosvenda() || ehJuridico();
   const podeMontadores = () => temCadastros() || ehPosvenda();
   const responsaveisChecklist = () => state.usuarios.filter(u => (u.setores || []).includes("checklist"));
@@ -653,6 +654,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ehPosvenda() || ehGestao()) pv.push(["novopv", "Novo atendimento"]);
     if (podeVerPosvenda()) pv.push(["posvenda", "Painel do pós-venda"]);
     if (pv.length) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Pós-venda", ic: "✚", itens: pv });
+    if (podeChecklist()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Checklist", ic: "✓", itens: [["checklist", "Agendar checklist"]] });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
     if (ehGestao()) cd.push(["admin", "Administração"]);
@@ -667,7 +669,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
     ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
-    ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
+    podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };
 }
 export type Regras = ReturnType<typeof criarRegras>;
