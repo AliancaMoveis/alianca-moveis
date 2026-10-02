@@ -46,10 +46,17 @@ export default function Checklist() {
   const [f, setF] = useState("hoje"); const [q, setQ] = useState("");
   const [importando, setImportando] = useState(false);
   const arq = useRef<HTMLInputElement>(null);
-  const [de, setDe] = useState(""); const [ate, setAte] = useState("");
-  // filtro pela data de inclusão (da planilha) — vale para os números, os filtros e a lista
-  const todos = st.chamados.filter((c: any) => c.tipo === "checklist" && R.podeVer(c)
-    && (!de || (c.dataVenda && String(c.dataVenda).slice(0, 10) >= de)) && (!ate || (c.dataVenda && String(c.dataVenda).slice(0, 10) <= ate)));
+  const [per, setPer] = useState("todos"); const [de, setDe] = useState(""); const [ate, setAte] = useState("");
+  // período pela data de inclusão (da planilha): todos · deste mês · meses anteriores · data determinada — vale para os números, os filtros e a lista
+  const ini = hoje().slice(0, 7) + "-01";
+  const noPer = (c: any) => {
+    const d = String(c.dataVenda || "").slice(0, 10);
+    if (per === "mes") return d >= ini;
+    if (per === "anteriores") return !!d && d < ini;
+    if (per === "data") return (!de || (!!d && d >= de)) && (!ate || (!!d && d <= ate));
+    return true;
+  };
+  const todos = st.chamados.filter((c: any) => c.tipo === "checklist" && R.podeVer(c) && noPer(c));
   const abertos = todos.filter((c: any) => c.status !== "concluida");
   const mes = hoje().slice(0, 7);
   const FILTROS: Record<string, [string, (c: any) => boolean]> = {
@@ -121,9 +128,11 @@ export default function Checklist() {
         <input className="busca" style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 10, font: "inherit", background: "var(--surface)", color: "var(--ink)" }}
           placeholder="Buscar por nome, nº da venda ou telefone" value={q} onChange={e => setQ(e.target.value)} />
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
-          <div className="field" style={{ minWidth: 150 }}><label>Inclusão de</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
-          <div className="field" style={{ minWidth: 150 }}><label>até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
-          {(de || ate) && <button className="btn ghost sm" onClick={() => { setDe(""); setAte(""); }}>Limpar datas</button>}
+          <div className="field" style={{ minWidth: 190 }}><label>Data de inclusão</label><select value={per} onChange={e => setPer(e.target.value)}>
+            <option value="todos">Todos os períodos</option><option value="mes">Deste mês</option><option value="anteriores">Meses anteriores</option><option value="data">Data determinada…</option></select></div>
+          {per === "data" && <div className="field" style={{ minWidth: 150 }}><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>}
+          {per === "data" && <div className="field" style={{ minWidth: 150 }}><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>}
+          {per !== "todos" && <button className="btn ghost sm" onClick={() => { setPer("todos"); setDe(""); setAte(""); }}>Limpar</button>}
         </div>
         <div className="chips" style={{ marginTop: 10 }}>{Object.entries(FILTROS).map(([k, [l]]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
       </div>
