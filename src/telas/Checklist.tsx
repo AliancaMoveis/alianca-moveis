@@ -25,20 +25,18 @@ export function aFazerHoje(c: any) {
   if (k.retornarEm && String(k.retornarEm).slice(0, 10) <= hoje()) return true;
   return e === "aguardando" && diasDesde(k.ultimoContato) >= 2;
 }
-const semMedida = (c: any) => !ck(c).medidaOk && !((ck(c).planilha || {}).medidor) && !((ck(c).planilha || {}).minhaVisita);
 const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 const dataLonga = (v: string) => { if (!v) return "(data)"; const d = parseData(v); return `${DIAS[d.getDay()]}, ${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}, às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`; };
 const nomeCli = (c: any) => primeiroNome(String(c.cliente || "").toLowerCase().replace(/(^|\s)\S/g, s => s.toUpperCase()));
 
 export const MODELOS: Record<string, string> = { primeiro: "Primeiro contato (com data)", cobranca: "Cliente não respondeu", retorno: "Retorno (obra / outra data)", confirmacao: "Confirmar o agendamento" };
-export function mensagemCk(tipo: string, c: any, data: string, remetente: string, medida: boolean) {
-  const n = nomeCli(c), num = c.pedido || "—", quando = dataLonga(data);
-  const amb = "✅ O ambiente já está pronto para a montagem? (sem obras em andamento, com piso, pintura, gesso, elétrica e demais acabamentos finalizados)\n🚧 Se ainda houver obra ou reforma, qual a previsão de término?\n\nCom o ambiente em obra não conseguimos finalizar o projeto, pois qualquer mudança no local altera as medidas dos móveis.";
-  const med = medida ? "\n\n📐 Como ainda não temos a medição do seu ambiente, o nosso setor de Medidas também vai entrar em contato para agendar a conferência das medidas." : "";
-  if (tipo === "cobranca") return `Olá, ${n}! Tudo bem? 😊\nAqui é ${remetente}, do setor de Checklist da Aliança Móveis.\n\nPassando para saber se você conseguiu ver minha mensagem sobre a revisão final do seu projeto (venda nº ${num}).\nAinda tenho disponível *${quando}*. Fica bom para você? Se preferir outro dia, é só me dizer.\n\n${amb}${med}`;
-  if (tipo === "retorno") return `Olá, ${n}! Tudo bem? 😊\nAqui é ${remetente}, do setor de Checklist da Aliança Móveis.\n\nConforme combinamos, estou retomando o contato sobre a revisão final do seu projeto (venda nº ${num}).\nA obra/reforma do ambiente já foi finalizada? Se sim, tenho disponibilidade para *${quando}*. Fica bom para você?\n\n${amb}${med}`;
-  if (tipo === "confirmacao") return `Olá, ${n}! 😊\nAqui é ${remetente}, do setor de Checklist da Aliança Móveis.\n\nConfirmando a revisão final do seu projeto (venda nº ${num}) para *${quando}*.\nLembrando que o ambiente precisa estar pronto para a montagem, sem obras e com os acabamentos finalizados.\n\nQualquer imprevisto, é só me avisar por aqui. Até lá!`;
-  return `Olá, ${n}! Tudo bem? 😊\nAqui é ${remetente}, do setor de Checklist da Aliança Móveis.\n\nEstamos dando andamento ao seu projeto de móveis planejados (venda nº ${num}). O próximo passo é a *revisão final do projeto (checklist)*, antes de enviarmos para a fábrica.\n\nTenho disponibilidade para *${quando}*. Esse horário fica bom para você?\n\nPara confirmarmos, preciso saber:\n${amb}${med}\n\nFico no aguardo!`;
+export function mensagemCk(tipo: string, c: any, data: string, remetente: string) {
+  const n = nomeCli(c), quando = dataLonga(data);
+  const ola = `Olá, ${n}! Tudo bem?\n\nAqui é ${remetente}, da Aliança Móveis.`;
+  if (tipo === "cobranca") return `${ola} Estou passando para saber se você viu minha mensagem sobre a revisão final do seu projeto (checklist).\n\nAinda tenho disponível *${quando}*. Fica bom para você? Se preferir outro dia ou horário, é só me dizer.\n\nLembrando que o ambiente precisa estar pronto para a montagem, sem obra e com os acabamentos finalizados.`;
+  if (tipo === "retorno") return `${ola} Conforme combinamos, estou retomando o contato sobre a revisão final do seu projeto (checklist).\n\nA obra do ambiente já foi finalizada? Se sim, tenho disponível *${quando}*. Fica bom para você?`;
+  if (tipo === "confirmacao") return `${ola} Passando para confirmar a revisão final do seu projeto (checklist) para *${quando}*.\n\nLembrando que o ambiente precisa estar pronto para a montagem, sem obra e com os acabamentos finalizados.\n\nQualquer imprevisto, é só me avisar por aqui. Até lá!`;
+  return `${ola} Seu projeto de móveis planejados está na etapa de revisão final (checklist), que fazemos antes de enviar o pedido para a fábrica.\n\nTenho um horário disponível para *${quando}*. Podemos confirmar?\n\nAntes, preciso que você me confirme se o ambiente já está pronto para a montagem: sem obra ou reforma em andamento e com piso, pintura, gesso e elétrica finalizados.\n\nSe ainda estiver em obra, me diga a previsão de término que agendamos para depois. Assim garantimos que as medidas dos móveis fiquem certinhas.\n\nFico no aguardo!`;
 }
 
 export default function Checklist() {
@@ -282,57 +280,72 @@ export function ConfirmaExcluir({ ids, rotulo, forte }: { ids: string[]; rotulo:
 }
 
 // ---------- sugestão de dias e horários livres ----------
-export const AGENDA_PADRAO = { dias: [1, 2, 3, 4, 5], horarios: ["09:00", "10:30", "14:00", "15:30", "17:00"], vagas: 1, seguraDias: 2, projetistas: ["Silvane", "Rafael", "Angela", "Gislaine", "Cleberson", "Juliana"] };
+export const AGENDA_PADRAO = { dias: [1, 2, 3, 4, 5], horarios: ["09:00", "11:00", "15:00", "17:00"], duracaoMin: 120, vagas: 1, seguraDias: 2, projetistas: ["Silvane", "Rafael", "Angela", "Gislaine", "Cleberson", "Juliana"] };
 const CORES_PROJ = ["#2f6fd6", "#c2410c", "#0f8a5f", "#8b3fd1", "#b8860b", "#d6336c", "#0e7490", "#4d5b7c"];
 export const cfgAgenda = (st: any) => ({ ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) });
 let _projs: string[] = AGENDA_PADRAO.projetistas;
 export const corProj = (n?: string) => (n ? CORES_PROJ[Math.max(0, _projs.indexOf(n)) % CORES_PROJ.length] : "var(--ink-faint)");
 const isoDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-/** ocupação de cada horário: agendados + datas oferecidas a clientes que ainda não responderam (seguradas por alguns dias) */
-export function ocupacao(st: any, excluirId?: string, projetista?: string): Record<string, string[]> {
+/** quem está ocupado: agendados (com ou sem projetista) + datas oferecidas que ainda esperam o cliente (reservam o projetista por alguns dias) */
+type Ocup = { proj: string; ini: number; cliente: string; aguardando: boolean };
+export function ocupacoes(st: any, excluirId?: string): Ocup[] {
   const cfg = cfgAgenda(st); _projs = cfg.projetistas;
-  const m: Record<string, string[]> = {};
+  const out: Ocup[] = [];
   st.chamados.forEach((c: any) => {
     if (c.tipo !== "checklist" || c.status === "concluida" || c.id === excluirId) return;
     const k = ck(c), e = etapaCk(c);
-    let slot = "";
-    if (e === "agendado" && k.agendadoPara) slot = String(k.agendadoPara).slice(0, 16);
-    else if (e === "aguardando" && k.proposta && diasDesde(k.ultimoContato) <= cfg.seguraDias) slot = String(k.proposta).slice(0, 16);
-    if (slot) (m[slot] = m[slot] || []).push(c.cliente + (k.projetista ? " · " + k.projetista : "") + (e === "aguardando" ? " (aguardando resposta)" : ""));
-    if (slot && projetista && e === "agendado" && k.projetista === projetista) (m["P|" + slot] = m["P|" + slot] || []).push(c.cliente);
+    if (e === "agendado" && k.agendadoPara) out.push({ proj: k.projetista || "", ini: +parseData(String(k.agendadoPara).slice(0, 16)), cliente: c.cliente, aguardando: false });
+    else if (e === "aguardando" && k.proposta && diasDesde(k.ultimoContato) <= cfg.seguraDias) out.push({ proj: k.propostaProjetista || "", ini: +parseData(String(k.proposta).slice(0, 16)), cliente: c.cliente, aguardando: true });
   });
-  return m;
+  return out;
 }
-export function sugestoes(st: any, excluirId?: string, n = 8, projetista?: string): string[] {
-  const cfg = cfgAgenda(st);
-  const occ = ocupacao(st, excluirId, projetista), out: string[] = [], agora = Date.now() + 2 * 36e5;
-  for (let i = 0; i < 45 && out.length < n; i++) {
+/** projetistas livres num horário (atendimento de 2h; sobreposição conta como ocupado). Agendados sem projetista ocupam uma vaga qualquer. */
+export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?: Ocup[]): { livres: string[]; ocupados: string[] } {
+  const cfg = cfgAgenda(st), dur = (cfg.duracaoMin || 120) * 6e4, t = +parseData(slot.slice(0, 16));
+  const no = (occ || ocupacoes(st, excluirId)).filter(o => Math.abs(o.ini - t) < dur);
+  const ocupadosProj = new Set(no.filter(o => o.proj).map(o => o.proj));
+  let livres = cfg.projetistas.filter((n: string) => !ocupadosProj.has(n));
+  const semProj = no.filter(o => !o.proj).length;
+  if (semProj) livres = livres.slice(0, Math.max(0, livres.length - semProj));
+  return { livres, ocupados: no.map(o => o.cliente + (o.proj ? " · " + o.proj : "") + (o.aguardando ? " (aguardando resposta)" : "")) };
+}
+export function sugestoes(st: any, excluirId?: string, n = 8, projetista?: string): { slot: string; livres: string[] }[] {
+  const cfg = cfgAgenda(st), occ = ocupacoes(st, excluirId), out: { slot: string; livres: string[] }[] = [], agora = Date.now() + 2 * 36e5;
+  for (let i = 0; i < 60 && out.length < n; i++) {
     const d = new Date(); d.setDate(d.getDate() + i);
     if (!cfg.dias.includes(d.getDay())) continue;
     for (const h of [...cfg.horarios].sort()) {
       const slot = isoDia(d) + "T" + h;
       if (+parseData(slot) < agora) continue;
-      if ((occ[slot] || []).length < cfg.vagas && !(occ["P|" + slot] || []).length) out.push(slot);
+      const { livres } = livresNoHorario(st, slot, excluirId, occ);
+      if (projetista ? livres.includes(projetista) : livres.length) out.push({ slot, livres });
       if (out.length >= n) break;
     }
   }
   return out;
 }
-export function Sugestoes({ valor, onPick, excluirId, projetista }: { valor: string; onPick: (v: string) => void; excluirId?: string; projetista?: string }) {
+/** chips com os próximos horários livres; ao clicar escolhe a data e um projetista livre (o cliente não vê o nome) */
+export function Sugestoes({ valor, onPick, excluirId, projetista }: { valor: string; onPick: (v: string, proj: string) => void; excluirId?: string; projetista?: string }) {
   const { st } = useApp() as any;
-  const lst = sugestoes(st, excluirId, 8, projetista), occ = ocupacao(st, excluirId, projetista);
-  const cfg = cfgAgenda(st), v16 = (valor || "").slice(0, 16);
-  const ocupado = valor && (occ["P|" + v16] || []).length ? [projetista + " já tem " + occ["P|" + v16].join(", ")] : valor && (occ[v16] || []).length >= cfg.vagas ? occ[v16] : null;
+  const [so, setSo] = useState(false);
+  const lst = sugestoes(st, excluirId, 10, so ? projetista : undefined);
+  const v16 = (valor || "").slice(0, 16);
+  const atual = v16.length === 16 ? livresNoHorario(st, v16, excluirId) : null;
+  const conflito = atual && projetista && !atual.livres.includes(projetista);
   return (
     <div className="field full">
-      <label>Horários livres sugeridos{projetista ? " para " + projetista : ""}</label>
+      <label style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>Horários livres sugeridos
+        {projetista && <span style={{ fontWeight: 400, display: "flex", gap: 5, alignItems: "center" }}><input type="checkbox" style={{ width: "auto" }} checked={so} onChange={e => setSo(e.target.checked)} />só os de {projetista}</span>}</label>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {lst.length ? lst.map(v => { const d = parseData(v); return (
-          <button type="button" key={v} className={"chip" + (valor.slice(0, 16) === v ? " on" : "")} onClick={() => onPick(v)}>
-            {DIAS[d.getDay()].slice(0, 3)} {d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · <b>{v.slice(11, 16)}</b></button>); })
-          : <span className="hint">Nenhum horário livre nas próximas semanas — revise os horários em ⚙ Horários.</span>}
+        {lst.length ? lst.map(({ slot, livres }) => { const d = parseData(slot); return (
+          <button type="button" key={slot} className={"chip" + (v16 === slot ? " on" : "")} title={"Livres: " + livres.join(", ")}
+            onClick={() => onPick(slot, projetista && livres.includes(projetista) ? projetista : livres[0])}>
+            {DIAS[d.getDay()].slice(0, 3)} {d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · <b>{slot.slice(11, 16)}</b> <span className="n">{livres.length} livre{livres.length > 1 ? "s" : ""}</span></button>); })
+          : <span className="hint">Nenhum horário livre nas próximas semanas — revise em ⚙ Horários.</span>}
       </div>
-      {ocupado && <span className="hint" style={{ color: "var(--danger)" }}>⚠️ Esse horário já está ocupado: {ocupado.join(", ")}</span>}
+      {atual && <span className="hint" style={{ color: conflito || !atual.livres.length ? "var(--danger)" : "var(--ink-soft)" }}>
+        {conflito ? `⚠️ ${projetista} já está ocupado nesse horário. ` : !atual.livres.length ? "⚠️ Nenhum projetista livre nesse horário. " : ""}
+        {atual.livres.length ? "Livres nesse horário: " + atual.livres.join(", ") + "." : ""}{atual.ocupados.length ? " Ocupados: " + atual.ocupados.join("; ") + "." : ""}</span>}
     </div>
   );
 }
@@ -348,7 +361,7 @@ function Calendario() {
   const evs = st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida" && Rg.podeVer(c)).map((c: any) => {
     const k = ck(c), e = etapaCk(c);
     if (e === "agendado" && k.agendadoPara) return { c, quando: String(k.agendadoPara).slice(0, 16), tipo: "ag", proj: k.projetista || "" };
-    if (ofer && e === "aguardando" && k.proposta) return { c, quando: String(k.proposta).slice(0, 16), tipo: "of", proj: "" };
+    if (ofer && e === "aguardando" && k.proposta) return { c, quando: String(k.proposta).slice(0, 16), tipo: "of", proj: k.propostaProjetista || "" };
     return null;
   }).filter(Boolean).filter((x: any) => !fp || x.proj === fp) as any[];
   const porDia: Record<string, any[]> = {};
@@ -362,9 +375,9 @@ function Calendario() {
   const Ev = ({ x, compacto }: any) => (
     <div onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + " · venda " + x.c.pedido + (x.proj ? " · " + x.proj : "")}
       style={{ cursor: "pointer", borderRadius: 7, padding: compacto ? "2px 6px" : "5px 7px", marginBottom: 4, fontSize: compacto ? 11.5 : 12.5, lineHeight: 1.25,
-        background: x.tipo === "ag" ? corProj(x.proj) : "transparent", color: x.tipo === "ag" ? "#fff" : "var(--warn)", border: x.tipo === "ag" ? "none" : "1.5px dashed var(--warn)",
+        background: x.tipo === "ag" ? corProj(x.proj) : "transparent", color: x.tipo === "ag" ? "#fff" : (x.proj ? corProj(x.proj) : "var(--warn)"), border: x.tipo === "ag" ? "none" : "1.5px dashed " + (x.proj ? corProj(x.proj) : "var(--warn)"),
         whiteSpace: compacto ? "nowrap" : undefined, overflow: "hidden", textOverflow: "ellipsis" }}>
-      {compacto && <b>{x.quando.slice(11, 16)} </b>}{x.c.cliente}{!compacto && <div style={{ opacity: .9, fontSize: 11 }}>{x.tipo === "ag" ? (x.proj || "sem projetista") : "oferecido · aguardando"}</div>}
+      {compacto && <b>{x.quando.slice(11, 16)} </b>}{x.c.cliente}{!compacto && <div style={{ opacity: .9, fontSize: 11 }}>{x.tipo === "ag" ? (x.proj || "sem projetista") : "oferecido" + (x.proj ? " · " + x.proj : "") + " · aguardando"}</div>}
     </div>);
   const titulo = modo === "semana" ? `Semana de ${seg.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : r.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const ini = new Date(r.getFullYear(), r.getMonth(), 1); const g0 = new Date(ini); g0.setDate(1 - ((ini.getDay() + 6) % 7));
@@ -419,22 +432,22 @@ function ModalHorarios() {
   const { st, setModal, toast, recarregar } = useApp() as any;
   const cfg = { ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) };
   const [dias, setDias] = useState<number[]>(cfg.dias); const [hs, setHs] = useState(cfg.horarios.join(", "));
-  const [vagas, setVagas] = useState(String(cfg.vagas)); const [seg, setSeg] = useState(String(cfg.seguraDias)); const [projs, setProjs] = useState((cfg.projetistas || []).join(", "));
+  const [dur, setDur] = useState(String((cfg.duracaoMin || 120) / 60).replace(".", ",")); const [seg, setSeg] = useState(String(cfg.seguraDias)); const [projs, setProjs] = useState((cfg.projetistas || []).join(", "));
   const fechar = () => setModal(null);
   async function salvar() {
     const horarios = hs.split(/[,;\s]+/).map((x: string) => x.trim()).filter(Boolean).map((x: string) => x.length === 4 ? "0" + x : x);
-    try { await A.salvarChecklistAgenda({ dias, horarios, vagas: Number(vagas), seguraDias: Number(seg), projetistas: projs.split(",").map((x: string) => x.trim()).filter(Boolean) }); await recarregar(); fechar(); toast("Horários do checklist salvos"); }
+    try { await A.salvarChecklistAgenda({ dias, horarios, vagas: 1, duracaoMin: Math.round(Number(dur.replace(",", ".")) * 60) || 120, seguraDias: Number(seg), projetistas: projs.split(",").map((x: string) => x.trim()).filter(Boolean) }); await recarregar(); fechar(); toast("Horários do checklist salvos"); }
     catch (x: any) { toast(x.message); }
   }
   return (
     <Modal titulo="Horários do checklist" onFechar={fechar}>
-      <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 12px" }}>Usados para sugerir dias e horários livres. Um horário fica ocupado quando tem cliente agendado ou quando foi oferecido a um cliente que ainda não respondeu.</p>
+      <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 12px" }}>Usados para sugerir dias e horários livres. Cada horário tem uma vaga por projetista; a vaga fica ocupada quando o projetista tem cliente agendado ou um horário oferecido que o cliente ainda não respondeu.</p>
       <div className="field" style={{ marginBottom: 12 }}><label>Dias de atendimento</label>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{[1, 2, 3, 4, 5, 6, 0].map(d => <label key={d} style={{ display: "flex", gap: 5, alignItems: "center", fontSize: 14 }}><input type="checkbox" style={{ width: "auto" }} checked={dias.includes(d)} onChange={e => setDias(x => e.target.checked ? [...x, d] : x.filter(y => y !== d))} />{DIAS[d].split("-")[0]}</label>)}</div></div>
       <div className="grid">
-        <div className="field full"><label>Horários (separados por vírgula)</label><input value={hs} onChange={e => setHs(e.target.value)} placeholder="09:00, 10:30, 14:00, 15:30" /></div>
+        <div className="field full"><label>Horários (separados por vírgula)</label><input value={hs} onChange={e => setHs(e.target.value)} placeholder="09:00, 11:00, 15:00, 17:00" /></div>
         <div className="field full"><label>Projetistas do checklist (separados por vírgula)</label><input value={projs} onChange={e => setProjs(e.target.value)} placeholder="Silvane, Rafael, Angela" /></div>
-        <div className="field"><label>Clientes por horário (somando todos os projetistas)</label><input type="number" min={1} max={20} value={vagas} onChange={e => setVagas(e.target.value)} /></div>
+        <div className="field"><label>Duração de cada atendimento (horas)</label><input inputMode="decimal" value={dur} onChange={e => setDur(e.target.value)} /><span className="hint">Cada projetista atende um cliente por vez.</span></div>
         <div className="field"><label>Segurar a data oferecida por (dias)</label><input type="number" min={0} max={15} value={seg} onChange={e => setSeg(e.target.value)} /><span className="hint">Enquanto o cliente não responde, o horário oferecido não é sugerido para outro.</span></div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}><button className="btn primary" onClick={salvar}>Salvar</button><button className="btn ghost" onClick={fechar}>Cancelar</button></div>
@@ -445,44 +458,47 @@ function ModalHorarios() {
 const proximoDiaUtil = () => { const d = new Date(); d.setDate(d.getDate() + 1); while ([0, 6].includes(d.getDay())) d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T10:00`; };
 
 export function ModalWhats({ c }: any) {
-  const { R, setModal, toast, recarregar } = useApp() as any;
+  const { R, st, setModal, toast, recarregar } = useApp() as any;
   const k = ck(c), e = etapaCk(c);
+  const projs: string[] = cfgAgenda(st).projetistas;
   const [tipo, setTipo] = useState(e === "agendado" ? "confirmacao" : e === "aguardando" || e === "sem_resposta" ? "cobranca" : ["em_obras", "outra_data"].includes(e) ? "retorno" : "primeiro");
-  const { st } = useApp() as any;
-  const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : k.proposta) || sugestoes(st, c.id, 1)[0] || proximoDiaUtil()).slice(0, 16));
-  const [med, setMed] = useState(semMedida(c) && !k.medidaId);
+  const primeira = e === "agendado" || k.proposta ? null : sugestoes(st, c.id, 1)[0];
+  const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : k.proposta) || (primeira && primeira.slot) || proximoDiaUtil()).slice(0, 16));
+  const [proj, setProj] = useState<string>((e === "agendado" ? k.projetista : k.propostaProjetista) || (primeira && primeira.livres[0]) || "");
   const tels = [c.telefone, k.telefone2].filter((t: string) => t && t.replace(/\D/g, "").length >= 10);
   const [tel, setTel] = useState(tels[0] || "");
   const rem = primeiroNome(R.me()?.nome || "");
   const [txt, setTxt] = useState(""); const [editado, setEditado] = useState(false);
-  const texto = editado ? txt : mensagemCk(tipo, c, data, rem, med);
+  const texto = editado ? txt : mensagemCk(tipo, c, data, rem);
+  const comData = tipo === "primeiro" || tipo === "retorno";
   const fechar = () => setModal(null);
   async function enviar() {
     const n = sanitizeWhats(tel);
     if (!n) { toast("Cliente sem telefone válido"); return; }
     if (tipo !== "confirmacao" && !data) { toast("Escolha a data e o horário oferecidos"); return; }
-    window.open(`https://wa.me/${n}?text=${encodeURIComponent(texto)}`, "_blank");
+    if (comData && !proj) { toast("Escolha o projetista que vai atender (o cliente não vê)"); return; }
     try {
-      if (tipo === "primeiro" || tipo === "retorno") await A.checklistRegistrar(c.id, { acao: "mensagem", data, precisaMedida: med });
+      if (comData) await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj });
       else if (tipo === "cobranca") await A.checklistRegistrar(c.id, { acao: "cobranca" });
-      await recarregar(); fechar(); toast(tipo === "confirmacao" ? "WhatsApp aberto" : "Contato registrado — quando o cliente responder, registre o resultado");
-    } catch (x: any) { toast(x.message); }
+    } catch (x: any) { toast(x.message); return; }
+    window.open(`https://wa.me/${n}?text=${encodeURIComponent(texto)}`, "_blank");
+    await recarregar(); fechar(); toast(tipo === "confirmacao" ? "WhatsApp aberto" : "Contato registrado — quando o cliente responder, registre o resultado");
   }
   return (
     <Modal titulo={"WhatsApp · " + c.cliente} onFechar={fechar}>
       <div className="grid">
         <div className="field"><label>Mensagem</label><select value={tipo} onChange={ev => { setTipo(ev.target.value); setEditado(false); }}>{Object.entries(MODELOS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
-        <div className="field"><label>{tipo === "confirmacao" ? "Data agendada" : "Data e horário oferecidos"} <span className="req-star">*</span></label><input type="datetime-local" value={data} onChange={ev => { setData(ev.target.value); setEditado(false); }} /></div>
-        {tipo !== "confirmacao" && <Sugestoes valor={data} excluirId={c.id} onPick={v => { setData(v); setEditado(false); }} />}
         <div className="field"><label>Telefone</label>{tels.length > 1 ? <select value={tel} onChange={ev => setTel(ev.target.value)}>{tels.map((t: string) => <option key={t} value={t}>{t}</option>)}</select> : <input value={tel} onChange={ev => setTel(ev.target.value)} placeholder="DDD + número" />}</div>
-        {tipo !== "confirmacao" && <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={med} onChange={ev => { setMed(ev.target.checked); setEditado(false); }} /><span>Ainda sem medição — avisar que o setor de Medidas vai ligar</span></label>}
-        <div className="field full"><label>Texto (pode editar antes de enviar)</label><textarea rows={14} value={texto} onChange={ev => { setTxt(ev.target.value); setEditado(true); }} /></div>
+        <div className="field"><label>{tipo === "confirmacao" ? "Data agendada" : "Data e horário oferecidos"} <span className="req-star">*</span></label><input type="datetime-local" value={data} disabled={tipo === "cobranca"} onChange={ev => { setData(ev.target.value); setEditado(false); }} /></div>
+        {comData && <div className="field"><label>Projetista que vai atender <span className="req-star">*</span> <span className="hint">(não vai na mensagem)</span></label><select value={proj} onChange={ev => setProj(ev.target.value)}><option value="">Selecione…</option>{projs.map(n => <option key={n} value={n}>{n}</option>)}</select></div>}
+        {comData && <Sugestoes valor={data} excluirId={c.id} projetista={proj} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); setEditado(false); }} />}
+        <div className="field full"><label>Texto (pode editar antes de enviar)</label><textarea rows={13} value={texto} onChange={ev => { setTxt(ev.target.value); setEditado(true); }} /></div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
         <button className="btn primary" onClick={enviar}>Abrir WhatsApp{tipo === "confirmacao" ? "" : " e registrar o contato"}</button>
         <button className="btn ghost" onClick={fechar}>Cancelar</button>
       </div>
-      {med && !k.medidaId && <div className="hint" style={{ marginTop: 10 }}>Depois de enviar, use “Registrar resultado → Precisa de medida” para pedir a conferência ao setor de Medidas.</div>}
+      {comData && <div className="hint" style={{ marginTop: 10 }}>O horário fica reservado para {proj || "o projetista"} por {cfgAgenda(st).seguraDias} dia(s) enquanto o cliente não responde.</div>}
     </Modal>
   );
 }
@@ -501,7 +517,7 @@ export function ModalResultado({ c, inicial }: any) {
   const [data, setData] = useState<string>(inicial === "reagendar" ? "" : String(k.proposta || k.agendadoPara || "").slice(0, 16));
   const [ret, setRet] = useState(""); const [pronto, setPronto] = useState(false); const [obs, setObs] = useState("");
   const { st } = useApp() as any; const projs: string[] = cfgAgenda(st).projetistas;
-  const [proj, setProj] = useState<string>(k.projetista || "");
+  const [proj, setProj] = useState<string>(k.projetista || k.propostaProjetista || "");
   const SelProj = ({ req }: any) => <div className="field"><label>Projetista {req && <span className="req-star">*</span>}</label><select value={proj} onChange={e => setProj(e.target.value)}><option value="">Selecione…</option>{projs.map(n => <option key={n} value={n}>{n}</option>)}</select></div>;
   const fechar = () => setModal(null);
   async function salvar() {
@@ -525,7 +541,7 @@ export function ModalResultado({ c, inicial }: any) {
         {acao === "reagendar" && <>
           <div className="field"><label>Nova data e horário <span className="req-star">*</span></label><input type="datetime-local" value={data} onChange={e => setData(e.target.value)} /></div>
           <SelProj />
-          <Sugestoes valor={data} excluirId={c.id} onPick={setData} projetista={proj} />
+          <Sugestoes valor={data} excluirId={c.id} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); }} projetista={proj} />
           <div className="hint" style={{ gridColumn: "1 / -1", fontSize: 12.5 }}>Depois de salvar, altere também no sistema interno. Use “Confirmar o agendamento” no WhatsApp para avisar o cliente da nova data.</div>
         </>}
         {acao === "desmarcar" && <>
@@ -536,13 +552,13 @@ export function ModalResultado({ c, inicial }: any) {
         {acao === "agendado" && <>
           <div className="field"><label>Data e horário agendados <span className="req-star">*</span></label><input type="datetime-local" value={data} onChange={e => setData(e.target.value)} /></div>
           <SelProj req />
-          <Sugestoes valor={data} excluirId={c.id} onPick={setData} projetista={proj} />
+          <Sugestoes valor={data} excluirId={c.id} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); }} projetista={proj} />
           <label className="field full" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={pronto} onChange={e => setPronto(e.target.checked)} /><span>Cliente confirmou que o <b>ambiente está pronto</b> para a montagem (sem obra, acabamentos feitos) <span className="req-star">*</span></span></label>
           <div className="hint" style={{ gridColumn: "1 / -1", fontSize: 12.5 }}>Ambiente ainda em obra não pode ser finalizado — nesse caso use “Ambiente em obra”. Depois de registrar aqui, lance o agendamento no sistema interno.</div>
         </>}
         {acao === "outra_data" && <>
           <div className="field"><label>Data e horário que o cliente pediu</label><input type="datetime-local" value={data} onChange={e => setData(e.target.value)} /></div>
-          <Sugestoes valor={data} excluirId={c.id} onPick={setData} />
+          <Sugestoes valor={data} excluirId={c.id} onPick={v => setData(v)} />
           <div className="field"><label>Ou: retornar o contato em</label><input type="date" min={hoje()} value={ret} onChange={e => setRet(e.target.value)} /></div>
         </>}
         {acao === "em_obras" && <div className="field"><label>Previsão de fim da obra — retornar em <span className="req-star">*</span></label><input type="date" min={hoje()} value={ret} onChange={e => setRet(e.target.value)} /></div>}
