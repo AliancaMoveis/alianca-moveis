@@ -852,7 +852,13 @@ function CalendarioDia() {
     };
     window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up);
   }
-  const mover = (n: number) => { const d = parseData(dia); do { d.setDate(d.getDate() + n); } while (!cfg.dias.includes(d.getDay()) && Math.abs(+d - +parseData(dia)) < 8 * 864e5); setDia(isoDia(d)); };
+  // pula só os dias sem atendimento: dia fora da configuração (ex.: sábado) aparece quando tem cliente marcado
+  const diasComCliente = new Set<string>(st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida" && Rg.podeVer(c)).flatMap((c: any) => {
+    const e = etapaCk(c), k = ck(c);
+    if (e === "agendado") return atendimentos(c, cfg).map(a => a.slot.slice(0, 10));
+    return ofer && e === "aguardando" && k.proposta ? [String(k.proposta).slice(0, 10)] : [];
+  }));
+  const mover = (n: number) => { const d = parseData(dia); do { d.setDate(d.getDate() + n); } while (!cfg.dias.includes(d.getDay()) && !diasComCliente.has(isoDia(d)) && Math.abs(+d - +parseData(dia)) < 8 * 864e5); setDia(isoDia(d)); };
   type Ev = { c: any; ini: number; fim: number; proj: string; tipo: "ag" | "of"; lane?: number; lanes?: number; extra?: number; n?: number; total?: number };
   const minDe = (slot: string) => { const d = parseData(slot); return d.getHours() * 60 + d.getMinutes(); };
   const evs: Ev[] = st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida" && Rg.podeVer(c)).flatMap((c: any) => {
