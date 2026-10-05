@@ -16,7 +16,7 @@ export default function Relatorios() {
   const [f, setF] = useState({ de: hoje.slice(0, 8) + "01", ate: hoje, se: "", tp: "" });
   const [aba, setAba] = useState<"cc" | "mkt">("cc");
   const s = (k: string) => (e: any) => setF(x => ({ ...x, [k]: e.target.value }));
-  let arr = st.chamados.filter(c => R.podeVer(c) && !R.domMarketing(c));
+  let arr = st.chamados.filter(c => R.podeVer(c) && R.doCC(c));
   if (f.de) arr = arr.filter(c => new Date(c.criadoEm) >= new Date(f.de + "T00:00:00"));
   if (f.ate) arr = arr.filter(c => new Date(c.criadoEm) <= new Date(f.ate + "T23:59:59"));
   if (f.se) arr = arr.filter(c => c.setorDestino === f.se);

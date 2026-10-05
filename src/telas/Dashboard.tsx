@@ -41,11 +41,11 @@ export default function Dashboard() {
   const periodoTxt = " · " + fmtDate(de) + " a " + fmtDate(ate);
   const sub = (R.verTudo() ? (R.ehGestao() ? "Visão consolidada de todos os setores, em tempo real." : "Visão consolidada dos setores do call center, em tempo real. Marketing e Consultoria externa têm supervisão própria.") : "Visão do seu setor (" + (R.mySetores().map(R.setorNome).join(", ") || "—") + "), em tempo real.") + periodoTxt;
   // indicadores do call center (pós-venda). Marketing não tem prazo de resposta e fica fora destes números.
-  const cc = todos.filter((c: any) => !R.domMarketing(c));
+  const cc = todos.filter((c: any) => R.doCC(c));
   const pr = (c: any) => R.prioridade(c);
   const abertas = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length, atras = cc.filter((c: any) => pr(c) === "atrasado").length,
     crit = cc.filter((c: any) => pr(c) === "critico").length, urg = cc.filter((c: any) => pr(c) === "urgente").length, resp = cc.filter((c: any) => c.status === "respondida").length, inf = cc.filter((c: any) => c.status === "informar").length,
-    conc = cc.filter((c: any) => c.status === "concluida" && noPeriodo(concluidoEm(c))).length, novos = vis.filter((c: any) => !R.domMarketing(c)).length;
+    conc = cc.filter((c: any) => c.status === "concluida" && noPeriodo(concluidoEm(c))).length, novos = vis.filter((c: any) => R.doCC(c)).length;
 
   const vejaMkt = (R.temMarketing() || R.ehGestao()) && area !== "cc";
   const verCC = area !== "mkt" && (R.verTudo() || R.mySetores().some((x: string) => !R.ehSetorMarketing(x)));

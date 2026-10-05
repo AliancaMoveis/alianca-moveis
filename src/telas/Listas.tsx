@@ -26,7 +26,7 @@ export function Fila() {
   const [escopo, setEscopo] = useState<"minha" | "todos">("minha");
   const verSetor = vt || (ccTudo && escopo === "todos");
   // base = o que está no escopo + filtros de motivo/setor/busca; os números dos botões saem daqui (batem com a lista)
-  const base = st.chamados.filter(c => !R.domMarketing(c) && R.podeVer(c) && (!ccTudo || escopo === "todos" || R.naMinhaFila(c))
+  const base = st.chamados.filter(c => R.doCC(c) && R.podeVer(c) && (!ccTudo || escopo === "todos" || R.naMinhaFila(c))
     && (!fTipo || c.tipo === fTipo) && (!verSetor || !fSetor || c.setorDestino === fSetor) && bate(c, q));
   const FILTROS: Record<string, (c: any) => boolean> = {
     abertos: c => c.status !== "concluida",

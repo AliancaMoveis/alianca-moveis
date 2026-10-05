@@ -33,7 +33,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   // ---------- faixa: precisa de você agora ----------
   const pg = R.pendenciasGestao();
   const acomp = todos.filter((c: any) => R.acompAtivo(c));
-  const criticos = todos.filter((c: any) => !R.domMarketing(c) && R.prioridade(c) === "critico");
+  const criticos = todos.filter((c: any) => R.doCC(c) && R.prioridade(c) === "critico");
   const reemb = (st.reembolsos || []).filter((r: any) => r.status === "pendente");
   const medParadas = todos.filter((c: any) => c.tipo === "medidas" && c.status !== "concluida" && (+agora - +new Date(c.criadoEm)) > 2 * 86400000 && ["validar", "realizada"].includes(R.etapaMedida(c)));
   const semVendHoje = todos.filter((c: any) => R.domMarketing(c) && !c.atendenteId && String(c.dataLoja || "").slice(0, 10) === isoLocal(agora) && !c.venda);
@@ -50,7 +50,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const ativos = alertas.filter(a => a[1] > 0);
 
   // ---------- call center ----------
-  const cc = todos.filter((c: any) => !R.domMarketing(c));
+  const cc = todos.filter((c: any) => R.doCC(c));
   const regs = (a: string, b: string) => cc.filter((c: any) => dentro(c.criadoEm, a, b));
   const fins = (a: string, b: string) => cc.filter((c: any) => c.status === "concluida" && dentro(concluidoEm(c), a, b));
   const naLigacao = (l: any[]) => l.filter((c: any) => { const f = concluidoEm(c); return f && (+new Date(f) - +new Date(c.criadoEm)) < 15 * 60000; });
