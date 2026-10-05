@@ -214,7 +214,9 @@ function CartaoCk({ c, aba }: any) {
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
         {g === "agendado" && k.agendadoPara && <DataGrande v={k.agendadoPara} />}
         <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>{c.cliente} <span style={{ fontWeight: 400, color: "var(--ink-faint)", fontSize: 12.5 }}>· venda {c.pedido}</span></div>
+          <div style={{ fontWeight: 700, fontSize: 15, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{c.cliente}
+            <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: "var(--surface-2)", border: "1px solid var(--line)" }}>Venda {c.pedido}</span>
+            {g !== "agendado" && k.projetista && <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: corProj(k.projetista), color: "#fff" }}>👤 {k.projetista}</span>}</div>
           <DadosCk c={c} />
           {g === "aguardando" && <div style={{ marginTop: 7, padding: "7px 10px", borderRadius: 8, background: "var(--st-tratativa-bg)", border: "1px solid var(--st-tratativa)", fontSize: 13.5 }}>
             <b>⏸ Motivo:</b> {motivoCk(c) || "—"}
@@ -604,7 +606,7 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
         background: x.tipo === "ag" ? corProj(x.proj) : "#ffe8a3", color: x.tipo === "ag" ? "#fff" : "#6b4a00", border: x.tipo === "ag" ? "none" : "1.5px dashed " + (x.proj ? corProj(x.proj) : "var(--warn)"),
         outline: x.enc ? "2.5px solid var(--danger)" : undefined, outlineOffset: x.enc ? 1 : undefined,
         whiteSpace: compacto ? "nowrap" : undefined, overflow: "hidden", textOverflow: "ellipsis" }}>
-      {x.enc && "⚠️ "}{compacto && <b>{x.quando.slice(11, 16)} </b>}{x.c.cliente}{!compacto && <div style={{ opacity: .9, fontSize: 11 }}>{x.tipo === "ag" ? (x.proj || "sem projetista") : "oferecido" + (x.proj ? " · " + x.proj : "") + " · aguardando"}</div>}
+      {x.enc && "⚠️ "}{compacto && <b>{x.quando.slice(11, 16)} </b>}{x.c.cliente}{compacto && <span style={{ opacity: .85 }}> · {x.c.pedido}</span>}{!compacto && <div style={{ opacity: .9, fontSize: 11 }}>Venda {x.c.pedido} · {x.tipo === "ag" ? (x.proj || "sem projetista") : "oferecido" + (x.proj ? " · " + x.proj : "") + " · aguardando"}</div>}
     </div>);
   const titulo = modo === "semana" ? `Semana de ${seg.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : r.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const ini = new Date(r.getFullYear(), r.getMonth(), 1); const g0 = new Date(ini); g0.setDate(1 - ((ini.getDay() + 6) % 7));

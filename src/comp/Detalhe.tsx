@@ -765,11 +765,12 @@ function BlocoChecklist({ c }: any) {
   const k = ck(c), e = etapaCk(c), [nome, cor] = ETAPA_CK[e] || [e, "var(--line)"], p = k.planilha || {};
   return (
     <div className="resp-box" style={{ borderColor: cor }}><h4>Checklist (revisão do projeto) <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{nome}</span></h4>
+      <RowSb k="Venda"><b>{c.pedido || "—"}</b></RowSb>
       {p.vendedor && <RowSb k="Vendedor">{p.vendedor}</RowSb>}
       <RowSb k="Medidor">{p.medidor || "não informado na planilha"}{k.medidaId ? (k.medidaOk ? " · medidas conferidas" : " · aguardando o setor de Medidas (" + k.medidaId + ")") : ""}</RowSb>
       {k.proposta && <RowSb k="Data oferecida">{fmtDT(k.proposta)}</RowSb>}
       {k.agendadoPara && <RowSb k="Agendado para">{fmtDT(k.agendadoPara)}{k.ambiente === "pronto" ? " · ambiente pronto" : ""}</RowSb>}
-      {k.agendadoPara && <RowSb k="Projetista">{k.projetista || "não informado"}</RowSb>}
+      {(k.agendadoPara || k.projetista) && <RowSb k="Projetista">{k.projetista || "não informado"}</RowSb>}
       {e === "agendado" && <RowSb k="Presença">{(CONF_CK[k.confirmacao || ""] || CONF_CK[""])[0]}</RowSb>}
       {motivoCk(c) && <RowSb k="Aguardando">{motivoCk(c)}</RowSb>}
       {k.retornarEm && <RowSb k="Retornar em">{fmtDate(String(k.retornarEm).slice(0, 10))}</RowSb>}
