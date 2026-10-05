@@ -1,6 +1,6 @@
 // Setor Checklist — fila de clientes a agendar (importada da planilha do sistema interno), WhatsApp com mensagem pronta e controle do resultado.
 // O agendamento oficial continua no sistema interno; aqui fica o controle de contato.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { dataPlanilha, lerXlsx } from "../lib/planilha";
@@ -155,6 +155,12 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       const comData = dados.filter(d => d.agendadoPara).length;
       if (modoImp.current === "agendados" && !comData) throw new Error("Nenhuma linha com “Data do Agendamento” — essa parece ser a planilha de clientes a agendar");
       if (modoImp.current === "agendar" && comData > dados.length / 2 && !confirm(`${comData} das ${dados.length} linhas já têm data de agendamento — parece a planilha de AGENDADOS. Importar mesmo assim? (os que têm data entram em Agendados)`)) return;
+      if (modoImp.current === "agendar") {
+        // planilha "a agendar" sincroniza a base: mostra a prévia e só aplica depois do OK
+        const prev = await A.checklistSincronizar(dados, false);
+        setModal(<ModalSincronizar dados={dados} prev={prev} />);
+        return;
+      }
       const r = await A.checklistImportar(dados);
       await recarregar();
       toast(`${r.novos} cliente(s) novo(s)${r.agendados ? " (" + r.agendados + " já agendados)" : ""} · ${r.ignorados} já estavam no sistema (ignorados)`);
@@ -165,7 +171,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
 
   return (
     <section className="view active" id="view-checklist">
-      <div className="view-head"><div><h2>{(ABAS[aba] || ABAS.agendar)[0]}</h2>
+      {aba !== "agenda" && <><div className="view-head"><div><h2>{(ABAS[aba] || ABAS.agendar)[0]}</h2>
         <p>{(ABAS[aba] || ABAS.agendar)[1]}</p></div>
         <div><input ref={arq} type="file" accept=".xlsx" style={{ display: "none" }} onChange={e => importar(e.target.files?.[0])} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}><button className="btn ghost" onClick={() => setModal(<ModalHorarios />)}>⚙ Horários</button><button className="btn" onClick={() => setModal(<ModalIncluir />)}>＋ Incluir cliente</button>
@@ -178,7 +184,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
         <Kpi n={todos.filter((c: any) => G("agendado")(c) && diaAg(c) >= hoje()).length} l="Agendados" />
         <Kpi n={todos.filter((c: any) => aConfirmar(c, confDias)).length} l="Presença a confirmar" cls={todos.some((c: any) => aConfirmar(c, confDias)) ? "alert" : ""} />
         <Kpi n={todos.filter((c: any) => etapaCk(c) === "realizado" && String(ck(c).realizadoEm || "").slice(0, 7) === mes).length} l="Realizados no mês" />
-      </div>
+      </div></>}
       {aba === "agenda" ? <Calendario /> : <>
       <div className="card" style={{ padding: "12px 16px", margin: "14px 0" }}>
         <input className="busca" style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 10, font: "inherit", background: "var(--surface)", color: "var(--ink)" }}
@@ -588,6 +594,42 @@ export function ModalNaoPodeVir({ c }: any) {
     </Modal>
   );
 }
+/** prévia da planilha "a agendar": novos, mantidos, que viram agendados e que serão excluídos */
+function ModalSincronizar({ dados, prev }: { dados: any[]; prev: any }) {
+  const { setModal, toast, recarregar } = useApp() as any;
+  const [forcar, setForcar] = useState(false); const [sal, setSal] = useState(false); const [ver, setVer] = useState(false);
+  const fechar = () => setModal(null);
+  async function ok() {
+    if (prev.alerta && !forcar) { toast("Marque a confirmação: é muita gente para excluir"); return; }
+    setSal(true);
+    try {
+      const r = await A.checklistSincronizar(dados, true, forcar);
+      await recarregar(); fechar();
+      toast(`Base atualizada: ${r.novos} novo(s) · ${r.agendar} passaram para agendado · ${r.excluir} excluído(s)`);
+    } catch (x: any) { toast(x.message); setSal(false); }
+  }
+  const L = ({ n, t, cor }: any) => <div style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}><b style={{ fontSize: 20, minWidth: 48, textAlign: "right", color: cor }}>{n}</b><span>{t}</span></div>;
+  return (
+    <Modal titulo="Atualizar base com a planilha “a agendar”" onFechar={fechar}>
+      <L n={prev.novos} t="clientes novos vão entrar" cor="var(--st-concluida)" />
+      <L n={prev.mantidos} t="já estão no 360 — ficam como estão (obras, anotações e contatos são mantidos)" />
+      <L n={prev.agendar} t="não estão mais na planilha, mas já tinham data oferecida → passam para AGENDADO" cor="var(--st-respondida)" />
+      <L n={prev.excluir} t="não estão mais na planilha e não foram agendados (venda cancelada / saiu do checklist) → serão EXCLUÍDOS" cor="var(--danger)" />
+      {prev.comMedida > 0 && <L n={prev.comMedida} t="também saíram da planilha, mas têm medida em andamento — ficam até a medida ser concluída" />}
+      {(prev.excluir > 0 || prev.agendar > 0) && <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => setVer(v => !v)}>{ver ? "Esconder nomes" : "Ver nomes"}</button>}
+      {ver && <div style={{ maxHeight: 220, overflow: "auto", fontSize: 12.5, marginTop: 6, padding: 8, background: "var(--surface-2)", borderRadius: 8 }}>
+        {prev.listaAgendar.length > 0 && <><b>Passam para agendado:</b><ul style={{ margin: "4px 0 8px", paddingLeft: 18 }}>{prev.listaAgendar.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
+        {prev.listaExcluir.length > 0 && <><b style={{ color: "var(--danger)" }}>Serão excluídos:</b><ul style={{ margin: "4px 0", paddingLeft: 18 }}>{prev.listaExcluir.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
+      </div>}
+      <div className="hint" style={{ marginTop: 8 }}>Clientes já agendados, realizados ou encerrados não são alterados.</div>
+      {prev.alerta && <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, color: "var(--danger)", fontWeight: 700, fontSize: 13.5 }}><input type="checkbox" style={{ width: "auto" }} checked={forcar} onChange={e => setForcar(e.target.checked)} />Mais da metade dos clientes a agendar seria excluída. Confirmo que esta é a planilha certa.</label>}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn" onClick={fechar}>Cancelar</button>
+        <button className="btn primary" disabled={sal} onClick={ok}>OK, atualizar base</button>
+      </div>
+    </Modal>
+  );
+}
 type DiaEx = { data: string; duracaoMin: number; projetista: string };
 /** mais dias de atendimento para o mesmo cliente (checklist que não termina em um dia) */
 function DiasExtras({ c }: any) {
@@ -678,12 +720,13 @@ export function Sugestoes({ valor, onPick, excluirId, projetista }: { valor: str
 }
 
 // ---------- calendário: DIA por projetista (padrão do sistema interno), semana e mês ----------
-const H_INI = 8, H_FIM = 19, PX_H = 90;
+const H_FIM = 19, F_ALMOCO = 0.35;
+const almocoH = (h: number) => h >= 13 && h < 15;
 function Calendario() {
   const [modo, setModo] = useState<string>("dia");
   return (
     <>
-      <div className="subnav" style={{ margin: "14px 0 0" }}>
+      <div className="subnav" style={{ margin: "4px 0 0" }}>
         <button className={modo === "dia" ? "on" : ""} onClick={() => setModo("dia")}>Dia · por projetista</button>
         <button className={modo === "semana" ? "on" : ""} onClick={() => setModo("semana")}>Semana</button>
         <button className={modo === "mes" ? "on" : ""} onClick={() => setModo("mes")}>Mês</button>
@@ -699,6 +742,9 @@ function CalendarioDia() {
   const [ocultos, setOcultos] = useState<string[]>([]);
   const [ofer, setOfer] = useState(true);
   const dur = cfg.duracaoMin || 120;
+  // a agenda do dia cabe inteira na tela: a altura de cada hora se ajusta ao espaço livre (almoço fica estreito)
+  const gradeRef = useRef<HTMLDivElement>(null);
+  const [PX_H, setPX] = useState(60);
   const { setModal } = useApp() as any;
   const pega = useRef(0);
   const [estica, setEstica] = useState<{ id: string; fim: number } | null>(null);
@@ -709,7 +755,7 @@ function CalendarioDia() {
     const id = e.dataTransfer.getData("text/plain"); const c = st.chamados.find((x: any) => x.id === id); if (!c || !proj) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const d0 = durCk(c, cfg);
-    const ini = Math.max(H_INI * 60, Math.min(snap(H_INI * 60 + (e.clientY - r.top - pega.current) / PX_H * 60), H_FIM * 60 - d0));
+    const ini = Math.max(H_INI * 60, Math.min(snap(minOf(e.clientY - r.top - pega.current)), H_FIM * 60 - d0));
     const slot = dia + "T" + hhmm(ini), k = ck(c);
     if (proj === (k.projetista || "") && slot === String(k.agendadoPara || "").slice(0, 16)) return;
     setModal(<ModalMover c={c} data={slot} proj={proj} dur={durCk(c, cfg)} />);
@@ -717,7 +763,8 @@ function CalendarioDia() {
   function esticar(e: React.MouseEvent, c: any, ini: number, fim0: number) {
     e.preventDefault(); e.stopPropagation();
     const y0 = e.clientY; let fim = fim0;
-    const mv = (ev: MouseEvent) => { fim = Math.max(ini + 30, snap(fim0 + (ev.clientY - y0) / PX_H * 60)); setEstica({ id: c.id, fim }); };
+    const yFim = yOf(fim0);
+    const mv = (ev: MouseEvent) => { fim = Math.max(ini + 30, snap(minOf(yFim + ev.clientY - y0))); setEstica({ id: c.id, fim }); };
     const up = () => {
       window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); setEstica(null);
       if (fim !== fim0) setModal(<ModalMover c={c} data={String(ck(c).agendadoPara).slice(0, 16)} proj={ck(c).projetista || ""} dur={fim - ini} />);
@@ -733,6 +780,24 @@ function CalendarioDia() {
     if (ofer && e === "aguardando" && k.proposta && String(k.proposta).slice(0, 10) === dia) { const ini = minDe(String(k.proposta).slice(0, 16)); return [{ c, ini, fim: ini + dur, proj: k.propostaProjetista || "", tipo: "of" } as Ev]; }
     return [];
   });
+  const H_INI = Math.max(7, Math.min(9, ...evs.map(x => Math.floor(x.ini / 60))));
+  const hAlt = (h: number) => almocoH(h) ? PX_H * F_ALMOCO : PX_H;
+  const yOf = (m: number) => { let y = 0; for (let h = H_INI; h < H_FIM; h++) { const a = h * 60; if (m <= a) break; y += hAlt(h) * Math.min(1, (m - a) / 60); } return y; };
+  const minOf = (y: number) => { for (let h = H_INI; h < H_FIM; h++) { const a = hAlt(h); if (y <= a) return h * 60 + Math.max(0, y) / a * 60; y -= a; } return H_FIM * 60; };
+  const unidades = Array.from({ length: H_FIM - H_INI }, (_, i) => almocoH(H_INI + i) ? F_ALMOCO : 1).reduce((a, b) => a + b, 0);
+  const ALTURA = yOf(H_FIM * 60);
+  useEffect(() => {
+    const medir = () => {
+      const el = gradeRef.current; if (!el) return;
+      let sc: HTMLElement | null = el.parentElement, off = 0;
+      while (sc) { const o = getComputedStyle(sc).overflowY; if ((o === "auto" || o === "scroll") && sc.scrollHeight > sc.clientHeight) { off = sc.scrollTop; break; } sc = sc.parentElement; }
+      const topo = el.getBoundingClientRect().top + off + (sc ? 0 : window.scrollY);
+      const cab = (el.firstElementChild?.nextElementSibling as HTMLElement | null)?.offsetHeight || 30; // linha com os nomes dos projetistas
+      setPX(Math.max(34, Math.min(120, Math.floor((window.innerHeight - topo - cab - 34) / unidades))));
+    };
+    const r = requestAnimationFrame(medir); const t = setTimeout(medir, 300);
+    window.addEventListener("resize", medir); return () => { cancelAnimationFrame(r); clearTimeout(t); window.removeEventListener("resize", medir); };
+  }, [unidades, ocultos.length]);
   const semProj = evs.some(x => !x.proj);
   const colunas = [...cfg.projetistas, ...(semProj ? [""] : [])].filter(n => !ocultos.includes(n));
   const porCol: Record<string, Ev[]> = {};
@@ -747,44 +812,40 @@ function CalendarioDia() {
   const hm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
   const horas = Array.from({ length: H_FIM - H_INI }, (_, i) => H_INI + i);
   const d = parseData(dia);
-  const almoco = (h: number) => h >= 13 && h < 15;
+  const almoco = almocoH;
   return (
-    <div className="card" style={{ padding: "12px 14px", margin: "10px 0" }}>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-        {cfg.projetistas.map((n: string) => { const off = ocultos.includes(n); return (
-          <button key={n} title={(off ? "Mostrar " : "Esconder ") + n} onClick={() => setOcultos(o => off ? o.filter(x => x !== n) : [...o, n])}
-            style={{ width: 30, height: 26, borderRadius: 5, border: "none", cursor: "pointer", fontWeight: 800, color: "#fff", background: corProj(n), opacity: off ? .3 : 1 }}>{n[0]}</button>); })}
-        {ocultos.length > 0 && <button className="btn ghost sm" onClick={() => setOcultos([])}>mostrar todos</button>}
-        <label style={{ fontSize: 12.5, display: "flex", gap: 5, alignItems: "center", marginLeft: 8 }}><input type="checkbox" style={{ width: "auto" }} checked={ofer} onChange={e => setOfer(e.target.checked)} />mostrar mensagens enviadas aguardando resposta</label>
-      </div>
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, marginBottom: 8 }}>
-        <span style={{ display: "flex", gap: 5, alignItems: "center" }}><i style={{ width: 14, height: 11, borderRadius: 3, background: corProj(cfg.projetistas[0]), display: "inline-block" }} />Agendado (cor do projetista)</span>
-        <span style={{ display: "flex", gap: 5, alignItems: "center" }}><i style={{ width: 14, height: 11, borderRadius: 3, background: "#ffe8a3", border: "1.5px dashed #b8860b", display: "inline-block" }} />⏳ Data oferecida — aguardando resposta do cliente</span>
-        <span style={{ display: "flex", gap: 5, alignItems: "center" }}><i style={{ width: 14, height: 11, borderRadius: 3, border: "2px solid var(--danger)", display: "inline-block" }} />⚠️ Encaixe</span>
-      </div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+    <div className="card" style={{ padding: "8px 12px", margin: "6px 0" }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
         <button className="btn sm" style={{ background: "var(--ink)", color: "var(--surface)" }} onClick={() => mover(-1)}>&lt;</button>
         <button className="btn sm" style={{ background: "var(--ink)", color: "var(--surface)" }} onClick={() => setDia(hoje())}>Hoje</button>
         <button className="btn sm" style={{ background: "var(--ink)", color: "var(--surface)" }} onClick={() => mover(1)}>&gt;</button>
-        <input type="date" value={dia} onChange={e => e.target.value && setDia(e.target.value)} style={{ width: "auto", padding: "5px 8px", borderRadius: 8 }} />
-        <b style={{ fontSize: 18, marginLeft: "auto" }}>{d.toLocaleDateString("pt-BR")} - {DIAS[d.getDay()]}</b>
+        <input type="date" value={dia} onChange={e => e.target.value && setDia(e.target.value)} style={{ width: "auto", padding: "4px 8px", borderRadius: 8 }} />
+        <span style={{ width: 8 }} />
+        {cfg.projetistas.map((n: string) => { const off = ocultos.includes(n); return (
+          <button key={n} title={(off ? "Mostrar " : "Esconder ") + n} onClick={() => setOcultos(o => off ? o.filter(x => x !== n) : [...o, n])}
+            style={{ width: 26, height: 24, borderRadius: 5, border: "none", cursor: "pointer", fontWeight: 800, color: "#fff", background: corProj(n), opacity: off ? .3 : 1 }}>{n[0]}</button>); })}
+        {ocultos.length > 0 && <button className="btn ghost sm" onClick={() => setOcultos([])}>todos</button>}
+        <label title="Amarelo tracejado = data oferecida, aguardando resposta do cliente · borda vermelha = encaixe" style={{ fontSize: 12, display: "flex", gap: 5, alignItems: "center", marginLeft: 6 }}><input type="checkbox" style={{ width: "auto" }} checked={ofer} onChange={e => setOfer(e.target.checked)} /><i style={{ width: 12, height: 10, borderRadius: 3, background: "#ffe8a3", border: "1.5px dashed #b8860b", display: "inline-block" }} />aguardando resposta</label>
+        <b style={{ fontSize: 16, marginLeft: "auto" }}>{d.toLocaleDateString("pt-BR")} - {DIAS[d.getDay()]}</b>
         <span className="pill">{evs.filter(x => x.tipo === "ag").length} agendado(s)</span>
+        <span className="pill" style={{ cursor: "help" }} title="Clique no cliente para abrir a ficha. Arraste o cliente para outro horário ou outra coluna para trocar o projetista; puxe a borda de baixo para aumentar ou diminuir o tempo. Toda alteração pede confirmação. Faixa hachurada estreita = almoço (13h às 15h). Clique na letra do projetista para esconder ou mostrar a coluna.">ⓘ como usar</span>
       </div>
       <div style={{ overflowX: "auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: `40px repeat(${colunas.length}, minmax(165px, 1fr))`, minWidth: 40 + colunas.length * 165 }}>
+        <div ref={gradeRef} style={{ display: "grid", gridTemplateColumns: `40px repeat(${colunas.length}, minmax(150px, 1fr))`, minWidth: 40 + colunas.length * 150 }}>
           <div />
           {colunas.map(n => <div key={"h" + n} style={{ padding: "6px 8px", fontSize: 13, fontWeight: 700, borderBottom: `3px solid ${n ? corProj(n) : "var(--ink-faint)"}` }}>{n || "Sem projetista"}</div>)}
-          <div style={{ position: "relative", height: (H_FIM - H_INI) * PX_H }}>
-            {horas.map(h => <div key={h} style={{ position: "absolute", top: (h - H_INI) * PX_H, height: PX_H, width: "100%", fontSize: 12, color: "var(--ink-soft)", borderTop: "1px solid var(--line)", padding: "2px 4px" }}>{String(h).padStart(2, "0")}</div>)}
+          <div style={{ position: "relative", height: ALTURA }}>
+            {horas.map(h => <div key={h} style={{ position: "absolute", top: yOf(h * 60), height: hAlt(h), width: "100%", fontSize: almoco(h) ? 10 : 12, color: "var(--ink-soft)", borderTop: "1px solid var(--line)", padding: "1px 4px", overflow: "hidden" }}>{String(h).padStart(2, "0")}</div>)}
           </div>
           {colunas.map(n => (
             <div key={"c" + n} onDragOver={e => { if (n) e.preventDefault(); }} onDrop={e => soltar(e, n)}
-              style={{ position: "relative", height: (H_FIM - H_INI) * PX_H, borderLeft: "1px solid var(--line)", background: "var(--surface-2)" }}>
-              {horas.map(h => <div key={h} style={{ position: "absolute", top: (h - H_INI) * PX_H, height: PX_H, left: 0, right: 0, borderTop: "1px solid var(--line-soft)", background: almoco(h) ? "repeating-linear-gradient(45deg, transparent 0 6px, rgba(128,128,128,.08) 6px 12px)" : undefined }} />)}
+              style={{ position: "relative", height: ALTURA, borderLeft: "1px solid var(--line)", background: "var(--surface-2)" }}>
+              {horas.map(h => <div key={h} style={{ position: "absolute", top: yOf(h * 60), height: hAlt(h), left: 0, right: 0, borderTop: "1px solid var(--line-soft)", background: almoco(h) ? "repeating-linear-gradient(45deg, transparent 0 6px, rgba(128,128,128,.08) 6px 12px)" : undefined }} />)}
               {(porCol[n] || []).map(x0 => { let x = x0;
                 const k = ck(x.c), p = k.planilha || {}, cor = n ? corProj(n) : "#6b7280";
                 if (estica && estica.id === x.c.id && (x.extra ?? -1) < 0) x = { ...x, fim: estica.fim };
-                const top = Math.max(0, (x.ini - H_INI * 60) / 60 * PX_H), alt = Math.max(28, (Math.min(x.fim, H_FIM * 60) - Math.max(x.ini, H_INI * 60)) / 60 * PX_H - 3);
+                const top = yOf(Math.max(x.ini, H_INI * 60)), alt = Math.max(24, yOf(Math.min(x.fim, H_FIM * 60)) - top - 3);
+                const compacto = alt < 84, mini = alt < 44;
                 const w = 100 / (x.lanes || 1), conf = k.confirmacao;
                 return (
                   <div key={x.c.id + ":" + (x.extra ?? -1)} onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + (x.tipo === "ag" && (x.extra ?? -1) < 0 ? " — arraste para outro horário ou projetista" : (x.extra ?? -1) >= 0 ? " — dia adicional (altere na ficha do cliente)" : "")}
@@ -792,12 +853,13 @@ function CalendarioDia() {
                     style={{ position: "absolute", top: top + 1, height: alt, left: `calc(${(x.lane || 0) * w}% + 3px)`, width: `calc(${w}% - 6px)`, overflow: "hidden", cursor: "pointer",
                       borderRadius: 4, padding: "4px 6px", fontSize: 11.5, lineHeight: 1.3, color: x.tipo === "ag" ? "#fff" : "#6b4a00",
                       background: x.tipo === "ag" ? cor : "#ffe8a3", border: x.tipo === "ag" ? (k.encaixe ? "2.5px solid var(--danger)" : "none") : `2px dashed ${cor}` }}>
-                    <div style={{ fontWeight: 800, fontSize: 12.5 }}>{x.tipo === "of" ? "⏳ " : k.encaixe ? "⚠️ " : ""}{hm(x.ini)} - {hm(x.fim)}{(x.total || 1) > 1 ? ` · dia ${x.n}/${x.total}` : ""}</div>
-                    <div style={{ fontWeight: 700, textTransform: "uppercase", color: x.tipo === "ag" ? "#ffe9a8" : "#3d2a00", overflowWrap: "anywhere" }}>{x.c.cliente}</div>
-                    <div>{fmtTel(x.c.telefone) || "sem contato"}</div>
-                    <div>Venda {x.c.pedido}</div>
-                    {x.tipo === "ag" ? <div><b>Presença:</b> {conf === "confirmada" ? "Confirmada ✅" : conf === "enviada" ? "Aguardando" : "A confirmar"}</div>
-                      : <div style={{ fontWeight: 700 }}>Aguardando resposta</div>}
+                    <div style={{ fontWeight: 800, fontSize: compacto ? 11.5 : 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.tipo === "of" ? "⏳ " : k.encaixe ? "⚠️ " : ""}{hm(x.ini)} - {hm(x.fim)}{(x.total || 1) > 1 ? ` · dia ${x.n}/${x.total}` : ""}{x.tipo === "ag" && compacto ? (conf === "confirmada" ? " ✅" : conf === "enviada" ? " 📨" : " ⏳") : ""}</div>
+                    <div style={{ fontWeight: 700, textTransform: "uppercase", color: x.tipo === "ag" ? "#ffe9a8" : "#3d2a00", whiteSpace: compacto ? "nowrap" : undefined, overflow: "hidden", textOverflow: "ellipsis", overflowWrap: "anywhere" }}>{x.c.cliente}</div>
+                    {!mini && (compacto ? <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtTel(x.c.telefone) || "sem contato"} · {x.c.pedido}</div> : <>
+                      <div>{fmtTel(x.c.telefone) || "sem contato"}</div>
+                      <div>Venda {x.c.pedido}</div>
+                      {x.tipo === "ag" ? <div><b>Presença:</b> {conf === "confirmada" ? "Confirmada ✅" : conf === "enviada" ? "Aguardando" : "A confirmar"}</div>
+                        : <div style={{ fontWeight: 700 }}>Aguardando resposta</div>}</>)}
                     {x.tipo === "ag" && (x.extra ?? -1) < 0 && <div title="Arraste para aumentar ou diminuir o tempo" onClick={e => e.stopPropagation()} onMouseDown={e => esticar(e, x.c, x.ini, x.fim)}
                       style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 7, cursor: "ns-resize", background: "rgba(255,255,255,.35)" }} />}
                   </div>);
@@ -805,7 +867,6 @@ function CalendarioDia() {
             </div>))}
         </div>
       </div>
-      <div className="hint" style={{ marginTop: 8 }}>Clique no cliente para abrir a ficha. Arraste o cliente para outro horário ou outra coluna para trocar o projetista; puxe a borda de baixo para aumentar ou diminuir o tempo. Toda alteração pede confirmação. Faixa hachurada = almoço (13h às 15h). Clique na letra do projetista para esconder ou mostrar a coluna.</div>
     </div>
   );
 }
