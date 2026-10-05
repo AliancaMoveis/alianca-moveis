@@ -237,7 +237,7 @@ function CartaoCk({ c, aba }: any) {
           {g === "agendado" && k.confirmacao !== "confirmada" && <button className="btn sm primary" onClick={() => executar(() => A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }), "Presença confirmada")}>✅ Presença confirmada</button>}
           {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
           {g === "agendar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="espera" />)}>⏸ Aguardando</button>}
-          {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="reagendar" />)}>🔁 Alterar data</button>}
+          {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<Modal titulo={"Alterar agenda · " + c.cliente + " · venda " + c.pedido} onFechar={() => setModal(null)}><EditorAgenda c={c} /></Modal>)}>✏️ Projetista / horário</button>}
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="desmarcar" />)}>❌ Desmarcar</button>}
           <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : g === "agendado" ? "Realizado / outros" : "Registrar resultado"}</button>
           <button className="btn ghost sm" onClick={() => setModal(<ModalNotas c={c} />)} title="Mensagens enviadas e anotações">📝{notas ? " " + notas : ""}</button>
@@ -389,22 +389,24 @@ let _projs: string[] = AGENDA_PADRAO.projetistas;
 export const corProj = (n?: string) => (n ? CORES_PROJ[Math.max(0, _projs.indexOf(n)) % CORES_PROJ.length] : "var(--ink-faint)");
 const isoDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 /** quem está ocupado: agendados (com ou sem projetista) + datas oferecidas que ainda esperam o cliente (reservam o projetista por alguns dias) */
-type Ocup = { proj: string; ini: number; cliente: string; aguardando: boolean };
+type Ocup = { proj: string; ini: number; fim: number; cliente: string; aguardando: boolean };
+/** duração do atendimento deste cliente (minutos) — a agenda oficial tem atendimentos de 1h a 10h */
+export const durCk = (c: any, cfg?: any) => Number(ck(c).duracaoMin) || (cfg?.duracaoMin) || 120;
 export function ocupacoes(st: any, excluirId?: string): Ocup[] {
   const cfg = cfgAgenda(st); _projs = cfg.projetistas;
   const out: Ocup[] = [];
   st.chamados.forEach((c: any) => {
     if (c.tipo !== "checklist" || c.status === "concluida" || c.id === excluirId) return;
     const k = ck(c), e = etapaCk(c);
-    if (e === "agendado" && k.agendadoPara) out.push({ proj: k.projetista || "", ini: +parseData(String(k.agendadoPara).slice(0, 16)), cliente: c.cliente, aguardando: false });
-    else if (e === "aguardando" && k.proposta && diasDesde(k.ultimoContato) <= cfg.seguraDias) out.push({ proj: k.propostaProjetista || "", ini: +parseData(String(k.proposta).slice(0, 16)), cliente: c.cliente, aguardando: true });
+    if (e === "agendado" && k.agendadoPara) { const ini = +parseData(String(k.agendadoPara).slice(0, 16)); out.push({ proj: k.projetista || "", ini, fim: ini + durCk(c, cfg) * 6e4, cliente: c.cliente, aguardando: false }); }
+    else if (e === "aguardando" && k.proposta && diasDesde(k.ultimoContato) <= cfg.seguraDias) { const ini = +parseData(String(k.proposta).slice(0, 16)); out.push({ proj: k.propostaProjetista || "", ini, fim: ini + (cfg.duracaoMin || 120) * 6e4, cliente: c.cliente, aguardando: true }); }
   });
   return out;
 }
 /** projetistas livres num horário (atendimento de 2h; sobreposição conta como ocupado). Agendados sem projetista ocupam uma vaga qualquer. */
 export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?: Ocup[]): { livres: string[]; ocupados: string[] } {
   const cfg = cfgAgenda(st), dur = (cfg.duracaoMin || 120) * 6e4, t = +parseData(slot.slice(0, 16));
-  const no = (occ || ocupacoes(st, excluirId)).filter(o => Math.abs(o.ini - t) < dur);
+  const no = (occ || ocupacoes(st, excluirId)).filter(o => o.ini < t + dur && t < o.fim);
   const ocupadosProj = new Set(no.filter(o => o.proj).map(o => o.proj));
   let livres = cfg.projetistas.filter((n: string) => !ocupadosProj.has(n));
   const semProj = no.filter(o => !o.proj).length;
@@ -427,15 +429,16 @@ export function sugestoes(st: any, excluirId?: string, n = 8, projetista?: strin
   return out;
 }
 /** clientes do mesmo projetista que batem com esse horário (agendados e datas oferecidas) */
-export function conflitosProj(st: any, slot: string, proj: string, excluirId?: string) {
+export function conflitosProj(st: any, slot: string, proj: string, excluirId?: string, durMin?: number) {
   if (!proj || (slot || "").length < 16) return [] as Ocup[];
-  const dur = (cfgAgenda(st).duracaoMin || 120) * 6e4, t = +parseData(slot.slice(0, 16));
-  return ocupacoes(st, excluirId).filter(o => o.proj === proj && Math.abs(o.ini - t) < dur);
+  const ex = excluirId ? st.chamados.find((x: any) => x.id === excluirId) : null;
+  const dur = (durMin || (ex ? durCk(ex, cfgAgenda(st)) : cfgAgenda(st).duracaoMin || 120)) * 6e4, t = +parseData(slot.slice(0, 16));
+  return ocupacoes(st, excluirId).filter(o => o.proj === proj && o.ini < t + dur && t < o.fim);
 }
 /** aviso de encaixe: mesmo projetista com outro cliente no horário — só passa com a confirmação marcada */
-export function AvisoEncaixe({ slot, proj, excluirId, ok, setOk }: { slot: string; proj: string; excluirId?: string; ok: boolean; setOk: (v: boolean) => void }) {
+export function AvisoEncaixe({ slot, proj, excluirId, ok, setOk, durMin }: { slot: string; proj: string; excluirId?: string; ok: boolean; setOk: (v: boolean) => void; durMin?: number }) {
   const { st } = useApp() as any;
-  const lst = conflitosProj(st, slot, proj, excluirId);
+  const lst = conflitosProj(st, slot, proj, excluirId, durMin);
   if (!lst.length) return null;
   const ag = lst.filter(o => !o.aguardando);
   return (
@@ -445,6 +448,64 @@ export function AvisoEncaixe({ slot, proj, excluirId, ok, setOk }: { slot: strin
       <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
         <input type="checkbox" style={{ width: "auto" }} checked={ok} onChange={e => setOk(e.target.checked)} />
         Confirmo o encaixe: {proj} vai atender {lst.length + 1} clientes nesse horário{ag.length ? "" : " (o outro ainda não confirmou)"}</label>
+    </div>
+  );
+}
+
+const DURACOES = [60, 90, 120, 180, 240, 300, 360, 480, 600];
+const fmtDur = (m: number) => (m % 60 ? (m / 60).toFixed(1).replace(".", ",") : String(m / 60)) + "h";
+/** confirmação de qualquer mudança na agenda (arrastar, esticar ou editar na ficha) */
+export function ModalMover({ c, data, proj, dur }: { c: any; data: string; proj: string; dur: number }) {
+  const { setModal, toast, recarregar, st } = useApp() as any;
+  const k = ck(c), cfg = cfgAgenda(st), durAnt = durCk(c, cfg);
+  const [enc, setEnc] = useState(false); const [sal, setSal] = useState(false);
+  const fechar = () => setModal(null);
+  const ag = conflitosProj(st, data, proj, c.id, dur).filter(o => !o.aguardando);
+  const fim = (slot: string, m: number) => new Date(+parseData(slot.slice(0, 16)) + m * 6e4).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const linha = (slot: string, p: string, m: number) => <><b>{dataLonga(slot)}</b> até {fim(slot, m)} ({fmtDur(m)}) · <b>{p || "sem projetista"}</b></>;
+  async function ok() {
+    if (ag.length && !enc) { toast("Marque “Confirmo o encaixe” ou escolha outro horário"); return; }
+    setSal(true);
+    try {
+      await A.checklistRegistrar(c.id, { acao: "mover", data, projetista: proj, duracaoMin: dur, encaixe: enc });
+      await recarregar(); fechar(); toast("Agenda alterada — altere também no sistema interno");
+    } catch (x: any) { toast(x.message); setSal(false); }
+  }
+  const mudouData = data !== String(k.agendadoPara || "").slice(0, 16);
+  return (
+    <Modal titulo={"Confirmar alteração · " + c.cliente} onFechar={fechar}>
+      <div style={{ fontSize: 14, lineHeight: 1.7 }}>
+        <div><span style={{ color: "var(--ink-faint)" }}>Venda</span> <b>{c.pedido}</b></div>
+        <div><span style={{ color: "var(--ink-faint)" }}>Antes:</span> {linha(String(k.agendadoPara || "").slice(0, 16), k.projetista, durAnt)}</div>
+        <div><span style={{ color: "var(--ink-faint)" }}>Depois:</span> {linha(data, proj, dur)}</div>
+        {mudouData && <div className="hint" style={{ fontSize: 12.5 }}>A data mudou: a confirmação de presença volta para “a confirmar”.</div>}
+      </div>
+      <div className="grid" style={{ marginTop: 10 }}><AvisoEncaixe slot={data} proj={proj} excluirId={c.id} ok={enc} setOk={setEnc} durMin={dur} /></div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn" onClick={fechar}>Cancelar</button>
+        <button className="btn primary" disabled={sal} onClick={ok}>OK, alterar</button>
+      </div>
+    </Modal>
+  );
+}
+/** edição rápida na ficha: projetista, dia/horário e duração */
+export function EditorAgenda({ c }: any) {
+  const { st, setModal, toast } = useApp() as any;
+  const k = ck(c), cfg = cfgAgenda(st);
+  const [proj, setProj] = useState<string>(k.projetista || "");
+  const [data, setData] = useState<string>(String(k.agendadoPara || "").slice(0, 16));
+  const [dur, setDur] = useState<number>(durCk(c, cfg));
+  const opDur = Array.from(new Set([...DURACOES, dur])).sort((a, b) => a - b);
+  const mudou = proj !== (k.projetista || "") || data !== String(k.agendadoPara || "").slice(0, 16) || dur !== durCk(c, cfg);
+  return (
+    <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)" }}>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>✏️ Alterar agenda</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <label style={{ fontSize: 12 }}>Projetista<br /><select value={proj} onChange={e => setProj(e.target.value)} style={{ width: "auto" }}><option value="">Selecione…</option>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}</option>)}</select></label>
+        <label style={{ fontSize: 12 }}>Dia e horário<br /><input type="datetime-local" step={1800} value={data} onChange={e => setData(e.target.value)} style={{ width: "auto" }} /></label>
+        <label style={{ fontSize: 12 }}>Duração<br /><select value={dur} onChange={e => setDur(Number(e.target.value))} style={{ width: "auto" }}>{opDur.map(m => <option key={m} value={m}>{fmtDur(m)}</option>)}</select></label>
+        <button className="btn primary sm" disabled={!mudou} onClick={() => { if (!proj || data.length < 16) { toast("Escolha projetista, dia e horário"); return; } setModal(<ModalMover c={c} data={data} proj={proj} dur={dur} />); }}>Salvar alteração</button>
+      </div>
     </div>
   );
 }
@@ -497,6 +558,31 @@ function CalendarioDia() {
   const [ocultos, setOcultos] = useState<string[]>([]);
   const [ofer, setOfer] = useState(true);
   const dur = cfg.duracaoMin || 120;
+  const { setModal } = useApp() as any;
+  const pega = useRef(0);
+  const [estica, setEstica] = useState<{ id: string; fim: number } | null>(null);
+  const snap = (m: number) => Math.max(H_INI * 60, Math.min(H_FIM * 60, Math.round(m / 30) * 30));
+  const hhmm = (m: number) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  function soltar(e: React.DragEvent, proj: string) {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain"); const c = st.chamados.find((x: any) => x.id === id); if (!c || !proj) return;
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const d0 = durCk(c, cfg);
+    const ini = Math.max(H_INI * 60, Math.min(snap(H_INI * 60 + (e.clientY - r.top - pega.current) / PX_H * 60), H_FIM * 60 - d0));
+    const slot = dia + "T" + hhmm(ini), k = ck(c);
+    if (proj === (k.projetista || "") && slot === String(k.agendadoPara || "").slice(0, 16)) return;
+    setModal(<ModalMover c={c} data={slot} proj={proj} dur={durCk(c, cfg)} />);
+  }
+  function esticar(e: React.MouseEvent, c: any, ini: number, fim0: number) {
+    e.preventDefault(); e.stopPropagation();
+    const y0 = e.clientY; let fim = fim0;
+    const mv = (ev: MouseEvent) => { fim = Math.max(ini + 30, snap(fim0 + (ev.clientY - y0) / PX_H * 60)); setEstica({ id: c.id, fim }); };
+    const up = () => {
+      window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); setEstica(null);
+      if (fim !== fim0) setModal(<ModalMover c={c} data={String(ck(c).agendadoPara).slice(0, 16)} proj={ck(c).projetista || ""} dur={fim - ini} />);
+    };
+    window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up);
+  }
   const mover = (n: number) => { const d = parseData(dia); do { d.setDate(d.getDate() + n); } while (!cfg.dias.includes(d.getDay()) && Math.abs(+d - +parseData(dia)) < 8 * 864e5); setDia(isoDia(d)); };
   type Ev = { c: any; ini: number; fim: number; proj: string; tipo: "ag" | "of"; lane?: number; lanes?: number };
   const evs: Ev[] = st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida" && Rg.podeVer(c)).map((c: any) => {
@@ -504,7 +590,7 @@ function CalendarioDia() {
     const q = e === "agendado" ? k.agendadoPara : ofer && e === "aguardando" ? k.proposta : null;
     if (!q || String(q).slice(0, 10) !== dia) return null;
     const d = parseData(String(q).slice(0, 16)); const ini = d.getHours() * 60 + d.getMinutes();
-    return { c, ini, fim: ini + dur, proj: (e === "agendado" ? k.projetista : k.propostaProjetista) || "", tipo: e === "agendado" ? "ag" : "of" } as Ev;
+    return { c, ini, fim: ini + (e === "agendado" ? durCk(c, cfg) : dur), proj: (e === "agendado" ? k.projetista : k.propostaProjetista) || "", tipo: e === "agendado" ? "ag" : "of" } as Ev;
   }).filter(Boolean) as Ev[];
   const semProj = evs.some(x => !x.proj);
   const colunas = [...cfg.projetistas, ...(semProj ? [""] : [])].filter(n => !ocultos.includes(n));
@@ -551,14 +637,17 @@ function CalendarioDia() {
             {horas.map(h => <div key={h} style={{ position: "absolute", top: (h - H_INI) * PX_H, height: PX_H, width: "100%", fontSize: 12, color: "var(--ink-soft)", borderTop: "1px solid var(--line)", padding: "2px 4px" }}>{String(h).padStart(2, "0")}</div>)}
           </div>
           {colunas.map(n => (
-            <div key={"c" + n} style={{ position: "relative", height: (H_FIM - H_INI) * PX_H, borderLeft: "1px solid var(--line)", background: "var(--surface-2)" }}>
+            <div key={"c" + n} onDragOver={e => { if (n) e.preventDefault(); }} onDrop={e => soltar(e, n)}
+              style={{ position: "relative", height: (H_FIM - H_INI) * PX_H, borderLeft: "1px solid var(--line)", background: "var(--surface-2)" }}>
               {horas.map(h => <div key={h} style={{ position: "absolute", top: (h - H_INI) * PX_H, height: PX_H, left: 0, right: 0, borderTop: "1px solid var(--line-soft)", background: almoco(h) ? "repeating-linear-gradient(45deg, transparent 0 6px, rgba(128,128,128,.08) 6px 12px)" : undefined }} />)}
-              {(porCol[n] || []).map(x => {
+              {(porCol[n] || []).map(x0 => { let x = x0;
                 const k = ck(x.c), p = k.planilha || {}, cor = n ? corProj(n) : "#6b7280";
+                if (estica && estica.id === x.c.id) x = { ...x, fim: estica.fim };
                 const top = Math.max(0, (x.ini - H_INI * 60) / 60 * PX_H), alt = Math.max(28, (Math.min(x.fim, H_FIM * 60) - Math.max(x.ini, H_INI * 60)) / 60 * PX_H - 3);
                 const w = 100 / (x.lanes || 1), conf = k.confirmacao;
                 return (
-                  <div key={x.c.id} onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente}
+                  <div key={x.c.id} onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + (x.tipo === "ag" ? " — arraste para outro horário ou projetista" : "")}
+                    draggable={x.tipo === "ag"} onDragStart={e => { e.dataTransfer.setData("text/plain", x.c.id); e.dataTransfer.effectAllowed = "move"; pega.current = e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top; }}
                     style={{ position: "absolute", top: top + 1, height: alt, left: `calc(${(x.lane || 0) * w}% + 3px)`, width: `calc(${w}% - 6px)`, overflow: "hidden", cursor: "pointer",
                       borderRadius: 4, padding: "4px 6px", fontSize: 11.5, lineHeight: 1.3, color: x.tipo === "ag" ? "#fff" : "#6b4a00",
                       background: x.tipo === "ag" ? cor : "#ffe8a3", border: x.tipo === "ag" ? (k.encaixe ? "2.5px solid var(--danger)" : "none") : `2px dashed ${cor}` }}>
@@ -568,12 +657,14 @@ function CalendarioDia() {
                     <div style={{ fontWeight: 600, textTransform: "uppercase", color: x.tipo === "ag" ? "#ffe9a8" : "#3d2a00" }}>{x.c.cliente}</div>
                     {x.tipo === "ag" && <div><b>Presença:</b> {conf === "confirmada" ? "Confirmada ✅" : conf === "enviada" ? "Aguardando resposta" : "A confirmar"}</div>}
                     {p.cupom && <div><b>Valor Cupom:</b> {p.cupom}</div>}
+                    {x.tipo === "ag" && <div title="Arraste para aumentar ou diminuir o tempo" onClick={e => e.stopPropagation()} onMouseDown={e => esticar(e, x.c, x.ini, x.fim)}
+                      style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 7, cursor: "ns-resize", background: "rgba(255,255,255,.35)" }} />}
                   </div>);
               })}
             </div>))}
         </div>
       </div>
-      <div className="hint" style={{ marginTop: 8 }}>Clique no cliente para abrir a ficha. Faixa hachurada = almoço (13h às 15h). Clique na letra do projetista para esconder ou mostrar a coluna.</div>
+      <div className="hint" style={{ marginTop: 8 }}>Clique no cliente para abrir a ficha. Arraste o cliente para outro horário ou outra coluna para trocar o projetista; puxe a borda de baixo para aumentar ou diminuir o tempo. Toda alteração pede confirmação. Faixa hachurada = almoço (13h às 15h). Clique na letra do projetista para esconder ou mostrar a coluna.</div>
     </div>
   );
 }

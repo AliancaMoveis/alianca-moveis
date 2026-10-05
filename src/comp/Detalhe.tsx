@@ -9,7 +9,7 @@ import {
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
-import { CONF_CK, ConfirmaExcluir, ETAPA_CK, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
+import { CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
@@ -769,12 +769,13 @@ function BlocoChecklist({ c }: any) {
       {p.vendedor && <RowSb k="Vendedor">{p.vendedor}</RowSb>}
       <RowSb k="Medidor">{p.medidor || "não informado na planilha"}{k.medidaId ? (k.medidaOk ? " · medidas conferidas" : " · aguardando o setor de Medidas (" + k.medidaId + ")") : ""}</RowSb>
       {k.proposta && <RowSb k="Data oferecida">{fmtDT(k.proposta)}</RowSb>}
-      {k.agendadoPara && <RowSb k="Agendado para">{fmtDT(k.agendadoPara)}{k.ambiente === "pronto" ? " · ambiente pronto" : ""}</RowSb>}
+      {k.agendadoPara && <RowSb k="Agendado para">{fmtDT(k.agendadoPara)}{k.duracaoMin ? " · " + (k.duracaoMin % 60 ? (k.duracaoMin / 60).toFixed(1).replace(".", ",") : k.duracaoMin / 60) + "h" : ""}{k.ambiente === "pronto" ? " · ambiente pronto" : ""}</RowSb>}
       {(k.agendadoPara || k.projetista) && <RowSb k="Projetista">{k.projetista || "não informado"}</RowSb>}
       {e === "agendado" && <RowSb k="Presença">{(CONF_CK[k.confirmacao || ""] || CONF_CK[""])[0]}</RowSb>}
       {motivoCk(c) && <RowSb k="Aguardando">{motivoCk(c)}</RowSb>}
       {k.retornarEm && <RowSb k="Retornar em">{fmtDate(String(k.retornarEm).slice(0, 10))}</RowSb>}
       <RowSb k="Contatos">{k.contatos || 0}{k.ultimoContato ? " · último em " + fmtDT(k.ultimoContato) : ""}</RowSb>
+      {R.podeChecklist() && e === "agendado" && c.status !== "concluida" && <EditorAgenda key={String(k.agendadoPara) + (k.projetista || "") + (k.duracaoMin || "")} c={c} />}
       {R.podeChecklist() && <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
         {c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
         <button className="btn primary sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : "Registrar resultado"}</button>
