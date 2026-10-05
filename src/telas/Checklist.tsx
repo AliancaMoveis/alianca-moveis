@@ -437,7 +437,9 @@ export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?:
   const cfg = cfgAgenda(st), dur = (cfg.duracaoMin || 120) * 6e4, t = +parseData(slot.slice(0, 16));
   const no = (occ || ocupacoes(st, excluirId)).filter(o => o.ini < t + dur && t < o.fim);
   const ocupadosProj = new Set(no.filter(o => o.proj).map(o => o.proj));
-  let livres = cfg.projetistas.filter((n: string) => !ocupadosProj.has(n));
+  // projetistas só para emergência (ex.: gerente de loja) não entram nas sugestões — só são escolhidos à mão
+  const emerg: string[] = cfg.emergencia || [];
+  let livres = cfg.projetistas.filter((n: string) => !ocupadosProj.has(n) && !emerg.includes(n));
   const semProj = no.filter(o => !o.proj).length;
   if (semProj) livres = livres.slice(0, Math.max(0, livres.length - semProj));
   return { livres, ocupados: no.map(o => o.cliente + (o.proj ? " · " + o.proj : "") + (o.aguardando ? " (aguardando resposta)" : "")) };
@@ -530,7 +532,7 @@ export function EditorAgenda({ c }: any) {
     <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)" }}>
       <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>✏️ Alterar agenda</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <label style={{ fontSize: 12 }}>Projetista<br /><select value={proj} onChange={e => setProj(e.target.value)} style={{ width: "auto" }}><option value="">Selecione…</option>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}</option>)}</select></label>
+        <label style={{ fontSize: 12 }}>Projetista<br /><select value={proj} onChange={e => setProj(e.target.value)} style={{ width: "auto" }}><option value="">Selecione…</option>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}{(cfg.emergencia || []).includes(n) ? " (emergência)" : ""}</option>)}</select></label>
         <label style={{ fontSize: 12 }}>Dia e horário<br /><input type="datetime-local" step={1800} value={data} onChange={e => setData(e.target.value)} style={{ width: "auto" }} /></label>
         <label style={{ fontSize: 12 }}>Duração<br /><select value={dur} onChange={e => setDur(Number(e.target.value))} style={{ width: "auto" }}>{opDur.map(m => <option key={m} value={m}>{fmtDur(m)}</option>)}</select></label>
         <button className="btn primary sm" disabled={!mudou} onClick={() => { if (!proj || data.length < 16) { toast("Escolha projetista, dia e horário"); return; } setModal(<ModalMover c={c} data={data} proj={proj} dur={dur} />); }}>Salvar alteração</button>
@@ -580,7 +582,7 @@ export function ModalNaoPodeVir({ c }: any) {
       </div>
       {modo === "nova" ? <div className="grid">
         <div className="field"><label>Nova data e horário <span className="req-star">*</span></label><input type="datetime-local" step={1800} value={data} onChange={e => setData(e.target.value)} /></div>
-        <div className="field"><label>Projetista <span className="req-star">*</span></label><select value={proj} onChange={e => setProj(e.target.value)}><option value="">Selecione…</option>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}</option>)}</select></div>
+        <div className="field"><label>Projetista <span className="req-star">*</span></label><select value={proj} onChange={e => setProj(e.target.value)}><option value="">Selecione…</option>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}{(cfg.emergencia || []).includes(n) ? " (emergência)" : ""}</option>)}</select></div>
         <div className="field"><label>Duração</label><select value={dur} onChange={e => setDur(Number(e.target.value))}>{Array.from(new Set([...DURACOES, dur])).sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}</option>)}</select></div>
         <Sugestoes valor={data} excluirId={c.id} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); }} projetista={proj} />
         <AvisoEncaixe slot={data} proj={proj} excluirId={c.id} ok={enc} setOk={setEnc} durMin={dur} />
@@ -654,7 +656,7 @@ function DiasExtras({ c }: any) {
           <b style={{ fontSize: 12.5, minWidth: 48 }}>Dia {i + 2}</b>
           <input type="datetime-local" step={1800} value={e.data} onChange={ev => set(i, "data", ev.target.value)} style={{ width: "auto", padding: "5px 8px", fontSize: 13 }} />
           <select value={e.duracaoMin} onChange={ev => set(i, "duracaoMin", Number(ev.target.value))} style={{ width: "auto", padding: "5px 8px", fontSize: 13 }}>{Array.from(new Set([...DURACOES, e.duracaoMin])).sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}</option>)}</select>
-          <select value={e.projetista} onChange={ev => set(i, "projetista", ev.target.value)} style={{ width: "auto", padding: "5px 8px", fontSize: 13 }}>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}</option>)}</select>
+          <select value={e.projetista} onChange={ev => set(i, "projetista", ev.target.value)} style={{ width: "auto", padding: "5px 8px", fontSize: 13 }}>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}{(cfg.emergencia || []).includes(n) ? " (emergência)" : ""}</option>)}</select>
           <button className="btn ghost sm" style={{ color: "var(--danger)" }} title="Remover este dia" onClick={() => setL(x => x.filter((_, j) => j !== i))}>✕</button>
         </div>))}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -801,7 +803,8 @@ function CalendarioDia() {
     window.addEventListener("resize", medir); return () => { cancelAnimationFrame(r); clearTimeout(t); window.removeEventListener("resize", medir); };
   }, [unidades, ocultos.length]);
   const semProj = evs.some(x => !x.proj);
-  const colunas = [...cfg.projetistas, ...(semProj ? [""] : [])].filter(n => !ocultos.includes(n));
+  const emergD: string[] = cfg.emergencia || [];
+  const colunas = [...cfg.projetistas.filter((n: string) => !emergD.includes(n)), ...cfg.projetistas.filter((n: string) => emergD.includes(n)), ...(semProj ? [""] : [])].filter(n => !ocultos.includes(n));
   const porCol: Record<string, Ev[]> = {};
   colunas.forEach(n => {
     const l = evs.filter(x => x.proj === n).sort((a, b) => a.ini - b.ini);
@@ -835,7 +838,7 @@ function CalendarioDia() {
       <div style={{ overflowX: "auto" }}>
         <div ref={gradeRef} style={{ display: "grid", gridTemplateColumns: `40px repeat(${colunas.length}, minmax(150px, 1fr))`, minWidth: 40 + colunas.length * 150 }}>
           <div />
-          {colunas.map(n => <div key={"h" + n} style={{ padding: "6px 8px", fontSize: 13, fontWeight: 700, borderBottom: `3px solid ${n ? corProj(n) : "var(--ink-faint)"}` }}>{n || "Sem projetista"}</div>)}
+          {colunas.map(n => <div key={"h" + n} style={{ padding: "6px 8px", fontSize: 13, fontWeight: 700, borderBottom: `3px solid ${n ? corProj(n) : "var(--ink-faint)"}` }}>{n || "Sem projetista"}{emergD.includes(n) ? <span style={{ fontWeight: 400, fontSize: 11, color: "var(--ink-faint)" }}> · emergência</span> : null}</div>)}
           <div style={{ position: "relative", height: ALTURA }}>
             {horas.map(h => <div key={h} style={{ position: "absolute", top: yOf(h * 60), height: hAlt(h), width: "100%", fontSize: almoco(h) ? 10 : 12, color: "var(--ink-soft)", borderTop: "1px solid var(--line)", padding: "1px 4px", overflow: "hidden" }}>{String(h).padStart(2, "0")}</div>)}
           </div>
@@ -915,7 +918,7 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
         <button className="btn sm" onClick={() => mover(1)}>›</button>
         <b style={{ fontSize: 16, marginLeft: 6, textTransform: "capitalize" }}>{titulo}</b>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <select value={fp} onChange={e => setFp(e.target.value)} style={{ padding: "6px 8px", borderRadius: 8, width: "auto", maxWidth: 220 }}><option value="">Todos os projetistas</option>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}</option>)}</select>
+          <select value={fp} onChange={e => setFp(e.target.value)} style={{ padding: "6px 8px", borderRadius: 8, width: "auto", maxWidth: 220 }}><option value="">Todos os projetistas</option>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}{(cfg.emergencia || []).includes(n) ? " (emergência)" : ""}</option>)}</select>
           <label style={{ fontSize: 12.5, display: "flex", gap: 5, alignItems: "center" }}><input type="checkbox" style={{ width: "auto" }} checked={ofer} onChange={e => setOfer(e.target.checked)} />mostrar datas oferecidas</label>
           <div className="subnav" style={{ margin: 0 }}><button className={modo === "semana" ? "on" : ""} onClick={() => setModo("semana")}>Semana</button><button className={modo === "mes" ? "on" : ""} onClick={() => setModo("mes")}>Mês</button></div>
         </div>
@@ -956,11 +959,11 @@ function ModalHorarios() {
   const { st, setModal, toast, recarregar } = useApp() as any;
   const cfg = { ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) };
   const [dias, setDias] = useState<number[]>(cfg.dias); const [hs, setHs] = useState(cfg.horarios.join(", "));
-  const [dur, setDur] = useState(String((cfg.duracaoMin || 120) / 60).replace(".", ",")); const [seg, setSeg] = useState(String(cfg.seguraDias)); const [confD, setConfD] = useState(String(cfg.confirmarDias ?? 2)); const [projs, setProjs] = useState((cfg.projetistas || []).join(", "));
+  const [dur, setDur] = useState(String((cfg.duracaoMin || 120) / 60).replace(".", ",")); const [seg, setSeg] = useState(String(cfg.seguraDias)); const [confD, setConfD] = useState(String(cfg.confirmarDias ?? 2)); const [projs, setProjs] = useState((cfg.projetistas || []).join(", ")); const [emerg, setEmerg] = useState((cfg.emergencia || []).join(", "));
   const fechar = () => setModal(null);
   async function salvar() {
     const horarios = hs.split(/[,;\s]+/).map((x: string) => x.trim()).filter(Boolean).map((x: string) => x.length === 4 ? "0" + x : x);
-    try { await A.salvarChecklistAgenda({ dias, horarios, vagas: 1, duracaoMin: Math.round(Number(dur.replace(",", ".")) * 60) || 120, seguraDias: Number(seg), confirmarDias: Number(confD), projetistas: projs.split(",").map((x: string) => x.trim()).filter(Boolean) }); await recarregar(); fechar(); toast("Horários do checklist salvos"); }
+    try { await A.salvarChecklistAgenda({ dias, horarios, vagas: 1, duracaoMin: Math.round(Number(dur.replace(",", ".")) * 60) || 120, seguraDias: Number(seg), confirmarDias: Number(confD), projetistas: projs.split(",").map((x: string) => x.trim()).filter(Boolean), emergencia: emerg.split(",").map((x: string) => x.trim()).filter(Boolean) }); await recarregar(); fechar(); toast("Horários do checklist salvos"); }
     catch (x: any) { toast(x.message); }
   }
   return (
@@ -971,6 +974,7 @@ function ModalHorarios() {
       <div className="grid">
         <div className="field full"><label>Horários (separados por vírgula)</label><input value={hs} onChange={e => setHs(e.target.value)} placeholder="09:00, 11:00, 15:00, 17:00" /></div>
         <div className="field full"><label>Projetistas do checklist (separados por vírgula)</label><input value={projs} onChange={e => setProjs(e.target.value)} placeholder="Silvane, Rafael, Angela" /></div>
+        <div className="field full"><label>Só para emergência <span className="hint">(aparecem na agenda e podem ser escolhidos à mão, mas não entram nas sugestões de horário)</span></label><input value={emerg} onChange={e => setEmerg(e.target.value)} placeholder="Giovanni" /></div>
         <div className="field"><label>Duração de cada atendimento (horas)</label><input inputMode="decimal" value={dur} onChange={e => setDur(e.target.value)} /><span className="hint">Cada projetista atende um cliente por vez.</span></div>
         <div className="field"><label>Pedir confirmação de presença com (dias de antecedência)</label><input type="number" min={0} max={15} value={confD} onChange={e => setConfD(e.target.value)} /><span className="hint">Agendados com data nesse prazo aparecem em “Confirmação de presença”.</span></div>
         <div className="field"><label>Segurar a data oferecida por (dias)</label><input type="number" min={0} max={15} value={seg} onChange={e => setSeg(e.target.value)} /><span className="hint">Enquanto o cliente não responde, o horário oferecido não é sugerido para outro.</span></div>
