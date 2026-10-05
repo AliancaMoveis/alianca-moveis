@@ -433,13 +433,18 @@ export function ocupacoes(st: any, excluirId?: string): Ocup[] {
   return out;
 }
 /** projetistas livres num horário (atendimento de 2h; sobreposição conta como ocupado). Agendados sem projetista ocupam uma vaga qualquer. */
+/** bloqueios (agenda fechada) que pegam o período [ini, fim) — do projetista ou de todos */
+export function bloqueiosEm(st: any, proj: string, ini: number, fim: number) {
+  return ((st.ckBloqueios || []) as any[]).filter(b => (!b.projetista || !proj || b.projetista === proj) && +parseData(b.inicio) < fim && ini < +parseData(b.fim));
+}
+export const rotuloBloq = (b: any) => "🚫 " + b.motivo + (b.obs ? " — " + b.obs : "") + (b.projetista ? "" : " (todos)");
 export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?: Ocup[]): { livres: string[]; ocupados: string[] } {
   const cfg = cfgAgenda(st), dur = (cfg.duracaoMin || 120) * 6e4, t = +parseData(slot.slice(0, 16));
   const no = (occ || ocupacoes(st, excluirId)).filter(o => o.ini < t + dur && t < o.fim);
   const ocupadosProj = new Set(no.filter(o => o.proj).map(o => o.proj));
   // projetistas só para emergência (ex.: gerente de loja) não entram nas sugestões — só são escolhidos à mão
   const emerg: string[] = cfg.emergencia || [];
-  let livres = cfg.projetistas.filter((n: string) => !ocupadosProj.has(n) && !emerg.includes(n));
+  let livres = cfg.projetistas.filter((n: string) => !ocupadosProj.has(n) && !emerg.includes(n) && !bloqueiosEm(st, n, t, t + dur).length);
   const semProj = no.filter(o => !o.proj).length;
   if (semProj) livres = livres.slice(0, Math.max(0, livres.length - semProj));
   return { livres, ocupados: no.map(o => o.cliente + (o.proj ? " · " + o.proj : "") + (o.aguardando ? " (aguardando resposta)" : "")) };
@@ -470,6 +475,9 @@ export function conflitosProj(st: any, slot: string, proj: string, excluirId?: s
 export function AvisoEncaixe({ slot, proj, excluirId, ok, setOk, durMin }: { slot: string; proj: string; excluirId?: string; ok: boolean; setOk: (v: boolean) => void; durMin?: number }) {
   const { st } = useApp() as any;
   const lst = conflitosProj(st, slot, proj, excluirId, durMin);
+  const bl = proj && (slot || "").length >= 16 ? bloqueiosEm(st, proj, +parseData(slot.slice(0, 16)), +parseData(slot.slice(0, 16)) + (durMin || cfgAgenda(st).duracaoMin || 120) * 6e4) : [];
+  if (bl.length) return <div className="full" style={{ gridColumn: "1 / -1", border: "2px solid var(--danger)", background: "var(--danger-bg)", borderRadius: 10, padding: "10px 12px", fontWeight: 700, color: "var(--danger)" }}>
+    {proj} está com a agenda fechada nesse horário: {bl.map(rotuloBloq).join(" · ")}. Escolha outro dia/horário ou reabra a agenda (no calendário).</div>;
   if (!lst.length) return null;
   const ag = lst.filter(o => !o.aguardando);
   return (
@@ -630,6 +638,75 @@ function ModalSincronizar({ dados, prev }: { dados: any[]; prev: any }) {
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
         <button className="btn" onClick={fechar}>Cancelar</button>
         <button className="btn primary" disabled={sal} onClick={ok}>OK, atualizar base</button>
+      </div>
+    </Modal>
+  );
+}
+/** chips de agenda fechada num dia (semana / mês) */
+function BloqDia({ dia }: { dia: string }) {
+  const { st } = useApp() as any;
+  const l = bloqueiosEm(st, "", +parseData(dia + "T00:00"), +parseData(dia + "T00:00") + 864e5);
+  if (!l.length) return null;
+  return <>{l.map((b: any) => <div key={b.id} title={rotuloBloq(b)} style={{ fontSize: 10.5, fontWeight: 700, color: "#7a1f1f", background: "rgba(200,60,60,.12)", borderRadius: 4, padding: "1px 4px", margin: "2px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>🚫 {b.projetista || "Todos"} · {b.motivo}</div>)}</>;
+}
+const MOTIVOS_BLOQ = ["Feriado", "Folga", "Consulta", "Falta", "Férias", "Treinamento", "Outro"];
+/** fechar a agenda: de um projetista ou de todos, dia(s) inteiro(s) ou um período */
+function ModalBloqueio({ dia }: { dia: string }) {
+  const { st, setModal, toast, recarregar } = useApp() as any;
+  const cfg = cfgAgenda(st);
+  const [proj, setProj] = useState(""); const [de, setDe] = useState(dia); const [ate, setAte] = useState(dia);
+  const [inteiro, setInteiro] = useState(true); const [hi, setHi] = useState("09:00"); const [hf, setHf] = useState("13:00");
+  const [motivo, setMotivo] = useState("Feriado"); const [obs, setObs] = useState(""); const [sal, setSal] = useState(false);
+  const fechar = () => setModal(null);
+  const ini = inteiro ? de + "T00:00" : de + "T" + hi, fim = inteiro ? somaDias(ate || de, 1) + "T00:00" : (ate || de) + "T" + hf;
+  const afetados = st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida").flatMap((c: any) => atendimentos(c, cfg).map(a => ({ c, a })))
+    .filter(({ a }: any) => (!proj || a.proj === proj) && +parseData(a.slot) < +parseData(fim) && +parseData(a.slot) + a.dur * 6e4 > +parseData(ini));
+  async function ok() {
+    if (!de || (!inteiro && (!hi || !hf))) { toast("Preencha as datas"); return; }
+    if (+parseData(fim) <= +parseData(ini)) { toast("O fim precisa ser depois do início"); return; }
+    setSal(true);
+    try { await A.ckBloqueioSalvar({ projetista: proj, inicio: ini, fim, motivo, obs }); await recarregar(); fechar(); toast("Agenda fechada" + (afetados.length ? ` — ${afetados.length} agendamento(s) no período para remanejar` : "")); }
+    catch (x: any) { toast(x.message); setSal(false); }
+  }
+  return (
+    <Modal titulo="🚫 Fechar agenda" onFechar={fechar}>
+      <div className="grid">
+        <div className="field"><label>Projetista</label><select value={proj} onChange={e => setProj(e.target.value)}><option value="">Todos (ex.: feriado)</option>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}</option>)}</select></div>
+        <div className="field"><label>Motivo</label><select value={motivo} onChange={e => setMotivo(e.target.value)}>{MOTIVOS_BLOQ.map(m => <option key={m}>{m}</option>)}</select></div>
+        <div className="field"><label>De</label><input type="date" value={de} onChange={e => { setDe(e.target.value); if (!ate || ate < e.target.value) setAte(e.target.value); }} /></div>
+        <div className="field"><label>Até</label><input type="date" value={ate} min={de} onChange={e => setAte(e.target.value)} /></div>
+        <label className="field full" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={inteiro} onChange={e => setInteiro(e.target.checked)} />Dia inteiro</label>
+        {!inteiro && <><div className="field"><label>Das</label><input type="time" step={1800} value={hi} onChange={e => setHi(e.target.value)} /></div>
+          <div className="field"><label>Até as</label><input type="time" step={1800} value={hf} onChange={e => setHf(e.target.value)} /></div></>}
+        <div className="field full"><label>Observação</label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: Nossa Senhora Aparecida, consulta médica…" /></div>
+      </div>
+      {afetados.length > 0 && <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, border: "1.5px solid var(--warn)", background: "var(--st-tratativa-bg)", fontSize: 13 }}>
+        <b>⚠️ {afetados.length} agendamento(s) já marcado(s) nesse período</b> — continuam na agenda; remaneje cada um (arraste no calendário ou “Cliente não pode vir”):
+        <ul style={{ margin: "4px 0 0", paddingLeft: 18, maxHeight: 140, overflow: "auto" }}>{afetados.map(({ c, a }: any) => <li key={c.id + a.slot}>{fmtDateTime(a.slot)} · {a.proj || "sem projetista"} · {c.cliente} (venda {c.pedido})</li>)}</ul></div>}
+      <div className="hint" style={{ marginTop: 8 }}>Com a agenda fechada, o 360 não sugere nem deixa agendar nesse período.</div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn" onClick={fechar}>Cancelar</button>
+        <button className="btn primary" style={{ background: "var(--danger)", borderColor: "var(--danger)" }} disabled={sal} onClick={ok}>OK, fechar agenda</button>
+      </div>
+    </Modal>
+  );
+}
+function ModalReabrir({ b }: { b: any }) {
+  const { setModal, toast, recarregar } = useApp() as any;
+  const [sal, setSal] = useState(false);
+  const fechar = () => setModal(null);
+  async function ok() { setSal(true); try { await A.ckBloqueioReabrir(b.id); await recarregar(); fechar(); toast("Agenda reaberta"); } catch (x: any) { toast(x.message); setSal(false); } }
+  return (
+    <Modal titulo="Agenda fechada" onFechar={fechar}>
+      <div style={{ fontSize: 14, lineHeight: 1.8 }}>
+        <div><b>{rotuloBloq(b)}</b></div>
+        <div>Projetista: <b>{b.projetista || "todos"}</b></div>
+        <div>De <b>{fmtDateTime(b.inicio)}</b> até <b>{fmtDateTime(b.fim)}</b></div>
+        {b.criadoPor && <div className="hint">Fechada por {b.criadoPor}</div>}
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn" onClick={fechar}>Fechar</button>
+        <button className="btn primary" disabled={sal} onClick={ok}>Reabrir agenda</button>
       </div>
     </Modal>
   );
@@ -833,8 +910,12 @@ function CalendarioDia() {
         <label title="Amarelo tracejado = data oferecida, aguardando resposta do cliente · borda vermelha = encaixe" style={{ fontSize: 12, display: "flex", gap: 5, alignItems: "center", marginLeft: 6 }}><input type="checkbox" style={{ width: "auto" }} checked={ofer} onChange={e => setOfer(e.target.checked)} /><i style={{ width: 12, height: 10, borderRadius: 3, background: "#ffe8a3", border: "1.5px dashed #b8860b", display: "inline-block" }} />aguardando resposta</label>
         <b style={{ fontSize: 16, marginLeft: "auto" }}>{d.toLocaleDateString("pt-BR")} - {DIAS[d.getDay()]}</b>
         <span className="pill">{evs.filter(x => x.tipo === "ag").length} agendado(s)</span>
+        <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalBloqueio dia={dia} />)}>🚫 Fechar agenda</button>
         <span className="pill" style={{ cursor: "help" }} title="Clique no cliente para abrir a ficha. Arraste o cliente para outro horário ou outra coluna para trocar o projetista; puxe a borda de baixo para aumentar ou diminuir o tempo. Toda alteração pede confirmação. Faixa hachurada estreita = almoço (13h às 15h). Clique na letra do projetista para esconder ou mostrar a coluna.">ⓘ como usar</span>
       </div>
+      {bloqueiosEm(st, "", +parseData(dia + "T00:00"), +parseData(dia + "T00:00") + 864e5).filter((b: any) => !b.projetista).map((b: any) =>
+        <div key={"bt" + b.id} onClick={() => setModal(<ModalReabrir b={b} />)} style={{ cursor: "pointer", margin: "0 0 6px", padding: "6px 10px", borderRadius: 8, background: "var(--danger-bg)", border: "1.5px solid var(--danger)", color: "var(--danger)", fontWeight: 800, fontSize: 13 }}>
+          {rotuloBloq(b)} — agenda fechada para todos {b.inicio.slice(11, 16) !== "00:00" || b.fim.slice(11, 16) !== "00:00" ? `(${b.inicio.slice(11, 16)} às ${b.fim.slice(11, 16)})` : ""} · clique para reabrir</div>)}
       <div style={{ overflowX: "auto" }}>
         <div ref={gradeRef} style={{ display: "grid", gridTemplateColumns: `40px repeat(${colunas.length}, minmax(150px, 1fr))`, minWidth: 40 + colunas.length * 150 }}>
           <div />
@@ -846,6 +927,13 @@ function CalendarioDia() {
             <div key={"c" + n} onDragOver={e => { if (n) e.preventDefault(); }} onDrop={e => soltar(e, n)}
               style={{ position: "relative", height: ALTURA, borderLeft: "1px solid var(--line)", background: "var(--surface-2)" }}>
               {horas.map(h => <div key={h} style={{ position: "absolute", top: yOf(h * 60), height: hAlt(h), left: 0, right: 0, borderTop: "1px solid var(--line-soft)", background: almoco(h) ? "repeating-linear-gradient(45deg, transparent 0 6px, rgba(128,128,128,.08) 6px 12px)" : undefined }} />)}
+              {n && bloqueiosEm(st, n, +parseData(dia + "T00:00"), +parseData(dia + "T00:00") + 864e5).map((b: any) => {
+                const d0 = +parseData(dia + "T00:00"), bi = Math.max(H_INI * 60, (+parseData(b.inicio) - d0) / 6e4), bf = Math.min(H_FIM * 60, (+parseData(b.fim) - d0) / 6e4);
+                if (bf <= bi) return null;
+                return <div key={"b" + b.id} onClick={() => setModal(<ModalReabrir b={b} />)} title={rotuloBloq(b) + " — clique para reabrir"}
+                  style={{ position: "absolute", top: yOf(bi), height: Math.max(20, yOf(bf) - yOf(bi)), left: 2, right: 2, borderRadius: 4, cursor: "pointer", zIndex: 1, padding: "4px 6px", fontSize: 11.5, fontWeight: 800, color: "#7a1f1f",
+                    background: "repeating-linear-gradient(45deg, rgba(200,60,60,.16) 0 8px, rgba(200,60,60,.08) 8px 16px)", border: "1.5px solid rgba(200,60,60,.5)" }}>{rotuloBloq(b)}</div>;
+              })}
               {(porCol[n] || []).map(x0 => { let x = x0;
                 const k = ck(x.c), p = k.planilha || {}, cor = n ? corProj(n) : "#6b7280";
                 if (estica && estica.id === x.c.id && (x.extra ?? -1) < 0) x = { ...x, fim: estica.fim };
@@ -855,7 +943,7 @@ function CalendarioDia() {
                 return (
                   <div key={x.c.id + ":" + (x.extra ?? -1)} onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + (x.tipo === "ag" && (x.extra ?? -1) < 0 ? " — arraste para outro horário ou projetista" : (x.extra ?? -1) >= 0 ? " — dia adicional (altere na ficha do cliente)" : "")}
                     draggable={x.tipo === "ag" && (x.extra ?? -1) < 0} onDragStart={e => { e.dataTransfer.setData("text/plain", x.c.id); e.dataTransfer.effectAllowed = "move"; pega.current = e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top; }}
-                    style={{ position: "absolute", top: top + 1, height: alt, left: `calc(${(x.lane || 0) * w}% + 3px)`, width: `calc(${w}% - 6px)`, overflow: "hidden", cursor: "pointer",
+                    style={{ position: "absolute", zIndex: 2, top: top + 1, height: alt, left: `calc(${(x.lane || 0) * w}% + 3px)`, width: `calc(${w}% - 6px)`, overflow: "hidden", cursor: "pointer",
                       borderRadius: 4, padding: "4px 6px", fontSize: 11.5, lineHeight: 1.3, color: x.tipo === "ag" ? "#fff" : "#6b4a00",
                       background: x.tipo === "ag" ? cor : "#ffe8a3", border: x.tipo === "ag" ? (k.encaixe ? "2.5px solid var(--danger)" : "none") : `2px dashed ${cor}` }}>
                     <div style={{ fontWeight: 800, fontSize: compacto ? 11.5 : 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.tipo === "of" ? "⏳ " : k.encaixe ? "⚠️ " : ""}{hm(x.ini)} - {hm(x.fim)}{(x.total || 1) > 1 ? ` · dia ${x.n}/${x.total}` : ""}{x.tipo === "ag" && compacto ? (conf === "confirmada" ? " ✅" : conf === "enviada" ? " 📨" : " ⏳") : ""}</div>
@@ -931,7 +1019,7 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
       {modo === "semana" ? (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: 120 + diasSemana.length * 130 }}>
-            <thead><tr><th style={{ ...th, width: 60 }}></th>{diasSemana.map(d => { const iso = isoDia(d); return <th key={iso} style={{ ...th, color: iso === hoje() ? "var(--st-concluida)" : undefined }}>{DIAS[d.getDay()].split("-")[0]}<div style={{ fontSize: 15 }}>{d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</div></th>; })}</tr></thead>
+            <thead><tr><th style={{ ...th, width: 60 }}></th>{diasSemana.map(d => { const iso = isoDia(d); return <th key={iso} style={{ ...th, color: iso === hoje() ? "var(--st-concluida)" : undefined }}>{DIAS[d.getDay()].split("-")[0]}<div style={{ fontSize: 15 }}>{d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</div><BloqDia dia={iso} /></th>; })}</tr></thead>
             <tbody>{horas.map(h => <tr key={h}>
               <td style={{ padding: "6px", fontWeight: 700, fontSize: 13, borderBottom: "1px solid var(--line-soft)", verticalAlign: "top", color: "var(--ink-soft)" }}>{h}</td>
               {diasSemana.map(d => { const iso = isoDia(d); const l = (porDia[iso] || []).filter((x: any) => x.quando.slice(11, 16) === h);
@@ -945,6 +1033,7 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
           {celulas.map(d => { const iso = isoDia(d), l = porDia[iso] || [], fora = d.getMonth() !== r.getMonth();
             return <div key={iso} onClick={() => { setRef(iso); setModo("semana"); }} style={{ minHeight: 92, padding: 5, borderTop: "1px solid var(--line-soft)", borderLeft: "1px solid var(--line-soft)", cursor: "pointer", opacity: fora ? .45 : 1, background: iso === hoje() ? "var(--st-concluida-bg)" : undefined }}>
               <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 3, display: "flex", justifyContent: "space-between" }}><span>{d.getDate()}</span>{l.length > 0 && <span className="pill">{l.length}</span>}</div>
+              <BloqDia dia={iso} />
               {l.slice(0, 4).map((x: any) => <Ev key={x.c.id} x={x} compacto />)}
               {l.length > 4 && <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>+{l.length - 4} — clique para ver</div>}
             </div>; })}

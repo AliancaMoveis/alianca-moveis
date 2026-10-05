@@ -18,7 +18,10 @@ export type Estado = {
   reembolsos: Reembolso[];
   /** cruzamento Minha Visita × Exact, por nº de venda (setor de Medidas) */
   medidasCruz?: Record<string, MedidaCruz>;
+  /** períodos com a agenda do checklist fechada (feriado, folga, consulta…); projetista "" = todos */
+  ckBloqueios?: CkBloqueio[];
 };
+export type CkBloqueio = { id: number; projetista: string; inicio: string; fim: string; motivo: string; obs: string; criadoPor: string };
 export type MedidaCruz = { venda: string; comprador: string; telefone: string; visitado: string; consultor: string; statusMv: string; visitaEm: string; medidor: string; situacao: string; resultado: "ok" | "sem"; tratativa: string; obs: string; cruzadoEm: string; atualizadoEm: string; atualizadoPor: string };
 export type Reembolso = { id: string; usuarioId: string; chamadoId: string; data: string; tipo: string; valor: number; descricao: string; path: string; status: string; criadoEm: string; decididoEm: string; motivo: string };
 export type Montador = { id: string; nome: string; telefone: string; ativo: boolean };
@@ -69,7 +72,7 @@ export async function carregarEstado(tentativa = 0): Promise<Estado> {
   }
 }
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda, reemb, proms, mcruz] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda, reemb, proms, mcruz, bloqs] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em", "criado_em"),
@@ -88,6 +91,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("reembolsos", "*", "criado_em").catch(() => []), // o próprio pedido ou a Gestão (RLS)
     todos("venda_itens", "*", "registrado_em").catch(() => []), // nºs de venda, promissórias e pagamentos — só quem vê o valor (RLS)
     todos("medidas_cruzamento", "*", "venda").catch(() => []), // Medidas e Checklist (RLS)
+    todos("checklist_bloqueios", "*", "inicio").catch(() => []), // agenda fechada do checklist (RLS)
   ]);
   // lançamentos da venda: nºs pagos, promissórias (com saldo) e pagamentos de promissória
   const itensDe: Record<string, any[]> = {};
@@ -150,6 +154,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     reembolsos: (reemb as any[]).map((r: any) => ({ id: r.id, usuarioId: r.usuario_id, chamadoId: r.chamado_id || "", data: r.data, tipo: r.tipo, valor: Number(r.valor), descricao: r.descricao || "",
       path: r.comprovante_path, status: r.status, criadoEm: r.criado_em, decididoEm: r.decidido_em || "", motivo: r.motivo || "" })),
     montadores: montadores.map((m: any) => ({ id: m.id, nome: m.nome, telefone: m.telefone || "", ativo: m.ativo })),
+    ckBloqueios: (bloqs as any[]).filter((b: any) => b.ativo).map((b: any) => ({ id: b.id, projetista: b.projetista || "", inicio: String(b.inicio).slice(0, 16).replace(" ", "T"), fim: String(b.fim).slice(0, 16).replace(" ", "T"), motivo: b.motivo, obs: b.obs || "", criadoPor: b.criado_por || "" })),
     medidasCruz: Object.fromEntries((mcruz as any[]).map((m: any) => [m.venda, { venda: m.venda, comprador: m.comprador, telefone: m.telefone, visitado: m.visitado, consultor: m.consultor,
       statusMv: m.status_mv, visitaEm: m.visita_em, medidor: m.medidor, situacao: m.situacao_exact, resultado: m.resultado, tratativa: m.tratativa, obs: m.obs,
       cruzadoEm: m.cruzado_em, atualizadoEm: m.atualizado_em, atualizadoPor: m.atualizado_por }])),

@@ -64,6 +64,8 @@ export function estadoMock(): Estado {
     fabricas: [1, 2, 3, 4].map(i => ({ id: `00000000-0000-4000-c000-00000000000${i}`, nome: ["Móveis Bartira", "Henn Estofados", "Madesa Indústria", "Kappesberg"][i - 1], emails: "", repId: ["r1", "r2", "r3", "r1"][i - 1] })),
     config: { comissaoPct: 1.5, pagamentoVisita: 40 },
     reembolsos: [],
+    ckBloqueios: [{ id: 1, projetista: "", inicio: new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10) + "T00:00", fim: new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10) + "T00:00", motivo: "Feriado", obs: "teste", criadoPor: "Bruno" },
+      { id: 2, projetista: "Angela", inicio: new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10) + "T15:00", fim: new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10) + "T19:00", motivo: "Consulta", obs: "", criadoPor: "Bruno" }],
     montadores: [{ id: "m1", nome: "João Montador", telefone: "41999990011", ativo: true }, { id: "m2", nome: "Carlos Montador", telefone: "", ativo: true }],
     chamados: (seed as any[]).concat(POSVENDA).concat(MEDIDAS).concat(CHECKLIST).map(c => ({
       id: c.id, tipo: c.tipo, setorDestino: c.sd, status: c.st, criadoEm: H(c.cr).toISOString(), slaResposta: H(c.sla).toISOString(),
