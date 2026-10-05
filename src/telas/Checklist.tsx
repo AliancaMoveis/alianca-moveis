@@ -84,6 +84,9 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
   const [importando, setImportando] = useState(false);
   const arq = useRef<HTMLInputElement>(null);
   const [per, setPer] = useState("todos"); const [de, setDe] = useState(""); const [ate, setAte] = useState("");
+  // confirmação de presença: filtro pela data do checklist (vale para as três etapas)
+  const [diaF, setDiaF] = useState(""); const [diaX, setDiaX] = useState(hojeISO());
+  const diaAlvo = diaF === "hoje" ? hojeISO() : diaF === "amanha" ? somaDias(hojeISO(), 1) : diaF === "data" ? diaX : "";
   // período pela data de inclusão (da planilha): todos · deste mês · meses anteriores · data determinada — vale para os números, os filtros e a lista
   const ini = hoje().slice(0, 7) + "-01";
   const noPer = (c: any) => {
@@ -120,9 +123,9 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       encerrados: ["Realizados / encerrados", G("encerrado")],
     },
     confirmar: {
-      a_confirmar: [`A confirmar (próximos ${confDias} dias)`, c => aConfirmar(c, confDias)],
-      enviada: ["Aguardando confirmação de presença", c => G("agendado")(c) && ck(c).confirmacao === "enviada" && diaAg(c) >= hoje()],
-      confirmada: ["Presença confirmada", c => G("agendado")(c) && ck(c).confirmacao === "confirmada" && diaAg(c) >= hoje()],
+      a_confirmar: [diaAlvo ? "A confirmar" : `A confirmar (próximos ${confDias} dias)`, c => diaAlvo ? G("agendado")(c) && !ck(c).confirmacao && diaAg(c) === diaAlvo : aConfirmar(c, confDias)],
+      enviada: ["Aguardando confirmação de presença", c => G("agendado")(c) && ck(c).confirmacao === "enviada" && (diaAlvo ? diaAg(c) === diaAlvo : diaAg(c) >= hoje())],
+      confirmada: ["Presença confirmada", c => G("agendado")(c) && ck(c).confirmacao === "confirmada" && (diaAlvo ? diaAg(c) === diaAlvo : diaAg(c) >= hoje())],
     },
   };
   const FILTROS = FILTROS_ABA[aba] || {};
@@ -188,6 +191,12 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
           {per !== "todos" && <button className="btn ghost sm" onClick={() => { setPer("todos"); setDe(""); setAte(""); }}>Limpar</button>}
         </div>
         <div className="chips" style={{ marginTop: 10 }}>{Object.entries(FILTROS).map(([k, [l]]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
+        {aba === "confirmar" && <div className="chips" style={{ marginTop: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 12.5, color: "var(--ink-faint)", marginRight: 4 }}>📅 Data do checklist:</span>
+          {([["", "Todas"], ["hoje", "Hoje"], ["amanha", "Amanhã"], ["data", "Escolher data"]] as [string, string][]).map(([v, l]) => <button key={v} className={"chip" + (diaF === v ? " on" : "")} onClick={() => setDiaF(v)}>{l}</button>)}
+          {diaF === "data" && <input type="date" value={diaX} onChange={e => e.target.value && setDiaX(e.target.value)} style={{ width: "auto", padding: "4px 8px" }} />}
+          {diaAlvo && <span className="hint">{new Date(parseData(diaAlvo)).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" })}</span>}
+        </div>}
       </div>
       {porDia && lista.length ? Object.entries(lista.reduce((g: any, c: any) => { const d = diaAg(c) || "—"; (g[d] = g[d] || []).push(c); return g; }, {})).map(([d, cs]: any) =>
         <div key={d} style={{ marginBottom: 16 }}>
@@ -235,7 +244,8 @@ function CartaoCk({ c, aba }: any) {
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: 420, justifyContent: "flex-end" }}>
           {g === "agendado" && !k.confirmacao && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} inicial="confirmacao" />)}>📨 Enviar confirmação</button>}
-          {g === "agendado" && k.confirmacao !== "confirmada" && <button className="btn sm primary" onClick={() => executar(() => A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }), "Presença confirmada")}>✅ Presença confirmada</button>}
+          {g === "agendado" && k.confirmacao !== "confirmada" && <button className="btn sm" style={{ background: "var(--ok, #0f8a5f)", color: "#fff", borderColor: "var(--ok, #0f8a5f)", fontWeight: 700 }} onClick={() => executar(() => A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }), "Presença confirmada")}>✅ Confirmou presença</button>}
+          {g === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Não pode vir</button>}
           {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
           {g === "agendar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="espera" />)}>⏸ Aguardando</button>}
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<Modal titulo={"Alterar agenda · " + c.cliente + " · venda " + c.pedido} onFechar={() => setModal(null)}><EditorAgenda c={c} /></Modal>)}>✏️ Projetista / horário</button>}
@@ -519,6 +529,63 @@ export function EditorAgenda({ c }: any) {
       </div>
       <DiasExtras c={c} />
     </div>
+  );
+}
+/** cliente agendado não pode vir: remarca já uma nova data ou volta para a lista de agendamento */
+export function ModalNaoPodeVir({ c }: any) {
+  const { st, setModal, toast, recarregar } = useApp() as any;
+  const k = ck(c), cfg = cfgAgenda(st);
+  const [modo, setModo] = useState<"nova" | "lista">("nova");
+  const [motivo, setMotivo] = useState("");
+  const [data, setData] = useState("");
+  const [proj, setProj] = useState<string>(k.projetista || "");
+  const [dur, setDur] = useState<number>(durCk(c, cfg));
+  const [ret, setRet] = useState("");
+  const [enc, setEnc] = useState(false); const [sal, setSal] = useState(false);
+  const fechar = () => setModal(null);
+  async function ok() {
+    if (!motivo.trim()) { toast("Informe o motivo de o cliente não poder vir"); return; }
+    if (modo === "nova") {
+      if (data.length < 16 || !proj) { toast("Escolha a nova data, o horário e o projetista"); return; }
+      if (conflitosProj(st, data, proj, c.id, dur).some(o => !o.aguardando) && !enc) { toast("Marque “Confirmo o encaixe” ou escolha outro horário"); return; }
+    }
+    setSal(true);
+    try {
+      if (modo === "nova") await A.checklistRegistrar(c.id, { acao: "mover", data, projetista: proj, duracaoMin: dur, encaixe: enc, naoPodeVir: true, obs: motivo.trim() });
+      else await A.checklistRegistrar(c.id, { acao: "desmarcar", naoPodeVir: true, obs: motivo.trim(), retornarEm: ret });
+      await recarregar(); fechar();
+      toast(modo === "nova" ? "Nova data agendada — altere também no sistema interno" : "Cliente voltou para a lista de agendamento — desmarque também no sistema interno");
+    } catch (x: any) { toast(x.message); setSal(false); }
+  }
+  const opc = (v: "nova" | "lista", t: string, d: string) => (
+    <label style={{ flex: 1, minWidth: 200, display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer", padding: "10px 12px", borderRadius: 10, border: `2px solid ${modo === v ? "var(--brand, #2f6fd6)" : "var(--line)"}`, background: modo === v ? "var(--surface-2)" : undefined }}>
+      <input type="radio" style={{ width: "auto", marginTop: 3 }} checked={modo === v} onChange={() => setModo(v)} /><span><b>{t}</b><br /><span className="hint">{d}</span></span></label>);
+  return (
+    <Modal titulo={"Cliente não pode vir · " + c.cliente} onFechar={fechar}>
+      <div style={{ fontSize: 13.5, marginBottom: 10 }}>Venda <b>{c.pedido}</b> · agendado para <b>{dataLonga(String(k.agendadoPara || "").slice(0, 16))}</b> com <b>{k.projetista || "—"}</b>{k.naoPodeVir ? <span className="pill" style={{ marginLeft: 8 }}>já remarcou {k.naoPodeVir}x por não poder vir</span> : null}</div>
+      <div className="grid">
+        <div className="field full"><label>Motivo <span className="req-star">*</span></label><input value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex.: cliente viajando, imprevisto no trabalho, obra atrasou…" /></div>
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "10px 0" }}>
+        {opc("nova", "📅 Agendar nova data agora", "Já combinou outro dia com o cliente")}
+        {opc("lista", "↩️ Voltar para a lista de agendamento", "Ainda não tem nova data — o cliente volta para “A agendar”")}
+      </div>
+      {modo === "nova" ? <div className="grid">
+        <div className="field"><label>Nova data e horário <span className="req-star">*</span></label><input type="datetime-local" step={1800} value={data} onChange={e => setData(e.target.value)} /></div>
+        <div className="field"><label>Projetista <span className="req-star">*</span></label><select value={proj} onChange={e => setProj(e.target.value)}><option value="">Selecione…</option>{cfg.projetistas.map((n: string) => <option key={n} value={n}>{n}</option>)}</select></div>
+        <div className="field"><label>Duração</label><select value={dur} onChange={e => setDur(Number(e.target.value))}>{Array.from(new Set([...DURACOES, dur])).sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}</option>)}</select></div>
+        <Sugestoes valor={data} excluirId={c.id} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); }} projetista={proj} />
+        <AvisoEncaixe slot={data} proj={proj} excluirId={c.id} ok={enc} setOk={setEnc} durMin={dur} />
+        {Array.isArray(k.diasExtras) && k.diasExtras.length > 0 && <div className="hint" style={{ gridColumn: "1 / -1" }}>Este cliente tem mais {k.diasExtras.length} dia(s) de atendimento — confira se eles também precisam mudar (na ficha, em “Mais dias de atendimento”).</div>}
+      </div> : <div className="grid">
+        <div className="field"><label>Retornar o contato em <span className="hint">(vazio = volta para “A agendar” hoje)</span></label><input type="date" min={hoje()} value={ret} onChange={e => setRet(e.target.value)} /></div>
+        <div className="hint" style={{ gridColumn: "1 / -1" }}>O horário fica livre na agenda{Array.isArray(k.diasExtras) && k.diasExtras.length ? " (inclusive os dias adicionais)" : ""}. A confirmação de presença é zerada.</div>
+      </div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn" onClick={fechar}>Cancelar</button>
+        <button className="btn primary" disabled={sal} onClick={ok}>OK, confirmar</button>
+      </div>
+    </Modal>
   );
 }
 type DiaEx = { data: string; duracaoMin: number; projetista: string };

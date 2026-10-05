@@ -9,7 +9,7 @@ import {
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
-import { CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
+import { CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
@@ -761,7 +761,13 @@ function Vinculados({ c }: any) {
 
 const paraLocal = (iso: string) => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 function BlocoChecklist({ c }: any) {
-  const { R, setModal } = useApp() as any;
+  const { R, setModal, toast, recarregar } = useApp() as any;
+  const [conf, setConf] = useState(false);
+  async function confirmarPresenca() {
+    setConf(true);
+    try { await A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }); await recarregar(); toast("Presença confirmada ✅"); }
+    catch (x: any) { toast(x.message); } finally { setConf(false); }
+  }
   const k = ck(c), e = etapaCk(c), [nome, cor] = ETAPA_CK[e] || [e, "var(--line)"], p = k.planilha || {};
   return (
     <div className="resp-box" style={{ borderColor: cor }}><h4>Checklist (revisão do projeto) <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{nome}</span></h4>
@@ -772,6 +778,7 @@ function BlocoChecklist({ c }: any) {
       {k.agendadoPara && <RowSb k="Agendado para">{fmtDT(k.agendadoPara)}{k.duracaoMin ? " · " + (k.duracaoMin % 60 ? (k.duracaoMin / 60).toFixed(1).replace(".", ",") : k.duracaoMin / 60) + "h" : ""}{k.ambiente === "pronto" ? " · ambiente pronto" : ""}</RowSb>}
       {Array.isArray(k.diasExtras) && k.diasExtras.length > 0 && <RowSb k="Mais dias">{k.diasExtras.map((e: any, i: number) => <div key={i}>{fmtDT(e.data)}{e.duracaoMin ? " · " + (e.duracaoMin % 60 ? (e.duracaoMin / 60).toFixed(1).replace(".", ",") : e.duracaoMin / 60) + "h" : ""} · {e.projetista}</div>)}</RowSb>}
       {(k.agendadoPara || k.projetista) && <RowSb k="Projetista">{k.projetista || "não informado"}</RowSb>}
+      {k.naoPodeVir ? <RowSb k="Não pôde vir">{k.naoPodeVir}x (remarcado / desmarcado)</RowSb> : null}
       {e === "agendado" && <RowSb k="Presença">{(CONF_CK[k.confirmacao || ""] || CONF_CK[""])[0]}</RowSb>}
       {motivoCk(c) && <RowSb k="Aguardando">{motivoCk(c)}</RowSb>}
       {k.retornarEm && <RowSb k="Retornar em">{fmtDate(String(k.retornarEm).slice(0, 10))}</RowSb>}
@@ -779,6 +786,10 @@ function BlocoChecklist({ c }: any) {
       {R.podeChecklist() && e === "agendado" && c.status !== "concluida" && <EditorAgenda key={String(k.agendadoPara) + (k.projetista || "") + (k.duracaoMin || "")} c={c} />}
       {R.podeChecklist() && <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
         {c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
+        {e === "agendado" && c.status !== "concluida" && (k.confirmacao === "confirmada"
+          ? <span className="pill" style={{ background: "var(--ok, #0f8a5f)", color: "#fff", fontWeight: 700, padding: "6px 12px" }}>✅ Presença confirmada</span>
+          : <button className="btn sm" disabled={conf} style={{ background: "var(--ok, #0f8a5f)", color: "#fff", borderColor: "var(--ok, #0f8a5f)", fontWeight: 700 }} onClick={confirmarPresenca}>✅ Confirmou presença</button>)}
+        {e === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Cliente não pode vir</button>}
         <button className="btn primary sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : "Registrar resultado"}</button>
         <button className="btn sm" onClick={() => setModal(<ModalNotas c={c} />)}>📝 Colar mensagem / anotar</button>
         <button className="btn ghost sm" style={{ color: "var(--danger)", marginLeft: "auto" }} onClick={() => setModal(<ConfirmaExcluir ids={[c.id]} rotulo={c.cliente + " (venda " + c.pedido + ")"} />)}>🗑 Excluir do checklist</button>
