@@ -146,7 +146,7 @@ export default function Shell() {
             {atual === "admin" && <Admin />}
             {atual === "relatorios" && <Relatorios />}
             {atual === "posvenda" && <PosVenda />}
-            {atual === "checklist" && <Checklist />}
+            {(atual === "checklist" || atual.startsWith("ck_")) && <Checklist key={atual} aba={atual === "checklist" ? "agendar" : atual.slice(3)} />}
             {atual === "treino" && <Treino />}
           </main>
         </div>
