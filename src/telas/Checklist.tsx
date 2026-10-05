@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { dataPlanilha, lerXlsx } from "../lib/planilha";
+import { dataPlanilha, datasPlanilha, lerXlsx } from "../lib/planilha";
 import { fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
@@ -148,7 +148,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       if (!("Título" in linhas[0]) || !("Contato" in linhas[0])) throw new Error("Não reconheci a planilha: preciso das colunas “Título” (Venda nº) e “Contato”");
       const dados = linhas.map(l => ({
         numero: l["Título"], cliente: l["Contato"], telefone: l["Telefone 1"], telefone2: l["Telefone 2"], vendedor: l["Vendedor"], medidor: l["Medidor"],
-        inclusao: dataPlanilha(l["Inclusão"]).slice(0, 10), agendadoPara: ((x: string) => x.length > 10 ? x : x ? x + "T00:00" : "")(dataPlanilha(l["Data do Agendamento"])),
+        inclusao: dataPlanilha(l["Inclusão"]).slice(0, 10), ...((ds: string[]) => ({ agendadoPara: ds[0] || "", diasExtras: ds.slice(1).map(d => ({ data: d })) }))(datasPlanilha(l["Data do Agendamento"], hojeISO())),
         valor: l["Valor Negociado"], cupom: l["Valor dos Cupons"], minhaVisita: l["Cliente Minha Visita"], situacao: l["Situação"],
         descricao: (l["Descrição"] || "").replace(/Venda realizada e encaminhada para Checklist/gi, "").trim(),
       }));

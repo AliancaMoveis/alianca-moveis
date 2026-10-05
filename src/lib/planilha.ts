@@ -49,3 +49,20 @@ export function dataPlanilha(v: string): string {
   const d = `${ano}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   return m[4] ? `${d}T${m[4].padStart(2, "0")}:${m[5]}` : d;
 }
+
+/** "22/10/26, 09:00, 23/10/26, 09:00" → todas as datas ("AAAA-MM-DDTHH:MM"), em ordem.
+ *  Várias datas = atendimento em mais de um dia. Datas que já passaram são histórico de remarcação e são ignoradas
+ *  (se todas já passaram, fica só a última). */
+export function datasPlanilha(v: string, hojeIso: string): string[] {
+  const s = (v || "").trim(); if (!s) return [];
+  const out: string[] = [];
+  const re = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:,?\s*(\d{1,2}):(\d{2}))?/g; let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const ano = m[3].length === 2 ? "20" + m[3] : m[3];
+    out.push(`${ano}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}T${m[4] ? m[4].padStart(2, "0") + ":" + m[5] : "00:00"}`);
+  }
+  if (!out.length) { const d = dataPlanilha(s); return d ? [d.length > 10 ? d : d + "T00:00"] : []; }
+  const ord = Array.from(new Set(out)).sort();
+  const fut = ord.filter(d => d.slice(0, 10) >= hojeIso);
+  return fut.length ? fut : [ord[ord.length - 1]];
+}
