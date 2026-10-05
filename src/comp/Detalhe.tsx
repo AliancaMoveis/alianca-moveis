@@ -770,6 +770,7 @@ function BlocoChecklist({ c }: any) {
       <RowSb k="Medidor">{p.medidor || "não informado na planilha"}{k.medidaId ? (k.medidaOk ? " · medidas conferidas" : " · aguardando o setor de Medidas (" + k.medidaId + ")") : ""}</RowSb>
       {k.proposta && <RowSb k="Data oferecida">{fmtDT(k.proposta)}</RowSb>}
       {k.agendadoPara && <RowSb k="Agendado para">{fmtDT(k.agendadoPara)}{k.duracaoMin ? " · " + (k.duracaoMin % 60 ? (k.duracaoMin / 60).toFixed(1).replace(".", ",") : k.duracaoMin / 60) + "h" : ""}{k.ambiente === "pronto" ? " · ambiente pronto" : ""}</RowSb>}
+      {Array.isArray(k.diasExtras) && k.diasExtras.length > 0 && <RowSb k="Mais dias">{k.diasExtras.map((e: any, i: number) => <div key={i}>{fmtDT(e.data)}{e.duracaoMin ? " · " + (e.duracaoMin % 60 ? (e.duracaoMin / 60).toFixed(1).replace(".", ",") : e.duracaoMin / 60) + "h" : ""} · {e.projetista}</div>)}</RowSb>}
       {(k.agendadoPara || k.projetista) && <RowSb k="Projetista">{k.projetista || "não informado"}</RowSb>}
       {e === "agendado" && <RowSb k="Presença">{(CONF_CK[k.confirmacao || ""] || CONF_CK[""])[0]}</RowSb>}
       {motivoCk(c) && <RowSb k="Aguardando">{motivoCk(c)}</RowSb>}
