@@ -113,6 +113,8 @@ export const A = {
   ativarMontador: (id: string, ativo: boolean) => rpc("ativar_montador", { p_id: id, p_ativo: ativo }),
   posvendaRelato: (id: string, origem: string, peca: string) => rpc("posvenda_relato", { p_id: id, p_origem: origem, p_peca: peca }),
   posvendaAbertura: (id: string, p: any) => rpc("posvenda_abertura", { p_id: id, p }),
+  medidasCruzSalvar: (linhas: any[]) => rpc<{ novos: number; atualizados: number }>("medidas_cruzamento_salvar", { p: linhas }),
+  medidasCruzTratar: (venda: string, tratativa: string, obs: string, resultado?: string) => rpc("medidas_cruzamento_tratar", { p_venda: venda, p_tratativa: tratativa, p_obs: obs, p_resultado: resultado || null }),
   checklistSincronizar: (linhas: any[], aplicar: boolean, forcar = false) => rpc<any>("checklist_sincronizar", { p: linhas, p_aplicar: aplicar, p_forcar: forcar }),
   checklistImportar: (linhas: any[]) => rpc<{ novos: number; ignorados: number; agendados?: number }>("checklist_importar", { p: linhas }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),

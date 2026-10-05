@@ -7,6 +7,7 @@ import { dataPlanilha, datasPlanilha, lerXlsx } from "../lib/planilha";
 import { fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
+import { SeloMedidas } from "./Medidas";
 
 export const ETAPA_CK: Record<string, [string, string]> = {
   a_contatar: ["A contatar", "var(--primary)"], aguardando: ["Mensagem enviada · aguardando resposta", "var(--warn)"], outra_data: ["Aguardando · pediu outra data", "var(--st-respondida)"],
@@ -334,6 +335,7 @@ function DadosCk({ c }: any) {
         {it("Cupom", p.cupom)}
         {it("Negociado", p.valor)}
         {it("Tel.", tels.join(" / "))}
+        {(st.medidasCruz || {})[c.pedido] && <SeloMedidas peq resultado={st.medidasCruz[c.pedido].resultado} />}
       </div>
       {p.minhaVisita && <div style={{ marginTop: 6, padding: "6px 10px", borderRadius: 8, background: "var(--st-respondida-bg)", color: "var(--st-respondida)", fontSize: 12.5, fontWeight: 600 }}>
         🏠 Cliente Minha Visita: {p.minhaVisita}{consultor ? " · consultor " + consultor : ""} — o consultor já esteve no local (medidas feitas na visita).

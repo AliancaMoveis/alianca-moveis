@@ -9,6 +9,7 @@ import {
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
+import { SeloMedidas } from "../telas/Medidas";
 import { CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
@@ -761,7 +762,7 @@ function Vinculados({ c }: any) {
 
 const paraLocal = (iso: string) => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 function BlocoChecklist({ c }: any) {
-  const { R, setModal, toast, recarregar } = useApp() as any;
+  const { R, st, setModal, toast, recarregar } = useApp() as any;
   const [conf, setConf] = useState(false);
   async function confirmarPresenca() {
     setConf(true);
@@ -772,6 +773,7 @@ function BlocoChecklist({ c }: any) {
   return (
     <div className="resp-box" style={{ borderColor: cor }}><h4>Checklist (revisão do projeto) <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{nome}</span></h4>
       <RowSb k="Venda"><b>{c.pedido || "—"}</b></RowSb>
+      {(st.medidasCruz || {})[c.pedido] && (() => { const m = st.medidasCruz[c.pedido]; return <RowSb k="Medidas"><SeloMedidas resultado={m.resultado} />{m.consultor ? " · consultor " + m.consultor : ""}{m.visitado ? " · visitado como “" + m.visitado + "”" : ""}{m.tratativa ? " · " + m.tratativa : ""}{m.obs ? " — " + m.obs : ""}</RowSb>; })()}
       {p.vendedor && <RowSb k="Vendedor">{p.vendedor}</RowSb>}
       <RowSb k="Medidor">{p.medidor || "não informado na planilha"}{k.medidaId ? (k.medidaOk ? " · medidas conferidas" : " · aguardando o setor de Medidas (" + k.medidaId + ")") : ""}</RowSb>
       {k.proposta && <RowSb k="Data oferecida">{fmtDT(k.proposta)}</RowSb>}

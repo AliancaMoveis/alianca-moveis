@@ -16,7 +16,10 @@ export type Estado = {
   config: { comissaoPct: number; pagamentoVisita: number; valorVendaMkt?: number; modoTeste?: boolean; auxilioFixo?: number; diaAuxilio?: number; checklistAgenda?: any };
   montadores: Montador[];
   reembolsos: Reembolso[];
+  /** cruzamento Minha Visita × Exact, por nº de venda (setor de Medidas) */
+  medidasCruz?: Record<string, MedidaCruz>;
 };
+export type MedidaCruz = { venda: string; comprador: string; telefone: string; visitado: string; consultor: string; statusMv: string; visitaEm: string; medidor: string; situacao: string; resultado: "ok" | "sem"; tratativa: string; obs: string; cruzadoEm: string; atualizadoEm: string; atualizadoPor: string };
 export type Reembolso = { id: string; usuarioId: string; chamadoId: string; data: string; tipo: string; valor: number; descricao: string; path: string; status: string; criadoEm: string; decididoEm: string; motivo: string };
 export type Montador = { id: string; nome: string; telefone: string; ativo: boolean };
 
@@ -66,7 +69,7 @@ export async function carregarEstado(tentativa = 0): Promise<Estado> {
   }
 }
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda, reemb, proms] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda, reemb, proms, mcruz] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em", "criado_em"),
@@ -84,6 +87,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("posvenda", "*"), // só o setor Pós-venda e a Gestão recebem linhas (RLS)
     todos("reembolsos", "*", "criado_em").catch(() => []), // o próprio pedido ou a Gestão (RLS)
     todos("venda_itens", "*", "registrado_em").catch(() => []), // nºs de venda, promissórias e pagamentos — só quem vê o valor (RLS)
+    todos("medidas_cruzamento", "*", "venda").catch(() => []), // Medidas e Checklist (RLS)
   ]);
   // lançamentos da venda: nºs pagos, promissórias (com saldo) e pagamentos de promissória
   const itensDe: Record<string, any[]> = {};
@@ -146,6 +150,9 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     reembolsos: (reemb as any[]).map((r: any) => ({ id: r.id, usuarioId: r.usuario_id, chamadoId: r.chamado_id || "", data: r.data, tipo: r.tipo, valor: Number(r.valor), descricao: r.descricao || "",
       path: r.comprovante_path, status: r.status, criadoEm: r.criado_em, decididoEm: r.decidido_em || "", motivo: r.motivo || "" })),
     montadores: montadores.map((m: any) => ({ id: m.id, nome: m.nome, telefone: m.telefone || "", ativo: m.ativo })),
+    medidasCruz: Object.fromEntries((mcruz as any[]).map((m: any) => [m.venda, { venda: m.venda, comprador: m.comprador, telefone: m.telefone, visitado: m.visitado, consultor: m.consultor,
+      statusMv: m.status_mv, visitaEm: m.visita_em, medidor: m.medidor, situacao: m.situacao_exact, resultado: m.resultado, tratativa: m.tratativa, obs: m.obs,
+      cruzadoEm: m.cruzado_em, atualizadoEm: m.atualizado_em, atualizadoPor: m.atualizado_por }])),
     config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), valorVendaMkt: cfg.data.valor_venda_mkt != null ? Number(cfg.data.valor_venda_mkt) : 10, modoTeste: !!cfg.data.modo_teste, auxilioFixo: cfg.data.auxilio_fixo != null ? Number(cfg.data.auxilio_fixo) : 1500, diaAuxilio: Number(cfg.data.dia_auxilio) || 15, checklistAgenda: cfg.data.checklist_agenda || null } : { comissaoPct: 1.5, pagamentoVisita: 40 },
     chamados: chamados.map((c: any) => {
       const v = vendaDe[c.id];

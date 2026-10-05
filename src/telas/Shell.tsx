@@ -17,6 +17,7 @@ import Atividades from "./Atividades";
 import Relatorios from "./Relatorios";
 import PosVenda from "./PosVenda";
 import Checklist from "./Checklist";
+import Medidas from "./Medidas";
 import Treino from "./Treino";
 import { Cadastros, Admin } from "./Cadastros";
 import Detalhe from "../comp/Detalhe";
@@ -147,6 +148,7 @@ export default function Shell() {
             {atual === "relatorios" && <Relatorios />}
             {atual === "posvenda" && <PosVenda />}
             {(atual === "checklist" || atual.startsWith("ck_")) && <Checklist key={atual} aba={atual === "checklist" ? "agendar" : atual.slice(3)} />}
+            {atual.startsWith("md_") && <Medidas key={atual} aba={atual.slice(3)} />}
             {atual === "treino" && <Treino />}
           </main>
         </div>
