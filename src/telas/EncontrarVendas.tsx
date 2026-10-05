@@ -5,12 +5,13 @@ import { useRef, useState } from "react";
 import { useApp } from "../estado";
 import { Kpi } from "./Dashboard";
 import { col, fmtTel, lerArquivo, tira } from "./Medidas";
-import { cruzarVendas, type Achado, type Linha, type ResVenda } from "../lib/cruzarVendas";
+import { cruzarVendas, tipoPlanilha, type Achado, type Linha, type ResVenda } from "../lib/cruzarVendas";
 
 type Arq = { nome: string; linhas: Linha[] };
-type Filtro = "achados" | "telefone" | "end_ok" | "end_sem" | "end_dif" | "nada" | "todos";
+type Filtro = "achados" | "telefone" | "venda" | "end_ok" | "end_sem" | "end_dif" | "nada" | "todos";
 
 const COMO: Record<Achado["como"], [string, string, string]> = {
+  venda: ["🧾 Nº da venda no cadastro", "var(--st-concluida, #0f8a5f)", "O nº da venda está escrito no nome do cadastro do Minha Visita"],
   telefone: ["📞 Telefone", "var(--st-concluida, #0f8a5f)", "O telefone da venda é o mesmo do cadastro no Minha Visita"],
   end_ok: ["🏠 Endereço + complemento", "var(--st-concluida, #0f8a5f)", "Mesma rua, número e cidade — bloco/apto/casa também conferem"],
   end_sem: ["🏠 Endereço (sem complemento)", "var(--warn)", "Mesma rua, número e cidade — um dos lados não tem bloco/apto/casa para comparar"],
@@ -27,10 +28,17 @@ export default function EncontrarVendas() {
   const [res, setRes] = useState<ResVenda[] | null>(null);
   const [f, setF] = useState<Filtro>("achados"); const [q, setQ] = useState(""); const [aberto, setAberto] = useState<string>("");
 
-  async function add(files: FileList | null, set: (fn: (x: Arq[]) => Arq[]) => void, tipo: string) {
+  // cada planilha vai para o lugar certo pelo cabeçalho, não importa em qual caixa foi anexada
+  async function add(files: FileList | null, onde: "exact" | "mv") {
     for (const file of Array.from(files || [])) {
-      try { const l = await lerArquivo(file); if (!l.length) { toast(file.name + ": planilha vazia"); continue; } set(x => [...x, { nome: file.name, linhas: l }]); setRes(null); }
-      catch (e: any) { toast(`Não consegui ler ${file.name} (${tipo}): ${e.message}`); }
+      try {
+        const l = await lerArquivo(file); if (!l.length) { toast(file.name + ": planilha vazia"); continue; }
+        const tipo = tipoPlanilha(l);
+        if (!tipo) { toast(`${file.name}: não reconheci — use o relatório de vendas do Exact ou o customers do Minha Visita`); continue; }
+        (tipo === "exact" ? setExs : setMvs)(x => x.some(a => a.nome === file.name && a.linhas.length === l.length) ? x : [...x, { nome: file.name, linhas: l }]);
+        if (tipo !== onde) toast(`${file.name} é ${tipo === "exact" ? "do Exact" : "do Minha Visita"} — coloquei na caixa certa`);
+        setRes(null);
+      } catch (e: any) { toast(`Não consegui ler ${file.name}: ${e.message}`); }
     }
   }
   const totMv = mvs.reduce((s, a) => s + a.linhas.length, 0), totEx = exs.reduce((s, a) => s + a.linhas.length, 0);
@@ -84,19 +92,19 @@ export default function EncontrarVendas() {
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", margin: "10px 0" }}>
         <Caixa titulo="🧾 Exact · relatório de vendas" arqs={exs} set={setExs} inp={inEx} />
         <Caixa titulo="🏠 Minha Visita · customers" arqs={mvs} set={setMvs} inp={inMv} />
-        <input ref={inEx} type="file" accept=".csv,.xlsx" multiple style={{ display: "none" }} onChange={e => { add(e.target.files, setExs, "Exact"); e.target.value = ""; }} />
-        <input ref={inMv} type="file" accept=".csv,.xlsx" multiple style={{ display: "none" }} onChange={e => { add(e.target.files, setMvs, "Minha Visita"); e.target.value = ""; }} />
+        <input ref={inEx} type="file" accept=".csv,.xlsx" multiple style={{ display: "none" }} onChange={e => { add(e.target.files, "exact"); e.target.value = ""; }} />
+        <input ref={inMv} type="file" accept=".csv,.xlsx" multiple style={{ display: "none" }} onChange={e => { add(e.target.files, "mv"); e.target.value = ""; }} />
         <div style={{ display: "flex", alignItems: "center" }}><button className="btn primary" disabled={!totMv || !totEx} onClick={rodar}>🔎 Encontrar vendas</button></div>
       </div>
 
       {res && <>
         <div className="kpis" style={{ margin: "6px 0 10px" }}>
-          {([["Vendas no relatório", res.length], ["Encontradas no Minha Visita", n("achados")], ["Pelo telefone", n("telefone")], ["Pelo endereço", n("end_ok") + n("end_sem") + n("end_dif")], ["Não encontradas", n("nada")]] as [string, number][])
+          {([["Vendas no relatório", res.length], ["Encontradas no Minha Visita", n("achados")], ["Pelo telefone", n("telefone")], ["Pelo nº da venda", n("venda")], ["Pelo endereço", n("end_ok") + n("end_sem") + n("end_dif")], ["Não encontradas", n("nada")]] as [string, number][])
             .map(([l, v]) => <Kpi key={l} n={v} l={l} />)}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "0 0 8px" }}>
           <div className="chips">
-            {([["achados", "Encontradas"], ["telefone", "📞 Telefone"], ["end_ok", "🏠 Endereço + complemento"], ["end_sem", "🏠 Endereço sem complemento"], ["end_dif", "⚠️ Complemento diferente"], ["nada", "Não encontradas"], ["todos", "Todas"]] as [Filtro, string][])
+            {([["achados", "Encontradas"], ["telefone", "📞 Telefone"], ["venda", "🧾 Nº da venda"], ["end_ok", "🏠 Endereço + complemento"], ["end_sem", "🏠 Endereço sem complemento"], ["end_dif", "⚠️ Complemento diferente"], ["nada", "Não encontradas"], ["todos", "Todas"]] as [Filtro, string][])
               .map(([k, l]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{n(k)}</span></button>)}
           </div>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cliente, venda, telefone, vendedor, consultor" style={{ marginLeft: "auto", maxWidth: 320 }} />

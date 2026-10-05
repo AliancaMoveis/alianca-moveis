@@ -2,7 +2,7 @@
 // 1º pelo telefone (8 últimos dígitos); 2º pelo endereço (rua + número + cidade), comparando o complemento (bloco/apto/casa).
 export type Linha = Record<string, string>;
 export type End = { rua: string[]; num: string; cidade: string[]; comp: string; compNums: number[] };
-export type Achado = { mv: Linha; como: "telefone" | "end_ok" | "end_sem" | "end_dif"; end: End | null; mesmoNome: boolean };
+export type Achado = { mv: Linha; como: "telefone" | "venda" | "end_ok" | "end_sem" | "end_dif"; end: End | null; mesmoNome: boolean };
 export type ResVenda = { ex: Linha; end: End | null; achados: Achado[]; melhor: Achado | null };
 
 const T = (s: string) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/'/g, "").replace(/\s+/g, " ").trim();
@@ -49,16 +49,28 @@ function comparaComp(a: End, b: End): "end_ok" | "end_sem" | "end_dif" {
   if (!a.compNums.length || !b.compNums.length) return "end_sem";
   return subconj(a.compNums, b.compNums) || subconj(b.compNums, a.compNums) ? "end_ok" : "end_dif";
 }
-const ORDEM = { telefone: 0, end_ok: 1, end_sem: 2, end_dif: 3 } as const;
+const ORDEM = { telefone: 0, venda: 1, end_ok: 2, end_sem: 3, end_dif: 4 } as const;
 
 const so = (s: string) => (s || "").replace(/\D/g, "");
 const chave = (s: string) => { const d = so(s); return d.length >= 8 ? d.slice(-8) : ""; };
 
+/** de que tipo é a planilha, pelo cabeçalho */
+export function tipoPlanilha(l: Linha[]): "exact" | "mv" | "" {
+  const h = Object.keys(l[0] || {}).map(x => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+  if (h.some(x => ["clientetel1", "situacaovenda", "idpessoacli", "valortotarecebido"].includes(x))) return "exact";
+  if (h.some(x => ["celular", "contatode", "ultimocheck"].includes(x))) return "mv";
+  return "";
+}
+
 export function cruzarVendas(mv: Linha[], ex: Linha[], col: (l: Linha, ...n: string[]) => string): ResVenda[] {
-  const porTel: Record<string, Linha[]> = {}, porNum: Record<string, { mv: Linha; end: End }[]> = {};
+  const porTel: Record<string, Linha[]> = {}, porVenda: Record<string, Linha[]> = {}, porNum: Record<string, { mv: Linha; end: End }[]> = {};
   const endDe = new Map<Linha, End | null>();
+  // o mesmo cliente pode vir em mais de uma planilha exportada
+  const unicos = new Set<string>();
+  mv = mv.filter(c => { const k = [col(c, "Nome"), col(c, "Celular"), col(c, "Endereco", "Endereço")].join("|"); if (unicos.has(k)) return false; unicos.add(k); return true; });
   mv.forEach(c => {
     const k = chave(col(c, "Celular", "Telefone", "Whatsapp")); if (k) (porTel[k] = porTel[k] || []).push(c);
+    (col(c, "Nome").match(/\b1\d{6}\b/g) || []).forEach(v => (porVenda[v] = porVenda[v] || []).push(c));
     const e = endMv(col(c, "Endereco", "Endereço")); endDe.set(c, e);
     if (e) (porNum[e.num] = porNum[e.num] || []).push({ mv: c, end: e });
   });
@@ -66,6 +78,7 @@ export function cruzarVendas(mv: Linha[], ex: Linha[], col: (l: Linha, ...n: str
   return ex.filter(v => { const id = col(v, "ID", "Venda", "Número"); if (!id) return true; if (vistos.has(id)) return false; vistos.add(id); return true; }).map(v => {
     const achados: Achado[] = [];
     [col(v, "ClienteTel1", "Telefone 1", "Telefone"), col(v, "ClienteTel2", "Telefone 2")].forEach(t => (porTel[chave(t)] || []).forEach(c => { if (!achados.some(a => a.mv === c)) achados.push({ mv: c, como: "telefone", end: endDe.get(c) || null, mesmoNome: false }); }));
+    (porVenda[so(col(v, "ID", "Venda", "Número"))] || []).forEach(c => { if (!achados.some(a => a.mv === c)) achados.push({ mv: c, como: "venda", end: endDe.get(c) || null, mesmoNome: false }); });
     const e = endEx(col(v, "Orçamento", "Endereço", "Endereco"));
     if (e) (porNum[e.num] || []).forEach(({ mv: c, end: f }) => {
       if (achados.some(a => a.mv === c)) return;

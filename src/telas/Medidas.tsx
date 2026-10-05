@@ -6,6 +6,7 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { lerXlsx } from "../lib/planilha";
 import { fmtDateTime } from "../lib/regras";
+import { tipoPlanilha } from "../lib/cruzarVendas";
 
 type Linha = Record<string, string>;
 type Arq = { nome: string; linhas: Linha[] };
@@ -119,6 +120,7 @@ function Cruzar() {
     if (!file) return;
     try {
       const l = await lerArquivo(file);
+      if (tipoPlanilha(l) === "exact") throw new Error("este é o relatório de vendas do Exact — para cruzar vendas use o menu 🔎 Encontrar vendas");
       if (!l.length || !("Título" in l[0] || "Contato" in l[0])) throw new Error("não reconheci — preciso das colunas Título e Contato (planilha Tickets do Exact)");
       setEx({ nome: file.name, linhas: l }); setRes(null);
     } catch (e: any) { toast(file.name + ": " + (e.message || "não consegui ler")); }
