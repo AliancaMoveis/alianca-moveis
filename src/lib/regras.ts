@@ -330,6 +330,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // Proprietário: vê e pode tudo (como a Gestão), mas sem tarefas pessoais
   const ehProprietario = () => mySetores().includes("proprietario");
   const ehMedidor = () => mySetores().includes("medidas") && !!me()?.somenteAtribuidos;
+  // Encontrar vendas (Exact × Minha Visita): por enquanto só o Bruno
+  const podeEncontrarVendas = () => ["00000000-0000-4000-a000-000000000007"].includes(currentUserId);
   const ehSupMedidas = () => ehGestao() || mySetores().includes("medidas_supervisao");
   const etapaMedida = (c: Chamado) => (c.tratativa && c.tratativa.medida && c.tratativa.medida.etapa) || (c.status === "concluida" ? "liberada" : "validar");
   const quemMede = () => ({
@@ -660,6 +662,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (podeChecklist()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Checklist", ic: "✓", itens: [["ck_agendar", "A agendar"], ["ck_aguardando", "Aguardando"], ["ck_agendados", "Agendados"], ["ck_confirmar", "Confirmação de presença"], ["ck_agenda", "Agenda"]] });
     // Medidas: cruzamento Minha Visita × Exact (Gestão e Supervisão de Medidas)
     if (ehSupMedidas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Medidas", ic: "📐", itens: [["md_cruzar", "Cruzar Minha Visita × Exact"], ["md_resultados", "Medidas oficiais"]] });
+    if (podeEncontrarVendas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Encontrar vendas", ic: "🔎", itens: [["encontrar_vendas", "Encontrar vendas"]] });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
     if (ehGestao()) cd.push(["admin", "Administração"]);
@@ -668,7 +671,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,

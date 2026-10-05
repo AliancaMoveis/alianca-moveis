@@ -11,11 +11,11 @@ type Linha = Record<string, string>;
 type Arq = { nome: string; linhas: Linha[] };
 type Res = { venda: string; comprador: string; telefone: string; visitado: string; consultor: string; statusMv: string; visitaEm: string; medidor: string; situacao: string; resultado: "ok" | "sem"; outros: number };
 
-const so = (s: string) => (s || "").replace(/\D/g, "");
+export const so = (s: string) => (s || "").replace(/\D/g, "");
 /** chave do telefone: os 8 últimos dígitos (ignora +55, DDD e o 9 da frente) */
-const chave = (s: string) => { const d = so(s); return d.length >= 8 ? d.slice(-8) : ""; };
-const fmtTel = (s: string) => { let d = so(s); if (d.length > 11 && d.startsWith("55")) d = d.slice(2); return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 3)}-${d.slice(3, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : s; };
-const tira = (s: string) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+export const chave = (s: string) => { const d = so(s); return d.length >= 8 ? d.slice(-8) : ""; };
+export const fmtTel = (s: string) => { let d = so(s); if (d.length > 11 && d.startsWith("55")) d = d.slice(2); return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 3)}-${d.slice(3, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : s; };
+export const tira = (s: string) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /** CSV do Minha Visita (separado por ; ou ,, com aspas) */
 function lerCsv(txt: string): Linha[] {
@@ -34,14 +34,14 @@ function lerCsv(txt: string): Linha[] {
   const cab = (linhas.shift() || []).map(h => h.trim());
   return linhas.map(l => Object.fromEntries(cab.map((h, i) => [h, (l[i] || "").trim()])));
 }
-async function lerArquivo(f: File): Promise<Linha[]> {
+export async function lerArquivo(f: File): Promise<Linha[]> {
   if (/\.xlsx$/i.test(f.name)) return lerXlsx(f);
   const buf = await f.arrayBuffer();
   let txt = new TextDecoder("utf-8").decode(buf);
   if (txt.includes("�")) txt = new TextDecoder("windows-1252").decode(buf);
   return lerCsv(txt);
 }
-const col = (l: Linha, ...nomes: string[]) => { for (const n of nomes) { const k = Object.keys(l).find(x => tira(x) === tira(n)); if (k && l[k]) return l[k]; } return ""; };
+export const col = (l: Linha, ...nomes: string[]) => { for (const n of nomes) { const k = Object.keys(l).find(x => tira(x) === tira(n)); if (k && l[k]) return l[k]; } return ""; };
 
 /** nº da venda: "1296255 / NOME", "Venda 1139444" ou citado na descrição ("conf a venda 1285168") */
 function vendaDe(l: Linha) {
