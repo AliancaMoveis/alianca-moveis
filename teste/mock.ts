@@ -7,7 +7,7 @@ const U = (n: number) => `00000000-0000-4000-a000-${String(n).padStart(12, "0")}
 const usuarios = [
   [7, "Bruno Fiaron", ["gestao"], false], [1, "Rafaela Lima", ["callcenter"], false], [2, "Camila Rocha", ["callcenter"], false],
   [3, "Diego Alves", ["prazo_fabrica"], false], [4, "Bruno Sá", ["montagem"], false], [5, "Paula Reis", ["assistencia", "montagem"], false],
-  [8, "Fernanda Melo", ["checklist"], false], [9, "Igor Tavares", ["medidas"], true], [19, "Lucilene", ["medidas_supervisao", "medidas"], false], [20, "Washington", ["proprietario"], false], [10, "Ana Ribeiro", ["marketing_operadora"], false],
+  [8, "Fernanda Melo", ["checklist"], false], [9, "Igor Tavares", ["medidas"], true], [19, "Luciene", ["medidas_supervisao", "medidas"], false], [20, "Washington", ["proprietario"], false], [10, "Ana Ribeiro", ["marketing_operadora"], false],
   [13, "Marcelo Duarte", ["marketing_supervisao"], false], [11, "Consultor — Anderson", ["consultor_externo"], true], [12, "Consultor — Priscila", ["consultor_externo"], true],
   [14, "Suporte — Carla", ["suporte_consultores"], false], [15, "Vendedor — Roy", ["atendente_cliente"], true], [16, "Vendedora — Giovanna", ["atendente_cliente"], true], [6, "Supervisão", ["supervisao"], false], [17, "Vânia", ["posvenda"], false], [18, "Camila (Jurídico)", ["juridico"], false],
 ].map(([n, nome, setores, s]: any) => ({ id: U(n), nome, email: "", setores, somenteAtribuidos: s, ativo: true }));
@@ -53,9 +53,9 @@ const MEDIDAS = [
   { id: "ALM-0095", tipo: "medidas", sd: "medidas", st: "aberta", cr: -3, sla: 40, sol: null, soln: "Sistema", sols: "Venda confirmada", cli: "Helena Duarte", doc: "", tel: "41988887777", em: "", ped: "48250", pf: "", pr: "Cozinha planejada", mo: "Venda nº 48250 confirmada. Validar as medidas do consultor ou direcionar a medição.", urg: false, end: "Rua XV, 100", vinc: "ALM-0023",
     tr: { medida: { etapa: "validar", consultorVisita: U(11), medidasConsultor: "Cozinha 3,80m x 2,40m" } }, h: [[-3, "Sistema", "Medida criada automaticamente pela venda 48250"]] },
   { id: "ALM-0096", tipo: "medidas", sd: "medidas", st: "tratativa", cr: -20, sla: 30, sol: null, soln: "Sistema", sols: "Venda confirmada", cli: "Marcos Lima", doc: "", tel: "41977776666", em: "", ped: "48251", pf: "", pr: "Dormitório", mo: "Venda confirmada", urg: false, end: "Av. Brasil, 55", medi: U(9), dm: 2,
-    tr: { medida: { etapa: "agendada" } }, h: [[-20, "Lucilene", "Medição direcionada para Igor Tavares"]] },
+    tr: { medida: { etapa: "agendada" } }, h: [[-20, "Luciene", "Medição direcionada para Igor Tavares"]] },
   { id: "ALM-0097", tipo: "medidas", sd: "medidas", st: "tratativa", cr: -30, sla: 30, sol: null, soln: "Sistema", sols: "Venda confirmada", cli: "Rita Souza", doc: "", tel: "41977775555", em: "", ped: "48252", pf: "", pr: "Banheiro", mo: "Venda confirmada", urg: false, end: "Rua Chile, 9", medi: U(11), dm: 26,
-    tr: { medida: { etapa: "agendada" } }, h: [[-30, "Lucilene", "Medição direcionada para Consultor — Anderson"]] },
+    tr: { medida: { etapa: "agendada" } }, h: [[-30, "Luciene", "Medição direcionada para Consultor — Anderson"]] },
 ];
 export function estadoMock(): Estado {
   const est: Estado = {

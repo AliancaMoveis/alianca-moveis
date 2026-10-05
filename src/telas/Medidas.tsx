@@ -76,6 +76,19 @@ function cruzar(mv: Linha[], ex: Linha[]): Res[] {
 
 const TRATATIVAS = ["", "Medidas oficiais conferidas", "Agendar medição", "Pedir medidas ao consultor", "Conferir com o vendedor", "Medida feita pelo medidor", "Outro"];
 
+/** conferido = já recebeu tratativa */
+const conferido = (m: any) => !!(m && m.tratativa);
+type Conf = "nao" | "sim" | "todos";
+function ChipsConf({ v, set, nNao, nSim }: { v: Conf; set: (x: Conf) => void; nNao: number; nSim: number }) {
+  return (
+    <div className="chips">
+      <button className={"chip" + (v === "nao" ? " on" : "")} onClick={() => set("nao")}>🔎 Não conferidos<span className="n">{nNao}</span></button>
+      <button className={"chip" + (v === "sim" ? " on" : "")} onClick={() => set("sim")}>✔️ Conferidos<span className="n">{nSim}</span></button>
+      <button className={"chip" + (v === "todos" ? " on" : "")} onClick={() => set("todos")}>Todos<span className="n">{nNao + nSim}</span></button>
+    </div>
+  );
+}
+
 export default function Medidas({ aba = "cruzar" }: { aba?: string }) {
   return aba === "resultados" ? <Resultados /> : <Cruzar />;
 }
@@ -86,6 +99,7 @@ function Cruzar() {
   const [ex, setEx] = useState<Arq | null>(null);
   const [res, setRes] = useState<Res[] | null>(null);
   const [f, setF] = useState<"todos" | "ok" | "sem">("todos");
+  const [fc, setFc] = useState<Conf>("nao");
   const [salvando, setSalvando] = useState(false);
   const inMv = useRef<HTMLInputElement>(null), inEx = useRef<HTMLInputElement>(null);
   const totalMv = mvs.reduce((a, b) => a + b.linhas.length, 0);
@@ -118,8 +132,11 @@ function Cruzar() {
     try { const r = await A.medidasCruzSalvar(l); await recarregar(); toast(`Gravado: ${r.novos} nova(s) venda(s) · ${r.atualizados} atualizada(s) — já aparece no Checklist`); }
     catch (e: any) { toast(e.message); } finally { setSalvando(false); }
   }
-  const lista = (res || []).filter(r => f === "todos" || r.resultado === f);
-  const nOk = (res || []).filter(r => r.resultado === "ok").length, nSem = (res || []).length - nOk;
+  const salvoDe = (r: any) => (st.medidasCruz || {})[r.venda];
+  const nConf = (res || []).filter(r => conferido(salvoDe(r))).length;
+  const daSit = (res || []).filter(r => fc === "todos" || (fc === "sim") === conferido(salvoDe(r)));
+  const lista = daSit.filter(r => f === "todos" || r.resultado === f);
+  const nOk = daSit.filter(r => r.resultado === "ok").length, nSem = daSit.length - nOk;
   const caixa: React.CSSProperties = { flex: 1, minWidth: 280, border: "2px dashed var(--line)", borderRadius: 12, padding: 14, background: "var(--surface-2)" };
 
   return (
@@ -148,14 +165,15 @@ function Cruzar() {
 
       {res && <>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "14px 0 8px" }}>
+          <ChipsConf v={fc} set={setFc} nNao={res.length - nConf} nSim={nConf} />
           <div className="chips">
-            <button className={"chip" + (f === "todos" ? " on" : "")} onClick={() => setF("todos")}>Todos<span className="n">{res.length}</span></button>
+            <button className={"chip" + (f === "todos" ? " on" : "")} onClick={() => setF("todos")}>Todos<span className="n">{daSit.length}</span></button>
             <button className={"chip" + (f === "ok" ? " on" : "")} onClick={() => setF("ok")}>✅ Medidas oficiais ok<span className="n">{nOk}</span></button>
             <button className={"chip" + (f === "sem" ? " on" : "")} onClick={() => setF("sem")}>⚠️ Sem medidas<span className="n">{nSem}</span></button>
           </div>
           <button className="btn primary" style={{ marginLeft: "auto" }} disabled={salvando} onClick={gravar}>{salvando ? "Gravando…" : "💾 Gravar resultado (vai para o Checklist)"}</button>
         </div>
-        <Tabela linhas={lista.map(r => ({ ...r, salvo: (st.medidasCruz || {})[r.venda] }))} />
+        <Tabela linhas={lista.map(r => ({ ...r, salvo: salvoDe(r) }))} />
       </>}
     </section>
   );
@@ -170,7 +188,7 @@ function Tabela({ linhas }: { linhas: any[] }) {
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead><tr><th style={th}>Cliente comprador (Exact)</th><th style={th}>Venda</th><th style={th}>Telefone</th><th style={th}>Cliente visitado (Minha Visita)</th><th style={th}>Consultor</th><th style={th}>Medidas</th><th style={th}>Tratativa</th></tr></thead>
         <tbody>{linhas.map((r, i) => (
-          <tr key={(r.venda || r.comprador) + i}>
+          <tr key={r.venda || r.comprador + i}>
             <td style={td}><b>{r.comprador}</b>{r.medidor ? <div className="hint">medidor: {r.medidor}</div> : null}</td>
             <td style={td}>{r.venda || <span className="hint">sem nº</span>}</td>
             <td style={{ ...td, whiteSpace: "nowrap" }}>{r.telefone}</td>
@@ -206,6 +224,7 @@ function Tratar({ m }: { m: any }) {
         {mudou && <button className="btn primary sm" disabled={sal} onClick={() => salvar()}>Salvar</button>}
         <button className="btn ghost sm" disabled={sal} title="Corrigir o resultado manualmente" onClick={() => salvar(m.resultado === "ok" ? "sem" : "ok")}>{m.resultado === "ok" ? "marcar sem medidas" : "marcar medidas ok"}</button>
       </div>
+      {conferido(m) && <span className="pill" style={{ alignSelf: "flex-start", fontSize: 11 }}>✔️ Conferido</span>}
       {m.atualizadoPor && <span className="hint" style={{ fontSize: 11 }}>{m.atualizadoPor} · {fmtDateTime(m.atualizadoEm)}</span>}
     </div>
   );
@@ -213,19 +232,22 @@ function Tratar({ m }: { m: any }) {
 
 function Resultados() {
   const { st } = useApp() as any;
-  const [f, setF] = useState<"todos" | "ok" | "sem" | "pendente">("todos"); const [q, setQ] = useState("");
+  const [f, setF] = useState<"todos" | "ok" | "sem">("todos"); const [q, setQ] = useState(""); const [fc, setFc] = useState<Conf>("nao");
   const todos: any[] = useMemo(() => Object.values(st.medidasCruz || {}).sort((a: any, b: any) => String(b.cruzadoEm).localeCompare(String(a.cruzadoEm))), [st.medidasCruz]);
   const ck = new Set(st.chamados.filter((c: any) => c.tipo === "checklist").map((c: any) => c.pedido));
   const busca = tira(q), dig = so(q);
-  const lista = todos.filter(m => (f === "todos" || (f === "pendente" ? m.resultado === "sem" && !m.tratativa : m.resultado === f))
+  const nConf = todos.filter(conferido).length;
+  const daSit = todos.filter(m => fc === "todos" || (fc === "sim") === conferido(m));
+  const lista = daSit.filter(m => (f === "todos" || m.resultado === f)
     && (!q || tira(m.comprador + m.visitado + m.consultor).includes(busca) || (dig.length >= 3 && (m.venda.includes(dig) || so(m.telefone).includes(dig)))));
   return (
     <section className="view active">
       <div className="view-head"><div><h2>Medidas oficiais</h2>
         <p>Resultado gravado dos cruzamentos, por nº de venda. É isso que aparece nos clientes do Checklist (📐 Medidas oficiais ok / 📐 Sem medidas).</p></div></div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "10px 0" }}>
+        <ChipsConf v={fc} set={setFc} nNao={todos.length - nConf} nSim={nConf} />
         <div className="chips">
-          {([["todos", "Todos", todos.length], ["ok", "✅ Medidas oficiais ok", todos.filter(m => m.resultado === "ok").length], ["sem", "⚠️ Sem medidas", todos.filter(m => m.resultado === "sem").length], ["pendente", "Sem medidas e sem tratativa", todos.filter(m => m.resultado === "sem" && !m.tratativa).length]] as [any, string, number][])
+          {([["todos", "Todos", daSit.length], ["ok", "✅ Medidas oficiais ok", daSit.filter(m => m.resultado === "ok").length], ["sem", "⚠️ Sem medidas", daSit.filter(m => m.resultado === "sem").length]] as [any, string, number][])
             .map(([k, l, n]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{n}</span></button>)}
         </div>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, venda, telefone ou consultor" style={{ marginLeft: "auto", maxWidth: 320 }} />
