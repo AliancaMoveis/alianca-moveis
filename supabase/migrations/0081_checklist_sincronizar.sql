@@ -46,7 +46,7 @@ begin
     update public.chamados c set status = 'tratativa',
       tratativa = jsonb_set(c.tratativa, '{checklist}', (c.tratativa->'checklist') || jsonb_build_object(
         'etapa', 'agendado', 'agendadoPara', c.tratativa->'checklist'->>'proposta', 'retornarEm', null, 'confirmacao', '',
-        'projetista', nullif(c.tratativa->'checklist'->>'propostaProjetista', ''), 'agendadoPelaPlanilha', now())))
+        'projetista', nullif(c.tratativa->'checklist'->>'propostaProjetista', ''), 'agendadoPelaPlanilha', now()))
      where c.id = any(coalesce(v_ag, '{}'));
     -- sumiram da planilha sem data → venda cancelada / saiu do checklist
     update public.chamados set vinculado_a = null where vinculado_a = any(coalesce(v_exc, '{}'));
