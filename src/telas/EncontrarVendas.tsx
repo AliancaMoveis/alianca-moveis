@@ -102,11 +102,11 @@ export default function EncontrarVendas() {
       || (dig.length >= 3 && (col(x.ex, "ID").includes(dig) || [col(x.ex, "ClienteTel1"), col(x.ex, "ClienteTel2")].some(t => t.replace(/\D/g, "").includes(dig))))));
 
   function exportar() {
-    const cab = ["Venda", "Data", "Situação", "Vendedor", "Cliente (Exact)", "Telefone 1", "Telefone 2", "Valor", "Endereço (Exact)", "Encontrado por", "Mesmo nome", "Cliente (Minha Visita)", "Status Minha Visita", "Consultor", "Criado por", "Endereço (Minha Visita)", "Telefone (Minha Visita)", "Último check", "Outros cadastros"];
+    const cab = ["Cliente Minha Visita", "Cliente Exact", "Venda", "Consultor", "Status Minha Visita", "Status Exact", "Vendedor", "Data"];
     const q = (s: any) => '"' + String(s ?? "").replace(/"/g, '""') + '"';
-    const linhas = lista.map(x => { const a = x.melhor, c = a?.mv;
-      return [col(x.ex, "ID"), col(x.ex, "DataSituação"), col(x.ex, "SituaçãoVenda"), col(x.ex, "Vendedor"), col(x.ex, "Cliente"), col(x.ex, "ClienteTel1"), col(x.ex, "ClienteTel2"), col(x.ex, "ValorTotaRecebido", "ValorTotal"), col(x.ex, "Orçamento"),
-        a ? COMO[a.como][0].replace(/^\S+\s/, "") : "não encontrado", a?.mesmoNome ? "sim" : "", c ? col(c, "Nome") : "", c ? col(c, "Status") : "", c ? consultorDe(c) : "", c ? col(c, "Criado por") : "", c ? col(c, "Endereco", "Endereço") : "", c ? col(c, "Celular") : "", c ? col(c, "Último Check") : "", Math.max(0, x.achados.length - 1) || ""].map(q).join(";"); });
+    const linhas = lista.map(x => { const c = x.melhor?.mv;
+      return [c ? col(c, "Nome") : "", col(x.ex, "Cliente"), col(x.ex, "ID"), c ? consultorDe(c) : "", c ? col(c, "Status") : "não encontrado", col(x.ex, "SituaçãoVenda"), col(x.ex, "Vendedor"), col(x.ex, "DataSituação").slice(0, 10)]
+        .map(q).join(";"); });
     const blob = new Blob(["﻿" + [cab.map(q).join(";"), ...linhas].join("\r\n")], { type: "text/csv;charset=utf-8" });
     const el = document.createElement("a"); el.href = URL.createObjectURL(blob); el.download = "vendas-x-minha-visita.csv"; el.click(); setTimeout(() => URL.revokeObjectURL(el.href), 2000);
   }
