@@ -162,9 +162,10 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
         setModal(<ModalSincronizar dados={dados} prev={prev} />);
         return;
       }
-      const r = await A.checklistImportar(dados);
-      await recarregar();
-      toast(`${r.novos} cliente(s) novo(s)${r.agendados ? " (" + r.agendados + " já agendados)" : ""} · ${r.ignorados} já estavam no sistema (ignorados)`);
+      // planilha de agendados: mostra antes quem é novo, quem tem mais de um dia e quem já está no 360
+      const jaTem = new Set(st.chamados.filter((c: any) => c.tipo === "checklist").map((c: any) => String(c.pedido)));
+      const dias = await A.checklistDiasPlanilha(dados, false);
+      setModal(<ModalAgendados dados={dados} prev={dias} novos={dados.filter(d => d.agendadoPara && !jaTem.has(String(d.numero || "").replace(/\D/g, "")))} />);
     } catch (e: any) { toast(e.message || "Não foi possível importar"); }
     finally { setImportando(false); if (arq.current) arq.current.value = ""; }
   }
@@ -607,6 +608,45 @@ export function ModalNaoPodeVir({ c }: any) {
   );
 }
 /** prévia da planilha "a agendar": novos, mantidos, que viram agendados e que serão excluídos */
+/** prévia da planilha de AGENDADOS: novos, clientes com mais de um dia (identificados na coluna Data do Agendamento) e quem já está no 360 */
+function ModalAgendados({ dados, prev, novos }: { dados: any[]; prev: any; novos: any[] }) {
+  const { setModal, toast, recarregar } = useApp() as any;
+  const [sal, setSal] = useState(false); const [ver, setVer] = useState("");
+  const fechar = () => setModal(null);
+  const fmt = (d: string) => d ? d.slice(8, 10) + "/" + d.slice(5, 7) + " " + d.slice(11, 16) : "";
+  const varios = dados.filter(d => d.agendadoPara && d.diasExtras.length > 0);
+  async function ok() {
+    setSal(true);
+    try {
+      const r = await A.checklistImportar(dados);
+      const d = await A.checklistDiasPlanilha(dados, true);
+      await recarregar(); fechar();
+      toast(`${r.novos} novo(s) · ${d.maisDias} receberam os dias adicionais · ${d.agendar} passaram para agendado`);
+    } catch (x: any) { toast(x.message); setSal(false); }
+  }
+  const L = ({ n, t, cor, lista, id }: any) => <>
+    <div style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}>
+      <b style={{ fontSize: 20, minWidth: 48, textAlign: "right", color: cor }}>{n}</b><span style={{ flex: 1 }}>{t}</span>
+      {n > 0 && lista && <button className="btn ghost sm" onClick={() => setVer(ver === id ? "" : id)}>{ver === id ? "esconder" : "ver"}</button>}
+    </div>
+    {ver === id && <ul style={{ maxHeight: 200, overflow: "auto", fontSize: 12.5, margin: "4px 0 8px", padding: "6px 8px 6px 26px", background: "var(--surface-2)", borderRadius: 8 }}>{lista.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>}
+  </>;
+  return (
+    <Modal titulo="Importar planilha de agendados" onFechar={fechar}>
+      <L id="v" n={varios.length} t={<>linhas com <b>mais de um dia</b> na “Data do Agendamento” (cada data = um dia de atendimento)</>} cor="var(--primary)"
+        lista={varios.map(d => `${d.cliente} · venda ${d.numero} — ${[d.agendadoPara, ...d.diasExtras.map((e: any) => e.data)].map(fmt).join(" + ")}`)} />
+      <L id="n" n={novos.length} t="clientes novos vão entrar já agendados (com todos os dias)" cor="var(--st-concluida)" lista={novos.map(d => `${d.cliente} · venda ${d.numero} — ${[d.agendadoPara, ...d.diasExtras.map((e: any) => e.data)].map(fmt).join(" + ")}`)} />
+      <L id="m" n={prev.maisDias} t="já agendados no 360 → recebem os dias que faltam" cor="var(--primary)" lista={prev.listaMaisDias} />
+      <L id="a" n={prev.agendar} t="estavam a agendar / aguardando no 360 → passam para AGENDADO nos dias da planilha" cor="var(--st-respondida)" lista={prev.listaAgendar} />
+      <L id="d" n={prev.diferentes} t="agendados no 360 em outra data (remarcados) → não são alterados, confira" cor="var(--warn)" lista={prev.listaDiferentes} />
+      <div className="hint" style={{ marginTop: 8 }}>Projetista, anotações e confirmação de quem já está no 360 são mantidos. Nenhum dia é removido. Realizados e encerrados não mudam.</div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn" onClick={fechar}>Cancelar</button>
+        <button className="btn primary" disabled={sal || (!novos.length && !prev.maisDias && !prev.agendar)} onClick={ok}>{sal ? "Importando…" : "OK, importar"}</button>
+      </div>
+    </Modal>
+  );
+}
 function ModalSincronizar({ dados, prev }: { dados: any[]; prev: any }) {
   const { setModal, toast, recarregar } = useApp() as any;
   const [forcar, setForcar] = useState(false); const [sal, setSal] = useState(false); const [ver, setVer] = useState(false);

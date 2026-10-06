@@ -50,10 +50,9 @@ export function dataPlanilha(v: string): string {
   return m[4] ? `${d}T${m[4].padStart(2, "0")}:${m[5]}` : d;
 }
 
-/** "22/10/26, 09:00, 23/10/26, 09:00" → todas as datas ("AAAA-MM-DDTHH:MM"), em ordem.
- *  Várias datas = atendimento em mais de um dia. Datas que já passaram são histórico de remarcação e são ignoradas
- *  (se todas já passaram, fica só a última). */
-export function datasPlanilha(v: string, hojeIso: string): string[] {
+/** "11/09/26, 15:00, 20/10/26, 09:00" → todas as datas ("AAAA-MM-DDTHH:MM"), em ordem.
+ *  Várias datas = atendimento em dias distintos (todas valem, inclusive as que já passaram). Dois horários no mesmo dia = o primeiro. */
+export function datasPlanilha(v: string, _hojeIso?: string): string[] {
   const s = (v || "").trim(); if (!s) return [];
   const out: string[] = [];
   const re = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:,?\s*(\d{1,2}):(\d{2}))?/g; let m: RegExpExecArray | null;
@@ -63,6 +62,5 @@ export function datasPlanilha(v: string, hojeIso: string): string[] {
   }
   if (!out.length) { const d = dataPlanilha(s); return d ? [d.length > 10 ? d : d + "T00:00"] : []; }
   const ord = Array.from(new Set(out)).sort();
-  const fut = ord.filter(d => d.slice(0, 10) >= hojeIso);
-  return fut.length ? fut : [ord[ord.length - 1]];
+  return ord.filter((d, i) => !ord.slice(0, i).some(x => x.slice(0, 10) === d.slice(0, 10)));
 }
