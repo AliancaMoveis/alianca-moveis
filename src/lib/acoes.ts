@@ -33,6 +33,9 @@ export const A = {
   medidaDirecionar: (id: string, medidor: string, data: string, endereco: string) => rpc("medida_direcionar", { p_id: id, p_medidor: medidor, p_data: nz(data), p_endereco: endereco || "" }),
   medidaRealizada: (id: string, medidas: string, obs: string) => rpc("medida_realizada", { p_id: id, p_medidas: medidas || "", p_obs: obs || "" }),
   medidaRefazer: (id: string, motivo: string) => rpc("medida_refazer", { p_id: id, p_motivo: motivo }),
+  medidaEmObra: (id: string, previsao: string, obs: string) => rpc("medida_em_obra", { p_id: id, p_previsao: previsao || null, p_obs: obs || "" }),
+  medidaPendente: (id: string, obs: string) => rpc("medida_pendente", { p_id: id, p_obs: obs || "" }),
+  medidasImportar: (linhas: any[], aplicar: boolean) => rpc<any>("medidas_importar", { p: linhas, p_aplicar: aplicar }),
   medidaLiberar: (id: string, obs: string) => rpc<string>("medida_liberar", { p_id: id, p_obs: obs || "" }),
   solicitarReembolso: async (uid: string, tipo: string, valor: number, data: string, descricao: string, foto: Blob, chamado?: string) => {
     const pdf = foto.type === "application/pdf";

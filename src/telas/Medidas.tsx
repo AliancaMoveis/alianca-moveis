@@ -5,7 +5,9 @@ import { useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { lerXlsx } from "../lib/planilha";
-import { fmtDateTime } from "../lib/regras";
+import { linhaMedida } from "../lib/medidasPlanilha";
+import { Modal } from "../comp/Modal";
+import { fmtDateTime, grupoMedida } from "../lib/regras";
 import { tipoPlanilha } from "../lib/cruzarVendas";
 
 type Linha = Record<string, string>;
@@ -91,7 +93,62 @@ function ChipsConf({ v, set, nNao, nSim }: { v: Conf; set: (x: Conf) => void; nN
 }
 
 export default function Medidas({ aba = "cruzar" }: { aba?: string }) {
-  return aba === "resultados" ? <Resultados /> : <Cruzar />;
+  if (aba === "resultados") return <Resultados />;
+  if (aba === "cruzar") return <Cruzar />;
+  return <ListaMedidas aba={aba} />;
+}
+
+// ---------- listas da Supervisão de Medidas e "Medidas para fazer" (consultor / medidor) ----------
+const ABAS_MD: Record<string, [string, string]> = {
+  pendentes: ["Pendentes para medir", "Medidas a programar: direcione para um medidor (Cesar, Gilberto) ou para um consultor externo, com data e endereço."],
+  agendadas: ["Aguardando medição", "Medições direcionadas, aguardando quem mede anexar as fotos/planta e finalizar."],
+  analise: ["Aguardando análise", "Medidas feitas (medidores / consultores) e as que vieram do cruzamento com o Minha Visita. Aprove como medida oficial ou peça para refazer."],
+  aprovados: ["Aprovados — medida oficial", "Medidas aprovadas: o checklist da venda mostra “medida oficial” e as fotos ficam disponíveis para o projetista."],
+  obra: ["Em obra", "Clientes em obra: não permite a medida oficial. Volte para pendente quando a obra terminar."],
+  minhas: ["Medidas para fazer", "Solicitações de MEDIDA — não é visita de venda: paga R$ 40 por cliente, sem comissão. Depois de medir, anexe as fotos/planta e finalize."],
+};
+function ListaMedidas({ aba }: { aba: string }) {
+  const { R, st, abrirDetalhe } = useApp() as any;
+  const [q, setQ] = useState("");
+  const [t, d] = ABAS_MD[aba] || ABAS_MD.pendentes;
+  const eu = R.currentUserId;
+  const ckPorVenda: Record<string, any> = {};
+  st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida").forEach((c: any) => (ckPorVenda[c.pedido] = c));
+  let lista = st.chamados.filter((c: any) => c.tipo === "medidas" && R.podeVer(c));
+  lista = aba === "minhas" ? lista.filter((c: any) => c.medidorId === eu && ["agendada", "realizada"].includes(R.etapaMedida(c)))
+    : lista.filter((c: any) => grupoMedida(R.etapaMedida(c)) === aba);
+  const busca = tira(q), dig = so(q);
+  if (q) lista = lista.filter((c: any) => tira(c.cliente + " " + R.nomeUser(c.medidorId || "")).includes(busca) || (dig.length >= 3 && (String(c.pedido).includes(dig) || so(c.telefone).includes(dig))));
+  const diaCk = (c: any) => { const k = ckPorVenda[c.pedido]; return k && k.tratativa?.checklist?.etapa === "agendado" ? String(k.tratativa.checklist.agendadoPara || "").slice(0, 16) : ""; };
+  const ord = (c: any) => aba === "agendadas" || aba === "minhas" ? String(c.dataMedida || "9") : diaCk(c) || "9" + String(c.criadoEm);
+  lista = lista.slice().sort((a: any, b: any) => ord(a).localeCompare(ord(b)));
+  const em3 = (iso: string) => { if (!iso) return false; const lim = new Date(); lim.setDate(lim.getDate() + 3); return iso.slice(0, 10) <= lim.toISOString().slice(0, 10); };
+  return (
+    <section className="view active">
+      <div className="view-head"><div><h2>📐 {t}</h2><p>{d}</p></div></div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
+        <span className="pill">{lista.length} cliente(s)</span>
+        {aba !== "minhas" && R.ehSupMedidas() && <ImportarExact />}
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, venda, telefone ou quem mede" style={{ marginLeft: "auto", maxWidth: 320 }} />
+      </div>
+      {!lista.length ? <div className="card" style={{ padding: 20, textAlign: "center", color: "var(--ink-faint)" }}>Nenhum cliente aqui.</div> :
+        <div className="card" style={{ padding: 0 }}>{lista.map((c: any) => {
+          const m = (c.tratativa && c.tratativa.medida) || {}, dck = diaCk(c), alerta = aba !== "aprovados" && dck && em3(dck);
+          return (
+            <div key={c.id} className="acao" style={{ borderLeftColor: alerta ? "var(--critico)" : "var(--line)", margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)" }} onClick={() => abrirDetalhe(c.id)}>
+              <span><b>{c.cliente}</b> · venda {c.pedido || "—"}
+                {c.medidorId ? <> · 📐 {R.nomeUser(c.medidorId)}</> : m.consultorNome ? <> · 📐 {m.consultorNome}</> : null}
+                {c.dataMedida && ["agendada"].includes(R.etapaMedida(c)) ? <> · {fmtDateTime(c.dataMedida)}</> : null}
+                {m.origem === "minha_visita" && <span className="pill" style={{ marginLeft: 6 }}>Minha Visita · sem pagamento</span>}
+                {m.etapa === "validar" && <span className="pill" style={{ marginLeft: 6 }}>medidas do consultor</span>}
+                {m.etapa === "em_obra" && m.previsaoObra && <span className="pill" style={{ marginLeft: 6 }}>previsão {String(m.previsaoObra).split("-").reverse().join("/")}</span>}
+                {aba === "minhas" && <span className="pill" style={{ marginLeft: 6, background: "var(--st-concluida)", color: "#fff" }}>MEDIDA · R$ 40 · sem comissão</span>}
+                {c.endereco ? <span className="hint"> · {c.endereco}</span> : null}</span>
+              <span className="g" style={alerta ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{dck ? (alerta ? "⚠️ " : "") + "checklist " + fmtDateTime(dck) : ""}</span>
+            </div>);
+        })}</div>}
+    </section>
+  );
 }
 
 function Cruzar() {
@@ -257,5 +314,92 @@ function Resultados() {
       <div className="hint" style={{ marginBottom: 6 }}>{todos.filter(m => ck.has(m.venda)).length} dessas vendas estão no Checklist.</div>
       <Tabela linhas={lista.map(m => ({ ...m, salvo: m }))} />
     </section>
+  );
+}
+
+/** situação da medida de uma venda (para o checklist): medida oficial aprovada, em análise, agendada, pendente ou em obra */
+export function medidaDaVenda(st: any, pedido: string) {
+  if (!pedido) return null;
+  const l = st.chamados.filter((c: any) => c.tipo === "medidas" && c.pedido === pedido);
+  return l.find((c: any) => c.tratativa?.medida?.etapa === "liberada") || l.find((c: any) => c.status !== "concluida") || l[0] || null;
+}
+export function SeloMedidaVenda({ pedido, peq, comLink }: { pedido: string; peq?: boolean; comLink?: boolean }) {
+  const { st, R, abrirDetalhe } = useApp() as any;
+  const m = medidaDaVenda(st, pedido);
+  if (!m) { const x = (st.medidasCruz || {})[pedido]; return x ? <SeloMedidas peq={peq} resultado={x.resultado} /> : null; }
+  const e = R.etapaMedida(m), md = m.tratativa?.medida || {};
+  const [txt, cor] = e === "liberada" ? ["📐 Medida oficial aprovada", "var(--st-concluida, #0f8a5f)"] : e === "realizada" || e === "validar" ? ["📐 Medida em análise", "var(--primary)"]
+    : e === "agendada" ? ["📐 Medição " + (m.dataMedida ? fmtDateTime(m.dataMedida) : "agendada") + (m.medidorId ? " · " + R.nomeUser(m.medidorId) : ""), "var(--warn)"]
+    : e === "em_obra" ? ["🚧 Em obra — sem medida oficial", "var(--ink-soft)"] : ["📐 Medida pendente", "var(--danger)"];
+  const quem = m.medidorId ? R.nomeUser(m.medidorId) : md.consultorNome || "";
+  return <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+    <span className="pill" style={{ background: cor, color: "#fff", fontWeight: 700, fontSize: peq ? 11.5 : 12.5, whiteSpace: "nowrap" }}>{txt}</span>
+    {!peq && ["liberada", "realizada", "validar"].includes(e) && quem ? <span className="hint">medido por {quem}</span> : null}
+    {comLink && <a href="#" onClick={ev => { ev.preventDefault(); ev.stopPropagation(); abrirDetalhe(m.id); }} style={{ fontSize: 12.5 }}>ver medida e fotos ({(m.anexos || []).length})</a>}
+  </span>;
+}
+
+// ---------- importar as planilhas de tickets do Exact (Situação: PENDENTES · AGUARDANDO MEDIÇÃO · ANÁLISE · APROVADOS) ----------
+const ROT_ETAPA: Record<string, string> = { pendente: "Pendentes para medir", agendada: "Aguardando medição", realizada: "Aguardando análise", liberada: "Aprovados" };
+function ImportarExact() {
+  const { setModal, toast } = useApp() as any;
+  const ref = useRef<HTMLInputElement>(null);
+  const [lendo, setLendo] = useState(false);
+  async function ler(files: FileList | null) {
+    if (!files || !files.length) return;
+    setLendo(true);
+    try {
+      let dados: any[] = [];
+      for (const f of Array.from(files)) {
+        const l = await lerXlsx(f);
+        if (!l.length || !("Situação" in l[0]) || !("Título" in l[0])) throw new Error(f.name + ": não reconheci — preciso da planilha de tickets do Exact (colunas Título e Situação)");
+        dados = dados.concat(l.map(linhaMedida));
+      }
+      const semEtapa = dados.filter(d => !d.etapa).length;
+      const ok = dados.filter(d => d.etapa);
+      if (!ok.length) throw new Error("Nenhuma linha com Situação PENDENTES, AGUARDANDO MEDIÇÃO, ANÁLISE ou APROVADOS");
+      const prev = await A.medidasImportar(ok, false);
+      setModal(<ModalImportarMedidas dados={ok} prev={prev} semEtapa={semEtapa} />);
+    } catch (e: any) { toast(e.message || "Não foi possível ler a planilha"); }
+    finally { setLendo(false); if (ref.current) ref.current.value = ""; }
+  }
+  return <>
+    <input ref={ref} type="file" accept=".xlsx" multiple style={{ display: "none" }} onChange={e => ler(e.target.files)} />
+    <button className="btn primary sm" disabled={lendo} onClick={() => ref.current?.click()}>{lendo ? "Lendo…" : "📥 Importar planilha do Exact"}</button>
+  </>;
+}
+function ModalImportarMedidas({ dados, prev, semEtapa }: { dados: any[]; prev: any; semEtapa: number }) {
+  const { setModal, toast, recarregar } = useApp() as any;
+  const [sal, setSal] = useState(false); const [ver, setVer] = useState("");
+  const fechar = () => setModal(null);
+  const porEtapa: Record<string, number> = {}; dados.forEach(d => (porEtapa[d.etapa] = (porEtapa[d.etapa] || 0) + 1));
+  async function ok() {
+    setSal(true);
+    try { const r = await A.medidasImportar(dados, true); await recarregar(); fechar(); toast(`${r.novos} medida(s) nova(s) · ${r.avancam} avançaram de etapa`); }
+    catch (x: any) { toast(x.message); setSal(false); }
+  }
+  const L = ({ n, t, lista, id, cor }: any) => <>
+    <div style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}>
+      <b style={{ fontSize: 20, minWidth: 48, textAlign: "right", color: cor }}>{n}</b><span style={{ flex: 1 }}>{t}</span>
+      {n > 0 && lista && <button className="btn ghost sm" onClick={() => setVer(ver === id ? "" : id)}>{ver === id ? "esconder" : "ver"}</button>}
+    </div>
+    {ver === id && <ul style={{ maxHeight: 200, overflow: "auto", fontSize: 12.5, margin: "4px 0 8px", padding: "6px 8px 6px 26px", background: "var(--surface-2)", borderRadius: 8 }}>{lista.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>}
+  </>;
+  return (
+    <Modal titulo="Importar medidas do Exact" onFechar={fechar}>
+      <div className="hint" style={{ marginBottom: 6 }}>Na planilha: {Object.entries(porEtapa).map(([e, n]) => `${ROT_ETAPA[e]} ${n}`).join(" · ")}</div>
+      {Object.entries(prev.listaNovos || {}).map(([e, l]: any) => <L key={e} id={"n" + e} n={l.length} t={<>novas em <b>{ROT_ETAPA[e]}</b></>} lista={l} cor="var(--st-concluida)" />)}
+      {!prev.novos && <L n={0} t="medidas novas" />}
+      <L id="a" n={prev.avancam} t="já estão no 360 e avançam de etapa" lista={prev.listaAvancam} cor="var(--primary)" />
+      <L n={prev.iguais} t="já estão no 360 na mesma etapa (ou mais adiante, em obra ou aprovadas) — não mudam" />
+      {prev.semVenda > 0 && <div className="hint" style={{ marginTop: 6, color: "var(--warn)" }}>{prev.semVenda} linha(s) sem nº de venda (no Título nem na Descrição) — ignoradas.</div>}
+      {semEtapa > 0 && <div className="hint" style={{ marginTop: 4 }}>{semEtapa} linha(s) com outra Situação — ignoradas.</div>}
+      {(prev.medidorDesconhecido || []).length > 0 && <div className="hint" style={{ marginTop: 4, color: "var(--warn)" }}>Medidor não encontrado no 360 (fica só o nome do Exact): <b>{prev.medidorDesconhecido.join(", ")}</b></div>}
+      <div className="hint" style={{ marginTop: 8 }}>Medidas já feitas fora do 360 (análise / aprovados) entram sem o pagamento de R$ 40 no 360. Aprovados ficam como medida oficial no checklist da venda.</div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn" onClick={fechar}>Cancelar</button>
+        <button className="btn primary" disabled={sal || (!prev.novos && !prev.avancam)} onClick={ok}>{sal ? "Importando…" : "OK, importar"}</button>
+      </div>
+    </Modal>
   );
 }

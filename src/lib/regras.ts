@@ -17,7 +17,9 @@ export const SITUACOES_EXTRA = ["em_obras", "standby", "em_analise"];
 export const SITUACOES_CONSULTOR = ["ausente_endereco", "em_obras", "standby", "em_analise"];
 export const TIPO_VENDA_INFORMADO: Record<string, string> = { efetivada: "à vista (paga)", entrada: "entrada + promissória", promissoria: "100% promissória" };
 export const TIPO_REEMBOLSO: Record<string, string> = { pedagio: "Pedágio", estacionamento: "Estacionamento", combustivel: "Combustível", outro: "Outro" };
-export const ETAPA_MEDIDA: Record<string, string> = { validar: "Validar medidas", agendada: "Medição agendada", realizada: "Medida feita — conferir", liberada: "Liberada para o checklist" };
+export const ETAPA_MEDIDA: Record<string, string> = { pendente: "Pendente para medir", agendada: "Aguardando medição", validar: "Aguardando análise (medidas do consultor)", realizada: "Aguardando análise", em_obra: "Em obra", liberada: "Aprovada — medida oficial" };
+/** grupo da medida para as listas: pendentes · aguardando medição · análise · aprovados · em obra */
+export const grupoMedida = (etapa: string) => etapa === "liberada" ? "aprovados" : etapa === "agendada" ? "agendadas" : etapa === "em_obra" ? "obra" : ["validar", "realizada"].includes(etapa) ? "analise" : "pendentes";
 export const VENDA_STATUS: Record<string, string> = {
   registrada: "Pendente de análise", efetivada: "Efetivada", entrada: "Entrada + promissória", promissoria: "Promissória", cancelada: "Cancelada",
 };
@@ -375,7 +377,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const comissaoFutura = pendentes.reduce((s, c) => s + valorPendente(c.venda), 0) * (pct / 100);
     const comissao = totalVendido * (pct / 100);
     // medidas feitas (R$ por visita, sem comissão) e reembolsos aprovados
-    const medidas = medidasDe(consultorId).filter(c => c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && (dentroPeriodo(c.tratativa.medida.realizadaEm, de, ate) || (!de && !ate)));
+    const medidas = medidasDe(consultorId).filter(c => c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && !c.tratativa.medida.semPagamento && (dentroPeriodo(c.tratativa.medida.realizadaEm, de, ate) || (!de && !ate)));
     const pagamentoMedidas = medidas.length * pagamentoVisita;
     const reembolsos = reembolsosDe(consultorId).filter(r => r.status === "aprovado" && (dentroPeriodo(r.data, de, ate) || (!de && !ate)));
     const totalReembolsos = reembolsos.reduce((s, r) => s + r.valor, 0);
@@ -589,15 +591,16 @@ export function criarRegras(state: Estado, currentUserId: string) {
     add("retmont", "🔧 Retornos de montador para você", "O call center abriu um retorno do montador e escolheu você para tratar. Prioridade de atendimento.", ch.filter(c => c.tipo === "retorno_montador" && !["concluida", "respondida", "informar"].includes(c.status) && ((c as any).tratativa?.retorno?.atendenteId === eu)), "var(--critico)");
     if (ehGestao() || mySetores().includes("supervisao")) add("acomp", "🚨 Pedidos de acompanhamento", "O call center chamou a supervisão para estes chamados. Abra e marque \"Estou acompanhando\".", ch.filter(c => acompAtivo(c)), "var(--critico)");
     if (ehSupMedidas()) {
-      add("medvalidar", "📐 Medidas para validar", "Confira as medidas (do consultor ou do medidor). Se estiverem certas, libere para o checklist; se não, direcione a medição.", ch.filter(c => c.tipo === "medidas" && c.status !== "concluida" && ["validar", "realizada"].includes(etapaMedida(c))), "var(--primary)");
+      add("medalerta", "⚠️ Checklist em até 3 dias sem medida aprovada", "O checklist está chegando e a medida desta venda ainda não foi aprovada. Aprove, direcione a medição ou avise o checklist.", ch.filter(c => c.tipo === "checklist" && c.status !== "concluida" && (c as any).tratativa?.checklist?.etapa === "agendado" && (() => { const d = String((c as any).tratativa.checklist.agendadoPara || "").slice(0, 10), h = hojeISO(); const lim = new Date(); lim.setDate(lim.getDate() + 3); return d >= h && d <= isoLocal(lim).slice(0, 10); })() && !ch.some(m => m.tipo === "medidas" && m.pedido === c.pedido && etapaMedida(m) === "liberada")), "var(--critico)");
+      add("medvalidar", "📐 Medidas para aprovar", "Medidas feitas pelos medidores/consultores ou que vieram do cruzamento com o Minha Visita. Se estiverem certas, aprove como medida oficial; se não, peça para refazer.", ch.filter(c => c.tipo === "medidas" && c.status !== "concluida" && ["validar", "realizada"].includes(etapaMedida(c))), "var(--primary)");
     }
-    add("medfazer", "📐 Medidas a fazer", "Medições direcionadas para você. Depois de medir, anexe as fotos/planta e marque como realizada.", ch.filter(c => c.tipo === "medidas" && c.medidorId === eu && etapaMedida(c) === "agendada"), "var(--warn)");
+    add("medfazer", "📐 Medidas a fazer (R$ 40 por cliente · sem comissão)", "Medições direcionadas para você — não é visita de venda. Depois de medir, anexe as fotos/planta e marque como realizada.", ch.filter(c => c.tipo === "medidas" && c.medidorId === eu && etapaMedida(c) === "agendada"), "var(--warn)");
     add("informar", "Informar o cliente", "O setor registrou a solução mas não fala com o cliente. Avise o cliente e conclua.", ch.filter(c => doCC(c) && c.status === "informar" && (ehCallcenter() || c.solicitanteId === eu)), "var(--st-informar)");
     add("criticos", "Críticos no seu setor", "Mais de 24h sem resposta — precisam de ação imediata.", ch.filter(c => doCC(c) && mySetores().includes(c.setorDestino) && situacaoPrazo(c) === "critico"), "var(--critico)");
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => doCC(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => doCC(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["retmont", "acomp", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
+    const PRIORIDADE = ["retmont", "acomp", "medalerta", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));
@@ -670,7 +673,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (pv.length) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Pós-venda", ic: "✚", itens: pv });
     if (podeChecklist()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Checklist", ic: "✓", itens: [["ck_agendar", "A agendar"], ["ck_aguardando", "Aguardando"], ["ck_agendados", "Agendados"], ["ck_confirmar", "Confirmação de presença"], ["ck_agenda", "Agenda"]] });
     // Medidas: cruzamento Minha Visita × Exact (Gestão e Supervisão de Medidas)
-    if (ehSupMedidas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Medidas", ic: "📐", itens: [["md_cruzar", "Cruzar Minha Visita × Exact"], ["md_resultados", "Medidas oficiais"]] });
+    if (ehSupMedidas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Medidas", ic: "📐", itens: [["md_pendentes", "Pendentes para medir"], ["md_agendadas", "Aguardando medição"], ["md_analise", "Aguardando análise"], ["md_aprovados", "Aprovados"], ["md_obra", "Em obra"], ["md_cruzar", "Cruzar Minha Visita × Exact"], ["md_resultados", "Resultado dos cruzamentos"]] });
+    // consultor externo e medidor: as medidas deles separadas das visitas de venda (medida paga R$ 40, sem comissão)
+    else if (ehMedidor() || ehConsultorExterno()) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
     if (podeEncontrarVendas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Encontrar vendas", ic: "🔎", itens: [["encontrar_vendas", "Encontrar vendas"]] });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);

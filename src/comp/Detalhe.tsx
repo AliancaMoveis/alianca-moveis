@@ -9,7 +9,7 @@ import {
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
-import { SeloMedidas } from "../telas/Medidas";
+import { SeloMedidaVenda } from "../telas/Medidas";
 import { BotaoWhats } from "./Whats";
 import { cfgAgenda, CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
 
@@ -656,12 +656,20 @@ function MedidaBloco({ c }: any) {
   const [end, setEnd] = useState(c.endereco || "");
   const [obs, setObs] = useState(""); const [mot, setMot] = useState("");
   const [med, setMed] = useState(m.medidas || ""); const [mobs, setMobs] = useState(m.obs || "");
-  const cor = etapa === "liberada" ? "var(--st-concluida)" : etapa === "agendada" ? "var(--warn)" : "var(--primary)";
+  const cor = etapa === "liberada" ? "var(--st-concluida)" : etapa === "agendada" ? "var(--warn)" : etapa === "em_obra" ? "var(--ink-soft)" : "var(--primary)";
+  const [prevObra, setPrevObra] = useState(""); const [obsObra, setObsObra] = useState("");
+  const ckVenda = checklist || st.chamados.find((x: any) => x.tipo === "checklist" && c.pedido && x.pedido === c.pedido);
   const anexosConsultor = venda ? (venda.anexos || []).length : 0;
   return (
     <div className="resp-box" style={{ borderColor: cor }}>
       <h4>📐 Medidas <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{ETAPA_MEDIDA[etapa] || etapa}</span></h4>
-      <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 10 }}>Processo: venda → <b>medidas</b> → checklist.</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "0 0 10px" }}>
+        <span className="pill" style={{ background: "var(--st-concluida)", color: "#fff", fontWeight: 700 }}>SOLICITAÇÃO DE MEDIDA — não é visita de venda</span>
+        <span className="pill">{m.semPagamento ? "sem pagamento (medida da visita de venda · Minha Visita)" : "paga " + fmtMoeda(R.cfg().pagamentoVisita) + " a quem mede · sem comissão"}</span>
+      </div>
+      {m.origem === "minha_visita" && <RowSb k="Origem" pb="4px 0">Cruzamento com o Minha Visita · visitado por <b>{m.consultorNome || (c.medidorId ? R.nomeUser(c.medidorId) : "consultor")}</b>{m.visitaEm ? " · " + m.visitaEm : ""}</RowSb>}
+      {ckVenda && <RowSb k="Checklist" pb="4px 0"><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(ckVenda.id); }}>{ckVenda.id}</a>{ckVenda.tratativa?.checklist?.agendadoPara ? " · agendado " + fmtDateTime(ckVenda.tratativa.checklist.agendadoPara) + (ckVenda.tratativa.checklist.projetista ? " com " + ckVenda.tratativa.checklist.projetista : "") : " · ainda não agendado"}</RowSb>}
+      {etapa === "em_obra" && <div className="alerta" style={{ margin: "8px 0" }}><b>🚧 Em obra</b> — sem medida oficial{m.previsaoObra ? " · previsão de término " + String(m.previsaoObra).split("-").reverse().join("/") : ""}{m.obsObra ? " · " + m.obsObra : ""}</div>}
       {venda && <RowSb k="Venda" pb="4px 0"><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(venda.id); }}>{venda.id}</a>{venda.venda ? " · nº " + venda.venda.numero : ""}{venda.atendenteId ? " · vendedor " + R.nomeUser(venda.atendenteId) : ""}</RowSb>}
       {m.consultorVisita && <RowSb k="Consultor que visitou" pb="4px 0">{R.nomeUser(m.consultorVisita)}{venda ? " · " + anexosConsultor + " anexo(s) na visita" : ""}</RowSb>}
       {(m.medidasConsultor || m.obsConsultor) && <RowSb k="Medidas do consultor" pb="4px 0">{[m.medidasConsultor, m.obsConsultor].filter(Boolean).join(" · ")}</RowSb>}
@@ -677,9 +685,16 @@ function MedidaBloco({ c }: any) {
         <button className="btn primary sm" style={{ marginTop: 10 }} onClick={() => { if (!(c.anexos || []).length) { toast("Anexe as fotos/planta da medição primeiro"); return; } ex(() => A.medidaRealizada(c.id, med.trim(), mobs.trim()), "Medida registrada — a supervisora vai conferir"); }}>✓ Medida realizada</button>
       </div>}
 
-      {sup && ["validar", "realizada"].includes(etapa) && <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--st-concluida)" }}><h4>✅ Medidas certas — liberar para o checklist</h4>
+      {sup && ["validar", "realizada"].includes(etapa) && <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--st-concluida)" }}><h4>✅ Medidas certas — aprovar como medida oficial</h4>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>O checklist da venda passa a mostrar “medida oficial” e as fotos desta ficha ficam disponíveis para o projetista.</div>
         <div className="inline-2"><div className="field"><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação para o checklist (opcional)" /></div>
-          <button className="btn primary sm" onClick={() => ex(() => A.medidaLiberar(c.id, obs.trim()), "Liberado — checklist aberto")}>Liberar para o checklist</button></div></div>}
+          <button className="btn primary sm" onClick={() => ex(() => A.medidaLiberar(c.id, obs.trim()), "Medida aprovada — medida oficial")}>✅ Aprovar</button></div></div>}
+      {sup && etapa !== "liberada" && etapa !== "em_obra" && <div className="resp-box" style={{ marginTop: 12 }}><h4>🚧 Cliente em obra</h4>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Em obra não permite a medida oficial. Fica em “Em obra” até alguém voltar para pendente.</div>
+        <div className="inline-2"><div className="field"><input type="date" value={prevObra} onChange={e => setPrevObra(e.target.value)} title="Previsão de término (opcional)" /></div>
+          <div className="field"><input value={obsObra} onChange={e => setObsObra(e.target.value)} placeholder="Observação (opcional)" /></div>
+          <button className="btn sm" onClick={() => ex(() => A.medidaEmObra(c.id, prevObra, obsObra.trim()), "Marcado como em obra")}>Em obra</button></div></div>}
+      {sup && etapa === "em_obra" && <div style={{ marginTop: 12 }}><button className="btn sm" onClick={() => ex(() => A.medidaPendente(c.id, "obra terminou"), "Voltou para pendente para medir")}>Obra terminou → pendente para medir</button></div>}
 
       {sup && etapa === "realizada" && <div className="resp-box" style={{ marginTop: 12 }}><h4>↩️ Pedir para refazer</h4>
         <div className="inline-2"><div className="field"><input value={mot} onChange={e => setMot(e.target.value)} placeholder="O que precisa ser refeito" /></div>
@@ -784,7 +799,7 @@ function BlocoChecklist({ c }: any) {
   return (
     <div className="resp-box" style={{ borderColor: cor }}><h4>Checklist (revisão do projeto) <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{nome}</span></h4>
       <RowSb k="Venda"><b>{c.pedido || "—"}</b></RowSb>
-      {(st.medidasCruz || {})[c.pedido] && (() => { const m = st.medidasCruz[c.pedido]; return <RowSb k="Medidas"><SeloMedidas resultado={m.resultado} />{m.consultor ? " · consultor " + m.consultor : ""}{m.visitado ? " · visitado como “" + m.visitado + "”" : ""}{m.tratativa ? " · " + m.tratativa : ""}{m.obs ? " — " + m.obs : ""}</RowSb>; })()}
+      <RowSb k="Medidas"><SeloMedidaVenda pedido={c.pedido} comLink />{!st.chamados.some((x: any) => x.tipo === "medidas" && x.pedido === c.pedido) && !(st.medidasCruz || {})[c.pedido] ? <span className="hint">sem medida registrada no 360</span> : null}</RowSb>
       {p.vendedor && <RowSb k="Vendedor">{p.vendedor}</RowSb>}
       <RowSb k="Medidor">{p.medidor || "não informado na planilha"}{k.medidaId ? (k.medidaOk ? " · medidas conferidas" : " · aguardando o setor de Medidas (" + k.medidaId + ")") : ""}</RowSb>
       {k.proposta && <RowSb k="Data oferecida">{fmtDT(k.proposta)}</RowSb>}
