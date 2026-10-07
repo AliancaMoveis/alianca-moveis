@@ -32,7 +32,9 @@ export default function Atividades() {
   const usuarioPorNome = (nome: string) => st.usuarios.find(u => u.nome === nome) || null;
 
   let evs: any[] = [];
-  st.chamados.filter(R.podeVer).forEach(c => (c.historico || []).forEach((h: any) => {
+  const soCC = R.soCallCenter();
+  st.chamados.filter(c => R.podeVer(c) && !(soCC && R.domMarketing(c))).forEach(c => (c.historico || []).forEach((h: any) => {
+    if (soCC && R.acaoDeFora(h.quem)) return;
     const u = usuarioPorNome(h.quem);
     const setorId = u ? ((u.setores || [])[0] || "") : (h.quem === "Sistema" ? "sistema" : "");
     evs.push({ quando: h.quando, quem: h.quem, userId: u ? u.id : null, setorId, setorNome: h.quem === "Sistema" ? "Sistema" : (u ? R.setoresLabel(u) : "—"), texto: h.texto, chamado: c.id, cliente: c.cliente, tipo: classificaAcao(h.texto) });

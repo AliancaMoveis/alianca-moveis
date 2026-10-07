@@ -362,6 +362,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // ---------- medidas (venda → medidas → checklist) ----------
   // Proprietário: vê e pode tudo (como a Gestão), mas sem tarefas pessoais
   const ehProprietario = () => mySetores().includes("proprietario");
+  // Supervisão do call center (Salete): vê só o call center — nada do marketing nem das ações da Gestão
+  const soCallCenter = () => mySetores().includes("supervisao") && !ehGestao() && !temMarketing();
+  // ação registrada no histórico por alguém da Gestão/dono ou do marketing (escondida de quem é só call center)
+  const acaoDeFora = (quem: string) => { const u = state.usuarios.find(x => x.nome === quem); return !!u && (u.setores || []).some((x: string) => x === "gestao" || x === "proprietario" || MARKETING_SETORES.includes(x)); };
   const ehMedidor = () => mySetores().includes("medidas") && !!me()?.somenteAtribuidos;
   // Encontrar vendas (Exact × Minha Visita): por enquanto só o Bruno
   const podeEncontrarVendas = () => ["00000000-0000-4000-a000-000000000007"].includes(currentUserId);
@@ -719,7 +723,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, dispVendedor,
+    ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, dispVendedor, soCallCenter, acaoDeFora,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };

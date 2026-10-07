@@ -1107,3 +1107,11 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 @media (max-width:700px){.lv-linha,.lv-bloco.promissoria .lv-linha{grid-template-columns:1fr 1fr}.lv-linha .lv-x{grid-column:2;justify-self:end}.vc-res{grid-template-columns:1fr}}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .lv-bloco.promissoria,:root:not([data-theme="light"]) .vv-linha.pendg,:root:not([data-theme="light"]) .vc-res .pend{background:#2e2610}}
 :root[data-theme="dark"] .lv-bloco.promissoria,:root[data-theme="dark"] .vv-linha.pendg,:root[data-theme="dark"] .vc-res .pend{background:#2e2610}
+/* painel do celular reaproveitado no computador (Supervisão) */
+.mv-pc .mv-tiles{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.mv-pc .mv-tile{text-align:left;font:inherit;cursor:default}
+.mv-pc .mv-tile.clic{cursor:pointer}
+.mv-pc .mv-tile b{font-size:30px}
+.mv-pc .mv-receber{max-width:none}
+.mv-pc .mv-funil{max-width:900px}
+.mv-pc .mv-barra{grid-template-columns:220px 1fr 50px}

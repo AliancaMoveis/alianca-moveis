@@ -48,8 +48,8 @@ export default function Relatorios() {
         {aba === "cc" && <><div className="field"><label>Setor</label><select value={f.se} onChange={s("se")}><option value="">Todos os setores</option>{R.setoresVisiveis().map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>
         <div className="field"><label>Motivo</label><select value={f.tp} onChange={s("tp")}><option value="">Todos os motivos</option>{Object.entries(R.TIPOS).filter(([, t]: any) => !t.presale).map(([k, t]: any) => <option key={k} value={k}>{t.nome}</option>)}</select></div></>}
       </div><div style={{ marginTop: 14, display: "flex", gap: 10 }}><button className="btn ghost sm" onClick={() => setF({ de: hoje.slice(0, 8) + "01", ate: hoje, se: "", tp: "" })}>Mês atual</button><button className="btn ghost sm" onClick={() => setF({ de: "", ate: "", se: "", tp: "" })}>Todo o período</button><span className="live" style={{ marginLeft: 0 }}><i></i>atualiza ao vivo</span></div></div>
-      <div className="subnav" style={{ marginBottom: 14 }}><button className={aba === "cc" ? "on" : ""} onClick={() => setAba("cc")}>Call center e pós-venda</button><button className={aba === "mkt" ? "on" : ""} onClick={() => setAba("mkt")}>Marketing</button></div>
-      {aba === "mkt" ? <RelMkt de={f.de} ate={f.ate} /> : <>
+      <div className="subnav" style={{ marginBottom: 14 }}><button className={aba === "cc" ? "on" : ""} onClick={() => setAba("cc")}>Call center e pós-venda</button>{!R.soCallCenter() && <button className={aba === "mkt" ? "on" : ""} onClick={() => setAba("mkt")}>Marketing</button>}</div>
+      {aba === "mkt" && !R.soCallCenter() ? <RelMkt de={f.de} ate={f.ate} /> : <>
       <div className="kpis" id="relKpis"><Kpi n={total} l="Atendimentos no período" /><Kpi n={conc} l="Concluídas" /><Kpi n={at} l="Atrasadas agora" cls={at ? "alert" : ""} /><Kpi n={tmed != null ? tmed.toFixed(1) + "h" : "—"} l="Tempo médio de resposta" /></div>
       <div className="panel-grid">
         <div className="panel"><h3>Volume por setor</h3><div><Barras rows={R.setoresVisiveis().map(x => [x.nome, porSetor[x.id] || 0] as [string, number])} /></div></div>

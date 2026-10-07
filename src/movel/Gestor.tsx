@@ -2,6 +2,7 @@
 // equipe (consultores, vendedores, operadoras, setores), fila de ação e busca de clientes.
 import { useEffect, useRef, useState } from "react";
 import { A } from "../lib/acoes";
+import { fmtTempo, mediaHoras } from "../lib/atendimento";
 import { useApp } from "../estado";
 import { numsVenda, temPendenteGestao, STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
 
@@ -67,7 +68,7 @@ export function useTimeMkt(P: { de: string; ate: string }, tick = 0) {
 }
 
 // ----- blocos -----
-function useLista() {
+export function useLista() {
   const [sel, setSel] = useState<{ k: string; t: string; l: any[] } | null>(null);
   const abrirLista = (k: string, t: string, l: any[]) => setSel(sel && sel.k === k ? null : { k, t, l });
   return { sel, abrirLista, fechar: () => setSel(null) };
@@ -229,7 +230,7 @@ function TimeMkt({ P, L }: any) {
   </>;
 }
 
-function ResCC({ todos, noPer, P, L }: any) {
+export function ResCC({ todos, noPer, P, L }: any) {
   const { R, st } = useApp() as any;
   const cc = todos.filter((c: any) => doPainelCC(R, c));
   const pr = (c: any) => R.prioridade(c);
@@ -335,7 +336,7 @@ export function GestEquipe({ irTime }: { irTime?: () => void }) {
     linhas = Object.entries(porU).map(([uid, l]) => {
       const ab = l.filter((c: any) => c.status !== "concluida"), fora = ab.filter((c: any) => ["critico", "atrasado"].includes(R.prioridade(c)));
       return { u: { id: uid, nome: R.nomeUser(uid) }, l, chave: l.length, nums: [["Abertos", l.length], ["Em andamento", ab.length], ["Concluídos", l.length - ab.length], ["Fora do prazo", fora.length]],
-        dest: l.length + " chamado(s)", extra: [["Resolvidos", pc(l.length - ab.length, l.length)]], listas: [["Chamados do período", R.ordenar(l)], ["Fora do prazo", R.ordenar(fora)]] };
+        dest: l.length + " chamado(s)", extra: [["Resolvidos", pc(l.length - ab.length, l.length)], ["Tempo médio de atendimento", fmtTempo(mediaHoras(l.filter((c: any) => c.status === "concluida")))]], listas: [["Chamados do período", R.ordenar(l)], ["Fora do prazo", R.ordenar(fora)]] };
     });
   }
   linhas.sort((x, y) => y.chave - x.chave);

@@ -5,6 +5,7 @@ import { useApp } from "../estado";
 import { fmtDate, fmtMoeda, isoLocal, parseData, vendaContaVolume } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
 import PainelGestao from "./PainelGestao";
+import { fmtTempo, mediaHoras } from "../lib/atendimento";
 
 const FIM_TXT = (t: string) => t.startsWith("Status → Concluída") || t.startsWith("✓ Atendimento finalizado");
 const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => FIM_TXT(String(x.texto))); return h.length ? h[h.length - 1].quando : null; };
@@ -66,7 +67,8 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
     const reg = R1.filter((c: any) => c.solicitanteId === u.id);
     const fin = F1.filter((c: any) => (c.historico || []).some((h: any) => FIM_TXT(String(h.texto)) && h.quem === u.nome));
     return { nome: u.nome, reg: reg.length, fin: fin.length, lig: naLigacao(reg.filter((c: any) => c.status === "concluida")).length,
-      aberto: abertos.filter((c: any) => c.solicitanteId === u.id).length, sup: reg.filter((c: any) => c.tratativa && c.tratativa.acomp).length };
+      aberto: abertos.filter((c: any) => c.solicitanteId === u.id).length, sup: reg.filter((c: any) => c.tratativa && c.tratativa.acomp).length,
+      tm: mediaHoras(F1.filter((c: any) => c.solicitanteId === u.id)) };
   }).sort((a: any, b: any) => b.reg - a.reg);
   const motivos: Record<string, number> = {}; R1.forEach((c: any) => { motivos[c.tipo] = (motivos[c.tipo] || 0) + 1; });
   const motL = Object.entries(motivos).sort((a, b) => b[1] - a[1]); const mxMot = Math.max(1, ...motL.map(x => x[1]));
@@ -126,8 +128,8 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
           <Kpi n={acomp.length} l="Com a supervisão" cor={acomp.length ? "var(--critico)" : undefined} />
         </div>
         <div className="panel" style={{ marginBottom: 16 }}><h3>Por atendente</h3>
-          {porAt.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Atendente</th><th>Registrados</th><th>Finalizados</th><th>Na ligação</th><th>Em aberto (dela)</th><th>Acionou supervisão</th></tr></thead><tbody>
-            {porAt.map((x: any) => <tr key={x.nome}><td><b>{x.nome}</b></td><td>{x.reg}</td><td>{x.fin}</td><td>{x.lig}</td><td>{x.aberto}</td><td style={x.sup ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{x.sup}</td></tr>)}
+          {porAt.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Atendente</th><th>Registrados</th><th>Finalizados</th><th>Na ligação</th><th>Em aberto (dela)</th><th>Acionou supervisão</th><th title="Média entre abrir e finalizar, dos atendimentos dela finalizados no período">Tempo médio de atendimento</th></tr></thead><tbody>
+            {porAt.map((x: any) => <tr key={x.nome}><td><b>{x.nome}</b></td><td>{x.reg}</td><td>{x.fin}</td><td>{x.lig}</td><td>{x.aberto}</td><td style={x.sup ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{x.sup}</td><td><b>{fmtTempo(x.tm)}</b></td></tr>)}
           </tbody></table></div> : <div className="dn-vazio">Nenhuma atendente cadastrada.</div>}</div>
         <div className="panel-grid">
           <div className="panel"><h3>Motivos mais frequentes</h3>{motL.length ? motL.map(([k, n]) => <BarRow key={k} nm={R.tipoNome(k)} pct={n / mxMot * 100} v={n} />) : <div className="dn-vazio">Sem registros no período.</div>}</div>
