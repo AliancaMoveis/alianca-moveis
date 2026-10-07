@@ -145,7 +145,7 @@ function ClienteCard({ c }: any) {
 }
 
 function tratativaExiste(c: any, R: any) {
-  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "posvenda"].includes(c.tipo)) return true;
+  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "posvenda", "retorno_montador"].includes(c.tipo)) return true;
   if (!R.domMarketing(c)) return false;
   return ["marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente"].includes(c.setorDestino);
 }
@@ -168,6 +168,7 @@ function Tratativa({ c }: any) {
   const Btn = ({ on, ids, lOn, lOff, campo }: any) => <button className={"btn " + (on ? "" : "primary") + " sm"} id={ids} onClick={() => marcar(campo)}>{on ? lOn : lOff}</button>;
 
   if (c.tipo === "posvenda") return <TratPosvenda c={c} />;
+  if (c.tipo === "retorno_montador") return <TratRetornoMontador c={c} />;
   if (c.tipo === "montagem") return <div className="resp-box"><h4>Tratativa — Montagem (Exact)</h4><div className="grid"><div className="field"><label>Data agendada</label><input type="date" value={v.agenda} onChange={s("agenda")} /></div><div className="field"><label>Montador</label><input value={v.montador} onChange={s("montador")} placeholder="Nome do montador" /></div></div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => salvar(["agenda", "montador"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "assistencia") return <div className="resp-box"><h4>Tratativa — Assistência (peça + montador)</h4><div className="grid"><div className="field"><label>Peça solicitada</label><input value={v.peca} onChange={s("peca")} placeholder="Ex.: puxador, dobradiça…" /></div><div className="field"><label>Montador designado</label><input value={v.montador} onChange={s("montador")} /></div></div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => salvar(["peca", "montador"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "vistoria") return <div className="resp-box"><h4>Tratativa — Vistoria (aprovar e designar)</h4><div className="grid"><div className="field"><label>Montador de vistoria</label><input value={v.montador} onChange={s("montador")} /></div><div className="field"><label>Data da vistoria</label><input type="date" value={v.data} onChange={s("data")} /></div></div><div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.aprovada} campo="aprovada" lOn="Vistoria aprovada ✓" lOff="Aprovar vistoria" /><button className="btn primary sm" onClick={() => salvar(["montador", "data"])}>Salvar tratativa</button></div></div>;
@@ -802,6 +803,28 @@ function BlocoChecklist({ c }: any) {
   );
 }
 
+// Retorno do montador (aberto pelo call center): montador + atendente da montagem responsável
+function TratRetornoMontador({ c }: any) {
+  const { R, st, executar: ex } = useApp() as any;
+  const r = (c.tratativa || {}).retorno || {};
+  const [m, setM] = useState(r.montadorId || ""); const [at, setAt] = useState(r.atendenteId || "");
+  useEffect(() => { setM(r.montadorId || ""); setAt(r.atendenteId || ""); }, [c.id, r.montadorId, r.atendenteId]);
+  const mont = (st.montadores || []).find((x: any) => x.id === (r.montadorId || m));
+  const atendentes = st.usuarios.filter((u: any) => u.ativo && (u.setores || []).includes("montagem"));
+  const podeMudar = R.ehGestao() || R.mySetores().includes("montagem") || R.mySetores().includes("callcenter") || R.mySetores().includes("supervisao");
+  return (
+    <div className="resp-box"><h4>🔧 Retorno do montador</h4>
+      <RowSb k="Montador"><span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{r.montadorId ? R.nomeMontador(r.montadorId) : "não informado"}</b>{mont && mont.telefone ? <BotaoWhats tel={mont.telefone} texto={"Olá, " + mont.nome.split(" ")[0] + "! Aqui é da Aliança Móveis, sobre o retorno na obra de " + c.cliente + (c.pedido ? " (venda " + c.pedido + ")" : "") + "."} /> : null}</span></RowSb>
+      <RowSb k="Atendente da montagem">{r.atendenteId ? <b>{R.nomeUser(r.atendenteId)}</b> : <span style={{ color: "var(--danger)" }}>não definida</span>}{r.atendenteId === R.currentUserId ? <span className="badge b-urgente" style={{ marginLeft: 8 }}>com você</span> : null}</RowSb>
+      {podeMudar && <div className="grid" style={{ marginTop: 8 }}>
+        <div className="field"><label>Montador</label><select value={m} onChange={e => setM(e.target.value)}><option value="">Selecione…</option>{(st.montadores || []).filter((x: any) => x.ativo || x.id === m).map((x: any) => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>
+        <div className="field"><label>Atendente da montagem</label><select value={at} onChange={e => setAt(e.target.value)}><option value="">Selecione…</option>{atendentes.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
+      </div>}
+      {podeMudar && (m !== (r.montadorId || "") || at !== (r.atendenteId || "")) && <div style={{ marginTop: 10 }}><button className="btn primary sm" onClick={() => ex(() => A.retornoMontadorDefinir(c.id, { montadorId: m, atendenteId: at }), "Retorno atualizado")}>Salvar</button></div>}
+    </div>
+  );
+}
+
 // Pós-venda Projetados: Relato (fato, como foi contado) · Análise (tipo + responsabilidade) · Custo e solução · Encaminhar
 function TratPosvenda({ c }: any) {
   const { R, st, executar: ex, toast, recarregar, abrirDetalhe } = useApp() as any;
@@ -867,7 +890,7 @@ function TratPosvenda({ c }: any) {
           {(p.origem === "montador" || v.paradoObra) && <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={!!v.paradoObra} onChange={e => setV((x: any) => ({ ...x, paradoObra: e.target.checked }))} /><span>🚨 Montador parado na obra</span></label>}
           <div className="field full"><label>O que foi constatado</label><textarea value={v.ocorrido} onChange={s("ocorrido")} placeholder="Depois de falar com o cliente/montador ou da vistoria: o que de fato aconteceu e por quê"></textarea></div>
         </div>
-        {!montadores.length && <div className="hint" style={{ marginTop: 6 }}>Cadastre os montadores em Painel do pós-venda → Montadores.</div>}
+        {!montadores.length && <div className="hint" style={{ marginTop: 6 }}>Peça à Gestão para cadastrar os montadores (Cadastros → Montadores).</div>}
       </div>
       {(v.categoria === "dano_obra" || p.reembolsoStatus) && <div className="resp-box"><h4>Pedido de reembolso do cliente {v.reembolsoStatus && <span className={"badge " + (v.reembolsoStatus === "procedente" ? "b-concluida" : v.reembolsoStatus === "improcedente" ? "b-aberta" : "b-tratativa")} style={{ marginLeft: 8 }}>{PV_REEMB[v.reembolsoStatus]}</span>}</h4>
         <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 10px" }}>Dano no imóvel que o cliente atribui à montagem (ex.: cano furado). Confirme se é real (fotos, vistoria, conversa com o montador) antes de decidir. Se for culpa do montador, marque a responsabilidade “Montador” acima e lance o desconto abaixo.</p>

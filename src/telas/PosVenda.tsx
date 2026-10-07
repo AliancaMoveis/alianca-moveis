@@ -13,14 +13,14 @@ const ABAS_PV: Record<string, [string, string]> = {
   clientes: ["👤 Solicitações de clientes", "Reclamações de clientes — abertas aqui no pós-venda ou pelo call center: prazos, reembolsos e descontos de montadores."],
   montadores: ["🔧 Solicitações de montadores", "Suporte aos montadores na obra (WhatsApp / telefone): montador parado, peça faltante, medida, dúvida de projeto."],
   numeros: ["Números do pós-venda", "Qualidade: responsabilidades, custos, montadores com mais pedidos de suporte, projetistas e medições com erro."],
-  cadastro: ["Montadores", "Cadastro de montadores: WhatsApp, região preferencial e conta para pagamento."],
+  cadastro: ["Montadores", "Cadastro de montadores (WhatsApp e região preferencial) e contas para pagamento — só a Gestão."],
 };
 export default function PosVenda({ aba = "clientes" }: { aba?: string }) {
   const [t, d] = ABAS_PV[aba] || ABAS_PV.clientes;
   return (
     <section className="view active" id="view-posvenda">
       <div className="view-head"><div><h2>{t}</h2><p>{d}</p></div></div>
-      {aba === "montadores" ? <Abertos origem="montador" /> : aba === "numeros" ? <Numeros /> : aba === "cadastro" ? <Montadores /> : <Abertos origem="cliente" />}
+      {aba === "montadores" ? <Abertos origem="montador" /> : aba === "numeros" ? <Numeros /> : aba === "cadastro" ? <CadastroMontadores /> : <Abertos origem="cliente" />}
     </section>
   );
 }
@@ -194,6 +194,15 @@ function Abertos({ origem }: { origem: "cliente" | "montador" }) {
   );
 }
 
+function CadastroMontadores() {
+  const { R } = useApp() as any;
+  const [sub, setSub] = useState("cadastro");
+  if (!R.podeMontadores()) return <div className="empty">Só a Gestão acessa o cadastro de montadores.</div>;
+  return <>
+    <div className="subnav" style={{ marginTop: 10 }}><button className={sub === "cadastro" ? "on" : ""} onClick={() => setSub("cadastro")}>Cadastro</button><button className={sub === "contas" ? "on" : ""} onClick={() => setSub("contas")}>🔒 Contas para pagamento</button></div>
+    {sub === "contas" ? <ContasMontadores /> : <Montadores />}
+  </>;
+}
 function Montadores() {
   const { R, st, executar, setModal } = useApp() as any;
   const [q, setQ] = useState("");
@@ -232,7 +241,7 @@ function EditMontador({ id }: { id: string | null }) {
         <div className="field"><label>Telefone / WhatsApp</label><input value={tel} onChange={e => setTel(e.target.value)} placeholder="(41) 99999-9999" /></div>
         <div className="field"><label>Região preferencial <span className="hint">(só para controle)</span></label><input value={reg} onChange={e => setReg(e.target.value)} placeholder="Ex.: Curitiba Sul, São José, Litoral" /></div>
       </div>
-      <div className="hint" style={{ marginTop: 10 }}>A conta para pagamento do montador fica na Administração (dado sensível).</div>
+      <div className="hint" style={{ marginTop: 10 }}>A conta para pagamento fica na aba “🔒 Contas para pagamento”.</div>
       <div style={{ marginTop: 18 }}><button className="btn primary" onClick={salvar}>Salvar</button></div>
     </Modal>
   );

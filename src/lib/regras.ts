@@ -300,7 +300,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const ehJuridico = () => mySetores().includes("juridico");
   const podeChecklist = () => ehGestao() || mySetores().includes("checklist");
   const podeVerPosvenda = () => ehGestao() || ehPosvenda() || ehJuridico();
-  const podeMontadores = () => temCadastros() || ehPosvenda();
+  // cadastro de montadores e contas de pagamento: só a Gestão (Cadastros)
+  const podeMontadores = () => ehGestao();
   const responsaveisChecklist = () => state.usuarios.filter(u => (u.setores || []).includes("checklist"));
   const medidores = () => state.usuarios.filter(u => (u.setores || []).includes("medidas"));
   const nomeMontador = (id: string) => ((state.montadores || []).find(m => m.id === id) || ({} as any)).nome || "—";
@@ -585,6 +586,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c)), "var(--warn)");
       add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c)), "var(--danger)");
     }
+    add("retmont", "🔧 Retornos de montador para você", "O call center abriu um retorno do montador e escolheu você para tratar. Prioridade de atendimento.", ch.filter(c => c.tipo === "retorno_montador" && !["concluida", "respondida", "informar"].includes(c.status) && ((c as any).tratativa?.retorno?.atendenteId === eu)), "var(--critico)");
     if (ehGestao() || mySetores().includes("supervisao")) add("acomp", "🚨 Pedidos de acompanhamento", "O call center chamou a supervisão para estes chamados. Abra e marque \"Estou acompanhando\".", ch.filter(c => acompAtivo(c)), "var(--critico)");
     if (ehSupMedidas()) {
       add("medvalidar", "📐 Medidas para validar", "Confira as medidas (do consultor ou do medidor). Se estiverem certas, libere para o checklist; se não, direcione a medição.", ch.filter(c => c.tipo === "medidas" && c.status !== "concluida" && ["validar", "realizada"].includes(etapaMedida(c))), "var(--primary)");
@@ -595,7 +597,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => doCC(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => doCC(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["acomp", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
+    const PRIORIDADE = ["retmont", "acomp", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));
@@ -665,7 +667,6 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const pv: string[][] = [];
     if (ehPosvenda() || ehGestao()) pv.push(["novopv_cli", "Nova solicitação do cliente"], ["novopv_mont", "Nova solicitação do montador"]);
     if (podeVerPosvenda()) pv.push(["pv_clientes", "Solicitações de clientes"], ["pv_montadores", "Solicitações de montadores"], ["pv_numeros", "Números"]);
-    if (podeMontadores()) pv.push(["pv_cadastro", "Montadores"]);
     if (pv.length) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Pós-venda", ic: "✚", itens: pv });
     if (podeChecklist()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Checklist", ic: "✓", itens: [["ck_agendar", "A agendar"], ["ck_aguardando", "Aguardando"], ["ck_agendados", "Agendados"], ["ck_confirmar", "Confirmação de presença"], ["ck_agenda", "Agenda"]] });
     // Medidas: cruzamento Minha Visita × Exact (Gestão e Supervisão de Medidas)
@@ -673,6 +674,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (podeEncontrarVendas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Encontrar vendas", ic: "🔎", itens: [["encontrar_vendas", "Encontrar vendas"]] });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
+    if (podeMontadores()) cd.push(["pv_cadastro", "Montadores"]);
     if (ehGestao()) cd.push(["admin", "Administração"]);
     if (cd.length) G.push({ g: "Cadastros", ic: "⚙", itens: cd });
     return G;

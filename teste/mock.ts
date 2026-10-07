@@ -22,7 +22,7 @@ const setores = [
 const tipos: any = {
   previsao_frete: { nome: "Previsão do frete (já com o freteiro)", destino: "callcenter", rapido: true },
   entrega: { nome: "Solicitação de entrega", destino: "callcenter" },
-  horario_montagem: { nome: "Montagem já agendada — horário / confirmação", destino: "callcenter", rapido: true }, prazo_fabrica: { nome: "Prazo de fábrica", destino: "prazo_fabrica" },
+  retorno_montador: { nome: "Solicitação de retorno do montador", destino: "montagem", anexos: true }, horario_montagem: { nome: "Montagem já agendada — horário / confirmação", destino: "callcenter", rapido: true }, prazo_fabrica: { nome: "Prazo de fábrica", destino: "prazo_fabrica" },
   montagem: { nome: "Solicitação de montagem", destino: "montagem" }, assistencia: { nome: "Solicitação de assistência", destino: "assistencia", anexos: true },
   vistoria: { nome: "Solicitação de vistoria", destino: "assistencia", anexos: true }, checklist: { nome: "Agendamento de checklist", destino: "checklist" },
   medidas: { nome: "Solicitação de medidas", destino: "medidas" },

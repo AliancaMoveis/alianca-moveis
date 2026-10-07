@@ -6,7 +6,7 @@ import { EditFab } from "./Cadastros";
 import { BotaoWhats } from "../comp/Whats";
 import { cfgAgenda } from "./Checklist";
 
-const VAZIO: any = { pvSituacao: "", pvProjetista: "", pvProjOutro: false, pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
+const VAZIO: any = { rmMontador: "", rmAtendente: "", pvSituacao: "", pvProjetista: "", pvProjOutro: false, pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
 type NovoAnexo = { tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; blob?: Blob };
 
 export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; pvFixo?: "cliente" | "montador" }) {
@@ -83,6 +83,7 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
     e.preventDefault();
     if (!f.tipo) { toast("Escolha o motivo do contato"); return; }
     if (!R.podeCriarTipo(f.tipo)) { toast("Você não tem permissão para abrir este motivo"); return; }
+    if (f.tipo === "retorno_montador" && (!f.rmMontador || !f.rmAtendente)) { toast("Selecione o montador e a atendente da montagem"); return; }
     if (pvMont && !f.pvMontador) { toast("Informe qual montador pediu suporte"); return; }
     if (pvMont && !f.pvSituacao) { toast("Informe a situação do montador na obra"); return; }
     const finalizar = modo.current === "finalizar" && podeFinalizarJa;
@@ -98,6 +99,7 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
       const id = await A.criarChamado({ ...base, ...(pvMont ? { produto: f.produto || "Projetados" } : {}), fabrica: ehMkt ? "" : ehFab || ehPv ? f.fabrica : "", pedidoFabrica: ehFab ? f.pedidoFabrica : "", prazoTatico: ehFab || f.tipo === "entrega" ? f.prazoTatico : "", vinculadoA: vinc,
         ...(!ehMkt && finalizar ? { finalizar: true, resposta: resposta.trim() } : {}),
         ...(!ehMkt && acionar && !finalizar ? { acionarSupervisao: true, motivoSupervisao: motivoSup.trim() } : {}) });
+      if (f.tipo === "retorno_montador") await A.retornoMontadorDefinir(id, { montadorId: f.rmMontador, atendenteId: f.rmAtendente }).catch((e: any) => toast("Solicitação aberta, mas: " + e.message));
       if (ehPv) await A.posvendaAbertura(id, { origem: f.pvOrigem, peca: f.pvPeca, montadorId: f.pvMontador, paradoObra: f.pvParado, categoria: pvMont ? "" : f.pvTipo, situacao: pvMont ? f.pvSituacao : "", projetista: pvMont ? f.pvProjetista : "" }).catch((e: any) => toast("Atendimento aberto, mas: " + e.message));
       const fotos = anexos.filter(a => a.tipo === "img");
       const itens = fotos.length ? await enviarFotos(id, fotos.map(a => ({ nome: a.nome, blob: a.blob! }))) : [];
@@ -184,10 +186,15 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
               : <span className="hint" style={{ marginTop: 4 }}>Fábrica não está na lista? Peça à Supervisão para cadastrar.</span>}</div>}
           {(ehFab || f.tipo === "entrega") && <div className="field" id="fieldPrazoTatico"><label>Prazo de entrega no Tático <span className="hint">(prazo original)</span></label><input name="prazoTatico" type="date" value={f.prazoTatico} onChange={set("prazoTatico")} /></div>}
           {!ehMkt && !rapido && <div className="field"><label>Prazo para responder <span className="hint">(vazio = 2 dias úteis)</span></label><input name="slaManual" type="date" value={f.slaManual} onChange={set("slaManual")} /></div>}
+          {f.tipo === "retorno_montador" && <div className="field"><label>Montador <span className="req-star">*</span></label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}><select style={{ flex: 1 }} value={f.rmMontador} onChange={set("rmMontador")}><option value="">Selecione…</option>{(st.montadores || []).filter((m: any) => m.ativo).map((m: any) => <option key={m.id} value={m.id}>{m.nome}</option>)}</select>
+              {(() => { const m = (st.montadores || []).find((x: any) => x.id === f.rmMontador); return m ? <BotaoWhats tel={m.telefone} /> : null; })()}</div></div>}
+          {f.tipo === "retorno_montador" && <div className="field"><label>Atendente da montagem <span className="req-star">*</span> <span className="hint">(fica como pendência dela)</span></label>
+            <select value={f.rmAtendente} onChange={set("rmAtendente")}><option value="">Selecione…</option>{st.usuarios.filter((u: any) => u.ativo && (u.setores || []).includes("montagem")).map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>}
           {pvMont && <div className="field"><label>Montador <span className="req-star">*</span></label>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}><select style={{ flex: 1 }} value={f.pvMontador} onChange={set("pvMontador")}><option value="">Selecione…</option>{(st.montadores || []).filter((m: any) => m.ativo).map((m: any) => <option key={m.id} value={m.id}>{m.nome}{m.regiao ? " · " + m.regiao : ""}</option>)}</select>
               {(() => { const m = (st.montadores || []).find((x: any) => x.id === f.pvMontador); return m ? <BotaoWhats tel={m.telefone} /> : null; })()}</div>
-            {!(st.montadores || []).length && <span className="hint">Cadastre os montadores em Painel do pós-venda → Montadores.</span>}</div>}
+            {!(st.montadores || []).length && <span className="hint">Peça à Gestão para cadastrar os montadores (Cadastros → Montadores).</span>}</div>}
           {pvMont && <div className="field"><label>Situação <span className="req-star">*</span></label><select value={f.pvSituacao} onChange={e => { const v = e.target.value; setF((x: any) => ({ ...x, pvSituacao: v, pvParado: v === "parado" ? true : x.pvParado })); }}><option value="">Selecione…</option>{Object.entries(PV_SITUACAO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>}
           {pvMont && <div className="field"><label>Projetista que fez o checklist {ckDaVenda && ckDaVenda.tratativa?.checklist?.projetista ? <span className="hint">(puxado do checklist da venda)</span> : <span className="hint">(se não puxar, escolha)</span>}</label>
             {f.pvProjOutro ? <div style={{ display: "flex", gap: 6 }}><input style={{ flex: 1 }} value={f.pvProjetista} onChange={set("pvProjetista")} placeholder="Nome do projetista" /><button type="button" className="btn ghost sm" onClick={() => setF((x: any) => ({ ...x, pvProjOutro: false, pvProjetista: "" }))}>lista</button></div>

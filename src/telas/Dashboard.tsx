@@ -80,7 +80,9 @@ export default function Dashboard() {
   const srows = ORDEM.map(s => [STATUS[s].label, cc.filter((c: any) => c.status === s && (s !== "concluida" || noPeriodo(concluidoEm(c)))).length, s] as [string, number, string]);
   const smx = Math.max(1, ...srows.map(x => x[1]));
   // uma linha por chamado, com a faixa de prioridade dele (crítico, atrasado ou urgente); marketing entra só se parado +24h
-  const acao = R.ordenar(todos.filter((c: any) => naArea(c) && ["critico", "atrasado", "urgente"].includes(pr(c))));
+  // checklist, medidas e pós-venda não são do call center: só entram para quem é do próprio setor
+  const meuSetorOuCC = (c: any) => R.domMarketing(c) || R.doCC(c) || R.mySetores().includes(c.setorDestino);
+  const acao = R.ordenar(todos.filter((c: any) => naArea(c) && meuSetorOuCC(c) && ["critico", "atrasado", "urgente"].includes(pr(c))));
   const ab = cc.filter((c: any) => c.status === "aberta" || c.status === "tratativa");
   const pf: Record<string, number> = {}; ab.forEach((c: any) => { if (c.fabrica && c.tipo === "prazo_fabrica") pf[c.fabrica] = (pf[c.fabrica] || 0) + 1; });
   const fr = Object.entries(pf).sort((a, b) => b[1] - a[1]); const mxf = Math.max(1, ...fr.map(x => x[1]));
@@ -145,7 +147,7 @@ export default function Dashboard() {
       </>}
       {R.verTudo() && (
         <div className="setores" id="setoresWrap">
-          {R.setoresVisiveis().filter((s: any) => area === "tudo" || (area === "mkt") === R.ehSetorMarketing(s.id)).map((s: any) => {
+          {R.setoresVisiveis().filter((s: any) => (area === "tudo" || (area === "mkt") === R.ehSetorMarketing(s.id)) && (R.ehGestao() || !["checklist", "medidas", "medidas_supervisao", "posvenda"].includes(s.id) || R.mySetores().includes(s.id))).map((s: any) => {
             const mkt = R.ehSetorMarketing(s.id);
             const arr = todos.filter((c: any) => c.setorDestino === s.id && (c.status !== "concluida" && R.emAberto(c) || noPeriodo(concluidoEm(c))));
             const aberto = mkt ? arr.filter((c: any) => R.emAberto(c)).length : arr.filter((c: any) => c.status === "aberta" || c.status === "tratativa").length;

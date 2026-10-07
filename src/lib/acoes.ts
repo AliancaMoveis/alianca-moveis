@@ -109,6 +109,7 @@ export const A = {
     return rpc<any>("agenda_publica_avisar", { p_token: token, p_id: id });
   },
   salvarModoTeste: (ligado: boolean) => rpc("salvar_modo_teste", { p_ligado: ligado }),
+  retornoMontadorDefinir: (id: string, p: any) => rpc("retorno_montador_definir", { p_id: id, p }),
   montadorSalvar: (p: any) => rpc<string>("montador_salvar", { p }),
   salvarMontador: (id: string | null, nome: string, telefone: string) => rpc("salvar_montador", { p_id: id, p_nome: nome, p_telefone: telefone }),
   ativarMontador: (id: string, ativo: boolean) => rpc("ativar_montador", { p_id: id, p_ativo: ativo }),

@@ -1,4 +1,3 @@
-import { ContasMontadores } from "./PosVenda";
 import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
@@ -76,8 +75,7 @@ export function Admin() {
   return (
     <section className="view active" id="view-admin">
       <div className="view-head"><div><h2>Administração</h2><p>Usuários, setores e roteamento. Acesso restrito a quem tem a liberação de Administração.</p></div></div>
-      <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"], ["agendaloja", "Agenda da loja (tela aberta)"], ["contasmont", "Contas dos montadores"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
-      {sub === "contasmont" && <ContasMontadores />}
+      <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"], ["agendaloja", "Agenda da loja (tela aberta)"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
       {sub === "usuarios" && <div id="subUsuarios"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditUser id={null} />)}>Adicionar usuário</button></div>
         <div id="listaUser">{ativos.length ? ativos.map(linhaUser) : <div className="empty">Ninguém cadastrado.</div>}{inativos.length > 0 && <><div className="sec-label" style={{ marginTop: 18 }}>Desativados</div>{inativos.map(linhaUser)}</>}</div></div>}
       {sub === "setores" && <div id="subSetores"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditSetor id={null} />)}>Adicionar setor</button></div>
