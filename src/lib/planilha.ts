@@ -64,3 +64,16 @@ export function datasPlanilha(v: string, _hojeIso?: string): string[] {
   const ord = Array.from(new Set(out)).sort();
   return ord.filter((d, i) => !ord.slice(0, i).some(x => x.slice(0, 10) === d.slice(0, 10)));
 }
+
+/** Datas + coluna "Agenda" (projetista que atende). Vários nomes ("Cleberson, Rafael") = um por data, na ordem;
+ *  se houver menos nomes que datas, as datas que sobram ficam com o último nome. Volta em ordem de data, um por dia. */
+export function agendaPlanilha(datas: string, agenda: string): { data: string; projetista: string }[] {
+  const s = (datas || "").trim(); if (!s) return [];
+  const brutas: string[] = [];
+  const re = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:,?\s*(\d{1,2}):(\d{2}))?/g; let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) brutas.push(m[0]);
+  const lista = brutas.length ? brutas.map(b => datasPlanilha(b)[0]).filter(Boolean) : datasPlanilha(s);
+  const nomes = String(agenda || "").split(/[,;/]+/).map(x => x.trim()).filter(Boolean);
+  const pares = lista.map((d, i) => ({ data: d, projetista: nomes[i] ?? nomes[nomes.length - 1] ?? "" })).sort((a, b) => a.data.localeCompare(b.data));
+  return pares.filter((p, i) => !pares.slice(0, i).some(x => x.data.slice(0, 10) === p.data.slice(0, 10)));
+}
