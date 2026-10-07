@@ -615,6 +615,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     add("errovend", "🚨 Erros de venda para você", "O call center registrou um erro na sua venda. Abra, corrija e escreva o que foi feito.", ch.filter(c => c.tipo === "erro_venda" && c.status !== "concluida" && (c as any).tratativa?.erroVenda?.vendedorId === eu && !((c as any).tratativa?.erroVenda?.respostas || []).length), "var(--critico)");
     if (mySetores().includes("supervisao")) {
       add("desmont", "🛋 Desmontagem de estofado", "Encaminhe para a Tatiana (depósito → Valdir, estofador), marque \"enviada ao estofador\" e finalize.", ch.filter(c => c.tipo === "desmontagem_estofado" && c.status !== "concluida"), "var(--warn)");
+      add("endsup", "📍 Atualizações de endereço", "O cliente pediu para atualizar o endereço. Atualize nos sistemas e finalize.", ch.filter(c => c.tipo === "atualizacao_endereco" && c.status !== "concluida"), "var(--warn)");
       add("errovsup", "⚠️ Erros de venda", "Informe o vendedor e acompanhe a tratativa dele. Quando estiver resolvido, finalize.", ch.filter(c => c.tipo === "erro_venda" && c.status !== "concluida"), "var(--critico)");
     }
     if (ehGestao() || mySetores().includes("supervisao")) add("acomp", "🚨 Pedidos de acompanhamento", "O call center chamou a supervisão para estes chamados. Abra e marque \"Estou acompanhando\".", ch.filter(c => acompAtivo(c)), "var(--critico)");
