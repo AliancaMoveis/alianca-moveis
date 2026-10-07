@@ -25,11 +25,14 @@ export function SelPer({ per, setPer }: { per: Per; setPer: (p: Per) => void }) 
     <button key={k} className={per === k ? "on" : ""} onClick={() => setPer(k)}>{l}</button>)}</div>;
 }
 
-// quais áreas a pessoa enxerga
+// call center (mesma regra do computador): sem as filas próprias do checklist e das medidas (importadas),
+// mas com o pós-venda e com o que o call center abriu para o checklist/medidas
+export const doPainelCC = (R: any, c: any) => !R.domMarketing(c) && (R.doCC(c) || c.tipo === "posvenda" || (["checklist", "medidas"].includes(c.tipo) && /call center/i.test(c.setor || "")));
+// quais áreas a pessoa enxerga (a Supervisão do call center vê só o call center)
 export function areas(R: any, st: any) {
   const todos = st.chamados.filter(R.podeVer);
-  const mkt = R.ehGestao() || R.temMarketing() || R.verTudo() || R.mySetores().includes("suporte_consultores") || todos.some((c: any) => R.domMarketing(c));
-  const cc = todos.some((c: any) => !R.domMarketing(c));
+  const mkt = R.ehGestao() || R.temMarketing() || R.mySetores().includes("suporte_consultores");
+  const cc = todos.some((c: any) => doPainelCC(R, c));
   return { mkt, cc, todos };
 }
 function SelArea({ area, setArea, a }: any) {
@@ -228,8 +231,13 @@ function TimeMkt({ P, L }: any) {
 
 function ResCC({ todos, noPer, P, L }: any) {
   const { R, st } = useApp() as any;
-  const cc = todos.filter((c: any) => !R.domMarketing(c));
+  const cc = todos.filter((c: any) => doPainelCC(R, c));
   const pr = (c: any) => R.prioridade(c);
+  const sup = R.ehGestao() || R.mySetores().includes("supervisao");
+  const ab2 = (f: (c: any) => boolean) => cc.filter((c: any) => c.status !== "concluida" && f(c));
+  const acomp = cc.filter((c: any) => R.acompAtivo(c)), desm = ab2((c: any) => c.tipo === "desmontagem_estofado"), errv = ab2((c: any) => c.tipo === "erro_venda");
+  const errvResp = errv.filter((c: any) => ((c.tratativa || {}).erroVenda || {}).respostas?.length), ende = ab2((c: any) => c.tipo === "atualizacao_endereco"), pv = ab2((c: any) => c.tipo === "posvenda");
+  const hojeAbertos = cc.filter((c: any) => dia(c.criadoEm) === hojeISO());
   const T = (k: string, n: any, l: string, lista?: any[], cor?: string, sub?: string) => <Tile k={k} n={n} l={l} cor={cor} sub={sub} sel={L.sel} lista={lista ? () => L.abrirLista(k, l, R.ordenar(lista)) : undefined} />;
   const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => (String(x.texto).startsWith("Status → Concluída") || String(x.texto).startsWith("✓ Atendimento finalizado"))); return h.length ? h[h.length - 1].quando : c.criadoEm; };
   const abertos = cc.filter((c: any) => c.status !== "concluida");
@@ -251,7 +259,14 @@ function ResCC({ todos, noPer, P, L }: any) {
   const maxT = Math.max(1, ...tipos.map(x => x[1].length));
   return <>
     <div className="mv-receber cc"><span>Call center e pós-venda · agora</span><b>{abertos.length} em aberto</b>
-      <small>{crit.length + atr.length} fora do prazo · {pc(noPrazo.length, abertos.length)} no prazo</small></div>
+      <small>{crit.length + atr.length} fora do prazo · {pc(noPrazo.length, abertos.length)} no prazo · {hojeAbertos.length} aberto(s) hoje</small></div>
+    {sup && <><div className="mv-sec">Supervisão · com você</div>
+      <div className="mv-tiles">
+        {T("sa", acomp.length, "🚨 Pedidos de acompanhamento", acomp, acomp.length ? "var(--critico)" : undefined)}{T("sd", desm.length, "🛋 Desmontagem de estofado", desm, desm.length ? "var(--warn)" : undefined)}
+        {T("se", errv.length, "⚠️ Erros de venda", errv, errv.length ? "var(--danger)" : undefined, errvResp.length ? errvResp.length + " vendedor(es) responderam" : undefined)}{T("sn", ende.length, "📍 Atualização de endereço", ende, ende.length ? "var(--warn)" : undefined)}
+        {T("sp", pv.length, "Pós-venda em aberto", pv)}{T("sh", hojeAbertos.length, "Abertos hoje", hojeAbertos)}
+      </div>
+      <div className="mv-sec">Fila geral</div></>}
     <div className="mv-tiles">
       {T("cr", crit.length, "Críticos (+24h)", crit, "var(--critico)")}{T("at", atr.length, "Atrasados", atr, "var(--danger)")}
       {T("ur", urg.length, "Urgentes", urg, "var(--warn)")}{T("pt", perto.length, "Vencem em 24h", perto, perto.length ? "#b07a00" : undefined)}
@@ -315,7 +330,7 @@ export function GestEquipe({ irTime }: { irTime?: () => void }) {
       listas: [["Agendamentos", x.ag], ["Vieram", x.vieram], ["Vendas", x.vendas], ["Vendas a confirmar", x.aConf]] }));
   } else {
     // call center: por setor e por atendente
-    const cc = a.todos.filter((c: any) => !R.domMarketing(c));
+    const cc = a.todos.filter((c: any) => doPainelCC(R, c));
     const porU: Record<string, any[]> = {}; cc.filter((c: any) => noPer(c.criadoEm)).forEach((c: any) => (porU[c.solicitanteId] = porU[c.solicitanteId] || []).push(c));
     linhas = Object.entries(porU).map(([uid, l]) => {
       const ab = l.filter((c: any) => c.status !== "concluida"), fora = ab.filter((c: any) => ["critico", "atrasado"].includes(R.prioridade(c)));
@@ -354,11 +369,11 @@ export function GestAcao() {
   const L = useLista();
   const hoje = hojeISO();
   const pend = R.minhasPendencias();
-  const grupos = pend.grupos.filter((g: any) => g.itens.some((c: any) => area === "mkt" ? R.domMarketing(c) : !R.domMarketing(c)))
-    .map((g: any) => ({ ...g, itens: g.itens.filter((c: any) => area === "mkt" ? R.domMarketing(c) : !R.domMarketing(c)) }));
+  const naArea = (c: any) => area === "mkt" ? R.domMarketing(c) : !R.domMarketing(c);
+  const grupos = pend.grupos.filter((g: any) => g.itens.some(naArea)).map((g: any) => ({ ...g, itens: g.itens.filter(naArea) }));
   const t = q.trim().toLowerCase(), dg = t.replace(/\D/g, "");
   const achados = t.length >= 2 ? a.todos.filter((c: any) => (c.cliente + " " + c.id + " " + (c.produto || "") + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))).slice(0, 60) : [];
-  const base = a.todos.filter((c: any) => area === "mkt" ? R.domMarketing(c) : !R.domMarketing(c));
+  const base = a.todos.filter((c: any) => area === "mkt" ? R.domMarketing(c) : doPainelCC(R, c));
   const urg = area === "mkt"
     ? base.filter((c: any) => R.emAberto(c) && (R.clienteCriticoInatividade(c) || (c.dataLoja && dia(c.dataLoja) >= hoje && !c.atendenteId) || R.semParecer(c)))
     : base.filter((c: any) => ["critico", "atrasado", "urgente"].includes(R.prioridade(c)));
