@@ -17,6 +17,9 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
   const [origem, setOrigem] = useState<string | null>(pre ? pre.vinculadoA || null : null);
   const [f, setF] = useState<any>(inicialF);
   const [anexos, setAnexos] = useState<NovoAnexo[]>([]);
+  // prazo de fábrica: o mesmo cliente pode ter itens de várias fábricas — uma cobrança por fábrica, todas ligadas
+  const [extras, setExtras] = useState<{ fabrica: string; produto: string; pedidoFabrica: string }[]>([]);
+  const setEx = (i: number, k: string, v: string) => setExtras(l => l.map((x, j) => j === i ? { ...x, [k]: v } : x));
   const [link, setLink] = useState("");
   const [dups, setDups] = useState<any[]>([]);
   const [enviando, setEnviando] = useState(false);
@@ -76,7 +79,7 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
     setF((x: any) => ({ ...x, pvProjetista: x.pvProjetista || pj, pvProjOutro: x.pvProjetista ? x.pvProjOutro : !!pj && !projetistas.includes(pj),
       cliente: x.cliente || ckDaVenda.cliente || "", telefone: x.telefone || ckDaVenda.telefone || "" }));
   }, [ckDaVenda && ckDaVenda.id, ehPv]);
-  function limpar() { setF({ ...VAZIO, pvOrigem: pvFixo || "cliente", tipo: escopo === "pv" ? "posvenda" : "" }); setOrigem(null); setAnexos([]); setLink(""); setDups([]); }
+  function limpar() { setF({ ...VAZIO, pvOrigem: pvFixo || "cliente", tipo: escopo === "pv" ? "posvenda" : "" }); setOrigem(null); setAnexos([]); setLink(""); setDups([]); setExtras([]); }
   const ehFab = f.tipo === "prazo_fabrica";
 
   async function enviar(e: React.FormEvent) {
@@ -84,6 +87,10 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
     if (!f.tipo) { toast("Escolha o motivo do contato"); return; }
     if (!R.podeCriarTipo(f.tipo)) { toast("Você não tem permissão para abrir este motivo"); return; }
     if (f.tipo === "retorno_montador" && (!f.rmMontador || !f.rmAtendente)) { toast("Selecione o montador e a atendente da montagem"); return; }
+    if (ehFab && extras.length) {
+      if (extras.some(x => !x.fabrica)) { toast("Escolha a fábrica de cada item incluído (ou remova a linha)"); return; }
+      const fs = [f.fabrica, ...extras.map(x => x.fabrica)]; if (new Set(fs).size !== fs.length) { toast("A mesma fábrica foi escolhida duas vezes"); return; }
+    }
     if (f.tipo === "erro_venda" && (!f.evVendedor || f.evComprado.trim().length < 2 || f.evLancado.trim().length < 2)) { toast("Informe o vendedor, o que o cliente comprou e o que foi lançado/enviado"); return; }
     if (pvMont && !f.pvMontador) { toast("Informe qual montador pediu suporte"); return; }
     if (pvMont && !f.pvSituacao) { toast("Informe a situação do montador na obra"); return; }
@@ -109,9 +116,15 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
       if (outros.length) itens.push(...await enviarArquivos(id, outros.map(a => ({ nome: a.nome, blob: a.blob!, tipo: a.tipo as "video" | "pdf" }))));
       anexos.filter(a => a.tipo === "link").forEach(a => itens.push({ tipo: "link", url: a.url }));
       if (itens.length) await A.adicionarAnexos(id, itens, false);
+      const extrasIds: string[] = [];
+      if (ehFab) for (const x of extras) {
+        try { extrasIds.push(await A.criarChamado({ ...base, fabrica: x.fabrica, pedidoFabrica: x.pedidoFabrica, produto: x.produto.trim() || f.produto, prazoTatico: f.prazoTatico, vinculadoA: id })); }
+        catch (e: any) { toast("Cobrança de " + (st.fabricas.find((y: any) => y.id === x.fabrica)?.nome || "fábrica") + " não abriu: " + e.message); }
+      }
       limpar();
       await recarregar();
-      toast(finalizar ? "Atendimento " + id + " registrado e finalizado" : acionar ? "Solicitação " + id + " aberta — supervisão avisada" : "Solicitação " + id + " aberta");
+      if (extrasIds.length) { toast("Cobranças abertas: " + [id, ...extrasIds].join(", ") + " (uma por fábrica, ligadas)"); }
+      else toast(finalizar ? "Atendimento " + id + " registrado e finalizado" : acionar ? "Solicitação " + id + " aberta — supervisão avisada" : "Solicitação " + id + " aberta");
       setResposta(""); setAcionar(false); setMotivoSup(""); modo.current = "aberto";
       const menu = R.menuPerfil().flatMap((g: any) => g.itens.map((i: string[]) => i[0]));
       irPara(menu.includes("fila") && !presale ? "fila" : menu.includes("acompmkt") && presale ? "acompmkt" : menu.includes("carteira") && presale ? "carteira" : "dashboard");
@@ -186,6 +199,16 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
             <select name="fabrica" required={ehFab} value={f.fabrica} onChange={set("fabrica")}><option value="">Selecione…</option>{st.fabricas.map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select>
             {R.temCadastros() ? <button type="button" className="btn ghost sm" style={{ marginTop: 6, alignSelf: "flex-start" }} onClick={() => setModal(<EditFab id={null} />)}>+ Cadastrar fábrica que não está na lista</button>
               : <span className="hint" style={{ marginTop: 4 }}>Fábrica não está na lista? Peça à Supervisão para cadastrar.</span>}</div>}
+          {ehFab && <div className="field full">
+            {extras.map((x, i) => <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(160px,1fr) minmax(160px,1.4fr) minmax(120px,.8fr) auto", gap: 8, alignItems: "end", padding: "10px 12px", border: "1px dashed var(--line)", borderRadius: 9, marginBottom: 8 }}>
+              <div className="field"><label>Fábrica {i + 2} <span className="req-star">*</span></label><select value={x.fabrica} onChange={e => setEx(i, "fabrica", e.target.value)}><option value="">Selecione…</option>{st.fabricas.map(y => <option key={y.id} value={y.id}>{y.nome}</option>)}</select></div>
+              <div className="field"><label>Produto desta fábrica</label><input value={x.produto} onChange={e => setEx(i, "produto", e.target.value)} placeholder="Vazio = mesmo produto acima" /></div>
+              <div className="field"><label>Nº pedido na fábrica</label><input value={x.pedidoFabrica} onChange={e => setEx(i, "pedidoFabrica", e.target.value)} placeholder="Se souber" /></div>
+              <button type="button" className="btn ghost sm" onClick={() => setExtras(l => l.filter((_, j) => j !== i))}>Remover</button>
+            </div>)}
+            <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} onClick={() => setExtras(l => [...l, { fabrica: "", produto: "", pedidoFabrica: "" }])}>+ Incluir mais fábricas</button>
+            {extras.length > 0 && <span className="hint" style={{ marginTop: 4 }}>Abre uma cobrança para cada fábrica (cada uma com sua resposta e previsão), todas ligadas ao mesmo cliente. Os anexos ficam na primeira.</span>}
+          </div>}
           {(ehFab || f.tipo === "entrega") && <div className="field" id="fieldPrazoTatico"><label>Prazo de entrega no Tático <span className="hint">(prazo original)</span></label><input name="prazoTatico" type="date" value={f.prazoTatico} onChange={set("prazoTatico")} /></div>}
           {!ehMkt && !rapido && <div className="field"><label>Prazo para responder <span className="hint">(vazio = 2 dias úteis)</span></label><input name="slaManual" type="date" value={f.slaManual} onChange={set("slaManual")} /></div>}
           {f.tipo === "erro_venda" && <div className="field full"><label>Vendedor que fez a venda <span className="req-star">*</span> <span className="hint">(ele recebe no app para tratar)</span></label>
