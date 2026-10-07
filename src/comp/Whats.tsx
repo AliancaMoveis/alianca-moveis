@@ -27,6 +27,8 @@ const ASSUNTO: Record<string, string> = {
   horario_montagem: "o horário da montagem do seu pedido", montagem: "o agendamento da montagem do seu pedido", retorno_montador: "o retorno do montador para o seu pedido",
   assistencia: "a assistência do seu pedido", vistoria: "a vistoria do seu pedido", checklist: "o agendamento do checklist do seu projeto",
   medidas: "a medição dos ambientes do seu projeto", posvenda: "a sua solicitação de pós-venda", outros: "a sua solicitação",
+  agendamento_entrega: "o agendamento da entrega do seu pedido", atualizacao_endereco: "a atualização do endereço do seu pedido", previsao_assistencia: "a previsão da assistência do seu pedido",
+  garantia_expirada: "a sua solicitação de assistência", desmontagem_estofado: "a desmontagem do seu estofado", erro_venda: "a correção do seu pedido",
 };
 const primeiroNome = (n: string) => { const p = String(n || "").trim().split(/\s+/)[0] || ""; return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : ""; };
 /** Mensagem do WhatsApp coerente com o motivo da solicitação */

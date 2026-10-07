@@ -21,8 +21,8 @@ const setores = [
 ].map(([id, nome, liberacoes]: any) => ({ id, nome, liberacoes }));
 const tipos: any = {
   previsao_frete: { nome: "Previsão do frete (já com o freteiro)", destino: "callcenter", rapido: true },
-  entrega: { nome: "Solicitação de entrega", destino: "callcenter" },
-  retorno_montador: { nome: "Solicitação de retorno do montador", destino: "montagem", anexos: true }, horario_montagem: { nome: "Montagem já agendada — horário / confirmação", destino: "callcenter", rapido: true }, prazo_fabrica: { nome: "Prazo de fábrica", destino: "prazo_fabrica" },
+  entrega: { nome: "Previsão de entrega", destino: "callcenter" },
+  retorno_montador: { nome: "Solicitação de retorno do montador", destino: "montagem", anexos: true }, agendamento_entrega: { nome: "Agendamento de entrega", destino: "callcenter" }, atualizacao_endereco: { nome: "Atualização de endereço", destino: "callcenter" }, previsao_assistencia: { nome: "Previsão de assistência", destino: "assistencia" }, garantia_expirada: { nome: "Garantia expirada", destino: "assistencia", anexos: true }, desmontagem_estofado: { nome: "Desmontagem de estofado", destino: "supervisao", anexos: true }, erro_venda: { nome: "Erro de venda", destino: "supervisao", anexos: true }, horario_montagem: { nome: "Montagem já agendada — horário / confirmação", destino: "callcenter", rapido: true }, prazo_fabrica: { nome: "Prazo de fábrica", destino: "prazo_fabrica" },
   montagem: { nome: "Solicitação de montagem", destino: "montagem" }, assistencia: { nome: "Solicitação de assistência", destino: "assistencia", anexos: true },
   vistoria: { nome: "Solicitação de vistoria", destino: "assistencia", anexos: true }, checklist: { nome: "Agendamento de checklist", destino: "checklist" },
   medidas: { nome: "Solicitação de medidas", destino: "medidas" },

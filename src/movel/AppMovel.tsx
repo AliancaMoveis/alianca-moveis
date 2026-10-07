@@ -1,6 +1,7 @@
 // ALIANÇA 360 no celular (app instalado pelo navegador).
 // Consultor externo e vendedor: telas simples, com as ações do dia a um toque. Gestão/Supervisões: resumo visual.
 // Os demais setores usam a versão completa (responsiva).
+import { VendUrgentes, pendUrgentes } from "./Urgentes";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
@@ -42,7 +43,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : perfil === "dono" ? [["painel", "Painel", "📊"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
-    : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
+    : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["urgente", "Urgente", "🚨"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["time", "Time", "🎯"], ["equipe", "Equipe", "👥"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]];
   const [aba, setAba] = useState(abas[0][0]);
@@ -52,6 +53,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const { abrirDetalhe } = useApp() as any;
   const podeRegistrar = perfil === "marketing" || perfil === "consultor" || (perfil === "gestor" && (R.ehGestao() || R.temMarketing()));
   const papel = perfil === "dono" ? "Proprietário" : perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
+  const urg = perfil === "vendedor" ? pendUrgentes(R) : 0;
   const pend = perfil === "vendedor" ? R.state.chamados.filter((c: any) => c.atendenteId === R.currentUserId && (R.parecerCobrado(c) || R.semParecer(c))).length : 0;
   return (
     <div className="mv">
@@ -70,6 +72,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "medidor" && aba === "medidas" && <MedLista abrir={setAberto} />}
         {perfil === "vendedor" && aba === "hoje" && <VendHoje abrir={setAberto} />}
         {perfil === "vendedor" && aba === "clientes" && <VendClientes abrir={setAberto} />}
+        {perfil === "vendedor" && aba === "urgente" && <VendUrgentes />}
         {perfil === "marketing" && aba === "hoje" && <MktHoje ir={setAba} abrir={abrirDetalhe} />}
         {perfil === "marketing" && aba === "clientes" && <MktClientes abrir={abrirDetalhe} />}
         {perfil === "marketing" && aba === "ganhos" && <MktGanhos abrir={abrirDetalhe} />}
@@ -84,7 +87,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
       </main>
       {perfil === "gestor" && podeRegistrar && aba === "resumo" && <button className="mv-fab" onClick={() => setAba("novo")}>＋ Cliente</button>}
       <nav className="mv-tabs">
-        {abas.map(([k, l, ic]) => <button key={k} className={aba === k ? "on" : ""} onClick={() => setAba(k)}><span className={"ic" + (k === "novo" ? " mais" : "")}>{ic}</span>{l}{k === "clientes" && pend > 0 && <i className="mv-dot">{pend}</i>}</button>)}
+        {abas.map(([k, l, ic]) => <button key={k} className={aba === k ? "on" : ""} onClick={() => setAba(k)}><span className={"ic" + (k === "novo" ? " mais" : "")}>{ic}</span>{l}{k === "clientes" && pend > 0 && <i className="mv-dot">{pend}</i>}{k === "urgente" && urg > 0 && <i className="mv-dot">{urg}</i>}</button>)}
       </nav>
       {aberto && <Folha id={aberto} fechar={() => setAberto(null)} perfil={perfil} />}
       {detalheId && <Detalhe id={detalheId} />}

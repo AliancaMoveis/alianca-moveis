@@ -149,7 +149,7 @@ function ClienteCard({ c }: any) {
 }
 
 function tratativaExiste(c: any, R: any) {
-  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "posvenda", "retorno_montador"].includes(c.tipo)) return true;
+  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "posvenda", "retorno_montador", "desmontagem_estofado", "erro_venda"].includes(c.tipo)) return true;
   if (!R.domMarketing(c)) return false;
   return ["marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente"].includes(c.setorDestino);
 }
@@ -176,7 +176,14 @@ function Tratativa({ c }: any) {
   if (c.tipo === "montagem") return <div className="resp-box"><h4>Tratativa — Montagem (Exact)</h4><div className="grid"><div className="field"><label>Data agendada</label><input type="date" value={v.agenda} onChange={s("agenda")} /></div><div className="field"><label>Montador</label><input value={v.montador} onChange={s("montador")} placeholder="Nome do montador" /></div></div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => salvar(["agenda", "montador"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "assistencia") return <div className="resp-box"><h4>Tratativa — Assistência (peça + montador)</h4><div className="grid"><div className="field"><label>Peça solicitada</label><input value={v.peca} onChange={s("peca")} placeholder="Ex.: puxador, dobradiça…" /></div><div className="field"><label>Montador designado</label><input value={v.montador} onChange={s("montador")} /></div></div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => salvar(["peca", "montador"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "vistoria") return <div className="resp-box"><h4>Tratativa — Vistoria (aprovar e designar)</h4><div className="grid"><div className="field"><label>Montador de vistoria</label><input value={v.montador} onChange={s("montador")} /></div><div className="field"><label>Data da vistoria</label><input type="date" value={v.data} onChange={s("data")} /></div></div><div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.aprovada} campo="aprovada" lOn="Vistoria aprovada ✓" lOff="Aprovar vistoria" /><button className="btn primary sm" onClick={() => salvar(["montador", "data"])}>Salvar tratativa</button></div></div>;
-  if (c.tipo === "entrega") return <div className="resp-box"><h4>Tratativa — Entrega (Tático)</h4><p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 12px" }}>Se há disponibilidade, coloque para entrega no Tático. Se não houver, encaminhe para Prazo de fábrica.</p><div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.entregaTatico} campo="entregaTatico" lOn="Enviado ao Tático ✓" lOff="Colocar para entrega (Tático)" /><button className="btn sm" onClick={() => ex(() => A.entregaParaFabrica(c.id), "Encaminhado para Prazo de fábrica")}>Sem disponibilidade → Prazo de fábrica</button></div></div>;
+  if (c.tipo === "entrega") return <div className="resp-box"><h4>Tratativa — Entrega (Tático)</h4><p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 12px" }}>Se há disponibilidade, coloque para entrega no Tático. Se não houver, encaminhe para Prazo de fábrica.</p><div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.entregaTatico} campo="entregaTatico" lOn="Enviado ao Tático ✓" lOff="Colocar para entrega (Tático)" /><button className="btn sm" onClick={() => ex(() => A.entregaParaFabrica(c.id), "Encaminhado para Prazo de fábrica")}>Sem disponibilidade → Prazo de fábrica</button></div>
+    <div style={{ marginTop: 14, padding: "11px 13px", background: t.aguardandoCompra ? "#fff1d6" : "var(--surface-2)", border: "1px dashed " + (t.aguardandoCompra ? "#e0a84a" : "var(--line)"), borderRadius: 9 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: "#7a4a00", marginBottom: 6 }}>🔒 Status interno {t.aguardandoCompra && <span className="badge" style={{ background: "#e0a84a", color: "#fff", marginLeft: 6 }}>🛒 Aguardando compra</span>}</div>
+      <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Use quando Compras ainda não comprou o produto. É só acompanhamento interno — <b>não passe ao cliente dessa forma</b>.</div>
+      <Btn on={t.aguardandoCompra} campo="aguardandoCompra" lOn="Compra feita — tirar “Aguardando compra”" lOff="🛒 Marcar: aguardando compra" />
+    </div></div>;
+  if (c.tipo === "desmontagem_estofado") return <TratDesmontagem c={c} />;
+  if (c.tipo === "erro_venda") return <TratErroVenda c={c} />;
   if (c.tipo === "checklist") return <BlocoChecklist c={c} />;
   if (c.tipo === "medidas") return <div className="resp-box"><h4>Tratativa — Medidas</h4><div className="grid"><div className="field full"><label>Medidas informadas ao cliente</label><textarea value={v.medidas} onChange={s("medidas")} placeholder="Ex.: Largura 2,40m x altura 2,60m x profundidade 0,60m"></textarea></div></div><div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.confirmado} campo="confirmado" lOn="Confirmado com o cliente ✓" lOff="Confirmar com o cliente" /><button className="btn primary sm" onClick={() => salvar(["medidas"])}>Salvar tratativa</button></div></div>;
   if (!R.domMarketing(c)) return null;
@@ -623,6 +630,9 @@ function FinalizarAtend({ c }: any) {
   const [tx, setTx] = useState("");
   if (c.status === "concluida" || c.tipo === "medidas") return null;
   if (!(R.podeTratar(c) || R.mySetores().includes("callcenter"))) return null;
+  // desmontagem de estofado e erro de venda: só a Supervisão (Salete) / Gestão finalizam; desmontagem depois de enviada ao estofador
+  if (["desmontagem_estofado", "erro_venda"].includes(c.tipo) && !(R.ehGestao() || R.mySetores().includes("supervisao"))) return null;
+  if (c.tipo === "desmontagem_estofado" && !(c.tratativa || {}).estofadorEnviado) return null;
   // setor que não fala com o cliente (ex.: Solicitação Fábrica): não encerra — passa para o call center informar o cliente
   const passaCC = R.viaCC(c.setorDestino) && !R.mySetores().includes("callcenter") && !R.verTudo() && c.status !== "informar";
   const titulo = passaCC ? "✓ Solução pronta — call center informa o cliente" : "✓ Finalizar atendimento";
@@ -832,6 +842,50 @@ function BlocoChecklist({ c }: any) {
 }
 
 // Retorno do montador (aberto pelo call center): montador + atendente da montagem responsável
+function TratDesmontagem({ c }: any) {
+  const { R, executar: ex } = useApp() as any;
+  const t = c.tratativa || {};
+  const pode = R.ehGestao() || R.mySetores().includes("supervisao");
+  return (
+    <div className="resp-box"><h4>🛋 Desmontagem de estofado</h4>
+      <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 10 }}>Fluxo: a Salete encaminha para a <b>Tatiana (depósito)</b>, que aciona o <b>Valdir (estofador)</b>. Depois de enviada, a Salete finaliza.</div>
+      <RowSb k="Situação">{t.estofadorEnviado ? <span className="badge" style={{ background: "var(--st-concluida)", color: "#fff" }}>✓ Solicitação enviada para o estofador</span> : <span className="badge b-urgente">Aguardando envio ao estofador</span>}</RowSb>
+      {pode ? <div style={{ marginTop: 10 }}><button className={"btn sm" + (t.estofadorEnviado ? "" : " primary")} onClick={() => ex(() => A.alternarMarcacao(c.id, "estofadorEnviado"), "Atualizado")}>{t.estofadorEnviado ? "Desfazer “enviada ao estofador”" : "🛋 Solicitação enviada para o estofador"}</button></div>
+        : <div className="hint" style={{ marginTop: 8 }}>A Salete (Supervisão) trata e finaliza esta solicitação.</div>}
+    </div>
+  );
+}
+
+function TratErroVenda({ c }: any) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const e = (c.tratativa || {}).erroVenda || {}; const t = c.tratativa || {};
+  const pode = R.ehGestao() || R.mySetores().includes("supervisao");
+  const [ed, setEd] = useState(false);
+  const [v, setV] = useState(e.vendedorId || ""); const [co, setCo] = useState(e.comprado || ""); const [la, setLa] = useState(e.lancado || "");
+  useEffect(() => { setV(e.vendedorId || ""); setCo(e.comprado || ""); setLa(e.lancado || ""); }, [c.id, JSON.stringify(e)]);
+  const resp: any[] = e.respostas || [];
+  return (
+    <div className="resp-box"><h4>⚠️ Erro de venda</h4>
+      <RowSb k="Vendedor">{e.vendedorId ? <b>{R.nomeUser(e.vendedorId)}</b> : <span style={{ color: "var(--danger)" }}>não informado</span>}</RowSb>
+      <RowSb k="Cliente comprou">{e.comprado || "—"}</RowSb>
+      <RowSb k="Foi lançado / enviado">{e.lancado || "—"}</RowSb>
+      <RowSb k="Situação">{t.vendedorInformado ? <span className="badge" style={{ background: "var(--primary)", color: "#fff" }}>📣 Vendedor informado</span> : <span className="badge b-urgente">Vendedor ainda não informado</span>}{resp.length ? <span className="badge" style={{ background: "var(--st-concluida)", color: "#fff", marginLeft: 6 }}>💬 Vendedor respondeu</span> : null}</RowSb>
+      {resp.length > 0 && <div style={{ marginTop: 8 }}>{resp.map((r: any, i: number) => <div key={i} style={{ padding: "8px 11px", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 8, marginBottom: 6, fontSize: 13 }}><b>{R.nomeUser(e.vendedorId)}</b> <span className="hint">· {fmtDateTime(r.em)}</span><div>{r.texto}</div></div>)}</div>}
+      {pode && <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className={"btn sm" + (t.vendedorInformado ? "" : " primary")} onClick={() => ex(() => A.alternarMarcacao(c.id, "vendedorInformado"), "Atualizado")}>{t.vendedorInformado ? "Desfazer “vendedor informado”" : "📣 Marcar: vendedor informado"}</button>
+        <button className="btn ghost sm" onClick={() => setEd(x => !x)}>Corrigir dados</button>
+      </div>}
+      {pode && ed && <div className="grid" style={{ marginTop: 10 }}>
+        <div className="field full"><label>Vendedor</label><select value={v} onChange={x => setV(x.target.value)}><option value="">Selecione…</option>{R.projetistas().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
+        <div className="field full"><label>O que o cliente comprou</label><textarea value={co} onChange={x => setCo(x.target.value)} /></div>
+        <div className="field full"><label>O que foi lançado / enviado</label><textarea value={la} onChange={x => setLa(x.target.value)} /></div>
+        <div><button className="btn primary sm" onClick={async () => { if (!v) { toast("Selecione o vendedor"); return; } if (await ex(() => A.erroVendaDefinir(c.id, { vendedorId: v, comprado: co, lancado: la }), "Erro de venda atualizado")) setEd(false); }}>Salvar</button></div>
+      </div>}
+      <div className="hint" style={{ marginTop: 8 }}>O vendedor recebe no app (aba 🚨 Urgente) e registra a tratativa dele. A Salete acompanha e finaliza.</div>
+    </div>
+  );
+}
+
 function TratRetornoMontador({ c }: any) {
   const { R, st, executar: ex } = useApp() as any;
   const r = (c.tratativa || {}).retorno || {};

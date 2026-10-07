@@ -252,7 +252,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const trPendPara = (c: Chamado) => !!(c.transferencia && c.transferencia.status === "pendente" && c.transferencia.para === currentUserId);
   function podeVer(c: Chamado) {
     const u = me();
-    if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || trPendPara(c);
+    if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || trPendPara(c) || (c.tipo === "erro_venda" && (c as any).tratativa?.erroVenda?.vendedorId === currentUserId);
     if (ehGestao()) return true;
     if (domMarketing(c)) return temMarketing() || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
     if (verTudo()) return true;
@@ -612,6 +612,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c)), "var(--danger)");
     }
     add("retmont", "🔧 Retornos de montador para você", "O call center abriu um retorno do montador e escolheu você para tratar. Prioridade de atendimento.", ch.filter(c => c.tipo === "retorno_montador" && !["concluida", "respondida", "informar"].includes(c.status) && ((c as any).tratativa?.retorno?.atendenteId === eu)), "var(--critico)");
+    add("errovend", "🚨 Erros de venda para você", "O call center registrou um erro na sua venda. Abra, corrija e escreva o que foi feito.", ch.filter(c => c.tipo === "erro_venda" && c.status !== "concluida" && (c as any).tratativa?.erroVenda?.vendedorId === eu && !((c as any).tratativa?.erroVenda?.respostas || []).length), "var(--critico)");
+    if (mySetores().includes("supervisao")) {
+      add("desmont", "🛋 Desmontagem de estofado", "Encaminhe para a Tatiana (depósito → Valdir, estofador), marque \"enviada ao estofador\" e finalize.", ch.filter(c => c.tipo === "desmontagem_estofado" && c.status !== "concluida"), "var(--warn)");
+      add("errovsup", "⚠️ Erros de venda", "Informe o vendedor e acompanhe a tratativa dele. Quando estiver resolvido, finalize.", ch.filter(c => c.tipo === "erro_venda" && c.status !== "concluida"), "var(--critico)");
+    }
     if (ehGestao() || mySetores().includes("supervisao")) add("acomp", "🚨 Pedidos de acompanhamento", "O call center chamou a supervisão para estes chamados. Abra e marque \"Estou acompanhando\".", ch.filter(c => acompAtivo(c)), "var(--critico)");
     if (ehSupMedidas()) {
       add("medalerta", "⚠️ Checklist em até 3 dias sem medida aprovada", "O checklist está chegando e a medida desta venda ainda não foi aprovada. Aprove, direcione a medição ou avise o checklist.", ch.filter(c => c.tipo === "checklist" && c.status !== "concluida" && (c as any).tratativa?.checklist?.etapa === "agendado" && (() => { const d = String((c as any).tratativa.checklist.agendadoPara || "").slice(0, 10), h = hojeISO(); const lim = new Date(); lim.setDate(lim.getDate() + 3); return d >= h && d <= isoLocal(lim).slice(0, 10); })() && !ch.some(m => m.tipo === "medidas" && m.pedido === c.pedido && etapaMedida(m) === "liberada")), "var(--critico)");

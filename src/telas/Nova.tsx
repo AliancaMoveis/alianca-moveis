@@ -6,7 +6,7 @@ import { EditFab } from "./Cadastros";
 import { BotaoWhats } from "../comp/Whats";
 import { cfgAgenda } from "./Checklist";
 
-const VAZIO: any = { rmMontador: "", rmAtendente: "", pvSituacao: "", pvProjetista: "", pvProjOutro: false, pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
+const VAZIO: any = { evVendedor: "", evComprado: "", evLancado: "", rmMontador: "", rmAtendente: "", pvSituacao: "", pvProjetista: "", pvProjOutro: false, pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
 type NovoAnexo = { tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; blob?: Blob };
 
 export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; pvFixo?: "cliente" | "montador" }) {
@@ -84,6 +84,7 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
     if (!f.tipo) { toast("Escolha o motivo do contato"); return; }
     if (!R.podeCriarTipo(f.tipo)) { toast("Você não tem permissão para abrir este motivo"); return; }
     if (f.tipo === "retorno_montador" && (!f.rmMontador || !f.rmAtendente)) { toast("Selecione o montador e a atendente da montagem"); return; }
+    if (f.tipo === "erro_venda" && (!f.evVendedor || f.evComprado.trim().length < 2 || f.evLancado.trim().length < 2)) { toast("Informe o vendedor, o que o cliente comprou e o que foi lançado/enviado"); return; }
     if (pvMont && !f.pvMontador) { toast("Informe qual montador pediu suporte"); return; }
     if (pvMont && !f.pvSituacao) { toast("Informe a situação do montador na obra"); return; }
     const finalizar = modo.current === "finalizar" && podeFinalizarJa;
@@ -99,6 +100,7 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
       const id = await A.criarChamado({ ...base, ...(pvMont ? { produto: f.produto || "Projetados" } : {}), fabrica: ehMkt ? "" : ehFab || ehPv ? f.fabrica : "", pedidoFabrica: ehFab ? f.pedidoFabrica : "", prazoTatico: ehFab || f.tipo === "entrega" ? f.prazoTatico : "", vinculadoA: vinc,
         ...(!ehMkt && finalizar ? { finalizar: true, resposta: resposta.trim() } : {}),
         ...(!ehMkt && acionar && !finalizar ? { acionarSupervisao: true, motivoSupervisao: motivoSup.trim() } : {}) });
+      if (f.tipo === "erro_venda") await A.erroVendaDefinir(id, { vendedorId: f.evVendedor, comprado: f.evComprado, lancado: f.evLancado }).catch((e: any) => toast("Solicitação aberta, mas: " + e.message));
       if (f.tipo === "retorno_montador") await A.retornoMontadorDefinir(id, { montadorId: f.rmMontador, atendenteId: f.rmAtendente }).catch((e: any) => toast("Solicitação aberta, mas: " + e.message));
       if (ehPv) await A.posvendaAbertura(id, { origem: f.pvOrigem, peca: f.pvPeca, montadorId: f.pvMontador, paradoObra: f.pvParado, categoria: pvMont ? "" : f.pvTipo, situacao: pvMont ? f.pvSituacao : "", projetista: pvMont ? f.pvProjetista : "" }).catch((e: any) => toast("Atendimento aberto, mas: " + e.message));
       const fotos = anexos.filter(a => a.tipo === "img");
@@ -186,6 +188,11 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
               : <span className="hint" style={{ marginTop: 4 }}>Fábrica não está na lista? Peça à Supervisão para cadastrar.</span>}</div>}
           {(ehFab || f.tipo === "entrega") && <div className="field" id="fieldPrazoTatico"><label>Prazo de entrega no Tático <span className="hint">(prazo original)</span></label><input name="prazoTatico" type="date" value={f.prazoTatico} onChange={set("prazoTatico")} /></div>}
           {!ehMkt && !rapido && <div className="field"><label>Prazo para responder <span className="hint">(vazio = 2 dias úteis)</span></label><input name="slaManual" type="date" value={f.slaManual} onChange={set("slaManual")} /></div>}
+          {f.tipo === "erro_venda" && <div className="field full"><label>Vendedor que fez a venda <span className="req-star">*</span> <span className="hint">(ele recebe no app para tratar)</span></label>
+            <select value={f.evVendedor} onChange={set("evVendedor")}><option value="">Selecione…</option>{R.projetistas().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>}
+          {f.tipo === "erro_venda" && <div className="field"><label>O que o cliente comprou <span className="req-star">*</span></label><textarea value={f.evComprado} onChange={set("evComprado")} placeholder="Ex.: mesa com 4 cadeiras" /></div>}
+          {f.tipo === "erro_venda" && <div className="field"><label>O que foi lançado / enviado <span className="req-star">*</span></label><textarea value={f.evLancado} onChange={set("evLancado")} placeholder="Ex.: pedido saiu com 5 cadeiras" /></div>}
+          {f.tipo === "desmontagem_estofado" && <div className="field full"><div className="hint">🛋 Vai para a <b>Salete</b>: ela encaminha para a Tatiana (depósito), que aciona o Valdir (estofador).</div></div>}
           {f.tipo === "retorno_montador" && <div className="field"><label>Montador <span className="req-star">*</span></label>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}><select style={{ flex: 1 }} value={f.rmMontador} onChange={set("rmMontador")}><option value="">Selecione…</option>{(st.montadores || []).filter((m: any) => m.ativo).map((m: any) => <option key={m.id} value={m.id}>{m.nome}</option>)}</select>
               {(() => { const m = (st.montadores || []).find((x: any) => x.id === f.rmMontador); return m ? <BotaoWhats tel={m.telefone} /> : null; })()}</div></div>}
