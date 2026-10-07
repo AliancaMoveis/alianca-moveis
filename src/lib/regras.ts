@@ -663,8 +663,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ge.length) G.push({ g: (ehConsultorExterno() || ehMedidor()) && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
     // Pós-venda Projetados: grupo próprio (Vânia, Jurídico e Gestão)
     const pv: string[][] = [];
-    if (ehPosvenda() || ehGestao()) pv.push(["novopv", "Novo atendimento"]);
-    if (podeVerPosvenda()) pv.push(["posvenda", "Painel do pós-venda"]);
+    if (ehPosvenda() || ehGestao()) pv.push(["novopv_cli", "Nova solicitação do cliente"], ["novopv_mont", "Nova solicitação do montador"]);
+    if (podeVerPosvenda()) pv.push(["pv_clientes", "Solicitações de clientes"], ["pv_montadores", "Solicitações de montadores"], ["pv_numeros", "Números"]);
+    if (podeMontadores()) pv.push(["pv_cadastro", "Montadores"]);
     if (pv.length) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Pós-venda", ic: "✚", itens: pv });
     if (podeChecklist()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Checklist", ic: "✓", itens: [["ck_agendar", "A agendar"], ["ck_aguardando", "Aguardando"], ["ck_agendados", "Agendados"], ["ck_confirmar", "Confirmação de presença"], ["ck_agenda", "Agenda"]] });
     // Medidas: cruzamento Minha Visita × Exact (Gestão e Supervisão de Medidas)

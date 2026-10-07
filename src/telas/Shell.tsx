@@ -126,7 +126,7 @@ export default function Shell() {
             </div>
           </div>
           <main>
-            {(atual === "nova" || atual === "novocli" || atual === "novopv") && <Nova key={atual} escopo={atual === "novocli" ? "mkt" : atual === "novopv" ? "pv" : "cc"} />}
+            {(atual === "nova" || atual === "novocli" || atual.startsWith("novopv")) && <Nova key={atual} escopo={atual === "novocli" ? "mkt" : atual.startsWith("novopv") ? "pv" : "cc"} pvFixo={atual === "novopv_mont" ? "montador" : atual.startsWith("novopv") ? "cliente" : undefined} />}
             {atual === "fila" && <Fila />}
             {atual === "acompmkt" && <AcompMkt />}
             {atual === "direcionamento" && <Direcionamento />}
@@ -147,7 +147,7 @@ export default function Shell() {
             {atual === "cadastros" && <Cadastros />}
             {atual === "admin" && <Admin />}
             {atual === "relatorios" && <Relatorios />}
-            {atual === "posvenda" && <PosVenda />}
+            {(atual === "posvenda" || atual.startsWith("pv_")) && <PosVenda key={atual} aba={atual === "posvenda" ? "clientes" : atual.slice(3)} />}
             {(atual === "checklist" || atual.startsWith("ck_")) && <Checklist key={atual} aba={atual === "checklist" ? "agendar" : atual.slice(3)} />}
             {atual.startsWith("md_") && <Medidas key={atual} aba={atual.slice(3)} />}
             {atual === "encontrar_vendas" && R.podeEncontrarVendas() && <EncontrarVendas />}

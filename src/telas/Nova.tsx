@@ -9,11 +9,11 @@ import { cfgAgenda } from "./Checklist";
 const VAZIO: any = { pvSituacao: "", pvProjetista: "", pvProjOutro: false, pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
 type NovoAnexo = { tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; blob?: Blob };
 
-export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
+export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; pvFixo?: "cliente" | "montador" }) {
   const { R, st, toast, recarregar, irPara, abrirDetalhe, setModal, preset } = useApp() as any;
   // "+ Nova solicitação" na ficha: já vem com os dados do cliente e fica ligada ao atendimento de origem
   const pre = preset && preset.prefill ? preset.prefill : null;
-  const inicialF = () => ({ ...VAZIO, tipo: escopo === "pv" ? "posvenda" : "", ...(pre ? { cliente: pre.cliente || "", clienteDoc: pre.clienteDoc || "", telefone: pre.telefone || "", pedido: pre.pedido || "", dataVenda: pre.dataVenda ? String(pre.dataVenda).slice(0, 10) : "", produto: pre.produto || "" } : {}) });
+  const inicialF = () => ({ ...VAZIO, pvOrigem: pvFixo || "cliente", tipo: escopo === "pv" ? "posvenda" : "", ...(pre ? { cliente: pre.cliente || "", clienteDoc: pre.clienteDoc || "", telefone: pre.telefone || "", pedido: pre.pedido || "", dataVenda: pre.dataVenda ? String(pre.dataVenda).slice(0, 10) : "", produto: pre.produto || "" } : {}) });
   const [origem, setOrigem] = useState<string | null>(pre ? pre.vinculadoA || null : null);
   const [f, setF] = useState<any>(inicialF);
   const [anexos, setAnexos] = useState<NovoAnexo[]>([]);
@@ -76,7 +76,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
     setF((x: any) => ({ ...x, pvProjetista: x.pvProjetista || pj, pvProjOutro: x.pvProjetista ? x.pvProjOutro : !!pj && !projetistas.includes(pj),
       cliente: x.cliente || ckDaVenda.cliente || "", telefone: x.telefone || ckDaVenda.telefone || "" }));
   }, [ckDaVenda && ckDaVenda.id, ehPv]);
-  function limpar() { setF({ ...VAZIO, tipo: escopo === "pv" ? "posvenda" : "" }); setOrigem(null); setAnexos([]); setLink(""); setDups([]); }
+  function limpar() { setF({ ...VAZIO, pvOrigem: pvFixo || "cliente", tipo: escopo === "pv" ? "posvenda" : "" }); setOrigem(null); setAnexos([]); setLink(""); setDups([]); }
   const ehFab = f.tipo === "prazo_fabrica";
 
   async function enviar(e: React.FormEvent) {
@@ -119,8 +119,8 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
   return (
     <section className="view active" id="view-nova">
       <div className="view-head"><div>
-        <h2 id="novaTitulo">{escopo === "pv" ? "Novo atendimento de pós-venda" : ehMkt ? "Novo cliente" : "Nova solicitação"}</h2>
-        <p id="novaSub">{escopo === "pv" ? "Registre o cliente e o relato do problema como foi contado. A análise (responsabilidade, custo) você completa depois, na ficha." : ehMkt ? "Cadastro de cliente do marketing. Não se mistura com as solicitações do call center." : "Escolha o motivo do contato — ele define para qual setor a tratativa é encaminhada."}</p>
+        <h2 id="novaTitulo">{escopo === "pv" ? (pvFixo === "montador" ? "Nova solicitação do montador" : "Nova solicitação do cliente") : ehMkt ? "Novo cliente" : "Nova solicitação"}</h2>
+        <p id="novaSub">{escopo === "pv" ? (pvFixo === "montador" ? "Montador pediu suporte na obra (WhatsApp / telefone): registre o montador, a situação, o projetista do checklist e o que ele descreveu." : "Registre o cliente e o relato do problema como foi contado. A análise (responsabilidade, custo) você completa depois, na ficha.") : ehMkt ? "Cadastro de cliente do marketing. Não se mistura com as solicitações do call center." : "Escolha o motivo do contato — ele define para qual setor a tratativa é encaminhada."}</p>
       </div></div>
       {origem && <div className="ro-note" style={{ marginBottom: 14 }}>Nova solicitação para <b>{f.cliente}</b>, ligada ao atendimento <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(origem); }}>{origem}</a> — o histórico do cliente continua junto. Escolha o motivo do novo assunto. <a href="#" onClick={e => { e.preventDefault(); setOrigem(null); }}>Desligar</a></div>}
       {dups.length > 0 && !origem && (
@@ -154,7 +154,7 @@ export default function Nova({ escopo }: { escopo: "cc" | "mkt" | "pv" }) {
             <div className="rota" id="rotaAviso">{dest ? <>Será encaminhada para: <b>{R.setorNome(dest)}</b></> : null}</div>
           </div>
         </div>
-        {ehPv && <>
+        {ehPv && escopo === "pv" && !pvFixo && <>
           <div className="sec-label">Tipo de solicitação</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
             {([["cliente", "👤 Solicitação do cliente", "Reclamação do cliente — relato como no call center"], ["montador", "🔧 Solicitação do montador", "Montador pediu suporte na obra (WhatsApp / telefone)"]] as [string, string, string][]).map(([k, l, d]) => (
