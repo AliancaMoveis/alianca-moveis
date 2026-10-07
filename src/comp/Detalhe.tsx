@@ -596,9 +596,8 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
       {link && <a className="btn wa" href={link} target="_blank" rel="noopener">WhatsApp do representante</a>}
       <button className={"btn " + (c.urgente ? "danger" : "")} onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button>
     </div>
-    {!presale && <><div className="sec-label" style={{ marginTop: 16 }}>Mudar status</div>
-      {R.viaCC(c.setorDestino) && <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 6 }}>Ao concluir, o chamado vai para <b>Informar cliente</b>: o call center avisa o cliente e encerra.</div>}
-      <div className="status-flow" id="flow">{ORDEM.filter(s => s !== "informar" || R.viaCC(c.setorDestino) || c.status === "informar").map(s => <button key={s} className={c.status === s ? "cur" : ""} onClick={() => { if (s !== c.status) ex(() => A.mudarStatus(c.id, s), "Status atualizado"); }}>{STATUS[s].label}</button>)}</div></>}
+    {!presale && <><div className="sec-label" style={{ marginTop: 16 }}>Etapa do atendimento <span className="hint" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>— para encerrar, use “✓ Finalizar atendimento” abaixo</span></div>
+      <div className="status-flow" id="flow">{ORDEM.filter(s => s !== "concluida" && (s !== "informar" || R.viaCC(c.setorDestino) || c.status === "informar")).map(s => <button key={s} className={c.status === s ? "cur" : ""} onClick={() => { if (s !== c.status) ex(() => A.mudarStatus(c.id, s), "Status atualizado"); }}>{STATUS[s].label}</button>)}</div></>}
     {!presale && <div className="resp-box"><h4>Registrar solução / previsão</h4><div className="grid">
       <div className="field"><label>Previsão</label><input type="date" value={prev} onChange={e => setPrev(e.target.value)} /></div>
       <div className="field"><label>Quem respondeu</label><input value={quem} onChange={e => setQuem(e.target.value)} /></div>
@@ -615,18 +614,28 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
 
 // ✓ finalizar o atendimento (call center e setor responsável), em qualquer motivo — exceto medidas, que seguem o fluxo próprio
 function FinalizarAtend({ c }: any) {
-  const { R, executar: ex } = useApp() as any;
+  const { R, executar: ex, toast } = useApp() as any;
   const [abrir, setAbrir] = useState(false);
   const [tx, setTx] = useState("");
   if (c.status === "concluida" || c.tipo === "medidas") return null;
   if (!(R.podeTratar(c) || R.mySetores().includes("callcenter"))) return null;
+  // setor que não fala com o cliente (ex.: Solicitação Fábrica): não encerra — passa para o call center informar o cliente
+  const passaCC = R.viaCC(c.setorDestino) && !R.mySetores().includes("callcenter") && !R.verTudo() && c.status !== "informar";
+  const titulo = passaCC ? "✓ Solução pronta — call center informa o cliente" : "✓ Finalizar atendimento";
+  const ok = async () => {
+    if (tx.trim().length < 3) { toast(passaCC ? "Escreva a solução / previsão para o call center passar ao cliente" : "Escreva o que foi resolvido / informado ao cliente"); return; }
+    const feito = passaCC ? await ex(async () => { await A.adicionarNota(c.id, "Solução: " + tx.trim()); await A.mudarStatus(c.id, "concluida"); }, "Enviado ao call center para informar o cliente")
+      : await ex(() => A.finalizarAtendimento(c.id, tx.trim()), "Atendimento finalizado");
+    if (feito) { setAbrir(false); setTx(""); }
+  };
   return (
     <div style={{ margin: "12px 0" }}>
-      {!abrir ? <button className="btn primary" onClick={() => setAbrir(true)}>✓ Finalizar atendimento</button>
-        : <div className="resp-box" style={{ borderColor: "var(--st-concluida)" }}><h4>✓ Finalizar atendimento</h4>
-          <div className="field"><textarea value={tx} onChange={e => setTx(e.target.value)} placeholder="O que foi resolvido / informado ao cliente (opcional, fica no histórico)" /></div>
+      {!abrir ? <button className="btn primary" onClick={() => setAbrir(true)}>{titulo}</button>
+        : <div className="resp-box" style={{ borderColor: "var(--st-concluida)" }}><h4>{titulo}</h4>
+          <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 8px" }}>{passaCC ? "O chamado vai para “Informar cliente”: o call center avisa o cliente e encerra." : "Encerra o atendimento. O texto fica no histórico do cliente."}</p>
+          <div className="field"><textarea value={tx} onChange={e => setTx(e.target.value)} placeholder={passaCC ? "Solução / previsão para o call center passar ao cliente" : "O que foi resolvido / informado ao cliente"} /></div>
           <div className="row" style={{ gap: 8, marginTop: 8 }}>
-            <button className="btn primary sm" onClick={async () => { if (await ex(() => A.finalizarAtendimento(c.id, tx.trim()), "Atendimento finalizado")) { setAbrir(false); setTx(""); } }}>Confirmar e finalizar</button>
+            <button className="btn primary sm" onClick={ok}>Confirmar</button>
             <button className="btn sm" onClick={() => setAbrir(false)}>Cancelar</button>
           </div></div>}
     </div>
@@ -734,7 +743,7 @@ function AcompanhamentoCC({ c, link, notaRef, foco }: any) {
   return <>
     {c.status === "informar" ? <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--st-informar)" }}><h4>Informar o cliente</h4>
       <div style={{ fontSize: 13, marginBottom: 10 }}>{c.resposta ? <>Retorno: <b>{c.resposta.texto || "—"}</b>{c.resposta.previsao ? " · previsão " + fmtDate(c.resposta.previsao) : ""}</> : "Veja o retorno no histórico abaixo."}</div>
-      <button className="btn primary sm" onClick={() => ex(() => A.mudarStatus(c.id, "concluida"), "Cliente informado — concluído")}>Cliente informado — concluir</button></div>
+      <div className="hint">Depois de avisar o cliente, use <b>✓ Finalizar atendimento</b> abaixo.</div></div>
     : <div className="ro-note" style={{ marginTop: 12 }}>Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>{R.viaCC(c.setorDestino) ? <>. Quando ele registrar o retorno, o chamado volta para o call center em <b>Informar cliente</b>.</> : <>, que fala direto com o cliente e conclui.</>} Pelo call center você pode registrar um novo contato do cliente e marcar urgente.</div>}
     <div style={{ margin: "12px 0 6px", display: "flex", gap: 9, flexWrap: "wrap" }}>
       {link && <a className="btn wa" href={link} target="_blank" rel="noopener">WhatsApp do representante</a>}
