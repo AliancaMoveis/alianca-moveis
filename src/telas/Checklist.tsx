@@ -978,11 +978,12 @@ function CalendarioDia() {
         <div key={"bt" + b.id} onClick={() => setModal(<ModalReabrir b={b} />)} style={{ cursor: "pointer", margin: "0 0 6px", padding: "6px 10px", borderRadius: 8, background: "var(--danger-bg)", border: "1.5px solid var(--danger)", color: "var(--danger)", fontWeight: 800, fontSize: 13 }}>
           {rotuloBloq(b)} — agenda fechada para todos {b.inicio.slice(11, 16) !== "00:00" || b.fim.slice(11, 16) !== "00:00" ? `(${b.inicio.slice(11, 16)} às ${b.fim.slice(11, 16)})` : ""} · clique para reabrir</div>)}
       <div style={{ overflowX: "auto" }}>
-        <div ref={gradeRef} style={{ display: "grid", gridTemplateColumns: `40px repeat(${colunas.length}, minmax(150px, 1fr))`, minWidth: 40 + colunas.length * 150 }}>
-          <div />
+        <div ref={gradeRef} style={{ display: "grid", gridTemplateColumns: `54px repeat(${colunas.length}, minmax(150px, 1fr))`, minWidth: 54 + colunas.length * 150 }}>
+          <div style={{ position: "sticky", left: 0, zIndex: 3, background: "var(--surface)" }} />
           {colunas.map(n => <div key={"h" + n} style={{ padding: "6px 8px", fontSize: 13, fontWeight: 700, borderBottom: `3px solid ${n ? corProj(n) : "var(--ink-faint)"}` }}>{n || "Sem projetista"}{emergD.includes(n) ? <span style={{ fontWeight: 400, fontSize: 11, color: "var(--ink-faint)" }}> · emergência</span> : null}</div>)}
-          <div style={{ position: "relative", height: ALTURA }}>
-            {horas.map(h => <div key={h} style={{ position: "absolute", top: yOf(h * 60), height: hAlt(h), width: "100%", fontSize: almoco(h) ? 10 : 12, color: "var(--ink-soft)", borderTop: "1px solid var(--line)", padding: "1px 4px", overflow: "hidden" }}>{String(h).padStart(2, "0")}</div>)}
+          {/* horários na lateral (fixos ao rolar para o lado) */}
+          <div style={{ position: "sticky", left: 0, zIndex: 3, height: ALTURA, background: "var(--surface)", borderRight: "1px solid var(--line)" }}>
+            {[...horas, H_FIM].map(h => <div key={h} style={{ position: "absolute", top: Math.max(0, yOf(h * 60) - (h === H_FIM ? 14 : 0)), right: 6, fontSize: 12, fontWeight: 700, color: almoco(h) ? "var(--ink-faint)" : "var(--ink-soft)", lineHeight: "14px", background: "var(--surface)", padding: "1px 0" }}>{h}:00</div>)}
           </div>
           {colunas.map(n => (
             <div key={"c" + n} onDragOver={e => { if (n) e.preventDefault(); }} onDrop={e => soltar(e, n)}
