@@ -49,7 +49,7 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
       <div className="idcol"><span className="tid">{c.id}</span><span className="tdate">{fmtDateTime(c.criadoEm)}</span></div>
       <div className="main">
         <div className="cli">{presale ? <>{c.cliente} {marcas}{urg}</> : <>{c.cliente}{R.ehFabrica(c) && c.fabrica ? <> · <b>{R.nomeFab(c.fabrica)}</b></> : null} {urg}</>}</div>
-        <div className="meta"><span className="pill">{R.tipoNome(c.tipo)}</span> <span className="pill setor">{R.setorNome(c.setorDestino)}</span> · {linha2} {att}</div>
+        <div className="meta"><span className="pill">{R.tipoNome(c.tipo)}</span> <span className="pill setor">{R.setorNome(c.setorDestino)}</span>{!presale && t.retorno && t.retorno.atendenteId ? <> <span className="pill" style={{ background: "var(--primary)", color: "#fff", fontWeight: 700 }}>→ {R.nomeUser(t.retorno.atendenteId)}</span></> : null} · {linha2} {att}</div>
         {resposta && c.resposta && (
           <div className="resp-inline"><b>Retorno:</b> {c.resposta.texto || "—"}{c.resposta.previsao ? " · previsão " + fmtDate(c.resposta.previsao) : ""} <span style={{ color: "var(--ink-faint)" }}>({c.resposta.quem || "—"})</span></div>
         )}

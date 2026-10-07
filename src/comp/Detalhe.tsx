@@ -10,7 +10,7 @@ import {
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
 import { SeloMedidaVenda } from "../telas/Medidas";
-import { BotaoWhats } from "./Whats";
+import { BotaoWhats, msgWhatsCliente, separarTelefones } from "./Whats";
 import { cfgAgenda, CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
@@ -72,7 +72,10 @@ export default function Detalhe({ id }: { id: string }) {
             <HistoricoCliente c={c} />
           </>}
           {!presale && <>
-            <Row k="Cliente">{c.cliente}{c.clienteDoc ? " · " + c.clienteDoc : ""}{c.telefone ? " · " + c.telefone : ""} <EditarCliente c={c} /></Row>
+            <Row k="Cliente"><b>{c.cliente}</b> <EditarCliente c={c} /></Row>
+            <Row k="CPF">{c.clienteDoc || "—"}</Row>
+            <Row k="Contato">{(() => { const tels = separarTelefones(c.telefone); const eu = R.nomeUser(R.currentUserId); const msg = msgWhatsCliente(c, eu ? eu.split(" ")[0] : "");
+              return tels.length ? <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>{tels.map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b><BotaoWhats tel={t} texto={msg} /></span>)}</span> : (c.telefone || "—"); })()}</Row>
             <Row k="Pedido venda">{c.pedido}{c.dataVenda ? " · " + fmtDate(c.dataVenda) : ""}</Row>
             <Row k="Produto">{c.produto}</Row>
             {ehFab && <>

@@ -14,3 +14,24 @@ export function BotaoWhats({ tel, texto = "", rotulo = "WhatsApp", sm = true }: 
     </a>
   );
 }
+
+/** Separa os telefones de um campo livre ("(41) 99999-9999 / 41 3333-4444") */
+export function separarTelefones(t: string): string[] {
+  const achados = String(t || "").match(/\(?\d{2}\)?[\s.-]*\d{4,5}[\s.-]?\d{4,5}/g) || [];
+  const vistos = new Set<string>(); const out: string[] = [];
+  for (const a of achados) { const d = a.replace(/\D/g, ""); if (d.length >= 10 && d.length <= 13 && !vistos.has(d)) { vistos.add(d); out.push(a.trim()); } }
+  return out;
+}
+const ASSUNTO: Record<string, string> = {
+  previsao_frete: "a previsão de entrega do seu pedido", entrega: "a entrega do seu pedido", prazo_fabrica: "o prazo de fábrica do seu pedido",
+  horario_montagem: "o horário da montagem do seu pedido", montagem: "o agendamento da montagem do seu pedido", retorno_montador: "o retorno do montador para o seu pedido",
+  assistencia: "a assistência do seu pedido", vistoria: "a vistoria do seu pedido", checklist: "o agendamento do checklist do seu projeto",
+  medidas: "a medição dos ambientes do seu projeto", posvenda: "a sua solicitação de pós-venda", outros: "a sua solicitação",
+};
+const primeiroNome = (n: string) => { const p = String(n || "").trim().split(/\s+/)[0] || ""; return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : ""; };
+/** Mensagem do WhatsApp coerente com o motivo da solicitação */
+export function msgWhatsCliente(c: any, quem = ""): string {
+  const nome = primeiroNome(c.cliente);
+  const assunto = ASSUNTO[c.tipo] || "a sua solicitação";
+  return "Olá" + (nome ? ", " + nome : "") + "! Aqui é " + (quem ? quem + ", " : "") + "da Aliança Móveis. Estou entrando em contato sobre " + assunto + (c.pedido ? " (venda " + c.pedido + ")" : "") + ".";
+}
