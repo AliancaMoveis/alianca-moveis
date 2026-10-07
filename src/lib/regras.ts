@@ -34,6 +34,13 @@ export const MARKETING_SETORES = ["marketing_operadora", "marketing_supervisao",
 // status do cliente enquanto está com o vendedor (antes do desfecho)
 export const EM_ATENDIMENTO = ["com_vendedor", "orcamento", "sem_resposta", "reagendado", "em_obras", "standby", "em_analise"];
 export const LIMITE_INATIVIDADE_H = 24;
+export const DIAS_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+/** Turnos dos vendedores (escala): manhã = entra 9:00, almoço 11:00–13:00 · tarde = entra 10:40, almoço 13:30–15:30 (minutos do dia) */
+export const TURNOS: Record<string, { rot: string; entra: number; almoco: [number, number] }> = {
+  manha: { rot: "Entra 9:00 · almoço 11:00–13:00", entra: 540, almoco: [660, 780] },
+  tarde: { rot: "Entra 10:40 · almoço 13:30–15:30", entra: 640, almoco: [810, 930] },
+};
+export const hhmm = (m: number) => Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0");
 export const statusFinalCliente = ["vendido", "vendido_promissoria", "vendido_entrada", "venda_cancelada", "atendido", "nao_compareceu", "reprovado"];
 export const COR_SETOR: Record<string, string> = {
   callcenter: "#4b6bd6", prazo_fabrica: "#b8802a", montagem: "#2f8fa8", assistencia: "#c23b3b", checklist: "#7a5bb5", medidas: "#1f9c7a",
@@ -334,7 +341,23 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const parecerCobrado = (c: Chamado) => !!(c.tratativa && c.tratativa.cobradoEm) && c.setorDestino === "atendente_cliente" && !c.venda && !statusFinalCliente.includes(statusClienteDe(c));
   // quem responde por definir o vendedor e cobrar parecer: Suporte = clientes dos consultores externos; Supervisão Marketing / Gerente de Loja = agendados pelo marketing
   const souRespLoja = (c: Chamado) => (mySetores().includes("suporte_consultores") && !ehDireto(c)) || (temMarketing() && ehDireto(c));
-  const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente"));
+  const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente")).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  /** Disponibilidade do vendedor para atender um cliente na loja num horário (folga, turno, almoço e outro cliente a menos de 2h) */
+  const dispVendedor = (uid: string, quando: string | null | undefined, exceto?: Chamado | null): string[] => {
+    const u: any = getUser(uid); if (!u || !quando) return [];
+    const d = new Date(quando); if (isNaN(d.getTime())) return [];
+    const mot: string[] = []; const m = d.getHours() * 60 + d.getMinutes();
+    if (u.folga !== null && u.folga !== undefined && d.getDay() === u.folga) mot.push("folga (" + DIAS_SEMANA[u.folga] + ")");
+    const tu = TURNOS[u.turno || ""];
+    if (tu) {
+      if (m < tu.entra) mot.push("só entra às " + hhmm(tu.entra));
+      else if (m >= tu.almoco[0] && m < tu.almoco[1]) mot.push("no almoço (" + hhmm(tu.almoco[0]) + "–" + hhmm(tu.almoco[1]) + ")");
+    }
+    if (exceto && exceto.tratativa && exceto.tratativa.querProjeto === "sim" && u.fazProjeto === false) mot.push("não faz projeto (cliente quer projeto)");
+    const outros = state.chamados.filter((x: any) => x.atendenteId === uid && x.dataLoja && (!exceto || x.id !== exceto.id) && x.setorDestino === "atendente_cliente" && !x.venda && !statusFinalCliente.includes(statusClienteDe(x)));
+    for (const x of outros) { const dx = new Date(x.dataLoja as string); const dif = Math.abs(dx.getTime() - d.getTime()) / 60000; if (dif < 120) mot.push("já tem " + x.cliente + " às " + hhmm(dx.getHours() * 60 + dx.getMinutes())); }
+    return mot;
+  };
 
   // ---------- medidas (venda → medidas → checklist) ----------
   // Proprietário: vê e pode tudo (como a Gestão), mas sem tarefas pessoais
@@ -690,7 +713,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas,
+    ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, dispVendedor,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };

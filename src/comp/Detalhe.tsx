@@ -11,6 +11,7 @@ import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
 import { SeloMedidaVenda } from "../telas/Medidas";
 import { BotaoWhats, msgWhatsCliente, separarTelefones } from "./Whats";
+import { SelVendedor, confirmarDisp, registrarIndisp } from "./SelVendedor";
 import { cfgAgenda, CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
@@ -237,8 +238,8 @@ function Tratativa({ c }: any) {
         {t.medidas && <RowSb k="Medidas">{t.medidas}</RowSb>}
         {t.obs && <RowSb k="Observação">{t.obs}</RowSb>}
         <RowSb k="Vinda à loja" pb="4px 0 12px">{fmtDateTime(c.dataLoja)}</RowSb>
-        <div className="grid"><div className="field"><label>Vendedor que vai atender</label><select value={aten} onChange={e => setAten(e.target.value)}><option value="">Selecione…</option>{R.projetistas().map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div></div>
-        <div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => { if (!aten) { toast("Selecione o vendedor"); return; } ex(() => A.designarProjetista(c.id, aten), "Vendedor definido"); }}>Definir vendedor</button></div>
+        <div className="grid"><div className="field"><label>Vendedor que vai atender</label><SelVendedor value={aten} onChange={setAten} quando={c.dataLoja} c={c} /></div></div>
+        <div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={async () => { if (!aten) { toast("Selecione o vendedor"); return; } const d = confirmarDisp(R, aten, c.dataLoja, c); if (!d.ok) return; if (await ex(() => A.designarProjetista(c.id, aten), "Vendedor definido")) registrarIndisp(c.id, aten, d.motivo); }}>Definir vendedor</button></div>
       </div>
     );
   }
@@ -418,7 +419,7 @@ function Vendedor({ c }: any) {
   const tr = c.transferencia && c.transferencia.status === "pendente" ? c.transferencia : null;
   const autoridade = R.podeEditarAgenda(), souAtual = c.atendenteId === R.currentUserId, souDestino = tr && tr.para === R.currentUserId;
   const projs = R.projetistas().filter(p => p.id !== c.atendenteId);
-  const sel = (label: string) => <div className="field"><label>{label}</label><select value={novo} onChange={e => setNovo(e.target.value)}><option value="">Selecione…</option>{projs.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></div>;
+  const sel = (label: string) => <div className="field"><label>{label}</label><SelVendedor value={novo} onChange={setNovo} quando={c.dataLoja} c={c} lista={projs} /></div>;
   return (
     <div className="resp-box"><h4>Vendedor definido</h4>
       <RowSb k="Vendedor atual" pb="5px 0" bold>{atual ? atual.nome : "—"}</RowSb>
@@ -434,10 +435,10 @@ function Vendedor({ c }: any) {
         </div>
         {(autoridade || souAtual) && <div style={{ marginTop: 10 }}><button className="btn ghost sm" onClick={() => ex(() => A.cancelarTransferencia(c.id), "Solicitação cancelada")}>Cancelar solicitação</button></div>}
       </> : autoridade ? <>
-        <div className="inline-2" style={{ marginTop: 12 }}>{sel("Trocar para")}<button className="btn sm" onClick={() => { if (!novo) { toast("Selecione o vendedor"); return; } ex(() => A.trocarVendedor(c.id, novo), "Vendedor alterado"); }}>Alterar vendedor</button></div>
+        <div className="inline-2" style={{ marginTop: 12 }}>{sel("Trocar para")}<button className="btn sm" onClick={async () => { if (!novo) { toast("Selecione o vendedor"); return; } const d = confirmarDisp(R, novo, c.dataLoja, c); if (!d.ok) return; if (await ex(() => A.trocarVendedor(c.id, novo), "Vendedor alterado")) registrarIndisp(c.id, novo, d.motivo); }}>Alterar vendedor</button></div>
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 7 }}>Como Gestão/Supervisão/Suporte, a troca é aplicada na hora.</div>
       </> : souAtual ? <>
-        <div className="inline-2" style={{ marginTop: 12 }}>{sel("Indicar outro vendedor")}<button className="btn sm" onClick={async () => { if (!novo) { toast("Indique o vendedor"); return; } await ex(() => A.solicitarTransferencia(c.id, novo), "Solicitação enviada, aguardando aceite"); }}>Solicitar transferência</button></div>
+        <div className="inline-2" style={{ marginTop: 12 }}>{sel("Indicar outro vendedor")}<button className="btn sm" onClick={async () => { if (!novo) { toast("Indique o vendedor"); return; } const d = confirmarDisp(R, novo, c.dataLoja, c); if (!d.ok) return; if (await ex(() => A.solicitarTransferencia(c.id, novo), "Solicitação enviada, aguardando aceite")) registrarIndisp(c.id, novo, d.motivo); }}>Solicitar transferência</button></div>
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 7 }}>A troca só vale após o aceite do outro vendedor ou aprovação da Gestão/Supervisão/Suporte.</div>
       </> : null}
     </div>

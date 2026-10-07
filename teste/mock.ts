@@ -9,8 +9,8 @@ const usuarios = [
   [3, "Diego Alves", ["prazo_fabrica"], false], [4, "Bruno Sá", ["montagem"], false], [5, "Paula Reis", ["assistencia", "montagem"], false],
   [8, "Fernanda Melo", ["checklist"], false], [9, "Igor Tavares", ["medidas"], true], [19, "Luciene", ["medidas_supervisao", "medidas"], false], [20, "Washington", ["proprietario"], false], [10, "Ana Ribeiro", ["marketing_operadora"], false],
   [13, "Marcelo Duarte", ["marketing_supervisao"], false], [11, "Consultor — Anderson", ["consultor_externo"], true], [12, "Consultor — Priscila", ["consultor_externo"], true],
-  [14, "Suporte — Carla", ["suporte_consultores"], false], [15, "Vendedor — Roy", ["atendente_cliente"], true], [16, "Vendedora — Giovanna", ["atendente_cliente"], true], [6, "Supervisão", ["supervisao"], false], [17, "Vânia", ["posvenda"], false], [18, "Camila (Jurídico)", ["juridico"], false],
-].map(([n, nome, setores, s]: any) => ({ id: U(n), nome, email: "", setores, somenteAtribuidos: s, ativo: true }));
+  [14, "Suporte — Carla", ["suporte_consultores"], false], [15, "Vendedor — Roy", ["atendente_cliente"], true], [16, "Vendedora — Giovanna", ["atendente_cliente"], true], [21, "Vendedor — Marcelo", ["atendente_cliente"], true], [6, "Supervisão", ["supervisao"], false], [17, "Vânia", ["posvenda"], false], [18, "Camila (Jurídico)", ["juridico"], false],
+].map(([n, nome, setores, s]: any) => ({ id: U(n), nome, email: "", setores, somenteAtribuidos: s, ativo: true, fazProjeto: n !== 21, folga: n === 15 ? 3 : n === 16 ? 5 : n === 21 ? 2 : null, turno: n === 15 || n === 21 ? "manha" : n === 16 ? "tarde" : null }));
 const L = (criar = false, verTudo = false, cadastros = false, admin = false, verMarketing = false) => ({ criar, verTudo, cadastros, admin, verMarketing });
 const setores = [
   ["callcenter", "Call center", L(true)], ["prazo_fabrica", "Prazo de fábrica", { ...L(), viaCallcenter: true }], ["montagem", "Montagem", L()], ["assistencia", "Assistência", L()],

@@ -4,7 +4,7 @@ import { sb } from "./supabase";
 
 export type Anexo = { id?: string; tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; path?: string | null };
 export type Chamado = any;
-export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean };
+export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean; fazProjeto?: boolean; folga?: number | null; turno?: string | null };
 export type Setor = { id: string; nome: string; liberacoes: Record<string, boolean> };
 export type Estado = {
   setores: Setor[];
@@ -75,7 +75,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
   const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda, reemb, proms, mcruz, bloqs, mconta] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
-    todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em", "criado_em"),
+    todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em,faz_projeto,folga,turno", "criado_em"),
     todos("usuario_setores", "*", "ordem"),
     todos("representantes", "*", "criado_em"),
     todos("fabricas", "*", "criado_em"),
@@ -149,9 +149,9 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       id: s.id, nome: s.nome,
       liberacoes: { criar: s.lib_criar, verTudo: s.lib_ver_tudo, cadastros: s.lib_cadastros, admin: s.lib_admin, verMarketing: s.lib_ver_marketing, viaCallcenter: !!s.via_callcenter },
     })),
-    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo })),
+    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo, fazProjeto: u.faz_projeto !== false, folga: u.folga ?? null, turno: u.turno || null })),
     representantes: reps.map((r: any) => ({ id: r.id, nome: r.nome, whats: r.whats, email: r.email })),
-    fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })),
+    fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })).sort((a: any, b: any) => { const na = /n[aã]o informad/i.test(a.nome) ? 1 : 0, nb = /n[aã]o informad/i.test(b.nome) ? 1 : 0; return na - nb || a.nome.localeCompare(b.nome, "pt-BR"); }),
     tipos: tiposMap,
     reembolsos: (reemb as any[]).map((r: any) => ({ id: r.id, usuarioId: r.usuario_id, chamadoId: r.chamado_id || "", data: r.data, tipo: r.tipo, valor: Number(r.valor), descricao: r.descricao || "",
       path: r.comprovante_path, status: r.status, criadoEm: r.criado_em, decididoEm: r.decidido_em || "", motivo: r.motivo || "" })),

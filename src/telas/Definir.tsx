@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { hojeISO, isoLocal, parseData } from "../lib/regras";
+import { SelVendedor, confirmarDisp, registrarIndisp } from "../comp/SelVendedor";
+import { DIAS_SEMANA, TURNOS, hojeISO, isoLocal, parseData } from "../lib/regras";
 
 const dia = (c: any) => String(c.dataLoja || "").slice(0, 10);
 const hora = (c: any) => { const s = String(c.dataLoja || ""); return s.length > 10 ? s.slice(11, 16) : "—"; };
@@ -83,7 +84,8 @@ export default function Definir() {
             const prox = ag.slice().sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja))).slice(0, 3);
             return (
               <div key={v.id} className="dv-vend">
-                <div className="dv-vend-top"><b>{v.nome}</b><span className="dv-n" title="Hoje">{h.length} hoje</span><span className="dv-n cinza" title="Próximos 7 dias">{s.length} na semana</span></div>
+                <div className="dv-vend-top"><b>{v.nome}</b>{v.fazProjeto !== false ? <span className="pill" style={{ background: "var(--primary)", color: "#fff", whiteSpace: "nowrap" }}>📐 projetista</span> : <span className="pill" style={{ whiteSpace: "nowrap" }}>só vendedor</span>}<span className="dv-n" title="Hoje">{h.length} hoje</span><span className="dv-n cinza" title="Próximos 7 dias">{s.length} na semana</span></div>
+                {(v.folga !== null && v.folga !== undefined) || v.turno ? <div className="dv-vend-l" style={{ cursor: "default", color: "var(--ink-faint)" }}>{v.folga !== null && v.folga !== undefined ? "Folga " + DIAS_SEMANA[v.folga] : ""}{v.turno && TURNOS[v.turno] ? (v.folga !== null && v.folga !== undefined ? " · " : "") + TURNOS[v.turno].rot : ""}</div> : null}
                 {prox.length ? prox.map((c: any) => <div key={c.id} className="dv-vend-l" onClick={() => abrirDetalhe(c.id)}>{dia(c) === hoje ? "hoje" : rotuloDia(dia(c)).split(",")[1].trim()} {hora(c)} · {c.cliente}</div>)
                   : <div className="dv-vend-l vazio">Sem clientes agendados</div>}
               </div>
@@ -118,16 +120,16 @@ function Cartao({ c, vendedores, comVend, abrir, troca }: any) {
   const hoje = hojeISO();
   const noDia = (uid: string) => comVend.filter((x: any) => x.atendenteId === uid && x.id !== c.id && dia(x) === dia(c));
   // sugestão: quem tem menos clientes no dia
-  const sug = !troca && c.dataLoja ? vendedores.slice().sort((a: any, b: any) => noDia(a.id).length - noDia(b.id).length)[0] : null;
-  const m = minutos(c);
-  const choque = v && m !== null ? noDia(v).find((x: any) => { const mx = minutos(x); return mx !== null && Math.abs(mx - m) < 60; }) : null;
+  const sug = !troca && c.dataLoja ? vendedores.filter((a: any) => !R.dispVendedor(a.id, c.dataLoja, c).length).sort((a: any, b: any) => noDia(a.id).length - noDia(b.id).length)[0] || null : null;
   const imgs = (c.anexos || []).filter((a: any) => a.tipo === "img").length;
   const t = c.tratativa || {};
   const cor = !c.dataLoja ? "var(--ink-faint)" : dia(c) < hoje ? "var(--danger)" : dia(c) === hoje ? "var(--warn)" : "var(--primary)";
-  const definir = () => {
+  const definir = async () => {
     if (!v) { toast("Escolha o vendedor"); return; }
-    if (troca) { if (v === c.atendenteId) { toast("Já é este vendedor"); return; } ex(() => A.trocarVendedor(c.id, v), "Vendedor alterado"); }
-    else ex(() => A.designarProjetista(c.id, v), "Vendedor definido — cliente na fila dele");
+    if (troca && v === c.atendenteId) { toast("Já é este vendedor"); return; }
+    const d = confirmarDisp(R, v, c.dataLoja, c); if (!d.ok) return;
+    const ok = troca ? await ex(() => A.trocarVendedor(c.id, v), "Vendedor alterado") : await ex(() => A.designarProjetista(c.id, v), "Vendedor definido — cliente na fila dele");
+    if (ok) registrarIndisp(c.id, v, d.motivo);
   };
   return (
     <div className="dv-card" style={{ borderLeftColor: cor }}>
@@ -141,12 +143,8 @@ function Cartao({ c, vendedores, comVend, abrir, troca }: any) {
         {!troca && t.pedidoAtend && <div className="dv-pedido">🙋 <b>{t.pedidoAtendNome || R.nomeUser(t.pedidoAtend)}</b> está atendendo — aguardando aprovação
           <div style={{ display: "flex", gap: 6, marginTop: 6 }}><button className="btn primary sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, true), "Aprovado — cliente com o vendedor")}>Aprovar</button>
             <button className="btn ghost sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, false), "Pedido recusado")}>Recusar</button></div></div>}
-        <select value={v} onChange={e => setV(e.target.value)}>
-          <option value="">{troca ? "Trocar para…" : "Escolher vendedor…"}</option>
-          {vendedores.map((x: any) => { const n = c.dataLoja ? noDia(x.id).length : 0; return <option key={x.id} value={x.id}>{x.nome}{c.dataLoja ? ` — ${n} no dia` : ""}{sug && sug.id === x.id ? " (sugerido)" : ""}</option>; })}
-        </select>
+        <SelVendedor value={v} onChange={setV} quando={c.dataLoja} c={c} lista={vendedores} placeholder={troca ? "Trocar para…" : "Escolher vendedor…"} extra={(x: any) => (c.dataLoja ? ` (${noDia(x.id).length} no dia)` : "") + (sug && sug.id === x.id ? " (sugerido)" : "")} />
         <button className="btn primary sm" onClick={definir}>{troca ? "Trocar" : "Definir"}</button>
-        {choque && <div className="dv-aviso">⚠ {R.nomeUser(v)} já tem {choque.cliente} às {hora(choque)}</div>}
       </div>
     </div>
   );

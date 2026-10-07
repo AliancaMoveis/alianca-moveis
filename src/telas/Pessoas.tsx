@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useApp } from "../estado";
-import { STATUS_CLIENTE, VENDA_STATUS, corDoSetor, fmtDate, fmtMoeda, inicial, numsVenda, parseMoeda, temCancelamento, temPendenteGestao, valorPendente, vendaContaComissao, vendaContaVolume } from "../lib/regras";
+import { DIAS_SEMANA, TURNOS, STATUS_CLIENTE, VENDA_STATUS, corDoSetor, fmtDate, fmtMoeda, inicial, numsVenda, parseMoeda, temCancelamento, temPendenteGestao, valorPendente, vendaContaComissao, vendaContaVolume } from "../lib/regras";
 import { ScBadge, Ticket } from "../comp/Ticket";
 import { Kpi } from "./Dashboard";
+import { A } from "../lib/acoes";
 
 export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
   const { R, st } = useApp();
@@ -10,7 +11,9 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
   const ehVend = qual === "vendedores";
   const setor = ehVend ? "atendente_cliente" : "consultor_externo";
   const sufixo = ehVend ? "" : "2";
-  const pessoas = st.usuarios.filter(u => (u.setores || []).includes(setor) && (u.ativo || R.statsPessoa(u.id, ehVend).meus.length));
+  const [tipoV, setTipoV] = useState<"todos" | "proj" | "so">("todos");
+  const pessoas = st.usuarios.filter(u => (u.setores || []).includes(setor) && (u.ativo || R.statsPessoa(u.id, ehVend).meus.length))
+    .filter(u => !ehVend || tipoV === "todos" || (tipoV === "proj" ? u.fazProjeto !== false : u.fazProjeto === false));
   const dados = pessoas.map(u => ({ u, ...R.statsPessoa(u.id, ehVend) })).sort((a, b) => b.total - a.total);
   const maxT = Math.max(1, ...dados.map(d => d.total));
   const d = sel ? dados.find(x => x.u.id === sel) : null;
@@ -18,12 +21,13 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
   return (
     <section className="view active" id={"view-" + qual}>
       <div className="view-head"><div><h2 id={"pesTitulo" + sufixo}>{ehVend ? "Vendedores" : "Consultores externos"}</h2><p id={"pesSub" + sufixo}>{(ehVend ? "Carteira de cada vendedor da loja." : "Carteira de cada consultor externo.") + " Clique num card para ver os clientes."}</p></div></div>
+      {ehVend && <div className="subnav" style={{ marginBottom: 12 }}>{([["todos", "Todos"], ["proj", "📐 Projetistas"], ["so", "Só vendedores"]] as const).map(([k, l]) => <button key={k} className={tipoV === k ? "on" : ""} onClick={() => setTipoV(k)}>{l}</button>)}</div>}
       <div className="pess" id={"pesCards" + sufixo}>
         {dados.length ? dados.map(dd => {
           const cor = corDoSetor(setor);
           return (
             <div key={dd.u.id} className={"pcard" + (sel === dd.u.id ? " sel" : "")} onClick={() => setSel(s => s === dd.u.id ? null : dd.u.id)}>
-              <div className="t"><div className="av2" style={{ background: cor }}>{inicial(dd.u.nome.split("— ")[1] || dd.u.nome)}</div><div><div className="nm">{dd.u.nome}</div><div className="sb">{ehVend ? "Vendedor (loja)" : "Consultor externo"}</div></div></div>
+              <div className="t"><div className="av2" style={{ background: cor }}>{inicial(dd.u.nome.split("— ")[1] || dd.u.nome)}</div><div><div className="nm">{dd.u.nome}</div><div className="sb">{ehVend ? <>{dd.u.fazProjeto !== false ? <b style={{ color: "var(--primary)" }}>📐 Projetista</b> : "Só vendedor"}{dd.u.folga !== null && dd.u.folga !== undefined ? " · folga " + DIAS_SEMANA[dd.u.folga] : ""}{dd.u.turno && TURNOS[dd.u.turno] ? " · " + (dd.u.turno === "manha" ? "entra 9:00" : "entra 10:40") : ""}</> : "Consultor externo"}</div></div></div>
               <div className="num"><div>Ativos<b>{dd.ativos}</b></div><div>Vendas<b>{dd.vendas}</b></div><div>Vendido<b style={{ fontSize: 14 }}>{fmtMoeda(dd.total)}</b></div><div>Conversão<b>{dd.conv}%</b></div></div>
               <div className="bar"><i style={{ width: dd.total / maxT * 100 + "%", background: cor }}></i></div>
             </div>
@@ -31,6 +35,7 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
         }) : <div className="empty">Ninguém cadastrado neste papel.</div>}
       </div>
       <div id={"pesDetalhe" + sufixo}>
+        {d && ehVend && <EscalaVendedor u={d.u} />}
         {d && <div className="ap-sec"><h3>Clientes de {d.u.nome} <span className="badge b-tratativa">{arr.length}</span></h3>
           <div className="list">{arr.length ? arr.map(c => <Ticket key={c.id} c={c} />) : <div className="empty">Nenhum cliente.</div>}</div></div>}
       </div>
@@ -39,6 +44,25 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
 }
 
 // Meus clientes (consultor / vendedor): a fila (em andamento) e a carteira (todos) numa tela só, com busca e filtros
+function EscalaVendedor({ u }: { u: any }) {
+  const { R, executar } = useApp() as any;
+  const pode = R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
+  const [fp, setFp] = useState(u.fazProjeto !== false); const [fo, setFo] = useState(u.folga === null || u.folga === undefined ? "" : String(u.folga)); const [tu, setTu] = useState(u.turno || "");
+  const tx = TURNOS[u.turno || ""];
+  if (!pode) return <div className="card" style={{ padding: "12px 16px", marginBottom: 14, fontSize: 13 }}><b>{u.nome}</b> · {u.fazProjeto !== false ? "📐 Projetista" : "Só vendedor"} · {u.folga !== null && u.folga !== undefined ? "folga " + DIAS_SEMANA[u.folga] : "folga não informada"} · {tx ? tx.rot : "horário não informado"}</div>;
+  return (
+    <div className="card" key={u.id} style={{ padding: "14px 18px", marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, marginBottom: 10 }}>Escala de {u.nome}</div>
+      <div className="grid">
+        <div className="field"><label>Tipo</label><select value={fp ? "1" : "0"} onChange={e => setFp(e.target.value === "1")}><option value="1">📐 Projetista (faz projeto)</option><option value="0">Só vendedor (não faz projeto)</option></select></div>
+        <div className="field"><label>Folga</label><select value={fo} onChange={e => setFo(e.target.value)}><option value="">Não informada</option>{DIAS_SEMANA.map((d, i) => <option key={i} value={i}>{d}</option>)}</select></div>
+        <div className="field"><label>Horário</label><select value={tu} onChange={e => setTu(e.target.value)}><option value="">Não informado</option>{Object.entries(TURNOS).map(([k, t]) => <option key={k} value={k}>{t.rot}</option>)}</select></div>
+      </div>
+      <div style={{ marginTop: 10 }}><button className="btn primary sm" onClick={() => executar(() => A.vendedorEscala(u.id, fp, fo === "" ? null : Number(fo), tu), "Escala salva")}>Salvar escala</button></div>
+    </div>
+  );
+}
+
 export function Carteira() {
   const { R } = useApp();
   const ehVend = R.mySetores().includes("atendente_cliente");
