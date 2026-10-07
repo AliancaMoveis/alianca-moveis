@@ -2,9 +2,10 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { PV_DESC, PV_DESFECHO, PV_ORIGEM, PV_REEMB, PV_RESP, PV_TIPOS, STATUS, fmtDateTime, fmtMoeda, inicial, pvPrazo } from "../lib/regras";
+import { PV_DESC, PV_DESFECHO, PV_ORIGEM, PV_REEMB, PV_RESP, PV_SITUACAO, PV_TIPOS, STATUS, fmtDateTime, fmtMoeda, inicial, pvPrazo } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
+import { BotaoWhats } from "../comp/Whats";
 
 const Nada = ({ t }: { t: string }) => <div style={{ color: "var(--ink-faint)", fontSize: 13 }}>{t}</div>;
 
@@ -130,8 +131,10 @@ function Numeros() {
 function Abertos() {
   const { R, st, abrirDetalhe, irPara } = useApp() as any;
   const todos = st.chamados.filter((c: any) => c.tipo === "posvenda" && R.podeVer(c));
-  const abertos = todos.filter((c: any) => c.status !== "concluida");
   const pv = (c: any) => c.posvenda || {};
+  const [fo, setFo] = useState<"" | "cliente" | "montador">("");
+  const abertosTodos = todos.filter((c: any) => c.status !== "concluida");
+  const abertos = abertosTodos.filter((c: any) => !fo || (pv(c).origem || "cliente") === fo);
   const peso = (c: any) => (pv(c).paradoObra ? 0 : pvPrazo(c) === "vencido" ? 1 : pvPrazo(c) === "hoje" ? 2 : !pv(c).prazo ? 3 : 4);
   const lista = abertos.slice().sort((a: any, b: any) => peso(a) - peso(b) || +new Date(pv(a).prazo || a.criadoEm) - +new Date(pv(b).prazo || b.criadoEm));
   const reembAnalise = todos.filter((c: any) => pv(c).reembolsoStatus === "em_analise");
@@ -144,8 +147,9 @@ function Abertos() {
     return (
       <div className="acao" style={{ borderLeftColor: cor }} onClick={() => abrirDetalhe(c.id)}>
         <span>{p.paradoObra && <b style={{ color: "var(--danger)" }}>🚨 PARADO NA OBRA · </b>}{c.id} · <b>{c.cliente}</b>
-          {p.origem === "montador" ? " · 🔧 " + (p.montadorId ? R.nomeMontador(p.montadorId) : "montador") : " · cliente"}
-          {p.categoria ? " · " + PV_TIPOS[p.categoria] : ""}{p.pecaAfetada ? " · " + p.pecaAfetada : ""}{extra}</span>
+          {p.origem === "montador" ? " · 🔧 montador " + (p.montadorId ? R.nomeMontador(p.montadorId) : "") : " · 👤 cliente"}
+          {p.origem === "montador" && p.situacao ? " · " + (PV_SITUACAO[p.situacao] || "").replace(/^🚨 /, "") : p.categoria ? " · " + PV_TIPOS[p.categoria] : ""}{p.pecaAfetada ? " · " + p.pecaAfetada : ""}{extra}</span>
+        {p.origem === "montador" && p.montadorId && (() => { const m = (st.montadores || []).find((x: any) => x.id === p.montadorId); return m && m.telefone ? <BotaoWhats tel={m.telefone} rotulo="" /> : null; })()}
         <span className="g" style={pz === "vencido" ? { color: "var(--danger)", fontWeight: 600 } : { color: pz === "hoje" ? "var(--warn)" : "var(--ink-faint)" }}>
           {p.prazo ? (pz === "vencido" ? "venceu " : "até ") + fmtDateTime(p.prazo) : "sem prazo"} · {dias(c.criadoEm)}d aberto</span>
       </div>
@@ -162,7 +166,9 @@ function Abertos() {
         <Kpi n={reembAnalise.length + reembPagar.length} l="Reembolsos a decidir / pagar" cls={reembAnalise.length + reembPagar.length ? "alert" : ""} />
         <Kpi n={fmtMoeda(aDescontar.reduce((t: number, c: any) => t + (pv(c).descontoMontador || 0), 0))} l={aDescontar.length + " desconto(s) de montador a fazer"} fs={20} />
       </div>
-      <div className="panel" style={{ marginTop: 16 }}><h3>Fila do pós-venda</h3>
+      <div className="panel" style={{ marginTop: 16 }}><h3 style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>Fila do pós-venda
+        <span className="chips" style={{ fontWeight: 400 }}>{([["", "Todas", abertosTodos.length], ["cliente", "👤 Cliente", abertosTodos.filter((c: any) => (pv(c).origem || "cliente") === "cliente").length], ["montador", "🔧 Montador", abertosTodos.filter((c: any) => pv(c).origem === "montador").length]] as [any, string, number][])
+          .map(([k, l, n]) => <button key={k} className={"chip" + (fo === k ? " on" : "")} onClick={() => setFo(k)}>{l}<span className="n">{n}</span></button>)}</span></h3>
         {lista.length ? lista.map((c: any) => <Linha key={c.id} c={c} />) : <Nada t="Nada em aberto. 👏" />}
       </div>
       {(reembAnalise.length > 0 || reembPagar.length > 0) && <div className="panel" style={{ marginTop: 16 }}><h3>Reembolsos pedidos por clientes</h3>
@@ -177,32 +183,63 @@ function Abertos() {
 }
 
 function Montadores() {
-  const { st, executar, setModal } = useApp() as any;
-  const lista = (st.montadores || []).slice().sort((a: any, b: any) => (a.ativo === b.ativo ? a.nome.localeCompare(b.nome) : a.ativo ? -1 : 1));
+  const { R, st, executar, setModal } = useApp() as any;
+  const [q, setQ] = useState("");
+  const verConta = R.ehGestao() || R.ehPosvenda();
+  const lista = (st.montadores || []).slice().sort((a: any, b: any) => (a.ativo === b.ativo ? a.nome.localeCompare(b.nome) : a.ativo ? -1 : 1))
+    .filter((m: any) => !q || (m.nome + " " + (m.regiao || "")).toLowerCase().includes(q.toLowerCase()));
   return (
     <div style={{ marginTop: 14 }}>
-      <div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditMontador id={null} />)}>Adicionar montador</button></div>
+      <div style={{ marginBottom: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}><button className="btn primary" onClick={() => setModal(<EditMontador id={null} />)}>Adicionar montador</button>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nome ou região" style={{ maxWidth: 280 }} /></div>
       {lista.length ? lista.map((m: any) => (
         <div className="fab" key={m.id} style={m.ativo ? undefined : { opacity: .6 }}><div className="fi">{inicial(m.nome)}</div>
-          <div><div className="fn">{m.nome}{!m.ativo && <span className="pill" style={{ marginLeft: 6 }}>inativo</span>}</div><div className="fc">{m.telefone ? "Telefone " + m.telefone : "sem telefone"}</div></div>
-          <div className="sp"><button className="btn ghost sm" onClick={() => setModal(<EditMontador id={m.id} />)}>Editar</button>
+          <div><div className="fn">{m.nome}{!m.ativo && <span className="pill" style={{ marginLeft: 6 }}>inativo</span>}</div>
+            <div className="fc">{m.telefone || "sem telefone"}{m.regiao ? " · região: " + m.regiao : ""}{verConta ? (m.conta && (m.conta.pixChave || m.conta.conta) ? " · 💳 conta cadastrada" : " · sem conta de pagamento") : ""}</div></div>
+          <div className="sp"><BotaoWhats tel={m.telefone} /><button className="btn ghost sm" onClick={() => setModal(<EditMontador id={m.id} />)}>Editar</button>
             <button className={"btn sm" + (m.ativo ? " danger" : "")} onClick={() => executar(() => A.ativarMontador(m.id, !m.ativo), m.ativo ? "Montador desativado" : "Montador reativado")}>{m.ativo ? "Desativar" : "Reativar"}</button></div>
         </div>
-      )) : <div className="empty">Nenhum montador cadastrado.</div>}
+      )) : <div className="empty">{q ? "Nenhum montador encontrado." : "Nenhum montador cadastrado."}</div>}
     </div>
   );
 }
 
+const CONTA_VAZIA = { titular: "", docTitular: "", banco: "", agencia: "", conta: "", tipoConta: "corrente", pixTipo: "", pixChave: "", obs: "" };
 function EditMontador({ id }: { id: string | null }) {
-  const { st, executar, setModal, toast } = useApp() as any;
-  const m = id ? st.montadores.find((x: any) => x.id === id) : { nome: "", telefone: "" };
-  const [nome, setNome] = useState(m.nome); const [tel, setTel] = useState(m.telefone || "");
+  const { R, st, executar, setModal, toast } = useApp() as any;
+  const m = id ? st.montadores.find((x: any) => x.id === id) : { nome: "", telefone: "", regiao: "", conta: null };
+  const verConta = R.ehGestao() || R.ehPosvenda();
+  const [nome, setNome] = useState(m.nome); const [tel, setTel] = useState(m.telefone || ""); const [reg, setReg] = useState(m.regiao || "");
+  const [ct, setCt] = useState<any>({ ...CONTA_VAZIA, ...(m.conta || {}) });
+  const c = (k: string) => (e: any) => setCt((x: any) => ({ ...x, [k]: e.target.value }));
   const fechar = () => setModal(null);
+  const salvar = async () => {
+    if (!nome.trim()) { toast("Informe o nome"); return; }
+    if (await executar(() => A.montadorSalvar({ id, nome: nome.trim(), telefone: tel.trim(), regiao: reg.trim(), ...(verConta ? { conta: ct } : {}) }), "Montador salvo")) fechar();
+  };
   return (
     <Modal titulo={id ? "Editar montador" : "Novo montador"} onFechar={fechar}>
-      <div className="field" style={{ marginBottom: 14 }}><label>Nome <span className="req-star">*</span></label><input value={nome} onChange={e => setNome(e.target.value)} /></div>
-      <div className="field" style={{ marginBottom: 20 }}><label>Telefone / WhatsApp</label><input value={tel} onChange={e => setTel(e.target.value)} /></div>
-      <button className="btn primary" onClick={async () => { if (!nome.trim()) { toast("Informe o nome"); return; } if (await executar(() => A.salvarMontador(id, nome.trim(), tel.trim()), "Montador salvo")) fechar(); }}>Salvar</button>
+      <div className="grid">
+        <div className="field full"><label>Nome <span className="req-star">*</span></label><input value={nome} onChange={e => setNome(e.target.value)} /></div>
+        <div className="field"><label>Telefone / WhatsApp</label><input value={tel} onChange={e => setTel(e.target.value)} placeholder="(41) 99999-9999" /></div>
+        <div className="field"><label>Região preferencial <span className="hint">(só para controle)</span></label><input value={reg} onChange={e => setReg(e.target.value)} placeholder="Ex.: Curitiba Sul, São José, Litoral" /></div>
+      </div>
+      {verConta && <>
+        <div className="sec-label" style={{ marginTop: 14 }}>Conta para pagamento <span className="hint" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}> (visível só para o Pós-venda e a Gestão)</span></div>
+        <div className="grid">
+          <div className="field"><label>Titular da conta</label><input value={ct.titular} onChange={c("titular")} placeholder="Nome do titular" /></div>
+          <div className="field"><label>CPF / CNPJ do titular</label><input value={ct.docTitular} onChange={c("docTitular")} /></div>
+          <div className="field"><label>Banco</label><input value={ct.banco} onChange={c("banco")} placeholder="Ex.: 260 · Nubank" /></div>
+          <div className="field"><label>Tipo de conta</label><select value={ct.tipoConta} onChange={c("tipoConta")}><option value="corrente">Conta corrente</option><option value="poupanca">Poupança</option><option value="pagamento">Conta de pagamento</option></select></div>
+          <div className="field"><label>Agência</label><input value={ct.agencia} onChange={c("agencia")} /></div>
+          <div className="field"><label>Conta (com dígito)</label><input value={ct.conta} onChange={c("conta")} /></div>
+          <div className="field"><label>Tipo de chave Pix</label><select value={ct.pixTipo} onChange={c("pixTipo")}><option value="">Sem Pix</option><option value="cpf">CPF</option><option value="cnpj">CNPJ</option><option value="telefone">Telefone</option><option value="email">E-mail</option><option value="aleatoria">Chave aleatória</option></select></div>
+          {ct.pixTipo && <div className="field"><label>Chave Pix</label><input value={ct.pixChave} onChange={c("pixChave")} /></div>}
+          <div className="field full"><label>Observação</label><input value={ct.obs} onChange={c("obs")} placeholder="Ex.: pagar na conta da empresa MEI" /></div>
+        </div>
+        {m.conta && m.conta.atualizadoPor && <div className="hint" style={{ marginTop: 6 }}>Conta atualizada por {m.conta.atualizadoPor} em {fmtDateTime(m.conta.atualizadoEm)}</div>}
+      </>}
+      <div style={{ marginTop: 18 }}><button className="btn primary" onClick={salvar}>Salvar</button></div>
     </Modal>
   );
 }

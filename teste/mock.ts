@@ -66,7 +66,7 @@ export function estadoMock(): Estado {
     reembolsos: [],
     ckBloqueios: [{ id: 1, projetista: "", inicio: new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10) + "T00:00", fim: new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10) + "T00:00", motivo: "Feriado", obs: "teste", criadoPor: "Bruno" },
       { id: 2, projetista: "Angela", inicio: new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10) + "T15:00", fim: new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10) + "T19:00", motivo: "Consulta", obs: "", criadoPor: "Bruno" }],
-    montadores: [{ id: "m1", nome: "João Montador", telefone: "41999990011", ativo: true }, { id: "m2", nome: "Carlos Montador", telefone: "", ativo: true }],
+    montadores: [{ id: "m1", nome: "João Montador", telefone: "41999990011", regiao: "Curitiba Sul", ativo: true, conta: { titular: "João Montador", docTitular: "000.000.000-00", banco: "Banco Teste", agencia: "0001", conta: "12345-6", tipoConta: "corrente", pixTipo: "telefone", pixChave: "41999990011", obs: "" } }, { id: "m2", nome: "Carlos Montador", telefone: "", regiao: "", ativo: true, conta: null }],
     chamados: (seed as any[]).concat(POSVENDA).concat(MEDIDAS).concat(CHECKLIST).map(c => ({
       id: c.id, tipo: c.tipo, setorDestino: c.sd, status: c.st, criadoEm: H(c.cr).toISOString(), slaResposta: H(c.sla).toISOString(),
       solicitanteId: c.sol, solicitante: c.soln, setor: c.sols, cliente: c.cli, clienteDoc: c.doc, telefone: c.tel, email: c.em, pedido: c.ped,

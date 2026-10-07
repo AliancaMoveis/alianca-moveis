@@ -61,7 +61,14 @@ export const PV_RESP: Record<string, string> = {
   analise: "Em análise", montador: "Montador", medida: "Projeto — erro de medição", checklist: "Projeto — falha no checklist",
   fabrica: "Fábrica", transporte: "Transporte / entrega", cliente: "Cliente (mau uso)", nenhum: "Sem responsável",
 };
-export const PV_ORIGEM: Record<string, string> = { cliente: "Cliente reclamou", montador: "Montador pediu suporte na obra" };
+export const PV_ORIGEM: Record<string, string> = { cliente: "Solicitação do cliente", montador: "Solicitação do montador" };
+/** situação do montador na obra (solicitação do montador) */
+export const PV_SITUACAO: Record<string, string> = {
+  parado: "🚨 Parado na obra — não consegue continuar", peca_faltante: "Peça faltante", peca_defeito: "Peça com defeito / avariada",
+  medida: "Medida não confere", duvida_projeto: "Dúvida de projeto", local: "Problema no local (obra, elétrica, hidráulica)", outro: "Outro",
+};
+/** link do WhatsApp: número com DDD (sem 55 → acrescenta) */
+export const linkWhats = (tel: string, texto = "") => { let d = String(tel || "").replace(/\D/g, ""); if (d.length < 10) return ""; if (!d.startsWith("55") || d.length <= 11) d = "55" + d; return "https://wa.me/" + d + (texto ? "?text=" + encodeURIComponent(texto) : ""); };
 export const PV_ENCAMINHAR: Record<string, string> = { vistoria: "Solicitar vistoria", assistencia: "Solicitar assistência (peça + montador)", montagem: "Nova montagem / retorno do montador", medidas: "Conferir medidas", checklist: "Revisar projeto (checklist)", prazo_fabrica: "Cobrar fábrica (prazo)" };
 export const corDoSetor = (id: string) => COR_SETOR[id] || "#8b94a3";
 // conta como venda: o que já foi pago e efetivado (100% promissória ainda não pago não conta; entrada + promissória conta a parte paga)

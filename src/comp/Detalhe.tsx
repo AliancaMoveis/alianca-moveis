@@ -5,12 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import {
-  EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, PV_DESFECHO, PV_ENCAMINHAR, PV_ORIGEM, PV_REEMB, pvPrazo, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, PV_DESFECHO, PV_ENCAMINHAR, PV_ORIGEM, PV_REEMB, PV_SITUACAO, pvPrazo, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
 import { SeloMedidas } from "../telas/Medidas";
-import { CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
+import { BotaoWhats } from "./Whats";
+import { cfgAgenda, CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
@@ -808,7 +809,7 @@ function TratPosvenda({ c }: any) {
   const venda = c.vinculadoA ? st.chamados.find((x: any) => x.id === c.vinculadoA) : null;
   const ini = () => ({
     categoria: p.categoria || "", responsabilidade: p.responsabilidade || "analise", montadorId: p.montadorId || "", medidorResp: p.medidorResp || "",
-    checklistResp: p.checklistResp || "", ocorrido: p.ocorrido || "", solucao: p.solucao || "",
+    checklistResp: p.checklistResp || "", projetistaChecklist: p.projetistaChecklist || "", situacao: p.situacao || "", ocorrido: p.ocorrido || "", solucao: p.solucao || "",
     custo: p.custo ? String(p.custo).replace(".", ",") : "", custoDesc: p.custoDesc || "", descontoMontador: p.descontoMontador ? String(p.descontoMontador).replace(".", ",") : "",
     prazo: p.prazo ? paraLocal(p.prazo) : "", desfecho: p.desfecho || "", paradoObra: !!p.paradoObra, descontoStatus: p.descontoStatus || "",
     reembolsoStatus: p.reembolsoStatus || "", reembolsoValor: p.reembolsoValor ? String(p.reembolsoValor).replace(".", ",") : "", reembolsoPagoEm: p.reembolsoPagoEm || "",
@@ -819,6 +820,7 @@ function TratPosvenda({ c }: any) {
   const [encTxt, setEncTxt] = useState("");
   const s = (k: string) => (e: any) => setV((x: any) => ({ ...x, [k]: e.target.value }));
   const montadores = (st.montadores || []).filter((m: any) => m.ativo || m.id === v.montadorId);
+  const projs: string[] = cfgAgenda(st).projetistas || [];
   if (!R.podeVerPosvenda()) return <div className="resp-box"><h4>Pós-venda Projetados</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>A análise deste atendimento (responsabilidade, montador e custos) é vista só pelo Pós-venda e pela Gestão.</div></div>;
   const r = v.responsabilidade;
   const salvar = () => {
@@ -842,10 +844,13 @@ function TratPosvenda({ c }: any) {
   return (
     <>
       <div className="resp-box"><h4>1 · Relato do problema</h4>
-        <RowSb k="Quem acionou">{PV_ORIGEM[p.origem || "cliente"]}{p.origem === "montador" && p.montadorId ? " · " + R.nomeMontador(p.montadorId) : ""}{p.paradoObra && c.status !== "concluida" ? <span className="badge b-urgente" style={{ marginLeft: 8 }}>🚨 parado na obra</span> : null}</RowSb>
+        <RowSb k="Solicitação"><b>{p.origem === "montador" ? "🔧 " : "👤 "}{PV_ORIGEM[p.origem || "cliente"]}</b>{p.paradoObra && c.status !== "concluida" ? <span className="badge b-urgente" style={{ marginLeft: 8 }}>🚨 parado na obra</span> : null}</RowSb>
+        {p.origem === "montador" && p.montadorId && (() => { const m = (st.montadores || []).find((x: any) => x.id === p.montadorId); return <RowSb k="Montador"><span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{R.nomeMontador(p.montadorId)}</b>{m && m.regiao ? <span className="hint">· {m.regiao}</span> : null}{m && m.telefone ? <BotaoWhats tel={m.telefone} texto={"Olá, " + m.nome.split(" ")[0] + "! Aqui é do Pós-venda da Aliança Móveis, sobre a obra de " + c.cliente + (c.pedido ? " (venda " + c.pedido + ")" : "") + "."} /> : <span className="hint">sem telefone no cadastro</span>}</span></RowSb>; })()}
+        {p.origem === "montador" && p.situacao && <RowSb k="Situação">{PV_SITUACAO[p.situacao] || p.situacao}</RowSb>}
+        {p.projetistaChecklist && <RowSb k="Projetista do checklist">{p.projetistaChecklist}</RowSb>}
         {venda && <RowSb k="Venda ligada"><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(venda.id); }}>{venda.cliente}</a>{venda.pedido ? " · nº " + venda.pedido : ""}{[venda.atendenteId && "vendedor " + R.nomeUser(venda.atendenteId), venda.consultorId && "consultor " + R.nomeUser(venda.consultorId), venda.medidorId && "medidor " + R.nomeUser(venda.medidorId)].filter(Boolean).map((x: any) => " · " + x).join("")}</RowSb>}
         {p.pecaAfetada && <RowSb k="Ambiente / peça">{p.pecaAfetada}</RowSb>}
-        <RowSb k="Relato">{c.motivo}</RowSb>
+        <RowSb k={p.origem === "montador" ? "O que o montador descreveu" : "Relato"}>{c.motivo}</RowSb>
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>O relato fica como foi registrado na abertura. Fotos e vídeos do cliente: bloco “Comprovações / anexos”, abaixo.</div>
       </div>
       <div className="resp-box"><h4>2 · Análise {r !== "analise" ? <span className="badge b-concluida" style={{ marginLeft: 8 }}>{PV_RESP[r]}</span> : <span className="badge b-tratativa" style={{ marginLeft: 8 }}>em análise</span>}</h4>
@@ -854,7 +859,10 @@ function TratPosvenda({ c }: any) {
           <Sel k="responsabilidade" label="De quem é a responsabilidade">{Object.entries(PV_RESP).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel>
           <Sel k="montadorId" label={r === "montador" ? "Montador responsável" : "Montador que montou"} req={r === "montador"}><option value="">Não informado</option>{montadores.map((m: any) => <option key={m.id} value={m.id}>{m.nome}{m.ativo ? "" : " (inativo)"}</option>)}</Sel>
           {(r === "medida" || v.medidorResp) && <Sel k="medidorResp" label="Quem fez a medição" req={r === "medida"}><option value="">Não informado</option>{R.medidores().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</Sel>}
-          <Sel k="checklistResp" label="Quem fez o checklist" req={r === "checklist"}><option value="">Não informado</option>{R.responsaveisChecklist().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</Sel>
+          <div className="field"><label>Projetista que fez o checklist</label><select value={projs.includes(v.projetistaChecklist) || !v.projetistaChecklist ? v.projetistaChecklist : "__x"} onChange={e => { const x = e.target.value; if (x === "__outro") { const n = prompt("Nome do projetista"); if (n && n.trim()) setV((y: any) => ({ ...y, projetistaChecklist: n.trim() })); return; } if (x !== "__x") setV((y: any) => ({ ...y, projetistaChecklist: x })); }}>
+            <option value="">Não informado</option>{projs.map((n: string) => <option key={n} value={n}>{n}</option>)}{v.projetistaChecklist && !projs.includes(v.projetistaChecklist) && <option value="__x">{v.projetistaChecklist}</option>}<option value="__outro">＋ Outro (digitar)</option></select></div>
+          {p.origem === "montador" && <Sel k="situacao" label="Situação do montador"><option value="">Não informada</option>{Object.entries(PV_SITUACAO).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel>}
+          <Sel k="checklistResp" label="Quem fez o checklist (usuário do 360)" req={r === "checklist"}><option value="">Não informado</option>{R.responsaveisChecklist().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</Sel>
           <div className="field"><label>Resolver até <span className="hint">(prazo que você define)</span></label><input type="datetime-local" value={v.prazo} onChange={s("prazo")} />{pvPrazo(c) === "vencido" && <span className="hint" style={{ color: "var(--danger)" }}>Prazo vencido — cobre ou redefina.</span>}</div>
           {(p.origem === "montador" || v.paradoObra) && <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={!!v.paradoObra} onChange={e => setV((x: any) => ({ ...x, paradoObra: e.target.checked }))} /><span>🚨 Montador parado na obra</span></label>}
           <div className="field full"><label>O que foi constatado</label><textarea value={v.ocorrido} onChange={s("ocorrido")} placeholder="Depois de falar com o cliente/montador ou da vistoria: o que de fato aconteceu e por quê"></textarea></div>
