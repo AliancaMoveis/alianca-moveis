@@ -57,7 +57,10 @@ export function AppProvider({ uid, inicial, children, overlays }: { uid: string;
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "historico" }, () => { clearTimeout(t); t = setTimeout(recarregar, 700); })
       .subscribe();
     const iv = setInterval(() => { recarregar(); setTick(x => x + 1); }, 30000);
-    return () => { sb.removeChannel(ch); clearInterval(iv); clearTimeout(t); };
+    // celular: ao voltar para o app (estava em segundo plano), atualiza na hora
+    const vis = () => { if (document.visibilityState === "visible") { recarregar(); setTick(x => x + 1); } };
+    document.addEventListener("visibilitychange", vis);
+    return () => { sb.removeChannel(ch); clearInterval(iv); clearTimeout(t); document.removeEventListener("visibilitychange", vis); };
   }, [recarregar]);
 
   const ctx: Ctx = {
