@@ -164,8 +164,10 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       }
       // planilha de agendados: mostra antes quem é novo, quem tem mais de um dia e quem já está no 360
       const jaTem = new Set(st.chamados.filter((c: any) => c.tipo === "checklist").map((c: any) => String(c.pedido)));
-      const dias = await A.checklistAgendadosPlanilha(dados, false, true, true);
-      setModal(<ModalAgendados dados={dados} prev={dias} novos={dados.filter(d => d.agendadoPara && !jaTem.has(String(d.numero || "").replace(/\D/g, "")))} />);
+      // só as linhas COM data: linha sem data na planilha de agendados não entra como "a agendar"
+      const agendados = dados.filter(d => d.agendadoPara);
+      const dias = await A.checklistAgendadosPlanilha(agendados, false, true, true);
+      setModal(<ModalAgendados dados={agendados} semData={dados.length - agendados.length} prev={dias} novos={agendados.filter(d => !jaTem.has(String(d.numero || "").replace(/\D/g, "")))} />);
     } catch (e: any) { toast(e.message || "Não foi possível importar"); }
     finally { setImportando(false); if (arq.current) arq.current.value = ""; }
   }
@@ -609,7 +611,7 @@ export function ModalNaoPodeVir({ c }: any) {
 }
 /** prévia da planilha "a agendar": novos, mantidos, que viram agendados e que serão excluídos */
 /** prévia da planilha de AGENDADOS: novos, clientes com mais de um dia (identificados na coluna Data do Agendamento) e quem já está no 360 */
-function ModalAgendados({ dados, prev, novos }: { dados: any[]; prev: any; novos: any[] }) {
+function ModalAgendados({ dados, prev, novos, semData = 0 }: { dados: any[]; prev: any; novos: any[]; semData?: number }) {
   const { setModal, toast, recarregar } = useApp() as any;
   const [sal, setSal] = useState(false); const [ver, setVer] = useState("");
   const [trocar, setTrocar] = useState(true); const [corrigir, setCorrigir] = useState(true); const [forcar, setForcar] = useState(false);
@@ -646,6 +648,7 @@ function ModalAgendados({ dados, prev, novos }: { dados: any[]; prev: any; novos
       <L id="l" n={prev.liberar} t="agendados no 360 (de hoje em diante) que NÃO estão na planilha" cor="var(--danger)" lista={prev.listaLiberar} />
       <L id="v" n={varios.length} t={<>linhas com <b>mais de um dia</b> (cada data = um dia, cada nome da Agenda = um dia)</>} lista={varios.map(d => `${d.cliente} · venda ${d.numero} — ${dias(d)}`)} />
       {(prev.desconhecidos || []).length > 0 && <div className="hint" style={{ color: "var(--warn)", marginTop: 8 }}>⚠️ Nomes na coluna Agenda que não são projetistas da agenda (ficam sem projetista): <b>{prev.desconhecidos.join(", ")}</b></div>}
+      {semData > 0 && <div className="hint" style={{ marginTop: 4 }}>{semData} linha(s) da planilha sem “Data do Agendamento” foram ignoradas (não entram no 360 por esta importação).</div>}
       {semAgenda.length > 0 && <div className="hint" style={{ marginTop: 4 }}>{semAgenda.length} linha(s) com data e sem nome na coluna Agenda.</div>}
       <div style={{ marginTop: 10, padding: 10, background: "var(--surface-2)", borderRadius: 10 }}>
         <Chk v={trocar} set={setTrocar}>Atualizar o <b>projetista</b> dos já agendados conforme a coluna <b>Agenda</b></Chk>
