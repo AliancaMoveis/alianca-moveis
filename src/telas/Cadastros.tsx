@@ -61,6 +61,10 @@ export function Admin() {
   const [sub, setSub] = useState("usuarios");
   const [pct, setPct] = useState(String(st.config.comissaoPct)); const [pag, setPag] = useState(String(st.config.pagamentoVisita)); const [vmk, setVmk] = useState(String((st.config as any).valorVendaMkt ?? 10));
   const ativos = st.usuarios.filter(u => u.ativo), inativos = st.usuarios.filter(u => !u.ativo);
+  const [buscaU, setBuscaU] = useState("");
+  const semAc = (t: string) => (t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const casaU = (u: any) => { const q = semAc(buscaU.trim()); if (!q) return true; return semAc([u.nome, u.email, ...(u.setores || []).map((id: string) => R.setorNome(id))].join(" ")).includes(q); };
+  const ativosF = ativos.filter(casaU), inativosF = inativos.filter(casaU);
   const linhaUser = (u: any) => (
     <div className="fab" key={u.id} style={u.ativo ? undefined : { opacity: .6 }}><div className="fi">{inicial(u.nome)}</div>
       <div><div className="fn">{u.nome} {u.id === R.currentUserId && <span style={{ color: "var(--ink-faint)", fontWeight: 400 }}>(logado)</span>}{!u.ativo && <span className="pill" style={{ marginLeft: 6 }}>desativado</span>}</div>
@@ -77,7 +81,8 @@ export function Admin() {
       <div className="view-head"><div><h2>Administração</h2><p>Usuários, setores e roteamento. Acesso restrito a quem tem a liberação de Administração.</p></div></div>
       <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"], ["agendaloja", "Agenda da loja (tela aberta)"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
       {sub === "usuarios" && <div id="subUsuarios"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditUser id={null} />)}>Adicionar usuário</button></div>
-        <div id="listaUser">{ativos.length ? ativos.map(linhaUser) : <div className="empty">Ninguém cadastrado.</div>}{inativos.length > 0 && <><div className="sec-label" style={{ marginTop: 18 }}>Desativados</div>{inativos.map(linhaUser)}</>}</div></div>}
+        <div style={{ marginBottom: 14, maxWidth: 420 }}><input type="search" placeholder="🔍 Buscar por nome, e-mail ou setor" value={buscaU} onChange={e => setBuscaU(e.target.value)} /></div>
+        <div id="listaUser">{ativosF.length ? ativosF.map(linhaUser) : <div className="empty">{buscaU.trim() ? "Nenhum usuário encontrado." : "Ninguém cadastrado."}</div>}{inativosF.length > 0 && <><div className="sec-label" style={{ marginTop: 18 }}>Desativados</div>{inativosF.map(linhaUser)}</>}</div></div>}
       {sub === "setores" && <div id="subSetores"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditSetor id={null} />)}>Adicionar setor</button></div>
         <div id="listaSetores">{st.setores.map(s => {
           const n = ativos.filter(u => (u.setores || []).includes(s.id)).length;
