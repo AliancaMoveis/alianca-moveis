@@ -647,6 +647,7 @@ function FinalizarAtend({ c }: any) {
     <div style={{ margin: "12px 0" }}>
       {!abrir ? <button className="btn primary" onClick={() => setAbrir(true)}>{titulo}</button>
         : <div className="resp-box" style={{ borderColor: "var(--st-concluida)" }}><h4>{titulo}</h4>
+          {c.tipo === "solicitacao_medida" && !(c.tratativa || {}).ordemMedida && <div className="ro-note" style={{ marginBottom: 8, background: "#fff1d6", borderColor: "#e0a84a", color: "#7a4a00" }}>⚠️ Ainda <b>não foi encaminhado para medir</b>. Se o cliente precisa de medição, use “📐 Encaminhar para medir” antes de finalizar — senão a medida não entra na fila.</div>}
           <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 8px" }}>{passaCC ? "O chamado vai para “Informar cliente”: o call center avisa o cliente e encerra." : "Encerra o atendimento. O texto fica no histórico do cliente."}</p>
           <div className="field"><textarea value={tx} onChange={e => setTx(e.target.value)} placeholder={passaCC ? "Solução / previsão para o call center passar ao cliente" : "O que foi resolvido / informado ao cliente"} /></div>
           <div className="row" style={{ gap: 8, marginTop: 8 }}>
