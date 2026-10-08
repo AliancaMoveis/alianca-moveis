@@ -1115,3 +1115,12 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .mv-pc .mv-receber{max-width:none}
 .mv-pc .mv-funil{max-width:900px}
 .mv-pc .mv-barra{grid-template-columns:220px 1fr 50px}
+/* agenda da loja: ver imagens */
+.ap-ver{display:block;width:max-content;margin-top:6px;align-self:flex-start;border:1px solid #2f5aa0;background:#eef3fb;color:#1e3a6e;border-radius:8px;padding:5px 10px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.ap-modal-c.ap-galeria{max-width:900px;width:94vw}
+.ap-imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;max-height:60vh;overflow:auto;margin:6px 0}
+.ap-imgs img{width:100%;height:150px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid #ddd}
+.ap-arq{display:block;padding:8px 10px;border:1px solid #ddd;border-radius:8px;text-decoration:none;color:#1e3a6e;font-weight:600;margin-bottom:6px}
+.ap-zoom{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:200;cursor:zoom-out}
+.ap-zoom img{max-width:96vw;max-height:94vh;border-radius:6px}
+.ap-ver:disabled{border-color:#d5d9e0;background:#f3f4f6;color:#9aa1ad;cursor:not-allowed}

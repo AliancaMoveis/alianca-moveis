@@ -29,6 +29,9 @@ export default function AgendaPublica() {
   const [sel, setSel] = useState("");                     // id do vendedor ou "outro"
   const [outro, setOutro] = useState("");
   const [vendedores, setVendedores] = useState<any[]>([]);
+  const [qtd, setQtd] = useState<Record<string, number>>({});   // nº de imagens/arquivos por cliente
+  const [ver, setVer] = useState<any>(null);                     // "Ver imagens": { x, sel, passo: nome | confirmar | ok, programado, arquivos }
+  const [zoom, setZoom] = useState("");
   useEffect(() => { if (token) A.agendaPublicaVendedores(token).then(setVendedores).catch(() => setVendedores([])); }, []);
   useEffect(() => { if (!aviso) return; const t = setTimeout(() => setAviso(null), 6000); return () => clearTimeout(t); }, [aviso]);
   const dia = (() => { const d = new Date(); d.setDate(d.getDate() + off); return d; })();
@@ -36,8 +39,8 @@ export default function AgendaPublica() {
   useEffect(() => { document.title = "Agenda da loja · Aliança Móveis"; const t = setInterval(() => setAgora(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
     let vivo = true;
-    const carregar = () => A.agendaPublicaDia(token, diaIso).then(r => { if (vivo) { setDados(r); setErro(""); setAtualizado(new Date()); } })
-      .catch((e: any) => { if (vivo) { setErro(e.message || "Não foi possível carregar"); setDados(d => d || []); } });
+    const carregar = () => { A.agendaPublicaAnexosQtd(token, diaIso).then(q => { if (vivo) setQtd(q || {}); }).catch(() => null); return A.agendaPublicaDia(token, diaIso).then(r => { if (vivo) { setDados(r); setErro(""); setAtualizado(new Date()); } })
+      .catch((e: any) => { if (vivo) { setErro(e.message || "Não foi possível carregar"); setDados(d => d || []); } }); };
     setDados(null); carregar();
     const t = setInterval(carregar, 60000);
     return () => { vivo = false; clearInterval(t); };
@@ -84,6 +87,21 @@ export default function AgendaPublica() {
     } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível assumir" }); }
     finally { setEnviando(""); }
   };
+  const abrirVer = (x: any) => { const v = vendedores.find(y => soNome(y.nome) === soNome(x.vendedor || "")); setVer({ x, sel: v ? v.id : "", passo: "nome" }); };
+  const verImagens = async (assumir: boolean) => {
+    const v = ver; if (!v || !v.sel) { setAviso({ ok: false, t: "Selecione o seu nome" }); return; }
+    setEnviando(v.x.id);
+    try {
+      const r = await A.agendaPublicaImagens(token, v.x.id, v.sel, assumir);
+      if (r && r.confirmar) { setVer({ ...v, passo: "confirmar", programado: r.programado || "" }); return; }
+      setVer({ ...v, passo: "ok", arquivos: r.arquivos || [] });
+      if (r.trocou) {
+        setDados(d => (d || []).map(y => y.id === v.x.id ? { ...y, vendedor: r.nome, situacao: y.situacao === "sem_vendedor" ? "com_vendedor" : y.situacao, pedido_vendedor: "" } : y));
+        setAviso({ ok: true, t: "✓ " + soNome(r.nome) + " agora é o projetista de " + v.x.cliente + "." });
+      }
+    } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível abrir as imagens" }); }
+    finally { setEnviando(""); }
+  };
   const podeAvisar = (x: any) => ehHoje && ["sem_vendedor", "com_vendedor", "em_atendimento"].includes(x.situacao);
   const proximoIdx = ehHoje ? lv.findIndex(x => min(x.hora) >= hhmm - 15 && podeAvisar(x)) : -1;
   return (
@@ -113,7 +131,8 @@ export default function AgendaPublica() {
                 <div className="ap-hora">{x.hora}{i === proximoIdx && <small>próximo</small>}</div>
                 <div className={"ap-origem " + x.origem}>{x.origem === "marketing" ? "Marketing" : "Externo"}</div>
                 <div className="ap-cli"><b>{x.cliente}</b>
-                  <span>{x.consultor ? "Consultor: " + soNome(x.consultor) : "Agendado pelo marketing"}{x.quer_projeto ? " · 📐 quer projeto" : ""}</span></div>
+                  <span>{x.consultor ? "Consultor: " + soNome(x.consultor) : "Agendado pelo marketing"}{x.quer_projeto ? " · 📐 quer projeto" : ""}</span>
+                  <button className="ap-ver" disabled={!qtd[x.id]} title={qtd[x.id] ? "" : "Nenhuma imagem anexada"} onClick={() => qtd[x.id] && abrirVer(x)}>🖼 {qtd[x.id] ? "Ver imagens (" + qtd[x.id] + ")" : "Sem imagens"}</button></div>
                 <div className="ap-vend">{x.vendedor ? <><small>{x.externo ? "Freelancer" : "Vendedor"}</small><b>{soNome(x.vendedor)}</b>{x.assumido ? <span className="ap-assumido">{x.externo ? "sem cadastro · assumiu na fila" : "assumiu na fila"}</span> : null}</>
                   : x.pedido_vendedor ? <><small>Aguardando aprovação</small><b className="pedido">{soNome(x.pedido_vendedor)}</b></>
                   : x.situacao === "sem_vendedor" ? <b className="semv">Sem vendedor · fila</b> : <b>—</b>}</div>
@@ -144,6 +163,37 @@ export default function AgendaPublica() {
           <button className="ap-confirmar" disabled={enviando === escolher.id || !sel || (sel === "outro" && outro.trim().length < 2)} onClick={assumir}>{enviando === escolher.id ? "Assumindo…" : "✋ Assumir atendimento"}</button>
           <button className="ap-cancelar" onClick={() => setEscolher(null)}>Cancelar</button>
         </div></div>}
+      {ver && <div className="ap-modal" onClick={() => setVer(null)}>
+        <div className={"ap-modal-c" + (ver.passo === "ok" ? " ap-galeria" : "")} onClick={e => e.stopPropagation()}>
+          {ver.passo === "nome" && <>
+            <b>Imagens de {ver.x.cliente}</b>
+            <span>Confirme quem vai fazer o projeto. {ver.x.vendedor ? <>Projetista programado: <b>{soNome(ver.x.vendedor)}</b>.</> : "Este cliente ainda está sem projetista."}</span>
+            <label className="ap-campo">Seu nome
+              <select value={ver.sel} onChange={e => setVer({ ...ver, sel: e.target.value })} autoFocus>
+                <option value="">Selecione…</option>
+                {vendedores.map(v => <option key={v.id} value={v.id}>{soNome(v.nome)}</option>)}
+              </select></label>
+            <button className="ap-confirmar" disabled={!ver.sel || enviando === ver.x.id} onClick={() => verImagens(false)}>{enviando === ver.x.id ? "Abrindo…" : "🖼 Ver imagens"}</button>
+            <button className="ap-cancelar" onClick={() => setVer(null)}>Cancelar</button>
+          </>}
+          {ver.passo === "confirmar" && <>
+            <b>Você vai assumir este projeto?</b>
+            <span>{ver.programado ? <>O projetista programado para <b>{ver.x.cliente}</b> é <b>{soNome(ver.programado)}</b>.</> : <><b>{ver.x.cliente}</b> está sem projetista.</>} Se você abrir as imagens, <b>o projeto passa para o seu nome</b>{ver.programado ? " e " + soNome(ver.programado) + " e a coordenação são avisados" : " e a coordenação é avisada"}.</span>
+            <button className="ap-confirmar" disabled={enviando === ver.x.id} onClick={() => verImagens(true)}>{enviando === ver.x.id ? "Assumindo…" : "✋ Sim, vou assumir o projeto"}</button>
+            <button className="ap-cancelar" onClick={() => setVer({ ...ver, passo: "nome" })}>Voltar</button>
+          </>}
+          {ver.passo === "ok" && <>
+            <b>Imagens de {ver.x.cliente}</b>
+            <span>Links válidos por 10 minutos. Toque numa imagem para ampliar.</span>
+            <div className="ap-imgs">
+              {(ver.arquivos || []).filter((a: any) => a.tipo === "img").map((a: any, i: number) => <img key={i} src={a.url} alt={a.nome || ""} onClick={() => setZoom(a.url)} />)}
+            </div>
+            {(ver.arquivos || []).filter((a: any) => a.tipo !== "img").map((a: any, i: number) => <a key={i} className="ap-arq" href={a.url} target="_blank" rel="noopener">{a.tipo === "pdf" ? "📄" : a.tipo === "video" ? "🎬" : "🔗"} {a.nome || (a.tipo === "pdf" ? "Planta (PDF)" : a.tipo === "video" ? "Vídeo" : "Link")}</a>)}
+            {!(ver.arquivos || []).length && <span>Nenhuma imagem anexada.</span>}
+            <button className="ap-cancelar" onClick={() => setVer(null)}>Fechar</button>
+          </>}
+        </div></div>}
+      {zoom && <div className="ap-zoom" onClick={() => setZoom("")}><img src={zoom} alt="" /></div>}
       {aviso && <div className={"ap-toast" + (aviso.ok ? "" : " erro")} onClick={() => setAviso(null)}>{aviso.t}</div>}
       <footer className="ap-rod">{erro ? <span style={{ color: "#c24a4a" }}>Sem conexão — tentando de novo… </span> : null}Atualizado às {atualizado ? atualizado.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"} · atualiza sozinho a cada minuto</footer>
     </div>

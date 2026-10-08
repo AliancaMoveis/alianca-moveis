@@ -115,6 +115,18 @@ export const A = {
     if ((import.meta as any).env?.VITE_MOCK) return { avisados: 1, vendedor: true };
     return rpc<any>("agenda_publica_avisar", { p_token: token, p_id: id });
   },
+  agendaPublicaAnexosQtd: async (token: string, dia: string): Promise<Record<string, number>> => {
+    if ((import.meta as any).env?.VITE_MOCK) return Object.fromEntries((((window as any).__agendaPublicaMock || []) as any[]).map((x: any) => [x.id, 3]));
+    return (await rpc<any>("agenda_publica_anexos_qtd", { p_token: token, p_dia: dia })) || {};
+  },
+  // "Ver imagens" na tela da loja: confirma quem é; se não for o projetista programado, só abre com assumir = true
+  agendaPublicaImagens: async (token: string, id: string, vendedor: string, assumir: boolean): Promise<any> => {
+    if ((import.meta as any).env?.VITE_MOCK) return assumir || vendedor === "v1" ? { ok: true, nome: "Giovanna", trocou: assumir, arquivos: [{ tipo: "img", nome: "planta.jpg", url: "/logo.png" }, { tipo: "img", nome: "parede.jpg", url: "/icon-512.png" }] } : { confirmar: true, programado: "Giovanna" };
+    const { data, error } = await sb.functions.invoke("agenda-imagens", { body: { token, id, vendedor, assumir } });
+    if (error) { let m = error.message; try { const j = await (error as any).context.json(); if (j && j.erro) m = j.erro; } catch { /* */ } throw new Error(m); }
+    if (data && data.erro) throw new Error(data.erro);
+    return data;
+  },
   salvarModoTeste: (ligado: boolean) => rpc("salvar_modo_teste", { p_ligado: ligado }),
   retornoMontadorDefinir: (id: string, p: any) => rpc("retorno_montador_definir", { p_id: id, p }),
   montadorSalvar: (p: any) => rpc<string>("montador_salvar", { p }),
