@@ -12,6 +12,7 @@ import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, lin
 import { SeloMedidaVenda } from "../telas/Medidas";
 import { BotaoWhats, msgWhatsCliente, separarTelefones } from "./Whats";
 import { SelVendedor, confirmarDisp, registrarIndisp } from "./SelVendedor";
+import { TratJuridico } from "../telas/Setores";
 import { cfgAgenda, CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalFinalizarCk, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
@@ -149,7 +150,7 @@ function ClienteCard({ c }: any) {
 }
 
 function tratativaExiste(c: any, R: any) {
-  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "posvenda", "retorno_montador", "desmontagem_estofado", "erro_venda", "solicitacao_medida"].includes(c.tipo)) return true;
+  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "posvenda", "retorno_montador", "desmontagem_estofado", "erro_venda", "solicitacao_medida", "juridico"].includes(c.tipo)) return true;
   if (!R.domMarketing(c)) return false;
   return ["marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente"].includes(c.setorDestino);
 }
@@ -184,6 +185,7 @@ function Tratativa({ c }: any) {
     </div></div>;
   if (c.tipo === "desmontagem_estofado") return <TratDesmontagem c={c} />;
   if (c.tipo === "solicitacao_medida") return <TratSolicitacaoMedida c={c} />;
+  if (c.tipo === "juridico") return <TratJuridico c={c} />;
   if (c.tipo === "erro_venda") return <TratErroVenda c={c} />;
   if (c.tipo === "checklist") return <BlocoChecklist c={c} />;
   if (c.tipo === "medidas") return <div className="resp-box"><h4>Tratativa — Medidas</h4><div className="grid"><div className="field full"><label>Medidas informadas ao cliente</label><textarea value={v.medidas} onChange={s("medidas")} placeholder="Ex.: Largura 2,40m x altura 2,60m x profundidade 0,60m"></textarea></div></div><div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.confirmado} campo="confirmado" lOn="Confirmado com o cliente ✓" lOff="Confirmar com o cliente" /><button className="btn primary sm" onClick={() => salvar(["medidas"])}>Salvar tratativa</button></div></div>;

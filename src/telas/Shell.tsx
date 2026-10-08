@@ -20,12 +20,15 @@ import Checklist from "./Checklist";
 import Medidas from "./Medidas";
 import EncontrarVendas from "./EncontrarVendas";
 import Treino from "./Treino";
+import { Juridico, SetorFila, listaSetor } from "./Setores";
+import { SETORES_MENU } from "../lib/regras";
 import { Cadastros, Admin } from "./Cadastros";
 import Detalhe from "../comp/Detalhe";
 import { AlterarSenha } from "../comp/Modal";
 
 const DOTS: Record<string, string> = { definir: "dotDefinir", fila: "dotFila", direcionamento: "dotDirecionamento", aprovacoes: "dotAprovacoes", pendencias: "dotPendencias", md_callcenter: "dotMdCC", pv_clientes: "dotPvCli", pv_montadores: "dotPvMont" };
 
+const temDot = (v: string) => !!DOTS[v] || /^st_.+_(fila|mim|cc)$/.test(v) || v === "jur_prazos";
 export default function Shell() {
   const { R, st, view, irPara, detalheId, modal, setModal, toast } = useApp();
   const sim = simulacao();
@@ -61,6 +64,9 @@ export default function Shell() {
     const pvAb = R.state.chamados.filter(c => c.tipo === "posvenda" && ["aberta", "tratativa"].includes(c.status) && R.podeVer(c));
     n.pv_clientes = pvAb.filter(c => ((c as any).posvenda?.origem || "cliente") !== "montador").length;
     n.pv_montadores = pvAb.filter(c => (c as any).posvenda?.origem === "montador").length;
+    SETORES_MENU.forEach(([id]) => { n["st_" + id + "_fila"] = listaSetor(R, R.state, id, "fila").length; n["st_" + id + "_mim"] = listaSetor(R, R.state, id, "mim").length; });
+    n.st_checklist_cc = listaSetor(R, R.state, "checklist", "cc").length;
+    { const lim = new Date(); lim.setDate(lim.getDate() + 3); const li = lim.toISOString().slice(0, 10); n.jur_prazos = R.state.chamados.filter((c: any) => c.tipo === "juridico" && c.status !== "concluida" && R.podeVer(c) && (c.tratativa?.juridico?.prazo || "") && c.tratativa.juridico.prazo <= li).length; }
     n.md_callcenter = R.state.chamados.filter(c => c.tipo === "solicitacao_medida" && ["aberta", "tratativa"].includes(c.status) && R.podeVer(c)).length;
     return n;
   }, [R]);
@@ -82,7 +88,7 @@ export default function Shell() {
           <div className="side-rolar" id="tabs">
             {G.map((gr: any) => {
               const aberto = abertos.has(gr.g);
-              const soma = gr.itens.reduce((t: number, [v]: string[]) => t + (DOTS[v] ? contagens[v] || 0 : 0), 0);
+              const soma = gr.itens.reduce((t: number, [v]: string[]) => t + (temDot(v) && !v.endsWith("_mim") ? contagens[v] || 0 : 0), 0);
               return (
                 <div key={gr.g} className={"grupo" + (aberto ? " aberto" : "")} data-g={gr.g}>
                   <div className="gcab" onClick={() => clicarGrupo(gr.g)}>
@@ -94,7 +100,7 @@ export default function Shell() {
                     {gr.itens.map(([v, l]: string[]) => (
                       <div key={v} className={"it" + (v === atual ? " on" : "")} onClick={() => clicarItem(v, gr.g)}>
                         <span className="pt"></span>{l}
-                        {DOTS[v] && contagens[v] > 0 && <span className="dot" id={DOTS[v]} style={{ display: "inline-block" }}>{contagens[v]}</span>}
+                        {temDot(v) && contagens[v] > 0 && <span className="dot" id={DOTS[v] || "dot_" + v} style={{ display: "inline-block" }}>{contagens[v]}</span>}
                       </div>
                     ))}
                   </div>
@@ -156,6 +162,8 @@ export default function Shell() {
             {atual.startsWith("md_") && <Medidas key={atual} aba={atual.slice(3)} />}
             {atual === "encontrar_vendas" && R.podeEncontrarVendas() && <EncontrarVendas />}
             {atual === "treino" && <Treino />}
+            {atual.startsWith("st_") && (() => { const m = atual.match(/^st_(.+)_([a-z]+)$/); return m ? <SetorFila key={atual} setor={m[1]} aba={m[2]} /> : null; })()}
+            {atual.startsWith("jur_") && <Juridico key={atual} aba={atual.slice(4)} />}
           </main>
         </div>
       </div>

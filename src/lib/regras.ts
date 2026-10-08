@@ -34,6 +34,8 @@ export const MARKETING_SETORES = ["marketing_operadora", "marketing_supervisao",
 // status do cliente enquanto está com o vendedor (antes do desfecho)
 export const EM_ATENDIMENTO = ["com_vendedor", "orcamento", "sem_resposta", "reagendado", "em_obras", "standby", "em_analise"];
 export const LIMITE_INATIVIDADE_H = 24;
+/** setores que ganham menu próprio (o que o call center abre para eles vira a "Fila do setor") */
+export const SETORES_MENU: [string, string, string][] = [["montagem", "Montagem", "🔧"], ["assistencia", "Assistência", "🛠"], ["prazo_fabrica", "Solicitação Fábrica", "🏭"]];
 export const DIAS_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 /** Turnos dos vendedores (escala): manhã = entra 9:00, almoço 11:00–13:00 · tarde = entra 10:40, almoço 13:30–15:30 (minutos do dia) */
 export const TURNOS: Record<string, { rot: string; entra: number; almoco: [number, number] }> = {
@@ -222,7 +224,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const ehSetorMarketing = (id: string) => MARKETING_SETORES.includes(id);
   const domMarketing = (c: Chamado) => !!(TIPOS[c.tipo] && TIPOS[c.tipo].presale);
   // é do call center: não é marketing e não é de setor com módulo próprio (Checklist, Medidas, Pós-venda) — esses não viram pendência do call center
-  const TIPOS_FORA_CC = ["checklist", "medidas", "posvenda"];
+  const TIPOS_FORA_CC = ["checklist", "medidas", "posvenda", "juridico"];
   const doCC = (c: Chamado) => !domMarketing(c) && !TIPOS_FORA_CC.includes(c.tipo);
 
   function normalizarStatusCliente(c: Chamado) {
@@ -254,6 +256,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const u = me();
     if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || trPendPara(c) || (c.tipo === "erro_venda" && (c as any).tratativa?.erroVenda?.vendedorId === currentUserId);
     if (ehGestao()) return true;
+    if (c.tipo === "juridico") return mySetores().includes("juridico"); // caso jurídico: só o Jurídico e a Gestão
     if (domMarketing(c)) return temMarketing() || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
     if (verTudo()) return true;
     if (mySetores().includes("callcenter")) return true;
@@ -295,6 +298,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const t = TIPOS[k]; if (!t) return false;
     // ordem de medida: só o setor de Medidas (o call center abre "Solicitação de medidas")
     if (k === "medidas") return ehGestao() || mySetores().includes("medidas_supervisao");
+    if (k === "juridico") return false; // caso jurídico abre pelo menu Jurídico
     if (!temLib("criar")) return false;
     if (ehGestao()) return true;
     const ms = mySetores();
@@ -619,6 +623,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     add("retmont", "🔧 Retornos de montador para você", "O call center abriu um retorno do montador e escolheu você para tratar. Prioridade de atendimento.", ch.filter(c => c.tipo === "retorno_montador" && !["concluida", "respondida", "informar"].includes(c.status) && ((c as any).tratativa?.retorno?.atendenteId === eu)), "var(--critico)");
     add("errovend", "🚨 Erros de venda para você", "O call center registrou um erro na sua venda. Abra, corrija e escreva o que foi feito.", ch.filter(c => c.tipo === "erro_venda" && c.status !== "concluida" && (c as any).tratativa?.erroVenda?.vendedorId === eu && !((c as any).tratativa?.erroVenda?.respostas || []).length), "var(--critico)");
+    if (mySetores().includes("juridico")) add("jurprazo", "⚖️ Prazos jurídicos em até 3 dias", "Casos com prazo (Reclame Aqui, Procon, processo) vencendo. Atualize o caso.", ch.filter(c => c.tipo === "juridico" && c.status !== "concluida" && (() => { const d = String((c as any).tratativa?.juridico?.prazo || ""); if (!d) return false; const lim = new Date(); lim.setDate(lim.getDate() + 3); return d <= isoLocal(lim); })()), "var(--critico)");
     if (mySetores().includes("posvenda") || ehGestao()) add("pvcc", "📞 Pós-venda aberto pelo call center — sem resposta", "O call center abriu e o cliente aguarda. Trate a solicitação no Pós-venda.", ch.filter(c => c.tipo === "posvenda" && ["aberta", "tratativa"].includes(c.status) && /call center/i.test((c as any).setor || "")), "var(--critico)");
     if (mySetores().includes("supervisao")) {
       add("desmont", "🛋 Desmontagem de estofado", "Encaminhe para a Tatiana (depósito → Valdir, estofador), marque \"enviada ao estofador\" e finalize.", ch.filter(c => c.tipo === "desmontagem_estofado" && c.status !== "concluida"), "var(--warn)");
@@ -637,7 +642,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => doCC(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => doCC(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["retmont", "pvcc", "solmed", "acomp", "medalerta", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
+    const PRIORIDADE = ["jurprazo", "retmont", "pvcc", "solmed", "acomp", "medalerta", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));
@@ -674,10 +679,22 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // Medidas tem a própria "Fila do call center" (menu Medidas): não repete a "Minha fila" para quem é só de Medidas
     const temCC = mySetores().some((x: string) => !ehSetorMarketing(x) && !["supervisao", "gestao", "medidas", "medidas_supervisao"].includes(x));
     const temMkt = mySetores().some((x: string) => ehSetorMarketing(x));
+    // menu "Call center": só o call center, a Supervisão do call center e a Gestão. Os outros setores têm o menu do próprio setor.
+    const veCC = ehGestao() || mySetores().includes("callcenter") || mySetores().includes("supervisao");
     const cc: string[][] = [];
-    if (podeCriarCC()) cc.push(["nova", "Nova solicitação"]);
-    if (verTudo()) cc.push(["fila", "Acompanhamento"]); else if (temCC) cc.push(["fila", "Minha fila"]);
-    if (cc.length) { cc.push(["consulta", "Consulta"]); if (podeTreinamento()) cc.push(["treino", "Treinamento"]); G.push({ g: "Call center", ic: "☎", itens: cc }); }
+    if (veCC) {
+      if (podeCriarCC()) cc.push(["nova", "Nova solicitação"]);
+      if (verTudo()) cc.push(["fila", "Acompanhamento"]); else if (temCC) cc.push(["fila", "Minha fila"]);
+      if (cc.length) { cc.push(["consulta", "Consulta"]); if (podeTreinamento()) cc.push(["treino", "Treinamento"]); G.push({ g: "Call center", ic: "☎", itens: cc }); }
+    }
+    // menus por setor (o que vem do call center vira a fila do setor)
+    let abrirNoSetor = !veCC && podeCriarCC(), consultaNoSetor = !veCC;
+    SETORES_MENU.filter(([id]) => mySetores().includes(id)).forEach(([id, nome, ic]) => {
+      const it: string[][] = [["st_" + id + "_mim", "Para mim"], ["st_" + id + "_fila", "Fila do setor"], ["st_" + id + "_resolvidos", "Resolvidos"]];
+      if (abrirNoSetor) { it.push(["nova", "Abrir solicitação"]); abrirNoSetor = false; }
+      if (consultaNoSetor) { it.push(["consulta", "Consulta"]); consultaNoSetor = false; }
+      G.push({ g: nome, ic, itens: it });
+    });
     const mk: string[][] = []; let soMeusClientes = false;
     if (podeCriarMkt()) mk.push(["novocli", "Novo cliente"]);
     if (temMarketing() || ehGestao()) {
@@ -709,12 +726,16 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ehPosvenda() || ehGestao()) pv.push(["novopv_cli", "Nova solicitação do cliente"], ["novopv_mont", "Nova solicitação do montador"]);
     if (podeVerPosvenda()) pv.push(["pv_clientes", "Solicitações de clientes"], ["pv_montadores", "Solicitações de montadores"], ["pv_numeros", "Números"]);
     if (pv.length) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Pós-venda", ic: "✚", itens: pv });
-    if (podeChecklist()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Checklist", ic: "✓", itens: [["ck_agendar", "A agendar"], ["ck_aguardando", "Aguardando"], ["ck_agendados", "Agendados"], ["ck_confirmar", "Confirmação de presença"], ["ck_agenda", "Agenda"]] });
+    if (podeChecklist()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Checklist", ic: "✓", itens: [["st_checklist_cc", "📞 Pedidos do call center"], ["ck_agendar", "A agendar"], ["ck_aguardando", "Aguardando"], ["ck_agendados", "Agendados"], ["ck_confirmar", "Confirmação de presença"], ["ck_agenda", "Agenda"]] });
     // Medidas: cruzamento Minha Visita × Exact (Gestão e Supervisão de Medidas)
     if (ehSupMedidas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Medidas", ic: "📐", itens: [["md_callcenter", "📞 Fila do call center"], ["md_pendentes", "Pendentes para medir"], ["md_agendadas", "Aguardando medição"], ["md_analise", "Aguardando análise"], ["md_aprovados", "Aprovados"], ["md_obra", "Em obra"], ["md_cruzar", "Cruzar Minha Visita × Exact"], ["md_resultados", "Resultado dos cruzamentos"]] });
     // consultor externo e medidor: as medidas deles separadas das visitas de venda (medida paga R$ 40, sem comissão)
     else if (ehMedidor() || ehConsultorExterno()) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
     if (podeEncontrarVendas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Encontrar vendas", ic: "🔎", itens: [["encontrar_vendas", "Encontrar vendas"]] });
+    if (ehJuridico() || ehGestao()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Jurídico", ic: "⚖", itens: [["jur_novo", "Novo caso"], ["jur_andamento", "Casos em andamento"], ["jur_prazos", "Prazos (próx. 15 dias)"], ["jur_encerrados", "Encerrados"]] });
+    if (!veCC && consultaNoSetor && (ehJuridico() || podeChecklist() || ehSupMedidas() || ehPosvenda())) {
+      const gi = G.findIndex(g => ["Jurídico", "Checklist", "Medidas", "Pós-venda"].includes(g.g)); if (gi >= 0) G[gi].itens.push(["consulta", "Consulta"]);
+    }
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
     if (podeMontadores()) cd.push(["pv_cadastro", "Montadores"]);
@@ -728,7 +749,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, dispVendedor, soCallCenter, acaoDeFora,
+    ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };
