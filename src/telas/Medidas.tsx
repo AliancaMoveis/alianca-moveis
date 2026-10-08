@@ -1,6 +1,7 @@
 // Setor de Medidas — cruzamento Minha Visita (customers) × Exact (tickets "aguardando medição") pelo telefone.
 // Cliente comprador que foi visitado por um consultor do Minha Visita = medidas oficiais ok; sem visita = sem medidas.
 // O resultado fica gravado por nº de venda e aparece nos clientes do Checklist.
+import { Ticket } from "../comp/Ticket";
 import { useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
@@ -95,7 +96,28 @@ function ChipsConf({ v, set, nNao, nSim }: { v: Conf; set: (x: Conf) => void; nN
 export default function Medidas({ aba = "cruzar" }: { aba?: string }) {
   if (aba === "resultados") return <Resultados />;
   if (aba === "cruzar") return <Cruzar />;
+  if (aba === "callcenter") return <FilaCallcenter />;
   return <ListaMedidas aba={aba} />;
+}
+
+// ---------- solicitações que o call center abriu para o setor de Medidas (não são ordens de medida) ----------
+function FilaCallcenter() {
+  const { R, st, abrirDetalhe } = useApp() as any;
+  const [f, setF] = useState<"abertas" | "finalizadas">("abertas");
+  const todas = st.chamados.filter((c: any) => c.tipo === "solicitacao_medida" && R.podeVer(c));
+  const abertas = todas.filter((c: any) => c.status !== "concluida"), fin = todas.filter((c: any) => c.status === "concluida");
+  const lista = (f === "abertas" ? R.ordenar(abertas) : fin.slice().sort((a: any, b: any) => String(b.criadoEm).localeCompare(String(a.criadoEm))));
+  return (
+    <section className="view active">
+      <div className="view-head"><div><h2>📞 Fila do call center</h2><p>Solicitações de medida abertas pelo call center. Trate cada uma: se precisar medir, use “Encaminhar para medir” (vai para Pendentes para medir) e depois finalize o ticket — o call center vê a resposta.</p></div></div>
+      <div className="subnav" style={{ marginBottom: 12 }}>
+        <button className={f === "abertas" ? "on" : ""} onClick={() => setF("abertas")}>Em aberto ({abertas.length})</button>
+        <button className={f === "finalizadas" ? "on" : ""} onClick={() => setF("finalizadas")}>Finalizadas ({fin.length})</button>
+      </div>
+      {!lista.length ? <div className="card" style={{ padding: 20, textAlign: "center", color: "var(--ink-faint)" }}>{f === "abertas" ? "Nenhuma solicitação do call center em aberto. 👍" : "Nenhuma finalizada ainda."}</div> :
+        <div className="list">{lista.map((c: any) => <Ticket key={c.id} c={c} resposta />)}</div>}
+    </section>
+  );
 }
 
 // ---------- listas da Supervisão de Medidas e "Medidas para fazer" (consultor / medidor) ----------
