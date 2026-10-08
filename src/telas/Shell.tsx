@@ -24,7 +24,7 @@ import { Cadastros, Admin } from "./Cadastros";
 import Detalhe from "../comp/Detalhe";
 import { AlterarSenha } from "../comp/Modal";
 
-const DOTS: Record<string, string> = { definir: "dotDefinir", fila: "dotFila", direcionamento: "dotDirecionamento", aprovacoes: "dotAprovacoes", pendencias: "dotPendencias", md_callcenter: "dotMdCC" };
+const DOTS: Record<string, string> = { definir: "dotDefinir", fila: "dotFila", direcionamento: "dotDirecionamento", aprovacoes: "dotAprovacoes", pendencias: "dotPendencias", md_callcenter: "dotMdCC", pv_clientes: "dotPvCli", pv_montadores: "dotPvMont" };
 
 export default function Shell() {
   const { R, st, view, irPara, detalheId, modal, setModal, toast } = useApp();
@@ -58,7 +58,10 @@ export default function Shell() {
     n.definir = R.podeEditarAgenda() ? R.state.chamados.filter(c => R.domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && (R.ehGestao() || R.souRespLoja(c))).length : 0;
     n.aprovacoes = R.ehGestao() ? R.pendenciasGestao().total : 0;
     n.pendencias = R.minhasPendencias().total;
-    n.md_callcenter = R.state.chamados.filter(c => c.tipo === "solicitacao_medida" && c.status !== "concluida" && R.podeVer(c)).length;
+    const pvAb = R.state.chamados.filter(c => c.tipo === "posvenda" && ["aberta", "tratativa"].includes(c.status) && R.podeVer(c));
+    n.pv_clientes = pvAb.filter(c => ((c as any).posvenda?.origem || "cliente") !== "montador").length;
+    n.pv_montadores = pvAb.filter(c => (c as any).posvenda?.origem === "montador").length;
+    n.md_callcenter = R.state.chamados.filter(c => c.tipo === "solicitacao_medida" && ["aberta", "tratativa"].includes(c.status) && R.podeVer(c)).length;
     return n;
   }, [R]);
 
