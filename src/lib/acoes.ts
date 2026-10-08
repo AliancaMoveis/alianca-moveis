@@ -94,6 +94,7 @@ export const A = {
   vendedorIndisponivelCiente: (id: string, vend: string, motivo: string) => rpc("vendedor_indisponivel_ciente", { p_id: id, p_vend: vend, p_motivo: motivo }),
   erroVendaDefinir: (id: string, p: any) => rpc("erro_venda_definir", { p_id: id, p }),
   erroVendaResponder: (id: string, texto: string) => rpc("erro_venda_responder", { p_id: id, p_texto: texto }),
+  medidaSolicitacaoEncaminhar: (id: string, obs: string) => rpc<string>("medida_solicitacao_encaminhar", { p_id: id, p_obs: obs }),
   salvarUsuario: (id: string, nome: string, setores: string[], somente: boolean) => rpc("salvar_usuario", { p_id: id, p_nome: nome, p_setores: setores, p_somente: somente }),
   desativarUsuario: (id: string) => rpc("desativar_usuario", { p_id: id }),
   reativarUsuario: (id: string) => rpc("reativar_usuario", { p_id: id }),

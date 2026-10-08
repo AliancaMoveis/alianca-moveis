@@ -293,6 +293,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const setoresCriaMkt = ["marketing_operadora", "marketing_supervisao", "consultor_externo"];
   const podeCriarTipo = (k: string) => {
     const t = TIPOS[k]; if (!t) return false;
+    // ordem de medida: só o setor de Medidas (o call center abre "Solicitação de medidas")
+    if (k === "medidas") return ehGestao() || mySetores().includes("medidas_supervisao");
     if (!temLib("criar")) return false;
     if (ehGestao()) return true;
     const ms = mySetores();
@@ -624,6 +626,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     if (ehGestao() || mySetores().includes("supervisao")) add("acomp", "🚨 Pedidos de acompanhamento", "O call center chamou a supervisão para estes chamados. Abra e marque \"Estou acompanhando\".", ch.filter(c => acompAtivo(c)), "var(--critico)");
     if (ehSupMedidas()) {
+      add("solmed", "📞 Solicitações de medida do call center", "Trate a solicitação: se precisar medir, use \"Encaminhar para medir\" (vai para a fila de medidas). Depois finalize o ticket do call center.", ch.filter(c => c.tipo === "solicitacao_medida" && c.status !== "concluida"), "var(--warn)");
       add("medalerta", "⚠️ Checklist em até 3 dias sem medida aprovada", "O checklist está chegando e a medida desta venda ainda não foi aprovada. Aprove, direcione a medição ou avise o checklist.", ch.filter(c => c.tipo === "checklist" && c.status !== "concluida" && (c as any).tratativa?.checklist?.etapa === "agendado" && (() => { const d = String((c as any).tratativa.checklist.agendadoPara || "").slice(0, 10), h = hojeISO(); const lim = new Date(); lim.setDate(lim.getDate() + 3); return d >= h && d <= isoLocal(lim).slice(0, 10); })() && !ch.some(m => m.tipo === "medidas" && m.pedido === c.pedido && etapaMedida(m) === "liberada")), "var(--critico)");
       add("medvalidar", "📐 Medidas para aprovar", "Medidas feitas pelos medidores/consultores ou que vieram do cruzamento com o Minha Visita. Se estiverem certas, aprove como medida oficial; se não, peça para refazer.", ch.filter(c => c.tipo === "medidas" && c.status !== "concluida" && ["validar", "realizada"].includes(etapaMedida(c))), "var(--primary)");
     }

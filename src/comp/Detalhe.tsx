@@ -149,7 +149,7 @@ function ClienteCard({ c }: any) {
 }
 
 function tratativaExiste(c: any, R: any) {
-  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "posvenda", "retorno_montador", "desmontagem_estofado", "erro_venda"].includes(c.tipo)) return true;
+  if (["montagem", "assistencia", "vistoria", "entrega", "checklist", "posvenda", "retorno_montador", "desmontagem_estofado", "erro_venda", "solicitacao_medida"].includes(c.tipo)) return true;
   if (!R.domMarketing(c)) return false;
   return ["marketing_supervisao", "consultor_externo", "suporte_consultores", "atendente_cliente"].includes(c.setorDestino);
 }
@@ -183,6 +183,7 @@ function Tratativa({ c }: any) {
       <Btn on={t.aguardandoCompra} campo="aguardandoCompra" lOn="Compra feita — tirar “Aguardando compra”" lOff="🛒 Marcar: aguardando compra" />
     </div></div>;
   if (c.tipo === "desmontagem_estofado") return <TratDesmontagem c={c} />;
+  if (c.tipo === "solicitacao_medida") return <TratSolicitacaoMedida c={c} />;
   if (c.tipo === "erro_venda") return <TratErroVenda c={c} />;
   if (c.tipo === "checklist") return <BlocoChecklist c={c} />;
   if (c.tipo === "medidas") return <div className="resp-box"><h4>Tratativa — Medidas</h4><div className="grid"><div className="field full"><label>Medidas informadas ao cliente</label><textarea value={v.medidas} onChange={s("medidas")} placeholder="Ex.: Largura 2,40m x altura 2,60m x profundidade 0,60m"></textarea></div></div><div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.confirmado} campo="confirmado" lOn="Confirmado com o cliente ✓" lOff="Confirmar com o cliente" /><button className="btn primary sm" onClick={() => salvar(["medidas"])}>Salvar tratativa</button></div></div>;
@@ -842,6 +843,26 @@ function BlocoChecklist({ c }: any) {
 }
 
 // Retorno do montador (aberto pelo call center): montador + atendente da montagem responsável
+function TratSolicitacaoMedida({ c }: any) {
+  const { R, st, executar: ex, abrirDetalhe } = useApp() as any;
+  const t = c.tratativa || {};
+  const [obs, setObs] = useState("");
+  const pode = R.ehSupMedidas();
+  const ordem = t.ordemMedida ? st.chamados.find((x: any) => x.id === t.ordemMedida) : null;
+  const existente = !t.ordemMedida && c.pedido ? st.chamados.find((x: any) => x.tipo === "medidas" && x.pedido === c.pedido) : null;
+  return (
+    <div className="resp-box"><h4>📞 Solicitação de medidas (call center)</h4>
+      <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 10 }}>Não é ordem de medida. O setor de Medidas trata; se precisar medir, encaminha para a fila de medidas. Depois <b>finaliza este ticket</b> (o call center vê a resposta).</div>
+      {t.ordemMedida ? <RowSb k="Ordem de medida"><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(t.ordemMedida); }}><b>{t.ordemMedida}</b></a>{ordem ? <span className="pill" style={{ marginLeft: 8 }}>📐 {ETAPA_MEDIDA[R.etapaMedida(ordem)] || "—"}{ordem.medidorId ? " · " + R.nomeUser(ordem.medidorId) : ""}</span> : null}</RowSb>
+        : existente ? <RowSb k="Ordem de medida"><span>Já existe para esta venda: <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(existente.id); }}><b>{existente.id}</b></a> · {ETAPA_MEDIDA[R.etapaMedida(existente)] || "—"}</span></RowSb> : null}
+      {pode && !t.ordemMedida && c.status !== "concluida" && <div style={{ marginTop: 10 }}>
+        <div className="field"><label>Observação para a medição <span className="hint">(opcional)</span></label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: cliente só pode à tarde" /></div>
+        <button className="btn primary sm" style={{ marginTop: 8 }} onClick={() => ex(() => A.medidaSolicitacaoEncaminhar(c.id, obs), existente ? "Vinculado à ordem de medida " + existente.id : "Encaminhado para medir")}>📐 {existente ? "Vincular à ordem de medida existente" : "Encaminhar para medir"}</button>
+      </div>}
+    </div>
+  );
+}
+
 function TratDesmontagem({ c }: any) {
   const { R, executar: ex } = useApp() as any;
   const t = c.tratativa || {};
