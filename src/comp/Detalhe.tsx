@@ -915,20 +915,22 @@ function TratErroVenda({ c }: any) {
 function TratRetornoMontador({ c }: any) {
   const { R, st, executar: ex } = useApp() as any;
   const r = (c.tratativa || {}).retorno || {};
-  const [m, setM] = useState(r.montadorId || ""); const [at, setAt] = useState(r.atendenteId || "");
-  useEffect(() => { setM(r.montadorId || ""); setAt(r.atendenteId || ""); }, [c.id, r.montadorId, r.atendenteId]);
+  const mAtual = r.montadorSaiu ? "saiu" : r.montadorId || "";
+  const [m, setM] = useState(mAtual); const [at, setAt] = useState(r.atendenteId || ""); const [nomeSaiu, setNomeSaiu] = useState(r.montadorNome || "");
+  useEffect(() => { setM(mAtual); setAt(r.atendenteId || ""); setNomeSaiu(r.montadorNome || ""); }, [c.id, mAtual, r.atendenteId, r.montadorNome]);
   const mont = (st.montadores || []).find((x: any) => x.id === (r.montadorId || m));
   const atendentes = st.usuarios.filter((u: any) => u.ativo && (u.setores || []).includes("montagem"));
   const podeMudar = R.ehGestao() || R.mySetores().includes("montagem") || R.mySetores().includes("callcenter") || R.mySetores().includes("supervisao");
   return (
     <div className="resp-box"><h4>🔧 Retorno do montador</h4>
-      <RowSb k="Montador"><span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{r.montadorId ? R.nomeMontador(r.montadorId) : "não informado"}</b>{mont && mont.telefone ? <BotaoWhats tel={mont.telefone} texto={"Olá, " + mont.nome.split(" ")[0] + "! Aqui é da Aliança Móveis, sobre o retorno na obra de " + c.cliente + (c.pedido ? " (venda " + c.pedido + ")" : "") + "."} /> : null}</span></RowSb>
+      <RowSb k="Montador"><span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{r.montadorSaiu ? "🚪 Montador saiu da loja" + (r.montadorNome ? " (" + r.montadorNome + ")" : "") : r.montadorId ? R.nomeMontador(r.montadorId) : "não informado"}</b>{mont && mont.telefone ? <BotaoWhats tel={mont.telefone} texto={"Olá, " + mont.nome.split(" ")[0] + "! Aqui é da Aliança Móveis, sobre o retorno na obra de " + c.cliente + (c.pedido ? " (venda " + c.pedido + ")" : "") + "."} /> : null}</span></RowSb>
       <RowSb k="Atendente da montagem">{r.atendenteId ? <b>{R.nomeUser(r.atendenteId)}</b> : <span style={{ color: "var(--danger)" }}>não definida</span>}{r.atendenteId === R.currentUserId ? <span className="badge b-urgente" style={{ marginLeft: 8 }}>com você</span> : null}</RowSb>
       {podeMudar && <div className="grid" style={{ marginTop: 8 }}>
-        <div className="field"><label>Montador</label><select value={m} onChange={e => setM(e.target.value)}><option value="">Selecione…</option>{(st.montadores || []).filter((x: any) => x.ativo || x.id === m).map((x: any) => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>
+        <div className="field"><label>Montador</label><select value={m} onChange={e => setM(e.target.value)}><option value="">Selecione…</option>{(st.montadores || []).filter((x: any) => x.ativo || x.id === m).map((x: any) => <option key={x.id} value={x.id}>{x.nome}</option>)}<option value="saiu">🚪 Montador saiu (não está mais na loja)</option></select>
+          {m === "saiu" && <input style={{ marginTop: 6 }} value={nomeSaiu} onChange={e => setNomeSaiu(e.target.value)} placeholder="Nome do montador que saiu (se souber)" />}</div>
         <div className="field"><label>Atendente da montagem</label><select value={at} onChange={e => setAt(e.target.value)}><option value="">Selecione…</option>{atendentes.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
       </div>}
-      {podeMudar && (m !== (r.montadorId || "") || at !== (r.atendenteId || "")) && <div style={{ marginTop: 10 }}><button className="btn primary sm" onClick={() => ex(() => A.retornoMontadorDefinir(c.id, { montadorId: m, atendenteId: at }), "Retorno atualizado")}>Salvar</button></div>}
+      {podeMudar && (m !== mAtual || at !== (r.atendenteId || "") || (m === "saiu" && nomeSaiu !== (r.montadorNome || ""))) && <div style={{ marginTop: 10 }}><button className="btn primary sm" onClick={() => ex(() => A.retornoMontadorDefinir(c.id, m === "saiu" ? { montadorSaiu: true, montadorNome: nomeSaiu.trim(), atendenteId: at } : { montadorId: m, atendenteId: at }), "Retorno atualizado")}>Salvar</button></div>}
     </div>
   );
 }
