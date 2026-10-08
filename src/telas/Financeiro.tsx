@@ -119,6 +119,17 @@ function FinConsultor() {
   const pagOrd = r.pagamentos.slice().sort((a: any, b: any) => +new Date(b.data) - +new Date(a.data));
   return (
     <section className="view active" id="view-financeiro">{cab}
+      <div className="panel-grid" style={{ marginBottom: 12 }}>
+        <div className="panel"><h3>🧭 Área dos externos <span className="hint" style={{ marginLeft: 6 }}>visitas + comissão das vendas</span></h3>
+          <div style={{ fontSize: 26, fontWeight: 800 }}>{fmtMoeda(r.pagamentoVisitas + r.comissao)}</div>
+          <div className="hint">{r.visitas.length} visita(s) paga(s) = {fmtMoeda(r.pagamentoVisitas)} · comissão {fmtMoeda(r.comissao)} ({r.vendas.length} venda(s))</div></div>
+        <div className="panel"><h3>📐 Setor de medidas <span className="hint" style={{ marginLeft: 6 }}>R$ por medida · sem comissão</span></h3>
+          <div style={{ fontSize: 26, fontWeight: 800 }}>{fmtMoeda(r.pagamentoMedidas)}</div>
+          <div className="hint">{r.medidas.length} medida(s) feita(s)</div></div>
+        <div className="panel"><h3>💰 Total geral (previsão)</h3>
+          <div style={{ fontSize: 26, fontWeight: 800, color: "var(--st-concluida)" }}>{fmtMoeda(r.total)}</div>
+          <div className="hint">externos + medidas + reembolsos {fmtMoeda(r.totalReembolsos)}{r.auxilio > 0 ? " + auxílio " + fmtMoeda(r.auxilio) : ""}</div></div>
+      </div>
       <div className="kpis" id="finKpis"><Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={r.medidas.length} l="Medidas feitas" /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas com pagamento" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" />{r.auxilio > 0 && <Kpi fs={22} n={fmtMoeda(r.auxilio)} l={"Auxílio fixo · pago dia " + r.datasAuxilio.map((d: string) => d.slice(8) + "/" + d.slice(5, 7)).join(", ")} />}<Kpi fs={22} n={fmtMoeda(r.total)} l="Previsão a receber (a confirmar)" cor="var(--st-concluida)" /><Kpi fs={22} n={fmtMoeda(r.comissaoFutura)} l={`Comissão futura (${r.pendentes.length} em promissória)`} cor="var(--warn)" /></div>
       <FechamentoMeu uid={alvo} />
       <div id="finDetalheWrap"><div className="panel-grid">

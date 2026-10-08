@@ -21,6 +21,7 @@ import Medidas from "./Medidas";
 import EncontrarVendas from "./EncontrarVendas";
 import Treino from "./Treino";
 import { Juridico, SetorFila, listaSetor } from "./Setores";
+import Consultores from "./Consultores";
 import { SETORES_MENU } from "../lib/regras";
 import { Cadastros, Admin } from "./Cadastros";
 import Detalhe from "../comp/Detalhe";
@@ -165,6 +166,7 @@ export default function Shell() {
             {atual === "treino" && <Treino />}
             {atual.startsWith("st_") && (() => { const m = atual.match(/^st_(.+)_([a-z]+)$/); return m ? <SetorFila key={atual} setor={m[1]} aba={m[2]} /> : null; })()}
             {atual.startsWith("jur_") && <Juridico key={atual} aba={atual.slice(4)} />}
+            {atual.startsWith("ce_") && <Consultores key={atual} aba={atual.slice(3)} />}
           </main>
         </div>
       </div>

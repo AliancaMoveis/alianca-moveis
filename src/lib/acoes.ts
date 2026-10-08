@@ -97,6 +97,7 @@ export const A = {
   medidaSolicitacaoEncaminhar: (id: string, obs: string) => rpc<string>("medida_solicitacao_encaminhar", { p_id: id, p_obs: obs }),
   juridicoCriar: (p: any) => rpc<string>("juridico_criar", { p }),
   juridicoSalvar: (id: string, p: any) => rpc("juridico_salvar", { p_id: id, p }),
+  minhasMedidasChecklist: () => rpc<Record<string, string>>("minhas_medidas_checklist"),
   salvarUsuario: (id: string, nome: string, setores: string[], somente: boolean) => rpc("salvar_usuario", { p_id: id, p_nome: nome, p_setores: setores, p_somente: somente }),
   desativarUsuario: (id: string) => rpc("desativar_usuario", { p_id: id }),
   reativarUsuario: (id: string) => rpc("reativar_usuario", { p_id: id }),

@@ -616,7 +616,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("appromis", "Promissórias em aberto", "Contam como venda, mas a comissão dessa parte só sai quando forem pagas.", p.promissorias, "var(--st-tratativa)");
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
-    if (temMarketing() && !ehGestao()) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
+    if ((temMarketing() && !ehGestao()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao())) {
       add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend), "var(--primary)");
       add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hojeISO())), "var(--warn)");
@@ -673,7 +673,6 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (!ehProprietario()) {
       if (ehGestao()) pessoal.push(["aprovacoes", "Aprovações (vendas e transferências)"]);
       if (defineVend) pessoal.push(["definir", "Definir vendedor"]);
-      if (coord) pessoal.push(["direcionamento", "Direcionar consultor"]);
       if (coord) pessoal.push(["produtividade", "Produtividade e pagamento"]);
     }
     G.push({ g: "Pessoal", ic: "◆", itens: pessoal });
@@ -701,24 +700,33 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (temMarketing() || ehGestao()) {
       mk.push(["acompmkt", "Acompanhamento"]);
       if (ehProprietario()) mk.push(["definir", "Definir vendedor"]);
-      if (!coord) mk.push(["direcionamento", "Direcionar consultor"]);
       mk.push(["agenda", "Agendamento loja"], ["operadoras", "Controle das operadoras"]);
       if (!coord) mk.push(["produtividade", "Produtividade e pagamento"]);
-      mk.push(["clientes", "Clientes"], ["vendedores", "Vendedores"], ["consultores", "Consultores externos"]);
+      mk.push(["clientes", "Clientes"], ["vendedores", "Vendedores"]);
     } else if (temMkt) {
       // consultor e vendedor (só esse papel no marketing): menu enxuto — "Meus clientes" já tem busca, status, período e cancelamentos
       soMeusClientes = (ehConsultorExterno() || mySetores().includes("atendente_cliente")) && !mySetores().some((x: string) => ["suporte_consultores", "marketing_operadora"].includes(x));
       // consultor e vendedor: "Minha fila" e "Minha carteira" viraram uma tela só ("Meus clientes"), com filtros
-      if (ehConsultorExterno() || mySetores().includes("atendente_cliente")) mk.push(["carteira", "Meus clientes"], ["agenda", "Agendamento loja"]);
+      if (ehConsultorExterno() && !mySetores().includes("atendente_cliente")) { /* consultor externo: menu próprio "Consultor externo" */ }
+      else if (ehConsultorExterno() || mySetores().includes("atendente_cliente")) mk.push(["carteira", "Meus clientes"], ["agenda", "Agendamento loja"]);
       else mk.push(["acompmkt", "Minha fila"], ["carteira", "Minha carteira"], ["agenda", "Agendamento loja"]);
       if (mySetores().includes("suporte_consultores")) mk.push(["vendedores", "Vendedores"]);
       if (!soMeusClientes) mk.push(["clientes", "Clientes"]);
       if (mySetores().includes("marketing_operadora")) mk.push(["produtividade", "Minha produtividade"]);
     }
     if (mk.length) { if (!cc.length && !soMeusClientes) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
+    // Consultores externos: setor próprio (o marketing gera a demanda, o consultor atende). Fica logo abaixo do Marketing.
+    const coordCE = ehGestao() || mySetores().includes("marketing_supervisao") || mySetores().includes("suporte_consultores");
+    if (coordCE) G.push({ g: "Consultores externos", ic: "🧭", itens: [["ce_painel", "Painel dos consultores"], ["direcionamento", "Direcionar consultor"], ["ce_visitas", "Visitas"], ["ce_loja", "Agendados na loja"]] });
+    else if (ehConsultorExterno()) G.push({ g: "Minhas operações", ic: "🧭", itens: [["carteira", "Meus clientes"], ["agenda", "Agendamento loja"]] });
+    // quem mede (consultor externo ou medidor): "Setor de medidas" (pós-venda) separado da operação de venda, e o financeiro
+    if ((ehConsultorExterno() || ehMedidor()) && !coordCE && !ehSupMedidas()) {
+      G.push({ g: "Setor de medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"], ["md_minhasfeitas", "Medidas finalizadas"]] });
+      G.push({ g: "Meu financeiro", ic: "💰", itens: [["financeiro", ehConsultorExterno() ? "Meus pagamentos (externos + medidas)" : "Meus pagamentos"]] });
+    }
     const ge: string[][] = [];
     const ehProjetista = mySetores().includes("atendente_cliente");
-    if (ehConsultorExterno() || ehMedidor() || ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) ge.push(["financeiro", ehGestao() ? "Financeiro" : ehConsultorExterno() ? "Vendas e comissão" : ehMedidor() ? "Minhas medidas e reembolsos" : ehProjetista ? "Minhas vendas" : "Vendas dos vendedores"]);
+    if ((ehGestao() || ehProjetista || mySetores().includes("suporte_consultores")) && !((ehConsultorExterno() || ehMedidor()) && !ehGestao())) ge.push(["financeiro", ehGestao() ? "Financeiro" : ehConsultorExterno() ? "Vendas e comissão" : ehMedidor() ? "Minhas medidas e reembolsos" : ehProjetista ? "Minhas vendas" : "Vendas dos vendedores"]);
     if (verTudo()) ge.push(["relatorios", "Relatórios"]);
     if (verTudo() || temMarketing()) ge.push(["atividades", "Controle de atividades"]);
     if (ge.length) G.push({ g: (ehConsultorExterno() || ehMedidor()) && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
@@ -731,7 +739,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // Medidas: cruzamento Minha Visita × Exact (Gestão e Supervisão de Medidas)
     if (ehSupMedidas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Medidas", ic: "📐", itens: [["md_callcenter", "📞 Fila do call center"], ["md_pendentes", "Pendentes para medir"], ["md_agendadas", "Aguardando medição"], ["md_analise", "Aguardando análise"], ["md_aprovados", "Aprovados"], ["md_obra", "Em obra"], ["md_cruzar", "Cruzar Minha Visita × Exact"], ["md_resultados", "Resultado dos cruzamentos"]] });
     // consultor externo e medidor: as medidas deles separadas das visitas de venda (medida paga R$ 40, sem comissão)
-    else if (ehMedidor() || ehConsultorExterno()) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
+    else if (false) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
     if (podeEncontrarVendas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Encontrar vendas", ic: "🔎", itens: [["encontrar_vendas", "Encontrar vendas"]] });
     if (ehJuridico() || ehGestao()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Jurídico", ic: "⚖", itens: [["jur_novo", "Novo caso"], ["jur_andamento", "Casos em andamento"], ["jur_prazos", "Prazos (próx. 15 dias)"], ["jur_encerrados", "Encerrados"]] });
     if (!veCC && consultaNoSetor && (ehJuridico() || podeChecklist() || ehSupMedidas() || ehPosvenda())) {

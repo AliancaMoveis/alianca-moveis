@@ -2,13 +2,13 @@
 // Cliente comprador que foi visitado por um consultor do Minha Visita = medidas oficiais ok; sem visita = sem medidas.
 // O resultado fica gravado por nº de venda e aparece nos clientes do Checklist.
 import { Ticket } from "../comp/Ticket";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { lerXlsx } from "../lib/planilha";
 import { linhaMedida } from "../lib/medidasPlanilha";
 import { Modal } from "../comp/Modal";
-import { fmtDateTime, grupoMedida } from "../lib/regras";
+import { ETAPA_MEDIDA, fmtDateTime, grupoMedida } from "../lib/regras";
 import { tipoPlanilha } from "../lib/cruzarVendas";
 
 type Linha = Record<string, string>;
@@ -127,6 +127,7 @@ const ABAS_MD: Record<string, [string, string]> = {
   analise: ["Aguardando análise", "Medidas feitas (medidores / consultores) e as que vieram do cruzamento com o Minha Visita. Aprove como medida oficial ou peça para refazer."],
   aprovados: ["Aprovados — medida oficial", "Medidas aprovadas: o checklist da venda mostra “medida oficial” e as fotos ficam disponíveis para o projetista."],
   obra: ["Em obra", "Clientes em obra: não permite a medida oficial. Volte para pendente quando a obra terminar."],
+  minhasfeitas: ["Medidas finalizadas", "Medidas que você já fez: aguardando análise da supervisão ou aprovadas. Cada medida paga R$ 40, sem comissão."],
   minhas: ["Medidas para fazer", "Solicitações de MEDIDA — não é visita de venda: paga R$ 40 por cliente, sem comissão. Depois de medir, anexe as fotos/planta e finalize."],
 };
 function ListaMedidas({ aba }: { aba: string }) {
@@ -137,12 +138,16 @@ function ListaMedidas({ aba }: { aba: string }) {
   const ckPorVenda: Record<string, any> = {};
   st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida").forEach((c: any) => (ckPorVenda[c.pedido] = c));
   let lista = st.chamados.filter((c: any) => c.tipo === "medidas" && R.podeVer(c));
-  lista = aba === "minhas" ? lista.filter((c: any) => c.medidorId === eu && ["agendada", "realizada"].includes(R.etapaMedida(c)))
+  lista = aba === "minhas" ? lista.filter((c: any) => c.medidorId === eu && ["agendada"].includes(R.etapaMedida(c)))
+    : aba === "minhasfeitas" ? lista.filter((c: any) => c.medidorId === eu && ["realizada", "validar", "liberada"].includes(R.etapaMedida(c)))
     : lista.filter((c: any) => grupoMedida(R.etapaMedida(c)) === aba);
   const busca = tira(q), dig = so(q);
   if (q) lista = lista.filter((c: any) => tira(c.cliente + " " + R.nomeUser(c.medidorId || "")).includes(busca) || (dig.length >= 3 && (String(c.pedido).includes(dig) || so(c.telefone).includes(dig))));
-  const diaCk = (c: any) => { const k = ckPorVenda[c.pedido]; return k && k.tratativa?.checklist?.etapa === "agendado" ? String(k.tratativa.checklist.agendadoPara || "").slice(0, 16) : ""; };
-  const ord = (c: any) => aba === "agendadas" || aba === "minhas" ? String(c.dataMedida || "9") : diaCk(c) || "9" + String(c.criadoEm);
+  const [ckMeu, setCkMeu] = useState<Record<string, string>>({});
+  useEffect(() => { if (aba === "minhas" || aba === "minhasfeitas") A.minhasMedidasChecklist().then(setCkMeu).catch(() => setCkMeu({})); }, [aba]);
+  const diaCk = (c: any) => { const k = ckPorVenda[c.pedido]; return k && k.tratativa?.checklist?.etapa === "agendado" ? String(k.tratativa.checklist.agendadoPara || "").slice(0, 16) : String(ckMeu[c.pedido] || "").slice(0, 16); };
+  // "para fazer": o checklist mais próximo vem primeiro (urgência), depois a data marcada da medição
+  const ord = (c: any) => aba === "minhas" ? (diaCk(c) || "9") + String(c.dataMedida || "9") : aba === "agendadas" ? String(c.dataMedida || "9") : aba === "minhasfeitas" ? "9" : diaCk(c) || "9" + String(c.criadoEm);
   lista = lista.slice().sort((a: any, b: any) => ord(a).localeCompare(ord(b)));
   const em3 = (iso: string) => { if (!iso) return false; const lim = new Date(); lim.setDate(lim.getDate() + 3); return iso.slice(0, 10) <= lim.toISOString().slice(0, 10); };
   return (
@@ -150,7 +155,7 @@ function ListaMedidas({ aba }: { aba: string }) {
       <div className="view-head"><div><h2>📐 {t}</h2><p>{d}</p></div></div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
         <span className="pill">{lista.length} cliente(s)</span>
-        {aba !== "minhas" && R.ehSupMedidas() && <ImportarExact />}
+        {aba !== "minhas" && aba !== "minhasfeitas" && R.ehSupMedidas() && <ImportarExact />}
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, venda, telefone ou quem mede" style={{ marginLeft: "auto", maxWidth: 320 }} />
       </div>
       {!lista.length ? <div className="card" style={{ padding: 20, textAlign: "center", color: "var(--ink-faint)" }}>Nenhum cliente aqui.</div> :
@@ -164,6 +169,7 @@ function ListaMedidas({ aba }: { aba: string }) {
                 {m.origem === "minha_visita" && <span className="pill" style={{ marginLeft: 6 }}>Minha Visita · sem pagamento</span>}
                 {m.etapa === "validar" && <span className="pill" style={{ marginLeft: 6 }}>medidas do consultor</span>}
                 {m.etapa === "em_obra" && m.previsaoObra && <span className="pill" style={{ marginLeft: 6 }}>previsão {String(m.previsaoObra).split("-").reverse().join("/")}</span>}
+                {(aba === "minhas" || aba === "minhasfeitas") && <span className="pill" style={{ marginLeft: 6 }}>{ETAPA_MEDIDA[R.etapaMedida(c)] || ""}</span>}
                 {aba === "minhas" && <span className="pill" style={{ marginLeft: 6, background: "var(--st-concluida)", color: "#fff" }}>MEDIDA · R$ 40 · sem comissão</span>}
                 {c.endereco ? <span className="hint"> · {c.endereco}</span> : null}</span>
               <span className="g" style={alerta ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{dck ? (alerta ? "⚠️ " : "") + "checklist " + fmtDateTime(dck) : ""}</span>
