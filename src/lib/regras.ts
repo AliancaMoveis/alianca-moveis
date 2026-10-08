@@ -626,9 +626,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     if (ehGestao() || mySetores().includes("supervisao")) add("acomp", "🚨 Pedidos de acompanhamento", "O call center chamou a supervisão para estes chamados. Abra e marque \"Estou acompanhando\".", ch.filter(c => acompAtivo(c)), "var(--critico)");
     if (ehSupMedidas()) {
-      add("solmed", "📞 Solicitações de medida do call center", "Trate a solicitação: se precisar medir, use \"Encaminhar para medir\" (vai para a fila de medidas). Depois finalize o ticket do call center.", ch.filter(c => c.tipo === "solicitacao_medida" && c.status !== "concluida"), "var(--warn)");
-      add("medalerta", "⚠️ Checklist em até 3 dias sem medida aprovada", "O checklist está chegando e a medida desta venda ainda não foi aprovada. Aprove, direcione a medição ou avise o checklist.", ch.filter(c => c.tipo === "checklist" && c.status !== "concluida" && (c as any).tratativa?.checklist?.etapa === "agendado" && (() => { const d = String((c as any).tratativa.checklist.agendadoPara || "").slice(0, 10), h = hojeISO(); const lim = new Date(); lim.setDate(lim.getDate() + 3); return d >= h && d <= isoLocal(lim).slice(0, 10); })() && !ch.some(m => m.tipo === "medidas" && m.pedido === c.pedido && etapaMedida(m) === "liberada")), "var(--critico)");
-      add("medvalidar", "📐 Medidas para aprovar", "Medidas feitas pelos medidores/consultores ou que vieram do cruzamento com o Minha Visita. Se estiverem certas, aprove como medida oficial; se não, peça para refazer.", ch.filter(c => c.tipo === "medidas" && c.status !== "concluida" && ["validar", "realizada"].includes(etapaMedida(c))), "var(--primary)");
+      add("solmed", "📞 Call center sem resposta (medidas)", "Trate a solicitação: se precisar medir, use \"Encaminhar para medir\" (vai para a fila de medidas). Depois finalize o ticket do call center.", ch.filter(c => c.tipo === "solicitacao_medida" && ["aberta", "tratativa"].includes(c.status)), "var(--warn)");
+      add("medalerta", "⚠️ Medida para aprovar — checklist em até 3 dias", "O checklist está chegando e a medida desta venda ainda não foi aprovada. Aprove (Aguardando análise), direcione a medição ou avise o checklist.", ch.filter(c => c.tipo === "checklist" && c.status !== "concluida" && (c as any).tratativa?.checklist?.etapa === "agendado" && (() => { const d = String((c as any).tratativa.checklist.agendadoPara || "").slice(0, 10), h = hojeISO(); const lim = new Date(); lim.setDate(lim.getDate() + 3); return d >= h && d <= isoLocal(lim).slice(0, 10); })() && !ch.some(m => m.tipo === "medidas" && m.pedido === c.pedido && etapaMedida(m) === "liberada")), "var(--critico)");
+      // aprovações ficam em "Aguardando análise"; viram pendência só quando o checklist está a 3 dias (medalerta)
     }
     add("medfazer", "📐 Medidas a fazer (R$ 40 por cliente · sem comissão)", "Medições direcionadas para você — não é visita de venda. Depois de medir, anexe as fotos/planta e marque como realizada.", ch.filter(c => c.tipo === "medidas" && c.medidorId === eu && etapaMedida(c) === "agendada"), "var(--warn)");
     add("informar", "Informar o cliente", "O setor registrou a solução mas não fala com o cliente. Avise o cliente e conclua.", ch.filter(c => doCC(c) && c.status === "informar" && (ehCallcenter() || c.solicitanteId === eu)), "var(--st-informar)");
@@ -670,7 +670,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
       if (coord) pessoal.push(["produtividade", "Produtividade e pagamento"]);
     }
     G.push({ g: "Pessoal", ic: "◆", itens: pessoal });
-    const temCC = mySetores().some((x: string) => !ehSetorMarketing(x) && !["supervisao", "gestao"].includes(x));
+    // Medidas tem a própria "Fila do call center" (menu Medidas): não repete a "Minha fila" para quem é só de Medidas
+    const temCC = mySetores().some((x: string) => !ehSetorMarketing(x) && !["supervisao", "gestao", "medidas", "medidas_supervisao"].includes(x));
     const temMkt = mySetores().some((x: string) => ehSetorMarketing(x));
     const cc: string[][] = [];
     if (podeCriarCC()) cc.push(["nova", "Nova solicitação"]);
