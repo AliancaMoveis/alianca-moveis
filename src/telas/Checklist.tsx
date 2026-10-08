@@ -22,6 +22,8 @@ export const CONF_CK: Record<string, [string, string]> = { "": ["⏳ Presença a
 export const ck = (c: any) => (c.tratativa && c.tratativa.checklist) || {};
 export const etapaCk = (c: any) => ck(c).etapa || (c.status === "concluida" ? "realizado" : "a_contatar");
 const hoje = () => hojeISO();
+/** cliente pediu encaixe: aceitou a data, mas quer ser antecipado se abrir vaga */
+export const querEnc = (c: any) => { const q = ck(c).querEncaixe; return q && typeof q === "object" ? q : null; };
 const diasDesde = (iso: any) => (iso ? Math.max(0, Math.floor((Date.now() - +parseData(iso)) / 864e5)) : 0);
 const somaDias = (iso: string, n: number) => { const d = parseData(iso); d.setDate(d.getDate() + n); return isoDia(d); };
 /** em que parte do checklist o cliente está: a agendar · aguardando (com motivo) · agendado · encerrado */
@@ -87,6 +89,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
   const [per, setPer] = useState("todos"); const [de, setDe] = useState(""); const [ate, setAte] = useState("");
   // confirmação de presença: filtro pela data do checklist (vale para as três etapas)
   const [diaF, setDiaF] = useState(""); const [diaX, setDiaX] = useState(hojeISO());
+  const [soEnc, setSoEnc] = useState(false);
   const diaAlvo = diaF === "hoje" ? hojeISO() : diaF === "amanha" ? somaDias(hojeISO(), 1) : diaF === "data" ? diaX : "";
   // período pela data de inclusão (da planilha): todos · deste mês · meses anteriores · data determinada — vale para os números, os filtros e a lista
   const ini = hoje().slice(0, 7) + "-01";
@@ -132,11 +135,14 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
   const FILTROS = FILTROS_ABA[aba] || {};
   const cont: Record<string, number> = {}; Object.entries(FILTROS).forEach(([k, [, fn]]) => (cont[k] = todos.filter(fn).length));
   const busca = q.trim().toLowerCase(), dig = q.replace(/\D/g, "");
-  let lista = FILTROS[f] ? todos.filter(FILTROS[f][1]) : [];
+  // "solicitam encaixe": todos desta aba com o pedido, do mais antigo para o mais novo (prioridade por demanda)
+  const grupoAba = aba === "agendar" ? "agendar" : aba === "aguardando" ? "aguardando" : "agendado";
+  const encAba = todos.filter((c: any) => querEnc(c) && grupoCk(c) === grupoAba && (grupoAba !== "agendado" || diaAg(c) >= hoje()));
+  let lista = soEnc ? encAba : FILTROS[f] ? todos.filter(FILTROS[f][1]) : [];
   if (busca) lista = lista.filter((c: any) => String(c.cliente).toLowerCase().includes(busca) || String(ck(c).projetista || "").toLowerCase().includes(busca) || (dig.length >= 3 && (String(c.pedido).includes(dig) || String(c.telefone).includes(dig))));
   const ordem = (c: any) => { const k = ck(c); return String(grupoCk(c) === "agendado" ? k.agendadoPara : k.retornarEm || c.dataVenda || c.criadoEm || ""); };
-  lista = lista.slice().sort((a: any, b: any) => ordem(a).localeCompare(ordem(b)));
-  const porDia = aba === "agendados" || aba === "confirmar";
+  lista = lista.slice().sort((a: any, b: any) => soEnc ? String(querEnc(a).em).localeCompare(String(querEnc(b).em)) || ordem(a).localeCompare(ordem(b)) : ordem(a).localeCompare(ordem(b)));
+  const porDia = (aba === "agendados" || aba === "confirmar") && !soEnc;
 
   const modoImp = useRef<"agendar" | "agendados">("agendar");
   const escolher = (m: "agendar" | "agendados") => { modoImp.current = m; arq.current?.click(); };
@@ -188,6 +194,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
         <Kpi n={todos.filter((c: any) => G("agendado")(c) && diaAg(c) >= hoje()).length} l="Agendados" />
         <Kpi n={todos.filter((c: any) => aConfirmar(c, confDias)).length} l="Presença a confirmar" cls={todos.some((c: any) => aConfirmar(c, confDias)) ? "alert" : ""} />
         <Kpi n={todos.filter((c: any) => etapaCk(c) === "realizado" && String(ck(c).realizadoEm || "").slice(0, 7) === mes).length} l="Realizados no mês" />
+        <Kpi n={todos.filter((c: any) => querEnc(c) && c.status !== "concluida").length} l="❗ Solicitam encaixe" cor="var(--danger)" />
       </div></>}
       {aba === "agenda" ? <Calendario /> : <>
       <div className="card" style={{ padding: "12px 16px", margin: "14px 0" }}>
@@ -200,7 +207,8 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
           {per === "data" && <div className="field" style={{ minWidth: 150 }}><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>}
           {per !== "todos" && <button className="btn ghost sm" onClick={() => { setPer("todos"); setDe(""); setAte(""); }}>Limpar</button>}
         </div>
-        <div className="chips" style={{ marginTop: 10 }}>{Object.entries(FILTROS).map(([k, [l]]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
+        <div className="chips" style={{ marginTop: 10 }}>{Object.entries(FILTROS).map(([k, [l]]) => <button key={k} className={"chip" + (f === k && !soEnc ? " on" : "")} onClick={() => { setF(k); setSoEnc(false); }}>{l}<span className="n">{cont[k] || 0}</span></button>)}
+          <button className={"chip" + (soEnc ? " on" : "")} style={soEnc ? { background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" } : { borderColor: "var(--danger)", color: "var(--danger)", fontWeight: 700 }} onClick={() => setSoEnc(v => !v)} title="Clientes que pediram para ser antecipados se abrir vaga — do pedido mais antigo para o mais novo">❗ Solicitam encaixe<span className="n">{encAba.length}</span></button></div>
         {aba === "confirmar" && <div className="chips" style={{ marginTop: 8, alignItems: "center" }}>
           <span style={{ fontSize: 12.5, color: "var(--ink-faint)", marginRight: 4 }}>📅 Data do checklist:</span>
           {([["", "Todas"], ["hoje", "Hoje"], ["amanha", "Amanhã"], ["data", "Escolher data"]] as [string, string][]).map(([v, l]) => <button key={v} className={"chip" + (diaF === v ? " on" : "")} onClick={() => setDiaF(v)}>{l}</button>)}
@@ -243,6 +251,8 @@ function CartaoCk({ c, aba }: any) {
           </div>}
           <div style={{ fontSize: 12.5, marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             {g !== "aguardando" && <span className="badge" style={{ background: cor0, color: "#fff" }}>{nome}</span>}
+            {querEnc(c) && <button type="button" className="pill" onClick={() => setModal(<ModalQuerEncaixe c={c} />)} title={"Pedido em " + fmtDate(querEnc(c).em) + (querEnc(c).por ? " por " + querEnc(c).por : "") + (querEnc(c).obs ? "\n" + querEnc(c).obs : "") + "\nClique para encerrar"}
+              style={{ background: "var(--danger)", color: "#fff", fontWeight: 800, border: 0, cursor: "pointer" }}>❗ SOLICITA ENCAIXE · desde {fmtDate(querEnc(c).em)}{diasDesde(querEnc(c).em) ? " (há " + diasDesde(querEnc(c).em) + "d)" : ""}{querEnc(c).obs ? " · " + String(querEnc(c).obs).slice(0, 40) : ""}</button>}
             {(g === "agendar" || e === "aguardando") && (() => { const sg = durSugeridaCk(c); return <span className="pill" style={{ fontWeight: 700 }} title={sg.cupom ? "Cupom " + fmtBRL(sg.cupom) + " → sugerido " + fmtDur(sg.min) : "Sem valor de cupom na planilha"}>⏱ {fmtDur(Number(k.duracaoMin) || sg.min)}{k.duracaoMin ? "" : sg.cupom ? " sugerido" : " (sem cupom)"}{Array.isArray(k.propostaDiasExtras) && k.propostaDiasExtras.length ? " · " + (k.propostaDiasExtras.length + 1) + " dias" : ""}</span>; })()}
             {e === "aguardando" && <span>oferecido {fmtDateTime(k.proposta)} · {k.contatos || 1}º contato · há {diasDesde(k.ultimoContato)}d</span>}
             {g === "agendado" && Array.isArray(k.diasExtras) && k.diasExtras.length > 0 && <span className="pill" title={k.diasExtras.map((e: any) => fmtDateTime(e.data) + " · " + e.projetista).join("\n")}>📆 {k.diasExtras.length + 1} dias</span>}
@@ -259,6 +269,7 @@ function CartaoCk({ c, aba }: any) {
           {g === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Não pode vir</button>}
           {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
           {g === "agendar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="espera" />)}>⏸ Aguardando</button>}
+          {c.status !== "concluida" && !querEnc(c) && ["agendar", "aguardando", "agendado"].includes(g) && <button className="btn sm" style={{ color: "var(--danger)", borderColor: "var(--danger)", fontWeight: 700 }} onClick={() => setModal(<ModalQuerEncaixe c={c} />)} title="Cliente quer ser antecipado se abrir vaga">❗ Solicita encaixe</button>}
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<Modal titulo={"Alterar agenda · " + c.cliente + " · venda " + c.pedido} onFechar={() => setModal(null)}><EditorAgenda c={c} /></Modal>)}>✏️ Projetista / horário</button>}
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="desmarcar" />)}>❌ Desmarcar</button>}
           <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : g === "agendado" ? "Realizado / outros" : "Registrar resultado"}</button>
@@ -289,6 +300,37 @@ export function NotasCk({ c }: any) {
   );
 }
 // encerra o atendimento do cliente no checklist (ex.: pedido aberto pelo call center) — o texto fica no histórico e o call center vê
+/** marca / encerra o pedido de encaixe (cliente quer ser antecipado se abrir vaga) */
+export function ModalQuerEncaixe({ c }: any) {
+  const { setModal, executar } = useApp() as any;
+  const q = querEnc(c); const [desde, setDesde] = useState(hojeISO()); const [obs, setObs] = useState("");
+  const fechar = () => setModal(null);
+  const ir = async (p: any, ok: string) => { if (await executar(() => A.checklistRegistrar(c.id, { acao: "quer_encaixe", ...p }), ok)) fechar(); };
+  return (
+    <Modal titulo={"❗ Solicita encaixe · " + c.cliente} onFechar={fechar}>
+      {q ? <>
+        <p style={{ marginTop: 0 }}>Pedido de encaixe desde <b>{fmtDate(q.em)}</b>{q.por ? " · marcado por " + q.por : ""}.{q.obs ? <><br /><span className="hint">{q.obs}</span></> : null}</p>
+        <div className="field full"><label>Observação <span className="hint">(opcional)</span></label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: antecipado para 14/10 às 09:00" /></div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          <button className="btn primary" onClick={() => ir({ ativo: false, antecipado: true, obs }, "Encaixe atendido")}>✅ Cliente foi antecipado</button>
+          <button className="btn" onClick={() => ir({ ativo: false, obs }, "Pedido de encaixe removido")}>Remover o pedido</button>
+          <button className="btn ghost" onClick={fechar}>Cancelar</button>
+        </div>
+      </> : <>
+        <p style={{ marginTop: 0 }}>O cliente aceitou a data, mas pediu para ser <b>antecipado se abrir vaga</b>. Ele fica sinalizado em vermelho e entra no filtro “❗ Solicitam encaixe”, do pedido mais antigo para o mais novo.</p>
+        <div className="grid">
+          <div className="field"><label>Data em que pediu</label><input type="date" value={desde} max={hojeISO()} onChange={e => setDesde(e.target.value)} /></div>
+          <div className="field full"><label>Observação <span className="hint">(disponibilidade do cliente)</span></label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: pode qualquer manhã; avisar com 1 dia" /></div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button className="btn primary" style={{ background: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => ir({ ativo: true, desde, obs }, "Cliente marcado: solicita encaixe")}>❗ Marcar solicita encaixe</button>
+          <button className="btn ghost" onClick={fechar}>Cancelar</button>
+        </div>
+      </>}
+    </Modal>
+  );
+}
+
 export function ModalFinalizarCk({ c }: any) {
   const { setModal, executar } = useApp() as any;
   const [tx, setTx] = useState("");
