@@ -12,7 +12,7 @@ import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, lin
 import { SeloMedidaVenda } from "../telas/Medidas";
 import { BotaoWhats, msgWhatsCliente, separarTelefones } from "./Whats";
 import { SelVendedor, confirmarDisp, registrarIndisp } from "./SelVendedor";
-import { cfgAgenda, CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
+import { cfgAgenda, CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalFinalizarCk, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
@@ -836,6 +836,7 @@ function BlocoChecklist({ c }: any) {
         {e === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Cliente não pode vir</button>}
         <button className="btn primary sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : "Registrar resultado"}</button>
         <button className="btn sm" onClick={() => setModal(<ModalNotas c={c} />)}>📝 Colar mensagem / anotar</button>
+        {c.status !== "concluida" && <button className="btn sm" onClick={() => setModal(<ModalFinalizarCk c={c} />)}>✓ Finalizar atendimento</button>}
         <button className="btn ghost sm" style={{ color: "var(--danger)", marginLeft: "auto" }} onClick={() => setModal(<ConfirmaExcluir ids={[c.id]} rotulo={c.cliente + " (venda " + c.pedido + ")"} />)}>🗑 Excluir do checklist</button>
       </div>}
       <div style={{ marginTop: 14 }}><div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>📝 Mensagens enviadas e anotações</div><NotasCk c={c} /></div>

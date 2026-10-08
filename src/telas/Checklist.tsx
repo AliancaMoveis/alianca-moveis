@@ -261,6 +261,7 @@ function CartaoCk({ c, aba }: any) {
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<Modal titulo={"Alterar agenda · " + c.cliente + " · venda " + c.pedido} onFechar={() => setModal(null)}><EditorAgenda c={c} /></Modal>)}>✏️ Projetista / horário</button>}
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="desmarcar" />)}>❌ Desmarcar</button>}
           <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : g === "agendado" ? "Realizado / outros" : "Registrar resultado"}</button>
+          {c.status !== "concluida" && <button className="btn sm" onClick={() => setModal(<ModalFinalizarCk c={c} />)}>✓ Finalizar atendimento</button>}
           <button className="btn ghost sm" onClick={() => setModal(<ModalNotas c={c} />)} title="Mensagens enviadas e anotações">📝{notas ? " " + notas : ""}</button>
           <button className="btn ghost sm" onClick={() => abrirDetalhe(c.id)}>Ficha</button>
           <button className="btn ghost sm" title="Excluir cliente do checklist" style={{ color: "var(--danger)" }} onClick={() => setModal(<ConfirmaExcluir ids={[c.id]} rotulo={c.cliente + " (venda " + c.pedido + ")"} />)}>🗑</button>
@@ -286,6 +287,23 @@ export function NotasCk({ c }: any) {
     </div>
   );
 }
+// encerra o atendimento do cliente no checklist (ex.: pedido aberto pelo call center) — o texto fica no histórico e o call center vê
+export function ModalFinalizarCk({ c }: any) {
+  const { setModal, executar } = useApp() as any;
+  const [tx, setTx] = useState("");
+  const fechar = () => setModal(null);
+  return (
+    <Modal titulo={"Finalizar atendimento · " + c.cliente} onFechar={fechar}>
+      <p style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 0 }}>Encerra este atendimento{c.setor && /call center/i.test(c.setor) ? " aberto pelo call center" : ""}. Escreva o que foi resolvido / informado ao cliente — fica no histórico.</p>
+      <div className="field"><textarea value={tx} onChange={e => setTx(e.target.value)} placeholder="Ex.: checklist agendado para 04/11 às 11h com o Cleberson" autoFocus /></div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button className="btn primary" disabled={tx.trim().length < 3} onClick={async () => { if (await executar(() => A.finalizarAtendimento(c.id, tx.trim()), "Atendimento finalizado")) fechar(); }}>✓ Finalizar atendimento</button>
+        <button className="btn ghost" onClick={fechar}>Cancelar</button>
+      </div>
+    </Modal>
+  );
+}
+
 export function ModalNotas({ c }: any) {
   const { setModal, toast, recarregar, st } = useApp() as any;
   const atual = st.chamados.find((x: any) => x.id === c.id) || c;
