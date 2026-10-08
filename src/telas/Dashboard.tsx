@@ -7,6 +7,7 @@ import PainelGestao from "./PainelGestao";
 import PainelDono from "./PainelDono";
 import PainelBruno from "./PainelBruno";
 import PainelSupervisao from "./PainelSupervisao";
+import PainelChecklist from "./PainelChecklist";
 import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume, pagamentosVenda } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
@@ -116,6 +117,8 @@ export default function Dashboard() {
   if (R.ehProprietario()) return <section className="view active" id="view-dashboard"><div className="view-head"><div><h2>Painel do dono</h2><p>Resultado do dia (ou do período escolhido), loja ao vivo, quem vende e quanto custa vender. Só visualização — as tarefas ficam com a Gestão.</p></div></div><PainelDono /></section>;
   if (R.ehGestao()) return <section className="view active" id="view-dashboard">{cabecalho}<PainelBruno de={de} ate={ate} /></section>;
   if (R.soCallCenter()) return <PainelSupervisao />;
+  // equipe do Checklist: o dashboard é o painel do dia do setor
+  if (R.mySetores().includes("checklist") && !R.mySetores().includes("callcenter") && !R.verTudo()) return <PainelChecklist />;
   if (souConsultor) return <section className="view active" id="view-dashboard">{cabecalho}<PainelConsultorVisual de={de} ate={ate} /></section>;
   if (souOperadora) return <section className="view active" id="view-dashboard">{cabecalho}<PainelOperadora de={de} ate={ate} /></section>;
   return (
