@@ -78,6 +78,7 @@ export default function Detalhe({ id }: { id: string }) {
             <Row k="CPF">{c.clienteDoc || "—"}</Row>
             <Row k="Contato">{(() => { const tels = separarTelefones(c.telefone); const eu = R.nomeUser(R.currentUserId); const msg = msgWhatsCliente(c, eu ? eu.split(" ")[0] : "");
               return tels.length ? <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>{tels.map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b><BotaoWhats tel={t} texto={msg} /></span>)}</span> : (c.telefone || "—"); })()}</Row>
+            {c.endereco ? <Row k="Endereço">{c.endereco}</Row> : null}
             <Row k="Pedido venda">{c.pedido}{c.dataVenda ? " · " + fmtDate(c.dataVenda) : ""}</Row>
             <Row k="Produto">{c.produto}</Row>
             {ehFab && <>

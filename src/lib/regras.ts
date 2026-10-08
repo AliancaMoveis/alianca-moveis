@@ -208,6 +208,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const getUser = (id: string): Usuario | null => state.usuarios.find(u => u.id === id) || null;
   const me = () => getUser(currentUserId);
   const mySetores = () => (me() || ({} as any)).setores || [];
+  /** base de clientes (CPF, endereço, histórico de compras): Gestão, call center e supervisão — o banco confere o mesmo */
+  const podeBaseClientes = () => ehGestao() || mySetores().includes("callcenter") || mySetores().includes("supervisao");
   const myLibs = () => { const acc: Record<string, boolean> = {}; mySetores().forEach((id: string) => { const s = getSetor(id); if (s && s.liberacoes) Object.keys(s.liberacoes).forEach(k => { if (s.liberacoes[k]) acc[k] = true; }); }); return acc; };
   const temLib = (k: string) => !!myLibs()[k];
   const setoresLabel = (u: any) => ((u && u.setores) || []).map(setorNome).join(", ") || "—";
@@ -745,6 +747,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (!veCC && consultaNoSetor && (ehJuridico() || podeChecklist() || ehSupMedidas() || ehPosvenda())) {
       const gi = G.findIndex(g => ["Jurídico", "Checklist", "Medidas", "Pós-venda"].includes(g.g)); if (gi >= 0) G[gi].itens.push(["consulta", "Consulta"]);
     }
+    if (podeBaseClientes()) G.push({ g: "Clientes", ic: "📇", itens: [["cli_base", "Base de clientes"]] });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
     if (podeMontadores()) cd.push(["pv_cadastro", "Montadores"]);
@@ -755,7 +758,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   return {
     acompAtivo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
-    verTudo, ehGestao, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
+    verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
     ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,

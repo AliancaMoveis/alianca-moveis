@@ -5,7 +5,7 @@ const colNum = (ref: string) => { let n = 0; for (const ch of ref.replace(/\d+/g
 const texto = (el: Element | null) => (el ? Array.from(el.getElementsByTagName("t")).map(t => t.textContent || "").join("") : "");
 
 /** Primeira aba da planilha como lista de objetos { cabeçalho: valor } (tudo em texto). */
-export async function lerXlsx(arq: File): Promise<Record<string, string>[]> {
+export async function lerXlsx(arq: File, aba?: string | RegExp): Promise<Record<string, string>[]> {
   const zip = await JSZip.loadAsync(arq);
   const xml = async (p: string) => { const f = zip.file(p); return f ? new DOMParser().parseFromString(await f.async("string"), "application/xml") : null; };
   const ss = await xml("xl/sharedStrings.xml");
@@ -13,7 +13,9 @@ export async function lerXlsx(arq: File): Promise<Record<string, string>[]> {
   // primeira aba: workbook → rels → arquivo
   let caminho = "xl/worksheets/sheet1.xml";
   const wb = await xml("xl/workbook.xml"), rels = await xml("xl/_rels/workbook.xml.rels");
-  const s1 = wb?.getElementsByTagName("sheet")[0];
+  const abas = wb ? Array.from(wb.getElementsByTagName("sheet")) : [];
+  const s1 = aba ? abas.find(x => { const n = x.getAttribute("name") || ""; return typeof aba === "string" ? n.trim().toLowerCase() === aba.toLowerCase() : aba.test(n); }) : abas[0];
+  if (aba && !s1) return [];
   const rid = s1?.getAttribute("r:id") || s1?.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
   if (rid && rels) {
     const r = Array.from(rels.getElementsByTagName("Relationship")).find(x => x.getAttribute("Id") === rid);

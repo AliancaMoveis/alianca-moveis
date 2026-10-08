@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BC, docValido, enderecoTxt, fmtTel } from "../lib/baseClientes";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import { PV_SITUACAO, PV_TIPOS, fmtDateTime, inicial, mesmaPessoa, soDigitos } from "../lib/regras";
@@ -81,6 +82,19 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
   }, [ckDaVenda && ckDaVenda.id, ehPv]);
   function limpar() { setF({ ...VAZIO, pvOrigem: pvFixo || "cliente", tipo: escopo === "pv" ? "posvenda" : "" }); setOrigem(null); setAnexos([]); setLink(""); setDups([]); setExtras([]); }
   const ehFab = f.tipo === "prazo_fabrica";
+  // CPF/CNPJ que está na base de clientes → preenche só o cadastro (nome, telefone, endereço). Vendedor e valores não entram.
+  const [baseCli, setBaseCli] = useState<any>(null);
+  const docDig = soDigitos(f.clienteDoc);
+  useEffect(() => {
+    setBaseCli(null);
+    if (ehMkt || !docValido(docDig)) return;
+    let vivo = true;
+    BC.porDoc(docDig).then(b => { if (!vivo || !b) return; setBaseCli(b);
+      const tels = [b.telefone1, b.telefone2].filter(Boolean).map(fmtTel).join(" / ");
+      setF((x: any) => ({ ...x, cliente: x.cliente.trim() ? x.cliente : b.nome, telefone: String(x.telefone || "").replace(/\D/g, "").length >= 10 ? x.telefone : tels, endereco: x.endereco || enderecoTxt(b) }));
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, [docDig, ehMkt]);
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -187,6 +201,9 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
           <div className="field"><label>Nome do cliente <span className="req-star">*</span></label><input name="cliente" required placeholder="Nome completo" value={f.cliente} onChange={set("cliente")} /></div>
           {!ehMkt && <div className="field" id="fieldClienteDoc"><label>CPF / CNPJ do cliente {pvMont ? <span className="hint">(se souber)</span> : <span className="req-star">*</span>}</label><input name="clienteDoc" required={!pvMont} placeholder="000.000.000-00" value={f.clienteDoc} onChange={set("clienteDoc")} /></div>}
           <div className="field"><label>Telefone {pvMont ? "do cliente " : "/ contato "}{pvMont ? <span className="hint">(se souber)</span> : <span className="req-star">*</span>}</label><input name="telefone" placeholder="(00) 00000-0000" value={f.telefone} onChange={set("telefone")} /></div>
+          {!ehMkt && baseCli && <div className="field full"><div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--st-concluida-bg, rgba(15,138,95,.08))", border: "1px solid var(--st-concluida, #0f8a5f)", fontSize: 13.5 }}>
+            📇 Cliente na base{baseCli.compras ? <> — já comprou <b>{baseCli.compras} {baseCli.compras === 1 ? "vez" : "vezes"}</b>{baseCli.ultimaCompra ? <>, última compra em <b>{new Date(baseCli.ultimaCompra).toLocaleDateString("pt-BR")}</b></> : null}</> : null}. Nome, telefone e endereço preenchidos pelo cadastro — confira com o cliente.</div></div>}
+          {!ehMkt && (baseCli || f.endereco) && <div className="field full"><label>Endereço do cliente</label><input name="endereco" value={f.endereco} onChange={set("endereco")} placeholder="Rua, número, bairro, cidade" /></div>}
           {!ehMkt && <div className="field" id="fieldPedido"><label>Nº venda {rapido ? <span className="hint">(opcional)</span> : <span className="req-star">*</span>}</label><input name="pedido" required={!rapido} placeholder="Ex.: 48213" value={f.pedido} onChange={set("pedido")} /></div>}
           {!ehMkt && <div className="field" id="fieldDataVenda"><label>Data da venda</label><input name="dataVenda" type="date" value={f.dataVenda} onChange={set("dataVenda")} /></div>}
           {ehFab && <div className="field" id="fieldPedidoFabrica"><label>Nº do nosso pedido na fábrica <span className="hint">(opcional)</span></label><input name="pedidoFabrica" placeholder="Se souber" value={f.pedidoFabrica} onChange={set("pedidoFabrica")} /></div>}
