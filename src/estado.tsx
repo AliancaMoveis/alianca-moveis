@@ -39,11 +39,15 @@ export function AppProvider({ uid, inicial, children, overlays }: { uid: string;
 
   const R = useMemo(() => criarRegras(st, uid), [st, uid]);
   const toast = useCallback((m: string) => { setMsg(m); setToastOn(true); clearTimeout(tRef.current); tRef.current = setTimeout(() => setToastOn(false), 2200); }, []);
-  const carregando = useRef(false);
-  const recarregar = useCallback(async () => {
-    if (carregando.current) return;
-    carregando.current = true;
-    try { setSt(await carregarEstado()); } catch (e: any) { console.error(e); } finally { carregando.current = false; }
+  // se já está carregando, não descarta o pedido: carrega de novo assim que terminar (senão a tela fica com dados antigos depois de uma ação)
+  const carregando = useRef<Promise<void> | null>(null); const denovo = useRef(false);
+  const recarregar = useCallback(async (): Promise<void> => {
+    if (carregando.current) { denovo.current = true; return carregando.current; }
+    const run = (async () => {
+      do { denovo.current = false; try { setSt(await carregarEstado()); } catch (e: any) { console.error(e); } } while (denovo.current);
+    })();
+    carregando.current = run;
+    try { await run; } finally { carregando.current = null; }
   }, []);
   const executar = useCallback(async (fn: () => Promise<any>, ok?: string) => {
     try { await fn(); await recarregar(); if (ok) toast(ok); return true; }
@@ -54,9 +58,10 @@ export function AppProvider({ uid, inicial, children, overlays }: { uid: string;
   useEffect(() => {
     let t: any;
     const ch = sb.channel("historico-ao-vivo")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "historico" }, () => { clearTimeout(t); t = setTimeout(recarregar, 700); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "historico" }, () => { clearTimeout(t); if (document.visibilityState === "visible") t = setTimeout(recarregar, 1500); })
       .subscribe();
-    const iv = setInterval(() => { recarregar(); setTick(x => x + 1); }, 30000);
+    // atualização periódica só com a tela visível (abas esquecidas abertas não pesam no banco)
+    const iv = setInterval(() => { if (document.visibilityState === "visible") recarregar(); setTick(x => x + 1); }, 60000);
     // celular: ao voltar para o app (estava em segundo plano), atualiza na hora
     const vis = () => { if (document.visibilityState === "visible") { recarregar(); setTick(x => x + 1); } };
     document.addEventListener("visibilitychange", vis);

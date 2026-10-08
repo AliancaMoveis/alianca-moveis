@@ -71,8 +71,19 @@ export async function carregarEstado(tentativa = 0): Promise<Estado> {
     throw e;
   }
 }
+// carga principal numa chamada só ao banco (a permissão de cada chamado é avaliada uma vez); se a função não existir, cai no modo antigo
+async function principal(): Promise<{ chamados: any[]; historico: any[]; anexos: any[]; vendas: any[]; valores: any[]; itens: any[] }> {
+  const { data, error } = await sb.rpc("carregar_principal");
+  if (!error && data) return data as any;
+  const [chamados, vendas, valores, historico, anexos, itens] = await Promise.all([
+    todos("chamados", "*", "criado_em"), todos("vendas", "*"), todos("vendas_valores", "*"),
+    todos("historico", "chamado_id,quando,quem_nome,texto,id", "id"), todos("anexos", "id,chamado_id,tipo,nome,url,storage_path,criado_em", "criado_em"),
+    todos("venda_itens", "*", "registrado_em").catch(() => []),
+  ]);
+  return { chamados, historico, anexos, vendas, valores, itens };
+}
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, chamados, vendas, valores, transf, hist, anexos, montadores, posvenda, reemb, proms, mcruz, bloqs, mconta] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, mconta] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em,faz_projeto,folga,turno", "criado_em"),
@@ -80,20 +91,16 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("representantes", "*", "criado_em"),
     todos("fabricas", "*", "criado_em"),
     sb.from("config").select("*").maybeSingle(),
-    todos("chamados", "*", "criado_em"),
-    todos("vendas", "*"),
-    todos("vendas_valores", "*"),
+    principal(),
     todos("transferencias", "*", "quando"),
-    todos("historico", "chamado_id,quando,quem_nome,texto,id", "id"),
-    todos("anexos", "id,chamado_id,tipo,nome,url,storage_path,criado_em", "criado_em"),
     todos("montadores", "*", "nome"),
     todos("posvenda", "*"), // só o setor Pós-venda e a Gestão recebem linhas (RLS)
     todos("reembolsos", "*", "criado_em").catch(() => []), // o próprio pedido ou a Gestão (RLS)
-    todos("venda_itens", "*", "registrado_em").catch(() => []), // nºs de venda, promissórias e pagamentos — só quem vê o valor (RLS)
     todos("medidas_cruzamento", "*", "venda").catch(() => []), // Medidas e Checklist (RLS)
     todos("checklist_bloqueios", "*", "inicio").catch(() => []), // agenda fechada do checklist (RLS)
     todos("montadores_conta", "*").catch(() => []), // conta de pagamento do montador — só Pós-venda e Gestão (RLS)
   ]);
+  const { chamados, vendas, valores, historico: hist, anexos } = P; const proms = P.itens;
   // lançamentos da venda: nºs pagos, promissórias (com saldo) e pagamentos de promissória
   const itensDe: Record<string, any[]> = {};
   (proms as any[]).forEach((i: any) => (itensDe[i.chamado_id] = itensDe[i.chamado_id] || []).push({
