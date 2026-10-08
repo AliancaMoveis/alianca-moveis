@@ -7,7 +7,7 @@ import { CONF_CK, ck, grupoCk } from "./Checklist";
 
 // classifica o que foi feito no histórico do checklist (texto gravado pelo banco)
 const ATV: [string, string, RegExp][] = [
-  ["agendou", "📅 Agendamentos feitos", /^📅 Checklist agendado/],
+  ["agendou", "📅 Agendamentos feitos (todos)", /^📅 (Checklist agendado|Agendado pela planilha|Saiu da planilha)/],
   ["contato", "💬 Contatos / mensagens", /^💬 (WhatsApp enviado|Nova tentativa)/],
   ["confenv", "📨 Confirmações enviadas", /^📨 Mensagem de confirmação/],
   ["confirmou", "✅ Clientes confirmaram", /^✅ Cliente confirmou presença/],
@@ -37,9 +37,9 @@ export default function PainelChecklist() {
   // atividades do dia (quem fez o quê)
   const evs: any[] = [];
   todos.forEach((c: any) => (c.historico || []).forEach((h: any) => { if (String(h.quando).slice(0, 10) !== dia && isoLocal(new Date(h.quando)) !== dia) return; const k = tipoAtv(h.texto); if (k) evs.push({ k, c, quem: h.quem, quando: h.quando, texto: h.texto }); }));
-  const cont = (k: string) => evs.filter(e => e.k === k).length;
-  const pessoas: Record<string, Record<string, number>> = {};
-  evs.filter(e => e.quem && e.quem !== "Sistema" && !/^Importa/i.test(e.quem)).forEach(e => { (pessoas[e.quem] = pessoas[e.quem] || {})[e.k] = (pessoas[e.quem][e.k] || 0) + 1; });
+  // total do setor: cada cliente conta uma vez por tipo de atividade, não importa quem fez (360 ou agenda oficial)
+  const unicos = (k: string) => new Set(evs.filter(e => e.k === k).map(e => e.c.id)).size;
+  const cont = unicos;
   // pendentes (agora)
   const aAgendar = todos.filter((c: any) => grupoCk(c) === "agendar"), aguard = todos.filter((c: any) => grupoCk(c) === "aguardando");
   const futuros = todos.filter((c: any) => grupoCk(c) === "agendado" && diaAg(c) > hojeISO());
@@ -48,7 +48,7 @@ export default function PainelChecklist() {
   const ehHoje = dia === hojeISO();
   return (
     <section className="view active">
-      <div className="view-head"><div><h2>✓ Painel do Checklist</h2><p>Agenda do dia, o que a equipe fez no dia e os clientes pendentes. Use as setas para ver outro dia.</p></div><span className="live"><i></i>ao vivo</span></div>
+      <div className="view-head"><div><h2>✓ Painel do Checklist</h2><p>Totais do setor (de qualquer pessoa que agendou — no 360 ou pela agenda oficial). A produtividade de cada pessoa fica em “📈 Produtividade”.</p></div><span className="live"><i></i>ao vivo</span></div>
       <div className="card" style={{ padding: "10px 14px", marginBottom: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <button className="btn sm" onClick={() => mover(-1)}>‹</button>
         <button className={"btn sm" + (ehHoje ? " primary" : "")} onClick={() => setDia(hojeISO())}>Hoje</button>
@@ -61,6 +61,7 @@ export default function PainelChecklist() {
         <Kpi n={agenda.length} l="Clientes na agenda do dia" />
         <Kpi n={confirmados.length} l="Confirmados para o dia" cor="var(--st-concluida)" />
         <Kpi n={aConfirmar.length} l="Ainda sem confirmação" cls={aConfirmar.length ? "urg" : ""} />
+        <Kpi n={cont("agendou")} l="Agendamentos feitos no dia" cor="var(--st-concluida)" />
         <Kpi n={cont("realizou")} l="Realizados no dia" />
       </div>
       <div className="sec-label">Atividades feitas no dia</div>
@@ -79,14 +80,43 @@ export default function PainelChecklist() {
             return <div key={x.c.id + x.quando} className="acao" style={{ borderLeftColor: cf[1] }} onClick={() => abrirDetalhe(x.c.id)}><span><b>{hora(x.quando)}</b> · {x.c.cliente} · {x.proj || "sem projetista"}</span><span className="g" style={{ color: cf[1] }}>{cf[0]}</span></div>; })
             : <div className="hint">Ninguém agendado neste dia.</div>}
         </div>
-        <div className="panel"><h3>Quem fez o quê no dia</h3>
-          {Object.keys(pessoas).length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Pessoa</th><th>Agendou</th><th>Contatos</th><th>Conf. enviadas</th><th>Confirmados</th><th>Reagend.</th><th>Realizados</th><th>Total</th></tr></thead><tbody>
-            {Object.entries(pessoas).sort((a, b) => Object.values(b[1]).reduce((s, n) => s + n, 0) - Object.values(a[1]).reduce((s, n) => s + n, 0)).map(([p, v]) =>
-              <tr key={p}><td><b>{p}</b></td><td>{v.agendou || 0}</td><td>{v.contato || 0}</td><td>{v.confenv || 0}</td><td>{v.confirmou || 0}</td><td>{v.reagendou || 0}</td><td>{v.realizou || 0}</td><td><b>{Object.values(v).reduce((s, n) => s + n, 0)}</b></td></tr>)}
-          </tbody></table></div> : <div className="hint">Nenhuma atividade registrada neste dia.</div>}
-          <h3 style={{ marginTop: 16 }}>Atividades</h3>
+        <div className="panel">
+          <h3>Atividades do dia (total do setor)</h3>
           {ATV.filter(([k]) => cont(k)).map(([k, l]) => <BarRow key={k} nm={l} pct={cont(k) / Math.max(1, ...ATV.map(([x]) => cont(x))) * 100} v={cont(k)} />)}
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** produtividade por pessoa (o que cada uma registrou no 360) — cada pessoa vê a sua; Gestão e supervisão do checklist veem todas */
+export function ProdutividadeChecklist() {
+  const { R, st } = useApp() as any;
+  const [de, setDe] = useState(hojeISO()); const [ate, setAte] = useState(hojeISO());
+  const todas = R.ehGestao?.() || R.verTudo?.();
+  const eu = R.me()?.nome || "";
+  const evs: any[] = [];
+  st.chamados.filter((c: any) => c.tipo === "checklist" && R.podeVer(c)).forEach((c: any) => (c.historico || []).forEach((h: any) => {
+    const d = isoLocal(new Date(h.quando)); if (d < de || d > ate) return; const k = tipoAtv(h.texto);
+    if (k && h.quem && h.quem !== "Sistema" && !/^Importa/i.test(h.quem) && (todas || h.quem === eu)) evs.push({ k, quem: h.quem }); }));
+  const pessoas: Record<string, Record<string, number>> = {};
+  evs.forEach(e => { (pessoas[e.quem] = pessoas[e.quem] || {})[e.k] = (pessoas[e.quem][e.k] || 0) + 1; });
+  const tot = (v: Record<string, number>) => Object.values(v).reduce((s, n) => s + n, 0);
+  return (
+    <section className="view active">
+      <div className="view-head"><div><h2>📈 Produtividade do checklist</h2><p>{todas ? "O que cada pessoa registrou no 360 no período." : "O que você registrou no 360 no período."}</p></div></div>
+      <div className="card" style={{ padding: "10px 14px", marginBottom: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button className="btn sm" onClick={() => { setDe(hojeISO()); setAte(hojeISO()); }}>Hoje</button>
+        <button className="btn sm" onClick={() => { const d = new Date(); d.setDate(d.getDate() - 6); setDe(isoLocal(d)); setAte(hojeISO()); }}>7 dias</button>
+        <button className="btn sm" onClick={() => { const d = new Date(); d.setDate(1); setDe(isoLocal(d)); setAte(hojeISO()); }}>Mês</button>
+        <input type="date" value={de} onChange={e => e.target.value && setDe(e.target.value)} style={{ maxWidth: 160 }} /> até
+        <input type="date" value={ate} onChange={e => e.target.value && setAte(e.target.value)} style={{ maxWidth: 160 }} />
+      </div>
+      <div className="panel">
+        {Object.keys(pessoas).length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Pessoa</th>{ATV.map(([k, l]) => <th key={k}>{l.replace(/ \(.*\)$/, "")}</th>)}<th>Total</th></tr></thead><tbody>
+          {Object.entries(pessoas).sort((a, b) => tot(b[1]) - tot(a[1])).map(([p, v]) =>
+            <tr key={p}><td><b>{p}</b></td>{ATV.map(([k]) => <td key={k}>{v[k] || 0}</td>)}<td><b>{tot(v)}</b></td></tr>)}
+        </tbody></table></div> : <div className="hint">Nenhuma atividade registrada no período.</div>}
       </div>
     </section>
   );

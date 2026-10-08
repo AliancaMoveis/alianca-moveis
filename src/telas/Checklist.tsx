@@ -243,6 +243,7 @@ function CartaoCk({ c, aba }: any) {
           </div>}
           <div style={{ fontSize: 12.5, marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             {g !== "aguardando" && <span className="badge" style={{ background: cor0, color: "#fff" }}>{nome}</span>}
+            {(g === "agendar" || e === "aguardando") && (() => { const sg = durSugeridaCk(c); return <span className="pill" style={{ fontWeight: 700 }} title={sg.cupom ? "Cupom " + fmtBRL(sg.cupom) + " → sugerido " + fmtDur(sg.min) : "Sem valor de cupom na planilha"}>⏱ {fmtDur(Number(k.duracaoMin) || sg.min)}{k.duracaoMin ? "" : sg.cupom ? " sugerido" : " (sem cupom)"}{Array.isArray(k.propostaDiasExtras) && k.propostaDiasExtras.length ? " · " + (k.propostaDiasExtras.length + 1) + " dias" : ""}</span>; })()}
             {e === "aguardando" && <span>oferecido {fmtDateTime(k.proposta)} · {k.contatos || 1}º contato · há {diasDesde(k.ultimoContato)}d</span>}
             {g === "agendado" && Array.isArray(k.diasExtras) && k.diasExtras.length > 0 && <span className="pill" title={k.diasExtras.map((e: any) => fmtDateTime(e.data) + " · " + e.projetista).join("\n")}>📆 {k.diasExtras.length + 1} dias</span>}
             {g === "agendado" && <span className="pill" style={{ background: corProj(k.projetista), color: "#fff", fontWeight: 700 }}>{k.projetista ? "👤 " + k.projetista : "👤 sem projetista"}</span>}
@@ -261,7 +262,7 @@ function CartaoCk({ c, aba }: any) {
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<Modal titulo={"Alterar agenda · " + c.cliente + " · venda " + c.pedido} onFechar={() => setModal(null)}><EditorAgenda c={c} /></Modal>)}>✏️ Projetista / horário</button>}
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="desmarcar" />)}>❌ Desmarcar</button>}
           <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : g === "agendado" ? "Realizado / outros" : "Registrar resultado"}</button>
-          {c.status !== "concluida" && <button className="btn sm" onClick={() => setModal(<ModalFinalizarCk c={c} />)}>✓ Finalizar atendimento</button>}
+          {c.status !== "concluida" && g !== "agendar" && <button className="btn sm" onClick={() => setModal(<ModalFinalizarCk c={c} />)}>✓ Finalizar atendimento</button>}
           <button className="btn ghost sm" onClick={() => setModal(<ModalNotas c={c} />)} title="Mensagens enviadas e anotações">📝{notas ? " " + notas : ""}</button>
           <button className="btn ghost sm" onClick={() => abrirDetalhe(c.id)}>Ficha</button>
           <button className="btn ghost sm" title="Excluir cliente do checklist" style={{ color: "var(--danger)" }} onClick={() => setModal(<ConfirmaExcluir ids={[c.id]} rotulo={c.cliente + " (venda " + c.pedido + ")"} />)}>🗑</button>
@@ -432,6 +433,12 @@ const isoDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 type Ocup = { proj: string; ini: number; fim: number; cliente: string; aguardando: boolean };
 /** duração do atendimento deste cliente (minutos) — a agenda oficial tem atendimentos de 1h a 10h */
 export const durCk = (c: any, cfg?: any) => Number(ck(c).duracaoMin) || (cfg?.duracaoMin) || 120;
+/** valor do cupom da venda (planilha do checklist) */
+export const cupomCk = (c: any) => { const v = String(ck(c).planilha?.cupom ?? ck(c).cupom ?? "").replace(/[^\d,.-]/g, ""); const n = parseFloat(v.replace(/\./g, "").replace(",", ".")); return isNaN(n) ? 0 : n; };
+/** duração sugerida pelo valor do cupom: até 20 mil 1h · até 50 mil 2h · até 100 mil 4h · até 150 mil 5h · até 200 mil 6h · acima 8h */
+export const durPorValor = (v: number) => v <= 0 ? 0 : v <= 20000 ? 60 : v <= 50000 ? 120 : v <= 100000 ? 240 : v <= 150000 ? 300 : v <= 200000 ? 360 : 480;
+export const durSugeridaCk = (c: any) => { const cupom = cupomCk(c); return { cupom, min: durPorValor(cupom) || 120 }; };
+const fmtBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 /** todos os dias de atendimento de um cliente agendado: o principal (extra = -1) + os dias adicionais */
 export type Atend = { slot: string; dur: number; proj: string; extra: number; n: number; total: number };
 export function atendimentos(c: any, cfg?: any): Atend[] {
@@ -449,7 +456,10 @@ export function ocupacoes(st: any, excluirId?: string): Ocup[] {
     if (c.tipo !== "checklist" || c.status === "concluida" || c.id === excluirId) return;
     const k = ck(c), e = etapaCk(c);
     if (e === "agendado" && k.agendadoPara) atendimentos(c, cfg).forEach(a => { const ini = +parseData(a.slot); out.push({ proj: a.proj, ini, fim: ini + a.dur * 6e4, cliente: c.cliente, aguardando: false }); });
-    else if (e === "aguardando" && k.proposta && diasDesde(k.ultimoContato) <= cfg.seguraDias) { const ini = +parseData(String(k.proposta).slice(0, 16)); out.push({ proj: k.propostaProjetista || "", ini, fim: ini + (cfg.duracaoMin || 120) * 6e4, cliente: c.cliente, aguardando: true }); }
+    else if (e === "aguardando" && k.proposta && diasDesde(k.ultimoContato) <= cfg.seguraDias) {
+      [{ data: k.proposta, duracaoMin: durCk(c, cfg) }, ...(Array.isArray(k.propostaDiasExtras) ? k.propostaDiasExtras : [])].forEach((x: any) => {
+        const ini = +parseData(String(x.data).slice(0, 16)); out.push({ proj: k.propostaProjetista || "", ini, fim: ini + (Number(x.duracaoMin) || durCk(c, cfg)) * 6e4, cliente: c.cliente, aguardando: true }); });
+    }
   });
   return out;
 }
@@ -459,8 +469,8 @@ export function bloqueiosEm(st: any, proj: string, ini: number, fim: number) {
   return ((st.ckBloqueios || []) as any[]).filter(b => (!b.projetista || !proj || b.projetista === proj) && +parseData(b.inicio) < fim && ini < +parseData(b.fim));
 }
 export const rotuloBloq = (b: any) => "🚫 " + b.motivo + (b.obs ? " — " + b.obs : "") + (b.projetista ? "" : " (todos)");
-export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?: Ocup[]): { livres: string[]; ocupados: string[] } {
-  const cfg = cfgAgenda(st), dur = (cfg.duracaoMin || 120) * 6e4, t = +parseData(slot.slice(0, 16));
+export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?: Ocup[], durMin?: number): { livres: string[]; ocupados: string[] } {
+  const cfg = cfgAgenda(st), dur = (durMin || cfg.duracaoMin || 120) * 6e4, t = +parseData(slot.slice(0, 16));
   const no = (occ || ocupacoes(st, excluirId)).filter(o => o.ini < t + dur && t < o.fim);
   const ocupadosProj = new Set(no.filter(o => o.proj).map(o => o.proj));
   // projetistas só para emergência (ex.: gerente de loja) não entram nas sugestões — só são escolhidos à mão
@@ -470,15 +480,19 @@ export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?:
   if (semProj) livres = livres.slice(0, Math.max(0, livres.length - semProj));
   return { livres, ocupados: no.map(o => o.cliente + (o.proj ? " · " + o.proj : "") + (o.aguardando ? " (aguardando resposta)" : "")) };
 }
-export function sugestoes(st: any, excluirId?: string, n = 8, projetista?: string): { slot: string; livres: string[] }[] {
+export function sugestoes(st: any, excluirId?: string, n = 8, projetista?: string, durMin?: number, mes?: string): { slot: string; livres: string[] }[] {
   const cfg = cfgAgenda(st), occ = ocupacoes(st, excluirId), out: { slot: string; livres: string[] }[] = [], agora = Date.now() + 2 * 36e5;
-  for (let i = 0; i < 60 && out.length < n; i++) {
-    const d = new Date(); d.setDate(d.getDate() + i);
+  // mes = "AAAA-MM": só os horários daquele mês; sem mês = os próximos a partir de hoje
+  const ini0 = new Date(); ini0.setHours(0, 0, 0, 0);
+  const base = mes ? new Date(Math.max(+ini0, +new Date(mes + "-01T00:00"))) : ini0;
+  for (let i = 0; i < 62 && out.length < n; i++) {
+    const d = new Date(base); d.setDate(base.getDate() + i);
+    if (mes && isoDia(d).slice(0, 7) !== mes) break;
     if (!cfg.dias.includes(d.getDay())) continue;
     for (const h of [...cfg.horarios].sort()) {
       const slot = isoDia(d) + "T" + h;
       if (+parseData(slot) < agora) continue;
-      const { livres } = livresNoHorario(st, slot, excluirId, occ);
+      const { livres } = livresNoHorario(st, slot, excluirId, occ, durMin);
       if (projetista ? livres.includes(projetista) : livres.length) out.push({ slot, livres });
       if (out.length >= n) break;
     }
@@ -848,23 +862,27 @@ function ModalDias({ c, dias }: { c: any; dias: DiaEx[] }) {
 }
 
 /** chips com os próximos horários livres; ao clicar escolhe a data e um projetista livre (o cliente não vê o nome) */
-export function Sugestoes({ valor, onPick, excluirId, projetista }: { valor: string; onPick: (v: string, proj: string) => void; excluirId?: string; projetista?: string }) {
+const MESES_NOME = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const proximosMeses = (n = 6) => Array.from({ length: n }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + i); return { v: isoDia(d).slice(0, 7), l: MESES_NOME[d.getMonth()] + (d.getFullYear() !== new Date().getFullYear() ? " " + d.getFullYear() : "") }; });
+export function Sugestoes({ valor, onPick, excluirId, projetista, durMin }: { valor: string; onPick: (v: string, proj: string) => void; excluirId?: string; projetista?: string; durMin?: number }) {
   const { st } = useApp() as any;
   const [so, setSo] = useState(false);
-  const lst = sugestoes(st, excluirId, 10, so ? projetista : undefined);
+  const [mes, setMes] = useState("");
+  const lst = sugestoes(st, excluirId, mes ? 120 : 10, so ? projetista : undefined, durMin, mes || undefined);
   const v16 = (valor || "").slice(0, 16);
-  const atual = v16.length === 16 ? livresNoHorario(st, v16, excluirId) : null;
+  const atual = v16.length === 16 ? livresNoHorario(st, v16, excluirId, undefined, durMin) : null;
   const conflito = atual && projetista && !atual.livres.includes(projetista);
   return (
     <div className="field full">
-      <label style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>Horários livres sugeridos
+      <label style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>Horários livres sugeridos{durMin ? " (" + fmtDur(durMin) + ")" : ""}
+        <select value={mes} onChange={e => setMes(e.target.value)} style={{ width: "auto", padding: "3px 8px", fontSize: 13, fontWeight: 400 }}><option value="">Próximos</option>{proximosMeses().map(m => <option key={m.v} value={m.v}>{m.l}</option>)}</select>
         {projetista && <span style={{ fontWeight: 400, display: "flex", gap: 5, alignItems: "center" }}><input type="checkbox" style={{ width: "auto" }} checked={so} onChange={e => setSo(e.target.checked)} />só os de {projetista}</span>}</label>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", ...(mes ? { maxHeight: 260, overflowY: "auto" } : {}) }}>
         {lst.length ? lst.map(({ slot, livres }) => { const d = parseData(slot); return (
           <button type="button" key={slot} className={"chip" + (v16 === slot ? " on" : "")} title={"Livres: " + livres.join(", ")}
             onClick={() => onPick(slot, projetista && livres.includes(projetista) ? projetista : livres[0])}>
             {DIAS[d.getDay()].slice(0, 3)} {d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · <b>{slot.slice(11, 16)}</b> <span className="n">{livres.length} livre{livres.length > 1 ? "s" : ""}</span></button>); })
-          : <span className="hint">Nenhum horário livre nas próximas semanas — revise em ⚙ Horários.</span>}
+          : <span className="hint">{mes ? "Nenhum horário livre nesse mês para essa duração." : "Nenhum horário livre nas próximas semanas — revise em ⚙ Horários."}</span>}
       </div>
       {atual && <span className="hint" style={{ color: conflito || !atual.livres.length ? "var(--danger)" : "var(--ink-soft)" }}>
         {conflito ? `⚠️ ${projetista} já está ocupado nesse horário. ` : !atual.livres.length ? "⚠️ Nenhum projetista livre nesse horário. " : ""}
@@ -1160,7 +1178,7 @@ export function ModalWhats({ c, inicial }: any) {
   const k = ck(c), e = etapaCk(c);
   const projs: string[] = cfgAgenda(st).projetistas;
   const [tipo, setTipo] = useState(inicial || (e === "agendado" ? "confirmacao" : e === "aguardando" || e === "sem_resposta" ? "cobranca" : ["em_obras", "outra_data", "espera"].includes(e) ? "retorno" : "primeiro"));
-  const primeira = e === "agendado" || k.proposta ? null : sugestoes(st, c.id, 1)[0];
+  const primeira = e === "agendado" || k.proposta ? null : sugestoes(st, c.id, 1, undefined, Number(k.duracaoMin) || durSugeridaCk(c).min)[0];
   const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : k.proposta) || (primeira && primeira.slot) || proximoDiaUtil()).slice(0, 16));
   const [proj, setProj] = useState<string>((e === "agendado" ? k.projetista : k.propostaProjetista) || (primeira && primeira.livres[0]) || "");
   const tels = [c.telefone, k.telefone2].filter((t: string) => t && t.replace(/\D/g, "").length >= 10);
@@ -1170,15 +1188,23 @@ export function ModalWhats({ c, inicial }: any) {
   const [encaixe, setEncaixe] = useState(false);
   const texto = editado ? txt : mensagemCk(tipo, c, data, rem);
   const comData = tipo === "primeiro" || tipo === "retorno";
+  // tempo que trava a agenda (não vai na mensagem): padrão pelo valor do cupom
+  const sug = durSugeridaCk(c);
+  const [dur, setDur] = useState<number>(Number(k.duracaoMin) || sug.min);
+  const [nDias, setNDias] = useState<number>(Array.isArray(k.propostaDiasExtras) ? k.propostaDiasExtras.length + 1 : 1);
+  const cfgA = cfgAgenda(st);
+  const extras = (() => { const out: { data: string; duracaoMin: number }[] = []; if (nDias < 2 || (data || "").length < 16) return out;
+    const d = parseData(data.slice(0, 16)); for (let i = 0; i < 30 && out.length < nDias - 1; i++) { d.setDate(d.getDate() + 1); if (cfgA.dias.includes(d.getDay())) out.push({ data: isoDia(d) + "T" + data.slice(11, 16), duracaoMin: dur }); } return out; })();
+  const confExtras = comData && proj ? extras.filter(x => conflitosProj(st, x.data, proj, c.id, dur).length) : [];
   const fechar = () => setModal(null);
   async function enviar() {
     const n = sanitizeWhats(tel);
     if (!n) { toast("Cliente sem telefone válido"); return; }
     if (tipo !== "confirmacao" && !data) { toast("Escolha a data e o horário oferecidos"); return; }
     if (comData && !proj) { toast("Escolha o projetista que vai atender (o cliente não vê)"); return; }
-    if (comData && conflitosProj(st, data, proj, c.id).length && !encaixe) { toast("Esse horário já tem cliente com " + proj + " — marque “Confirmo o encaixe” ou escolha outro horário/projetista"); return; }
+    if (comData && (conflitosProj(st, data, proj, c.id, dur).length || confExtras.length) && !encaixe) { toast("Esse horário já tem cliente com " + proj + " — marque “Confirmo o encaixe” ou escolha outro horário/projetista"); return; }
     try {
-      if (comData) await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj, encaixe, texto });
+      if (comData) await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj, encaixe, texto, duracaoMin: dur, diasExtras: extras });
       else if (tipo === "cobranca") await A.checklistRegistrar(c.id, { acao: "cobranca", texto });
       else if (tipo === "confirmacao" && e === "agendado") await A.checklistRegistrar(c.id, k.confirmacao === "confirmada" ? { acao: "nota", texto } : { acao: "confirmacao_enviada", texto });
     } catch (x: any) { toast(x.message); return; }
@@ -1192,8 +1218,15 @@ export function ModalWhats({ c, inicial }: any) {
         <div className="field"><label>Telefone</label>{tels.length > 1 ? <select value={tel} onChange={ev => setTel(ev.target.value)}>{tels.map((t: string) => <option key={t} value={t}>{t}</option>)}</select> : <input value={tel} onChange={ev => setTel(ev.target.value)} placeholder="DDD + número" />}</div>
         <div className="field"><label>{tipo === "confirmacao" ? "Data agendada" : "Data e horário oferecidos"} <span className="req-star">*</span></label><input type="datetime-local" value={data} disabled={tipo === "cobranca"} onChange={ev => { setData(ev.target.value); setEditado(false); }} /></div>
         {comData && <div className="field"><label>Projetista que vai atender <span className="req-star">*</span> <span className="hint">(não vai na mensagem)</span></label><select value={proj} onChange={ev => setProj(ev.target.value)}><option value="">Selecione…</option>{projs.map(n => <option key={n} value={n}>{n}</option>)}</select></div>}
-        {comData && <AvisoEncaixe slot={data} proj={proj} excluirId={c.id} ok={encaixe} setOk={setEncaixe} />}
-        {comData && <Sugestoes valor={data} excluirId={c.id} projetista={proj} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); setEncaixe(false); setEditado(false); }} />}
+        {comData && <div className="field"><label>Tempo que trava a agenda <span className="hint">(não vai na mensagem)</span></label>
+          <select value={dur} onChange={ev => { setDur(Number(ev.target.value)); setEncaixe(false); }}>{Array.from(new Set([60, 120, 180, 240, 300, 360, 420, 480, dur])).sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}{m === sug.min && sug.cupom ? " · sugerido" : ""}</option>)}</select>
+          <span className="hint">{sug.cupom ? "Cupom " + fmtBRL(sug.cupom) + " → sugerido " + fmtDur(sug.min) : "Sem valor de cupom — padrão " + fmtDur(sug.min)}</span></div>}
+        {comData && <div className="field"><label>Dias de atendimento</label>
+          <select value={nDias} onChange={ev => { setNDias(Number(ev.target.value)); setEncaixe(false); }}>{[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n === 1 ? "1 dia" : n + " dias seguidos (dias úteis)"}</option>)}</select>
+          {extras.length > 0 && <span className="hint" style={confExtras.length ? { color: "var(--danger)", fontWeight: 600 } : {}}>Também trava: {extras.map(x => { const d = parseData(x.data); return DIAS[d.getDay()].slice(0, 3) + " " + d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); }).join(", ")} às {data.slice(11, 16)}{confExtras.length ? " · ⚠️ " + proj + " já tem cliente em " + confExtras.length + " desses dias — marque o encaixe ou troque" : ""}</span>}</div>}
+        {comData && <AvisoEncaixe slot={data} proj={proj} excluirId={c.id} ok={encaixe} setOk={setEncaixe} durMin={dur} />}
+        {comData && confExtras.length > 0 && !conflitosProj(st, data, proj, c.id, dur).length && <label className="full" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, fontWeight: 600, color: "var(--danger)" }}><input type="checkbox" style={{ width: "auto" }} checked={encaixe} onChange={ev => setEncaixe(ev.target.checked)} />Confirmo o encaixe nos dias adicionais</label>}
+        {comData && <Sugestoes valor={data} excluirId={c.id} projetista={proj} durMin={dur} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); setEncaixe(false); setEditado(false); }} />}
         <div className="field full"><label>Texto (pode editar antes de enviar)</label><textarea rows={13} value={texto} onChange={ev => { setTxt(ev.target.value); setEditado(true); }} /></div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
