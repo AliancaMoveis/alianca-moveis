@@ -603,35 +603,36 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const semAtualizacaoMkt = ch.filter(c => {
       if (!clienteCriticoInatividade(c)) return false;
       const souResponsavel = c.consultorId === eu || c.atendenteId === eu;
-      return souResponsavel || ehGestao() || temMarketing() || mySetores().includes("suporte_consultores");
+      // Gestão: só o que é dela (o geral fica informativo no dashboard e nos relatórios)
+      return souResponsavel || (!ehGestao() && (temMarketing() || mySetores().includes("suporte_consultores")));
     });
     add("semAtualizacaoMkt", "Sem atualização há mais de " + LIMITE_INATIVIDADE_H + "h", "Nenhuma ação registrada neste cliente. Continua pendente até alguém atualizar — vendedor, consultor, Gestão, Supervisão ou Suporte.", semAtualizacaoMkt, "var(--critico)");
     add("semcontato", "Visitas sem contato iniciado", "Você ainda não registrou contato com estes clientes.", ch.filter(c => c.consultorId === eu && c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.contatoIniciado)), "var(--warn)");
     add("agendarloja", "Visitas feitas — falta agendar a loja", "Registre a data em que o cliente virá à loja para encaminhar ao Suporte.", ch.filter(c => c.consultorId === eu && c.setorDestino === "consultor_externo" && c.tratativa && c.tratativa.realizada && !c.dataLoja), "var(--st-respondida)");
     add("visitaatrasada", "Visitas com data vencida", "A data da visita já passou e ela não foi marcada como realizada.", ch.filter(c => c.consultorId === eu && c.dataVisita && parseData(c.dataVisita) < agora && !(c.tratativa && c.tratativa.realizada) && c.setorDestino === "consultor_externo"), "var(--danger)");
-    if (ehGestao()) {
+    if (false) { // vendas/promissórias/transferências ficam em "Aprovações" (com contador) e no painel da Gestão
       const p = pendenciasGestao();
       add("apvendas", "Vendas a confirmar", "Decida se a venda é efetivada, promissória ou cancelada.", p.vendasConfirmar, "var(--warn)");
       add("appromis", "Promissórias em aberto", "Contam como venda, mas a comissão dessa parte só sai quando forem pagas.", p.promissorias, "var(--st-tratativa)");
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
-    if (temMarketing()) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
-    if (mySetores().includes("suporte_consultores") || temMarketing()) {
+    if (temMarketing() && !ehGestao()) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
+    if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao())) {
       add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend), "var(--primary)");
-      add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c)), "var(--warn)");
+      add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hojeISO())), "var(--warn)");
       add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c)), "var(--danger)");
     }
     add("retmont", "🔧 Retornos de montador para você", "O call center abriu um retorno do montador e escolheu você para tratar. Prioridade de atendimento.", ch.filter(c => c.tipo === "retorno_montador" && !["concluida", "respondida", "informar"].includes(c.status) && ((c as any).tratativa?.retorno?.atendenteId === eu)), "var(--critico)");
     add("errovend", "🚨 Erros de venda para você", "O call center registrou um erro na sua venda. Abra, corrija e escreva o que foi feito.", ch.filter(c => c.tipo === "erro_venda" && c.status !== "concluida" && (c as any).tratativa?.erroVenda?.vendedorId === eu && !((c as any).tratativa?.erroVenda?.respostas || []).length), "var(--critico)");
     if (mySetores().includes("juridico")) add("jurprazo", "⚖️ Prazos jurídicos em até 3 dias", "Casos com prazo (Reclame Aqui, Procon, processo) vencendo. Atualize o caso.", ch.filter(c => c.tipo === "juridico" && c.status !== "concluida" && (() => { const d = String((c as any).tratativa?.juridico?.prazo || ""); if (!d) return false; const lim = new Date(); lim.setDate(lim.getDate() + 3); return d <= isoLocal(lim); })()), "var(--critico)");
-    if (mySetores().includes("posvenda") || ehGestao()) add("pvcc", "📞 Pós-venda aberto pelo call center — sem resposta", "O call center abriu e o cliente aguarda. Trate a solicitação no Pós-venda.", ch.filter(c => c.tipo === "posvenda" && ["aberta", "tratativa"].includes(c.status) && /call center/i.test((c as any).setor || "")), "var(--critico)");
+    if (mySetores().includes("posvenda")) add("pvcc", "📞 Pós-venda aberto pelo call center — sem resposta", "O call center abriu e o cliente aguarda. Trate a solicitação no Pós-venda.", ch.filter(c => c.tipo === "posvenda" && ["aberta", "tratativa"].includes(c.status) && /call center/i.test((c as any).setor || "")), "var(--critico)");
     if (mySetores().includes("supervisao")) {
       add("desmont", "🛋 Desmontagem de estofado", "Encaminhe para a Tatiana (depósito → Valdir, estofador), marque \"enviada ao estofador\" e finalize.", ch.filter(c => c.tipo === "desmontagem_estofado" && c.status !== "concluida"), "var(--warn)");
       add("endsup", "📍 Atualizações de endereço", "O cliente pediu para atualizar o endereço. Atualize nos sistemas e finalize.", ch.filter(c => c.tipo === "atualizacao_endereco" && c.status !== "concluida"), "var(--warn)");
       add("errovsup", "⚠️ Erros de venda", "Informe o vendedor e acompanhe a tratativa dele. Quando estiver resolvido, finalize.", ch.filter(c => c.tipo === "erro_venda" && c.status !== "concluida"), "var(--critico)");
     }
-    if (ehGestao() || mySetores().includes("supervisao")) add("acomp", "🚨 Pedidos de acompanhamento", "O call center chamou a supervisão para estes chamados. Abra e marque \"Estou acompanhando\".", ch.filter(c => acompAtivo(c)), "var(--critico)");
-    if (ehSupMedidas()) {
+    if (mySetores().includes("supervisao")) add("acomp", "🚨 Pedidos de acompanhamento", "O call center chamou a supervisão para estes chamados. Abra e marque \"Estou acompanhando\".", ch.filter(c => acompAtivo(c)), "var(--critico)");
+    if (mySetores().includes("medidas_supervisao")) {
       add("solmed", "📞 Call center sem resposta (medidas)", "Trate a solicitação: se precisar medir, use \"Encaminhar para medir\" (vai para a fila de medidas). Depois finalize o ticket do call center.", ch.filter(c => c.tipo === "solicitacao_medida" && ["aberta", "tratativa"].includes(c.status)), "var(--warn)");
       add("medalerta", "⚠️ Medida para aprovar — checklist em até 3 dias", "O checklist está chegando e a medida desta venda ainda não foi aprovada. Aprove (Aguardando análise), direcione a medição ou avise o checklist.", ch.filter(c => c.tipo === "checklist" && c.status !== "concluida" && (c as any).tratativa?.checklist?.etapa === "agendado" && (() => { const d = String((c as any).tratativa.checklist.agendadoPara || "").slice(0, 10), h = hojeISO(); const lim = new Date(); lim.setDate(lim.getDate() + 3); return d >= h && d <= isoLocal(lim).slice(0, 10); })() && !ch.some(m => m.tipo === "medidas" && m.pedido === c.pedido && etapaMedida(m) === "liberada")), "var(--critico)");
       // aprovações ficam em "Aguardando análise"; viram pendência só quando o checklist está a 3 dias (medalerta)

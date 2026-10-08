@@ -58,7 +58,8 @@ export default function Shell() {
     const n: Record<string, number> = {};
     n.fila = R.state.chamados.filter(c => R.doCC(c) && R.naMinhaFila(c) && (c.status === "aberta" || c.status === "tratativa" || (c.status === "informar" && R.ehCallcenter()))).length;
     n.direcionamento = R.pendentesDirecionamento().length;
-    n.definir = R.podeEditarAgenda() ? R.state.chamados.filter(c => R.domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && (R.ehGestao() || R.souRespLoja(c))).length : 0;
+    { const hj = new Date(); const hoje = hj.getFullYear() + "-" + String(hj.getMonth() + 1).padStart(2, "0") + "-" + String(hj.getDate()).padStart(2, "0");
+      n.definir = R.podeEditarAgenda() ? R.state.chamados.filter(c => R.domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && (R.ehGestao() || R.souRespLoja(c)) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hoje)).length : 0; }
     n.aprovacoes = R.ehGestao() ? R.pendenciasGestao().total : 0;
     n.pendencias = R.minhasPendencias().total;
     const pvAb = R.state.chamados.filter(c => c.tipo === "posvenda" && ["aberta", "tratativa"].includes(c.status) && R.podeVer(c));
