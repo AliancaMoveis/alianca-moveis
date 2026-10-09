@@ -697,20 +697,19 @@ export function ModalNaoPodeVir({ c }: any) {
 function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0 }: { dados: any[]; futuros: any[]; passados?: number; prev: any; novos: any[]; semData?: number }) {
   const { setModal, toast, recarregar } = useApp() as any;
   const [sal, setSal] = useState(false); const [ver, setVer] = useState("");
-  const [trocar, setTrocar] = useState(true); const [corrigir, setCorrigir] = useState(true); const [forcar, setForcar] = useState(false);
+  const [trocar, setTrocar] = useState(true);
   const fechar = () => setModal(null);
   const fmt = (d: string) => d ? d.slice(8, 10) + "/" + d.slice(5, 7) + " " + d.slice(11, 16) : "";
   const dias = (d: any) => [{ data: d.agendadoPara, projetista: d.projetista }, ...d.diasExtras].map((e: any) => fmt(e.data) + (e.projetista ? " " + e.projetista : "")).join(" + ");
   const varios = futuros.filter(d => d.agendadoPara && d.diasExtras.length > 0);
   const semAgenda = futuros.filter(d => d.agendadoPara && !d.projetista);
   async function ok() {
-    if (corrigir && prev.alertaLiberar && !forcar) { toast("Confirme a liberação: a planilha deixaria mais da metade da agenda livre"); return; }
     setSal(true);
     try {
       const r = await A.checklistImportar(futuros);
-      const d = await A.checklistAgendadosPlanilha(dados, true, trocar, corrigir);
+      const d = await A.checklistAgendadosPlanilha(dados, true, trocar, false);
       await recarregar(); fechar();
-      toast(`${r.novos} novo(s) · ${d.agendar} passaram para agendado · ${d.maisDias} com dias adicionais` + (corrigir ? ` · ${d.diferentes} remarcados · ${d.liberar} liberados` : ""));
+      toast(`${r.novos} novo(s) · ${d.agendar} passaram para agendado · ${d.projetista} com projetista atualizado`);
     } catch (x: any) { toast(x.message); setSal(false); }
   }
   const L = ({ n, t, cor, lista, id }: any) => <>
@@ -725,10 +724,9 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
     <Modal titulo="Importar planilha de agendados" onFechar={fechar}>
       <L id="n" n={novos.length} t="clientes novos vão entrar já agendados (com projetista e todos os dias)" cor="var(--st-concluida)" lista={novos.map(d => `${d.cliente} · venda ${d.numero} — ${dias(d)}`)} />
       <L id="a" n={prev.agendar} t="estavam a agendar / aguardando no 360 → passam para AGENDADO" cor="var(--st-respondida)" lista={prev.listaAgendar} />
-      <L id="m" n={prev.maisDias} t="já agendados no 360 → recebem os dias que faltam" cor="var(--primary)" lista={prev.listaMaisDias} />
-      <L id="p" n={prev.projetista} t="já agendados com projetista diferente (ou sem) da coluna Agenda" cor="var(--primary)" lista={prev.listaProjetista} />
-      <L id="d" n={prev.diferentes} t="agendados no 360 em outra data" cor="var(--warn)" lista={prev.listaDiferentes} />
-      <L id="l" n={prev.liberar} t="agendados no 360 (de hoje em diante) que NÃO estão na planilha" cor="var(--danger)" lista={prev.listaLiberar} />
+      <L id="p" n={prev.projetista} t="já agendados com projetista diferente (ou sem) da coluna Agenda → atualiza só o projetista" cor="var(--primary)" lista={prev.listaProjetista} />
+      <L id="d" n={prev.diferentes} t="já agendados no 360 em outra data — NÃO mudam (só para conferir no Exact)" cor="var(--warn)" lista={prev.listaDiferentes} />
+      <L id="l" n={prev.liberar} t="agendados no 360 que não estão na planilha — NÃO saem da agenda (só para conferir)" cor="var(--ink-soft)" lista={prev.listaLiberar} />
       <L id="v" n={varios.length} t={<>linhas com <b>mais de um dia</b> (cada data = um dia, cada nome da Agenda = um dia)</>} lista={varios.map(d => `${d.cliente} · venda ${d.numero} — ${dias(d)}`)} />
       {(prev.desconhecidos || []).length > 0 && <div className="hint" style={{ color: "var(--warn)", marginTop: 8 }}>⚠️ Nomes na coluna Agenda que não são projetistas da agenda (ficam sem projetista): <b>{prev.desconhecidos.join(", ")}</b></div>}
       {passados > 0 && <div className="hint" style={{ marginTop: 8, fontWeight: 600 }}>⏭ {passados} linha(s) com data <b>passada</b> ficaram de fora — só entram agendamentos de hoje em diante (não criam cliente nem mudam nada no 360).</div>}
@@ -736,8 +734,7 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
       {semAgenda.length > 0 && <div className="hint" style={{ marginTop: 4 }}>{semAgenda.length} linha(s) com data e sem nome na coluna Agenda.</div>}
       <div style={{ marginTop: 10, padding: 10, background: "var(--surface-2)", borderRadius: 10 }}>
         <Chk v={trocar} set={setTrocar}>Atualizar o <b>projetista</b> dos já agendados conforme a coluna <b>Agenda</b></Chk>
-        <Chk v={corrigir} set={setCorrigir}><b>Corrigir a agenda pela planilha:</b> remarcar os {prev.diferentes} que estão em outra data e <b>liberar</b> os {prev.liberar} que não estão na planilha (voltam para a agendar). Os “aguardando” (data oferecida esperando o cliente), realizados e encerrados não mudam.</Chk>
-        {corrigir && prev.alertaLiberar && <Chk v={forcar} set={setForcar}><span style={{ color: "var(--danger)", fontWeight: 700 }}>A planilha libera {prev.liberar} de {prev.agendadosFuturos} agendados futuros — mais da metade. Confirmo que é a planilha completa de agendados.</span></Chk>}
+        <div className="hint" style={{ marginTop: 8 }}>Quem <b>já está agendado</b> no 360 não muda: data, horário, duração e dias continuam como estão. A planilha só <b>acrescenta os novos</b> e <b>atualiza o projetista</b>.</div>
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
         <button className="btn" onClick={fechar}>Cancelar</button>
