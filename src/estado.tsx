@@ -54,16 +54,23 @@ export function AppProvider({ uid, inicial, children, overlays }: { uid: string;
     catch (e: any) { toast(e?.message || "Não foi possível concluir"); await recarregar(); return false; }
   }, [recarregar, toast]);
 
-  // tempo real: toda ação grava no histórico; ao chegar um evento, recarrega. + atualização periódica (prazos mudam com o tempo)
+  // tempo real: toda ação grava no histórico; ao chegar um evento, atualiza — mas no máximo 1 vez a cada 45 s por tela
+  // (com muita gente usando ao mesmo tempo, recarregar a cada evento derrubava o banco). Ações da própria pessoa atualizam na hora (executar).
+  const ultCarga = useRef(Date.now());
   useEffect(() => {
-    let t: any;
+    let t: any = null;
+    const suave = () => {
+      if (document.visibilityState !== "visible" || t) return;
+      const falta = Math.max(1500, 45000 - (Date.now() - ultCarga.current));
+      t = setTimeout(() => { t = null; ultCarga.current = Date.now(); recarregar(); }, falta);
+    };
     const ch = sb.channel("historico-ao-vivo")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "historico" }, () => { clearTimeout(t); if (document.visibilityState === "visible") t = setTimeout(recarregar, 1500); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "historico" }, suave)
       .subscribe();
-    // atualização periódica só com a tela visível (abas esquecidas abertas não pesam no banco)
-    const iv = setInterval(() => { if (document.visibilityState === "visible") recarregar(); setTick(x => x + 1); }, 60000);
-    // celular: ao voltar para o app (estava em segundo plano), atualiza na hora
-    const vis = () => { if (document.visibilityState === "visible") { recarregar(); setTick(x => x + 1); } };
+    // atualização periódica (prazos mudam com o tempo): a cada 3 min, só com a tela visível
+    const iv = setInterval(() => { if (document.visibilityState === "visible") suave(); setTick(x => x + 1); }, 180000);
+    // ao voltar para a tela: atualiza (respeitando o intervalo mínimo)
+    const vis = () => { if (document.visibilityState === "visible") { suave(); setTick(x => x + 1); } };
     document.addEventListener("visibilitychange", vis);
     return () => { sb.removeChannel(ch); clearInterval(iv); clearTimeout(t); document.removeEventListener("visibilitychange", vis); };
   }, [recarregar]);
