@@ -127,7 +127,8 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       encerrados: ["Realizados / encerrados", G("encerrado")],
     },
     confirmar: {
-      a_confirmar: [diaAlvo ? "A confirmar" : `A confirmar (próximos ${confDias} dias)`, c => diaAlvo ? G("agendado")(c) && !ck(c).confirmacao && diaAg(c) === diaAlvo : aConfirmar(c, confDias)],
+      // "Todas" = todos os agendados de hoje em diante que ainda não receberam confirmação (não só os próximos dias)
+      a_confirmar: ["A confirmar", c => G("agendado")(c) && !ck(c).confirmacao && (diaAlvo ? diaAg(c) === diaAlvo : diaAg(c) >= hoje())],
       enviada: ["Aguardando confirmação de presença", c => G("agendado")(c) && ck(c).confirmacao === "enviada" && (diaAlvo ? diaAg(c) === diaAlvo : diaAg(c) >= hoje())],
       confirmada: ["Presença confirmada", c => G("agendado")(c) && ck(c).confirmacao === "confirmada" && (diaAlvo ? diaAg(c) === diaAlvo : diaAg(c) >= hoje())],
     },
