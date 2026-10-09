@@ -159,21 +159,29 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
         valor: l["Valor Negociado"], cupom: l["Valor dos Cupons"], minhaVisita: l["Cliente Minha Visita"], situacao: l["Situação"],
         descricao: (l["Descrição"] || "").replace(/Venda realizada e encaminhada para Checklist/gi, "").trim(),
       }));
-      const comData = dados.filter(d => d.agendadoPara).length;
-      if (modoImp.current === "agendados" && !comData) throw new Error("Nenhuma linha com “Data do Agendamento” — essa parece ser a planilha de clientes a agendar");
+      // datas passadas do Exact (clientes não finalizados) não entram: só quem tem data de hoje em diante
+      const hj = hojeISO();
+      const ultimaData = (d: any) => [d.agendadoPara, ...(d.diasExtras || []).map((e: any) => e.data)].filter(Boolean).map((x: string) => x.slice(0, 10)).sort().pop() || "";
+      const passados = dados.filter(d => d.agendadoPara && ultimaData(d) < hj);
+      const comData = dados.filter(d => d.agendadoPara && ultimaData(d) >= hj).length;
+      if (modoImp.current === "agendados" && !comData) throw new Error(passados.length ? `Todas as ${passados.length} linhas com data são de datas passadas — nada para importar (só entram agendamentos de hoje em diante)` : "Nenhuma linha com “Data do Agendamento” — essa parece ser a planilha de clientes a agendar");
       if (modoImp.current === "agendar" && comData > dados.length / 2 && !confirm(`${comData} das ${dados.length} linhas já têm data de agendamento — parece a planilha de AGENDADOS. Importar mesmo assim? (os que têm data entram em Agendados)`)) return;
       if (modoImp.current === "agendar") {
         // planilha "a agendar" sincroniza a base: mostra a prévia e só aplica depois do OK
-        const prev = await A.checklistSincronizar(dados, false);
-        setModal(<ModalSincronizar dados={dados} prev={prev} />);
+        const semPassados = dados.filter(d => !passados.includes(d));
+        if (passados.length) toast(`${passados.length} linha(s) com data passada ficaram de fora`);
+        const prev = await A.checklistSincronizar(semPassados, false);
+        setModal(<ModalSincronizar dados={semPassados} prev={prev} />);
         return;
       }
       // planilha de agendados: mostra antes quem é novo, quem tem mais de um dia e quem já está no 360
       const jaTem = new Set(st.chamados.filter((c: any) => c.tipo === "checklist").map((c: any) => String(c.pedido)));
       // só as linhas COM data: linha sem data na planilha de agendados não entra como "a agendar"
+      // as passadas vão junto só para o banco saber que estão na planilha (não libera quem está nelas) — ele ignora as datas passadas
       const agendados = dados.filter(d => d.agendadoPara);
+      const futuros = agendados.filter(d => !passados.includes(d));
       const dias = await A.checklistAgendadosPlanilha(agendados, false, true, true);
-      setModal(<ModalAgendados dados={agendados} semData={dados.length - agendados.length} prev={dias} novos={agendados.filter(d => !jaTem.has(String(d.numero || "").replace(/\D/g, "")))} />);
+      setModal(<ModalAgendados dados={agendados} futuros={futuros} passados={passados.length} semData={dados.length - agendados.length} prev={dias} novos={futuros.filter(d => !jaTem.has(String(d.numero || "").replace(/\D/g, "")))} />);
     } catch (e: any) { toast(e.message || "Não foi possível importar"); }
     finally { setImportando(false); if (arq.current) arq.current.value = ""; }
   }
@@ -685,20 +693,20 @@ export function ModalNaoPodeVir({ c }: any) {
 }
 /** prévia da planilha "a agendar": novos, mantidos, que viram agendados e que serão excluídos */
 /** prévia da planilha de AGENDADOS: novos, clientes com mais de um dia (identificados na coluna Data do Agendamento) e quem já está no 360 */
-function ModalAgendados({ dados, prev, novos, semData = 0 }: { dados: any[]; prev: any; novos: any[]; semData?: number }) {
+function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0 }: { dados: any[]; futuros: any[]; passados?: number; prev: any; novos: any[]; semData?: number }) {
   const { setModal, toast, recarregar } = useApp() as any;
   const [sal, setSal] = useState(false); const [ver, setVer] = useState("");
   const [trocar, setTrocar] = useState(true); const [corrigir, setCorrigir] = useState(true); const [forcar, setForcar] = useState(false);
   const fechar = () => setModal(null);
   const fmt = (d: string) => d ? d.slice(8, 10) + "/" + d.slice(5, 7) + " " + d.slice(11, 16) : "";
   const dias = (d: any) => [{ data: d.agendadoPara, projetista: d.projetista }, ...d.diasExtras].map((e: any) => fmt(e.data) + (e.projetista ? " " + e.projetista : "")).join(" + ");
-  const varios = dados.filter(d => d.agendadoPara && d.diasExtras.length > 0);
-  const semAgenda = dados.filter(d => d.agendadoPara && !d.projetista);
+  const varios = futuros.filter(d => d.agendadoPara && d.diasExtras.length > 0);
+  const semAgenda = futuros.filter(d => d.agendadoPara && !d.projetista);
   async function ok() {
     if (corrigir && prev.alertaLiberar && !forcar) { toast("Confirme a liberação: a planilha deixaria mais da metade da agenda livre"); return; }
     setSal(true);
     try {
-      const r = await A.checklistImportar(dados);
+      const r = await A.checklistImportar(futuros);
       const d = await A.checklistAgendadosPlanilha(dados, true, trocar, corrigir);
       await recarregar(); fechar();
       toast(`${r.novos} novo(s) · ${d.agendar} passaram para agendado · ${d.maisDias} com dias adicionais` + (corrigir ? ` · ${d.diferentes} remarcados · ${d.liberar} liberados` : ""));
@@ -722,6 +730,7 @@ function ModalAgendados({ dados, prev, novos, semData = 0 }: { dados: any[]; pre
       <L id="l" n={prev.liberar} t="agendados no 360 (de hoje em diante) que NÃO estão na planilha" cor="var(--danger)" lista={prev.listaLiberar} />
       <L id="v" n={varios.length} t={<>linhas com <b>mais de um dia</b> (cada data = um dia, cada nome da Agenda = um dia)</>} lista={varios.map(d => `${d.cliente} · venda ${d.numero} — ${dias(d)}`)} />
       {(prev.desconhecidos || []).length > 0 && <div className="hint" style={{ color: "var(--warn)", marginTop: 8 }}>⚠️ Nomes na coluna Agenda que não são projetistas da agenda (ficam sem projetista): <b>{prev.desconhecidos.join(", ")}</b></div>}
+      {passados > 0 && <div className="hint" style={{ marginTop: 8, fontWeight: 600 }}>⏭ {passados} linha(s) com data <b>passada</b> ficaram de fora — só entram agendamentos de hoje em diante (não criam cliente nem mudam nada no 360).</div>}
       {semData > 0 && <div className="hint" style={{ marginTop: 4 }}>{semData} linha(s) da planilha sem “Data do Agendamento” foram ignoradas (não entram no 360 por esta importação).</div>}
       {semAgenda.length > 0 && <div className="hint" style={{ marginTop: 4 }}>{semAgenda.length} linha(s) com data e sem nome na coluna Agenda.</div>}
       <div style={{ marginTop: 10, padding: 10, background: "var(--surface-2)", borderRadius: 10 }}>
