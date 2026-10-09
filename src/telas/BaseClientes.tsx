@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { Modal } from "../comp/Modal";
+import { sb } from "../lib/supabase";
 import { Kpi } from "./Dashboard";
 import { BC, docValido, enderecoTxt, fmtDoc, fmtTel, lerArquivoBase, soDig } from "../lib/baseClientes";
 
@@ -110,6 +111,7 @@ function Importar() {
       const L = 800;
       for (let i = 0; i < dados.clientes.length; i += L) { setProg(`Clientes ${Math.min(i + L, dados.clientes.length)} de ${dados.clientes.length}…`); soma(await BC.importar(dados.clientes.slice(i, i + L), [])); }
       for (let i = 0; i < dados.vendas.length; i += L) { setProg(`Vendas ${Math.min(i + L, dados.vendas.length)} de ${dados.vendas.length}…`); soma(await BC.importar([], dados.vendas.slice(i, i + L))); }
+      await sb.rpc("ck_completar_local").then(() => null, () => null); // completa a cidade dos clientes do checklist
       setRes(tot); setProg(""); toast("Base importada");
     } catch (e: any) { setProg(""); setRes(tot); toast("Parou no meio: " + e.message + " — pode importar de novo, nada se duplica"); }
     finally { setRodando(false); }

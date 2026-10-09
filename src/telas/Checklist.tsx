@@ -23,6 +23,8 @@ export const ck = (c: any) => (c.tratativa && c.tratativa.checklist) || {};
 export const etapaCk = (c: any) => ck(c).etapa || (c.status === "concluida" ? "realizado" : "a_contatar");
 const hoje = () => hojeISO();
 /** cliente pediu encaixe: aceitou a data, mas quer ser antecipado se abrir vaga */
+/** cidade/bairro do cliente (base de clientes, pelo nº da venda) — importante para escolher o projetista */
+export const cidadeCk = (c: any) => { const l = ck(c).local; if (!l || !l.cidade) return ""; const cid = String(l.cidade).toLowerCase().replace(/(^|\s)\S/g, (x: string) => x.toUpperCase()); return cid + (l.bairro ? " · " + String(l.bairro).toLowerCase().replace(/(^|\s)\S/g, (x: string) => x.toUpperCase()) : ""); };
 export const querEnc = (c: any) => { const q = ck(c).querEncaixe; return q && typeof q === "object" ? q : null; };
 const diasDesde = (iso: any) => (iso ? Math.max(0, Math.floor((Date.now() - +parseData(iso)) / 864e5)) : 0);
 const somaDias = (iso: string, n: number) => { const d = parseData(iso); d.setDate(d.getDate() + n); return isoDia(d); };
@@ -252,6 +254,7 @@ function CartaoCk({ c, aba }: any) {
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontWeight: 700, fontSize: 15, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{c.cliente}
             <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: "var(--surface-2)", border: "1px solid var(--line)" }}>Venda {c.pedido}</span>
+            <span title="Cidade do cliente (base de clientes)" style={{ fontWeight: 800, fontSize: 13, padding: "1px 9px", borderRadius: 6, background: cidadeCk(c) ? "#0f5f8a" : "var(--surface-2)", color: cidadeCk(c) ? "#fff" : "var(--ink-faint)", border: cidadeCk(c) ? 0 : "1px dashed var(--line)" }}>📍 {cidadeCk(c) || "cidade não encontrada"}</span>
             {g !== "agendado" && k.projetista && <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: corProj(k.projetista), color: "#fff" }}>👤 {k.projetista}</span>}</div>
           <DadosCk c={c} />
           {g === "aguardando" && <div style={{ marginTop: 7, padding: "7px 10px", borderRadius: 8, background: "var(--st-tratativa-bg)", border: "1px solid var(--st-tratativa)", fontSize: 13.5 }}>
@@ -1300,7 +1303,7 @@ export function ModalWhats({ c, inicial }: any) {
     await recarregar(); fechar(); toast(tipo === "confirmacao" ? (k.confirmacao === "confirmada" ? "WhatsApp aberto — mensagem salva no cliente" : "Confirmação enviada — cliente em “Aguardando confirmação de presença”") : "Contato registrado — quando o cliente responder, registre o resultado");
   }
   return (
-    <Modal titulo={"WhatsApp · " + c.cliente} onFechar={fechar}>
+    <Modal titulo={"WhatsApp · " + c.cliente + (cidadeCk(c) ? " · 📍 " + cidadeCk(c) : "")} onFechar={fechar}>
       <div className="grid">
         <div className="field"><label>Mensagem</label><select value={tipo} onChange={ev => { setTipo(ev.target.value); setEditado(false); }}>{Object.entries(MODELOS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
         <div className="field"><label>Telefone</label>{tels.length > 1 ? <select value={tel} onChange={ev => setTel(ev.target.value)}>{tels.map((t: string) => <option key={t} value={t}>{t}</option>)}</select> : <input value={tel} onChange={ev => setTel(ev.target.value)} placeholder="DDD + número" />}</div>
@@ -1363,7 +1366,7 @@ export function ModalResultado({ c, inicial }: any) {
     } catch (x: any) { toast(x.message); }
   }
   return (
-    <Modal titulo={"Resultado do contato · " + c.cliente} onFechar={fechar}>
+    <Modal titulo={"Resultado do contato · " + c.cliente + (cidadeCk(c) ? " · 📍 " + cidadeCk(c) : "")} onFechar={fechar}>
       {fechado ? <p style={{ fontSize: 13.5 }}>Este checklist está encerrado. Reabrir volta o cliente para “A contatar”.</p> :
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
           {Object.entries(agendado ? ACOES_AGENDADO : ACOES).filter(([v]) => v !== "medida" || !k.medidaId || k.medidaOk).map(([v, l]) => <label key={v} style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer", fontSize: 14 }}><input type="radio" style={{ width: "auto" }} checked={acao === v} onChange={() => setAcao(v)} />{l}</label>)}

@@ -13,7 +13,7 @@ import { SeloMedidaVenda } from "../telas/Medidas";
 import { BotaoWhats, msgWhatsCliente, separarTelefones } from "./Whats";
 import { SelVendedor, confirmarDisp, registrarIndisp } from "./SelVendedor";
 import { TratJuridico } from "../telas/Setores";
-import { cfgAgenda, CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalFinalizarCk, ModalResultado, ModalWhats, NotasCk, ck, etapaCk, motivoCk } from "../telas/Checklist";
+import { cfgAgenda, CONF_CK, ConfirmaExcluir, ETAPA_CK, EditorAgenda, ModalNaoPodeVir, ModalNotas, ModalFinalizarCk, ModalResultado, ModalWhats, NotasCk, ck, cidadeCk, etapaCk, motivoCk } from "../telas/Checklist";
 
 const Row = ({ k, children, style }: any) => <div className="detail-row" style={style}><span className="k">{k}</span><span className="v">{children}</span></div>;
 const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="detail-row" style={{ border: 0, padding: pb }}><span className="k">{k}</span><span className="v" style={bold ? { fontWeight: 700 } : undefined}>{children}</span></div>;
@@ -818,6 +818,7 @@ function BlocoChecklist({ c }: any) {
   return (
     <div className="resp-box" style={{ borderColor: cor }}><h4>Checklist (revisão do projeto) <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{nome}</span></h4>
       <RowSb k="Venda"><b>{c.pedido || "—"}</b></RowSb>
+      <RowSb k="Cidade"><b>{cidadeCk(c) || "não encontrada na base de clientes"}</b></RowSb>
       <RowSb k="Medidas"><SeloMedidaVenda pedido={c.pedido} comLink />{!st.chamados.some((x: any) => x.tipo === "medidas" && x.pedido === c.pedido) && !(st.medidasCruz || {})[c.pedido] ? <span className="hint">sem medida registrada no 360</span> : null}</RowSb>
       {p.vendedor && <RowSb k="Vendedor">{p.vendedor}</RowSb>}
       <RowSb k="Medidor">{p.medidor || "não informado na planilha"}{k.medidaId ? (k.medidaOk ? " · medidas conferidas" : " · aguardando o setor de Medidas (" + k.medidaId + ")") : ""}</RowSb>
