@@ -544,6 +544,12 @@ export function ocupacoes(st: any, excluirId?: string): Ocup[] {
 }
 /** projetistas livres num horário (atendimento de 2h; sobreposição conta como ocupado). Agendados sem projetista ocupam uma vaga qualquer. */
 /** bloqueios (agenda fechada) que pegam o período [ini, fim) — do projetista ou de todos */
+/** projetista temporário: só atende no período (config.periodos = { nome: { de, ate, exceto[] } }), inclusive fora dos dias padrão */
+export const periodoDe = (cfg: any, proj: string) => (cfg.periodos || {})[proj] || null;
+export const periodoOk = (cfg: any, proj: string, dia: string) => { const p = periodoDe(cfg, proj); return !p || (dia >= p.de && dia <= p.ate && !(p.exceto || []).includes(dia)); };
+export const atendeNoDia = (cfg: any, proj: string, dia: string) => periodoDe(cfg, proj) ? periodoOk(cfg, proj, dia) : cfg.dias.includes(parseData(dia + "T12:00").getDay());
+export const diaComAgenda = (cfg: any, dia: string) => cfg.projetistas.some((n: string) => atendeNoDia(cfg, n, dia));
+export const rotuloPeriodo = (cfg: any, proj: string) => { const p = periodoDe(cfg, proj); return p ? `${proj} atende só de ${fmtDate(p.de).slice(0, 5)} a ${fmtDate(p.ate).slice(0, 5)}${(p.exceto || []).length ? " (exceto " + p.exceto.map((x: string) => fmtDate(x).slice(0, 5)).join(", ") + ")" : ""}` : ""; };
 export function bloqueiosEm(st: any, proj: string, ini: number, fim: number) {
   return ((st.ckBloqueios || []) as any[]).filter(b => (!b.projetista || !proj || b.projetista === proj) && +parseData(b.inicio) < fim && ini < +parseData(b.fim));
 }
@@ -554,7 +560,7 @@ export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?:
   const ocupadosProj = new Set(no.filter(o => o.proj).map(o => o.proj));
   // projetistas só para emergência (ex.: gerente de loja) não entram nas sugestões — só são escolhidos à mão
   const emerg: string[] = cfg.emergencia || [];
-  let livres = cfg.projetistas.filter((n: string) => !ocupadosProj.has(n) && !emerg.includes(n) && !bloqueiosEm(st, n, t, t + dur).length);
+  let livres = cfg.projetistas.filter((n: string) => !ocupadosProj.has(n) && !emerg.includes(n) && atendeNoDia(cfg, n, slot.slice(0, 10)) && !bloqueiosEm(st, n, t, t + dur).length);
   const semProj = no.filter(o => !o.proj).length;
   if (semProj) livres = livres.slice(0, Math.max(0, livres.length - semProj));
   return { livres, ocupados: no.map(o => o.cliente + (o.proj ? " · " + o.proj : "") + (o.aguardando ? " (aguardando resposta)" : "")) };
@@ -567,7 +573,7 @@ export function sugestoes(st: any, excluirId?: string, n = 8, projetista?: strin
   for (let i = 0; i < 62 && out.length < n; i++) {
     const d = new Date(base); d.setDate(base.getDate() + i);
     if (mes && isoDia(d).slice(0, 7) !== mes) break;
-    if (!cfg.dias.includes(d.getDay())) continue;
+    if (!diaComAgenda(cfg, isoDia(d))) continue;
     for (const h of [...cfg.horarios].sort()) {
       const slot = isoDia(d) + "T" + h;
       if (+parseData(slot) < agora) continue;
@@ -590,6 +596,8 @@ export function AvisoEncaixe({ slot, proj, excluirId, ok, setOk, durMin }: { slo
   const { st } = useApp() as any;
   const lst = conflitosProj(st, slot, proj, excluirId, durMin);
   const bl = proj && (slot || "").length >= 16 ? bloqueiosEm(st, proj, +parseData(slot.slice(0, 16)), +parseData(slot.slice(0, 16)) + (durMin || cfgAgenda(st).duracaoMin || 120) * 6e4) : [];
+  if (proj && (slot || "").length >= 10 && !periodoOk(cfgAgenda(st), proj, slot.slice(0, 10))) return <div className="full" style={{ gridColumn: "1 / -1", border: "2px solid var(--danger)", background: "var(--danger-bg)", borderRadius: 10, padding: "10px 12px", fontWeight: 700, color: "var(--danger)" }}>
+    {rotuloPeriodo(cfgAgenda(st), proj)}. Escolha outro dia ou outro projetista.</div>;
   if (bl.length) return <div className="full" style={{ gridColumn: "1 / -1", border: "2px solid var(--danger)", background: "var(--danger-bg)", borderRadius: 10, padding: "10px 12px", fontWeight: 700, color: "var(--danger)" }}>
     {proj} está com a agenda fechada nesse horário: {bl.map(rotuloBloq).join(" · ")}. Escolha outro dia/horário ou reabra a agenda (no calendário).</div>;
   if (!lst.length) return null;
@@ -1026,7 +1034,7 @@ function CalendarioDia() {
     if (e === "agendado" || e === "realizado") return atendimentos(c, cfg).map(a => a.slot.slice(0, 10));
     return ofer && e === "aguardando" && k.proposta ? [String(k.proposta).slice(0, 10)] : [];
   }));
-  const mover = (n: number) => { const d = parseData(dia); do { d.setDate(d.getDate() + n); } while (!cfg.dias.includes(d.getDay()) && !diasComCliente.has(isoDia(d)) && Math.abs(+d - +parseData(dia)) < 8 * 864e5); setDia(isoDia(d)); };
+  const mover = (n: number) => { const d = parseData(dia); do { d.setDate(d.getDate() + n); } while (!diaComAgenda(cfg, isoDia(d)) && !diasComCliente.has(isoDia(d)) && Math.abs(+d - +parseData(dia)) < 8 * 864e5); setDia(isoDia(d)); };
   type Ev = { c: any; ini: number; fim: number; proj: string; tipo: "ag" | "of"; lane?: number; lanes?: number; extra?: number; n?: number; total?: number };
   const minDe = (slot: string) => { const d = parseData(slot); return d.getHours() * 60 + d.getMinutes(); };
   const evs: Ev[] = st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).flatMap((c: any) => {
@@ -1056,7 +1064,9 @@ function CalendarioDia() {
   }, [unidades, ocultos.length]);
   const semProj = evs.some(x => !x.proj);
   const emergD: string[] = cfg.emergencia || [];
-  const colunas = [...cfg.projetistas.filter((n: string) => !emergD.includes(n)), ...cfg.projetistas.filter((n: string) => emergD.includes(n)), ...(semProj ? [""] : [])].filter(n => !ocultos.includes(n));
+  // projetista temporário só aparece nos dias do período (ou se tiver cliente no dia)
+  const colunas = [...cfg.projetistas.filter((n: string) => !emergD.includes(n)), ...cfg.projetistas.filter((n: string) => emergD.includes(n)), ...(semProj ? [""] : [])]
+    .filter(n => !ocultos.includes(n)).filter(n => !n || !periodoDe(cfg, n) || periodoOk(cfg, n, dia) || evs.some(x => x.proj === n));
   const porCol: Record<string, Ev[]> = {};
   colunas.forEach(n => {
     const l = evs.filter(x => x.proj === n).sort((a, b) => a.ini - b.ini);
@@ -1160,7 +1170,7 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
   const r = parseData(ref);
   const mover = (n: number) => { const d = parseData(ref); if (modo === "semana") d.setDate(d.getDate() + 7 * n); else d.setMonth(d.getMonth() + n, 1); setRef(isoDia(d)); };
   const seg = new Date(r); seg.setDate(r.getDate() - ((r.getDay() + 6) % 7));
-  const diasSemana = Array.from({ length: 7 }, (_, i) => { const d = new Date(seg); d.setDate(seg.getDate() + i); return d; }).filter(d => cfg.dias.includes(d.getDay()) || (porDia[isoDia(d)] || []).length);
+  const diasSemana = Array.from({ length: 7 }, (_, i) => { const d = new Date(seg); d.setDate(seg.getDate() + i); return d; }).filter(d => diaComAgenda(cfg, isoDia(d)) || (porDia[isoDia(d)] || []).length);
   const horas = Array.from(new Set([...cfg.horarios, ...diasSemana.flatMap(d => (porDia[isoDia(d)] || []).map((x: any) => x.quando.slice(11, 16)))])).sort();
   const Ev = ({ x, compacto }: any) => (
     <div onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + " · venda " + x.c.pedido + (x.proj ? " · " + x.proj : "")}
