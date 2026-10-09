@@ -492,7 +492,8 @@ const fmtBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", cur
 /** todos os dias de atendimento de um cliente agendado: o principal (extra = -1) + os dias adicionais */
 export type Atend = { slot: string; dur: number; proj: string; extra: number; n: number; total: number };
 export function atendimentos(c: any, cfg?: any): Atend[] {
-  const k = ck(c); if (etapaCk(c) !== "agendado" || !k.agendadoPara) return [];
+  // realizados continuam na agenda (a agenda do 360 tem que bater com a do Exact); só os em aberto ocupam horário futuro
+  const k = ck(c); if (!["agendado", "realizado"].includes(etapaCk(c)) || !k.agendadoPara) return [];
   const ex: any[] = Array.isArray(k.diasExtras) ? k.diasExtras : [];
   const l = [{ slot: String(k.agendadoPara).slice(0, 16), dur: durCk(c, cfg), proj: k.projetista || "", extra: -1 },
     ...ex.map((e, i) => ({ slot: String(e.data).slice(0, 16), dur: Number(e.duracaoMin) || durCk(c, cfg), proj: e.projetista || k.projetista || "", extra: i }))]
@@ -995,17 +996,17 @@ function CalendarioDia() {
     window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up);
   }
   // pula só os dias sem atendimento: dia fora da configuração (ex.: sábado) aparece quando tem cliente marcado
-  const diasComCliente = new Set<string>(st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida" && Rg.podeVer(c)).flatMap((c: any) => {
+  const diasComCliente = new Set<string>(st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).flatMap((c: any) => {
     const e = etapaCk(c), k = ck(c);
-    if (e === "agendado") return atendimentos(c, cfg).map(a => a.slot.slice(0, 10));
+    if (e === "agendado" || e === "realizado") return atendimentos(c, cfg).map(a => a.slot.slice(0, 10));
     return ofer && e === "aguardando" && k.proposta ? [String(k.proposta).slice(0, 10)] : [];
   }));
   const mover = (n: number) => { const d = parseData(dia); do { d.setDate(d.getDate() + n); } while (!cfg.dias.includes(d.getDay()) && !diasComCliente.has(isoDia(d)) && Math.abs(+d - +parseData(dia)) < 8 * 864e5); setDia(isoDia(d)); };
   type Ev = { c: any; ini: number; fim: number; proj: string; tipo: "ag" | "of"; lane?: number; lanes?: number; extra?: number; n?: number; total?: number };
   const minDe = (slot: string) => { const d = parseData(slot); return d.getHours() * 60 + d.getMinutes(); };
-  const evs: Ev[] = st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida" && Rg.podeVer(c)).flatMap((c: any) => {
+  const evs: Ev[] = st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).flatMap((c: any) => {
     const k = ck(c), e = etapaCk(c);
-    if (e === "agendado") return atendimentos(c, cfg).filter(a => a.slot.slice(0, 10) === dia).map(a => { const ini = minDe(a.slot); return { c, ini, fim: ini + a.dur, proj: a.proj, tipo: "ag", extra: a.extra, n: a.n, total: a.total } as Ev; });
+    if (e === "agendado" || e === "realizado") return atendimentos(c, cfg).filter(a => a.slot.slice(0, 10) === dia).map(a => { const ini = minDe(a.slot); return { c, ini, fim: ini + a.dur, proj: a.proj, tipo: "ag", extra: a.extra, n: a.n, total: a.total } as Ev; });
     if (ofer && e === "aguardando" && k.proposta && String(k.proposta).slice(0, 10) === dia) { const ini = minDe(String(k.proposta).slice(0, 16)); return [{ c, ini, fim: ini + dur, proj: k.propostaProjetista || "", tipo: "of" } as Ev]; }
     return [];
   });
@@ -1121,9 +1122,9 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
   const [ref, setRef] = useState(hoje());
   const [fp, setFp] = useState("");
   const [ofer, setOfer] = useState(true);
-  const evs = st.chamados.filter((c: any) => c.tipo === "checklist" && c.status !== "concluida" && Rg.podeVer(c)).map((c: any) => {
+  const evs = st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).map((c: any) => {
     const k = ck(c), e = etapaCk(c);
-    if (e === "agendado" && k.agendadoPara) return atendimentos(c, cfg).map(a => ({ c, quando: a.slot, tipo: "ag", proj: a.proj, enc: !!k.encaixe && a.extra < 0, n: a.n, total: a.total }));
+    if ((e === "agendado" || e === "realizado") && k.agendadoPara) return atendimentos(c, cfg).map(a => ({ c, quando: a.slot, tipo: "ag", proj: a.proj, enc: !!k.encaixe && a.extra < 0, n: a.n, total: a.total }));
     if (ofer && e === "aguardando" && k.proposta) return [{ c, quando: String(k.proposta).slice(0, 16), tipo: "of", proj: k.propostaProjetista || "" }];
     return [];
   }).flat().filter((x: any) => !fp || x.proj === fp) as any[];
