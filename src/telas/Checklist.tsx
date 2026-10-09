@@ -489,6 +489,27 @@ export const cupomCk = (c: any) => { const v = String(ck(c).planilha?.cupom ?? c
 /** duração sugerida pelo valor do cupom: até 20 mil 1h · até 50 mil 2h · até 100 mil 4h · até 150 mil 5h · até 200 mil 6h · acima 8h */
 export const durPorValor = (v: number) => v <= 0 ? 0 : v <= 20000 ? 60 : v <= 50000 ? 120 : v <= 100000 ? 240 : v <= 150000 ? 300 : v <= 200000 ? 360 : 480;
 export const durSugeridaCk = (c: any) => { const cupom = cupomCk(c); return { cupom, min: durPorValor(cupom) || 120 }; };
+/** dias úteis seguintes no mesmo horário (atendimento em mais de um dia) */
+export function diasSeguidos(data: string, n: number, dur: number, cfg: any): { data: string; duracaoMin: number }[] {
+  const out: { data: string; duracaoMin: number }[] = []; if (n < 2 || (data || "").length < 16) return out;
+  const d = parseData(data.slice(0, 16)); for (let i = 0; i < 30 && out.length < n - 1; i++) { d.setDate(d.getDate() + 1); if (cfg.dias.includes(d.getDay())) out.push({ data: isoDia(d) + "T" + data.slice(11, 16), duracaoMin: dur }); }
+  return out;
+}
+/** campos "Tempo que trava a agenda" + "Dias de atendimento" (o tempo não vai para o cliente) */
+export function CamposTempo({ c, dur, setDur, nDias, setNDias, data, proj }: any) {
+  const { st } = useApp() as any;
+  const sug = durSugeridaCk(c), cfgA = cfgAgenda(st);
+  const extras = diasSeguidos(data, nDias, dur, cfgA);
+  const conf = proj ? extras.filter(x => conflitosProj(st, x.data, proj, c.id, dur).some(o => !o.aguardando)) : [];
+  return <>
+    <div className="field"><label>Tempo de atendimento <span className="hint">(trava a agenda)</span></label>
+      <select value={dur} onChange={e => setDur(Number(e.target.value))}>{Array.from(new Set([60, 120, 180, 240, 300, 360, 420, 480, 600, dur])).sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}{m === sug.min && sug.cupom ? " · sugerido" : ""}</option>)}</select>
+      <span className="hint">{sug.cupom ? "Cupom " + fmtBRL(sug.cupom) + " → sugerido " + fmtDur(sug.min) : "Sem valor de cupom — padrão " + fmtDur(sug.min)}</span></div>
+    {setNDias && <div className="field"><label>Dias de atendimento</label>
+      <select value={nDias} onChange={e => setNDias(Number(e.target.value))}>{[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n === 1 ? "1 dia" : n + " dias seguidos (dias úteis)"}</option>)}</select>
+      {extras.length > 0 && <span className="hint" style={conf.length ? { color: "var(--danger)", fontWeight: 600 } : {}}>Também: {extras.map(x => { const d = parseData(x.data); return DIAS[d.getDay()].slice(0, 3) + " " + d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); }).join(", ")} às {data.slice(11, 16)}{conf.length ? " · ⚠️ " + proj + " já tem cliente em " + conf.length + " desses dias" : ""}</span>}</div>}
+  </>;
+}
 const fmtBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 /** todos os dias de atendimento de um cliente agendado: o principal (extra = -1) + os dias adicionais */
 export type Atend = { slot: string; dur: number; proj: string; extra: number; n: number; total: number };
@@ -1305,6 +1326,8 @@ export function ModalResultado({ c, inicial }: any) {
   const [proj, setProj] = useState<string>(k.projetista || k.propostaProjetista || "");
   const [encaixe, setEncaixe] = useState(false);
   const [motivo, setMotivo] = useState<string>(k.motivoEspera || "");
+  const [dur, setDur] = useState<number>(Number(k.duracaoMin) || durSugeridaCk(c).min);
+  const [nDias, setNDias] = useState<number>(Array.isArray(k.propostaDiasExtras) && k.propostaDiasExtras.length ? k.propostaDiasExtras.length + 1 : 1);
   const slotAlvo = acao === "projetista" ? String(k.agendadoPara || "") : data;
   const SelProj = ({ req }: any) => <div className="field"><label>Projetista {req && <span className="req-star">*</span>}</label><select value={proj} onChange={e => setProj(e.target.value)}><option value="">Selecione…</option>{projs.map(n => <option key={n} value={n}>{n}</option>)}</select></div>;
   const fechar = () => setModal(null);
@@ -1313,9 +1336,11 @@ export function ModalResultado({ c, inicial }: any) {
       if (acao === "medida") await A.checklistPedirMedida(c.id, obs);
       else {
         if (["agendado", "projetista"].includes(acao) && !proj) { toast("Escolha o projetista"); return; }
-        if (["agendado", "reagendar", "projetista"].includes(acao) && conflitosProj(st, slotAlvo, proj, c.id).some(o => !o.aguardando) && !encaixe) { toast(proj + " já tem cliente agendado nesse horário — marque “Confirmo o encaixe” ou escolha outro horário/projetista"); return; }
+        if (["agendado", "reagendar", "projetista"].includes(acao) && conflitosProj(st, slotAlvo, proj, c.id, dur).some(o => !o.aguardando) && !encaixe) { toast(proj + " já tem cliente agendado nesse horário — marque “Confirmo o encaixe” ou escolha outro horário/projetista"); return; }
         if (acao === "espera" && !motivo) { toast("Escolha o motivo"); return; }
-        await A.checklistRegistrar(c.id, { acao, data, retornarEm: ret, ambiente: pronto ? "pronto" : "", obs, projetista: proj, encaixe, motivo });
+        await A.checklistRegistrar(c.id, { acao, data, retornarEm: ret, ambiente: pronto ? "pronto" : "", obs, projetista: proj, encaixe, motivo, ...(["agendado", "reagendar"].includes(acao) ? { duracaoMin: dur } : {}) });
+        // atendimento em mais de um dia: grava os dias seguintes
+        if (acao === "agendado" && nDias > 1) await A.checklistRegistrar(c.id, { acao: "dias", encaixe, dias: diasSeguidos(data || String(k.proposta || ""), nDias, dur, cfgAgenda(st)).map(x => ({ ...x, projetista: proj })) });
       }
       await recarregar(); fechar(); toast(acao === "agendado" ? "Agendado — o cliente foi para 📅 Agendados" : acao === "reagendar" ? "Data alterada — altere também no sistema interno" : acao === "desmarcar" ? "Agendamento desmarcado — o cliente voltou para contato" : acao === "espera" ? "Cliente movido para ⏸ Aguardando" : acao === "presenca_confirmada" ? "Presença confirmada" : "Registrado");
     } catch (x: any) { toast(x.message); }
@@ -1331,7 +1356,8 @@ export function ModalResultado({ c, inicial }: any) {
         {acao === "reagendar" && <>
           <div className="field"><label>Nova data e horário <span className="req-star">*</span></label><input type="datetime-local" value={data} onChange={e => setData(e.target.value)} /></div>
           <SelProj />
-          <Sugestoes valor={data} excluirId={c.id} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); }} projetista={proj} />
+          <CamposTempo c={c} dur={dur} setDur={setDur} data={data} proj={proj} />
+          <Sugestoes valor={data} excluirId={c.id} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); }} projetista={proj} durMin={dur} />
           <div className="hint" style={{ gridColumn: "1 / -1", fontSize: 12.5 }}>Depois de salvar, altere também no sistema interno. A confirmação de presença volta para “a confirmar”.</div>
         </>}
         {acao === "desmarcar" && <>
@@ -1339,11 +1365,12 @@ export function ModalResultado({ c, inicial }: any) {
           <div className="hint" style={{ gridColumn: "1 / -1", fontSize: 12.5 }}>O horário fica livre para outro cliente. Desmarque também no sistema interno.</div>
         </>}
         {acao === "projetista" && <SelProj req />}
-        {["agendado", "reagendar", "projetista"].includes(acao) && <AvisoEncaixe slot={slotAlvo} proj={proj} excluirId={c.id} ok={encaixe} setOk={setEncaixe} />}
+        {["agendado", "reagendar", "projetista"].includes(acao) && <AvisoEncaixe slot={slotAlvo} proj={proj} excluirId={c.id} ok={encaixe} setOk={setEncaixe} durMin={dur} />}
         {acao === "agendado" && <>
           <div className="field"><label>Data e horário agendados <span className="req-star">*</span></label><input type="datetime-local" value={data} onChange={e => setData(e.target.value)} /></div>
           <SelProj req />
-          <Sugestoes valor={data} excluirId={c.id} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); }} projetista={proj} />
+          <CamposTempo c={c} dur={dur} setDur={setDur} nDias={nDias} setNDias={setNDias} data={data} proj={proj} />
+          <Sugestoes valor={data} excluirId={c.id} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); }} projetista={proj} durMin={dur} />
           <label className="field full" style={{ flexDirection: "row", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="checkbox" style={{ width: "auto" }} checked={pronto} onChange={e => setPronto(e.target.checked)} /><span>Cliente confirmou que o <b>ambiente está pronto</b> para a montagem (sem obra, acabamentos feitos) <span className="req-star">*</span></span></label>
           <div className="hint" style={{ gridColumn: "1 / -1", fontSize: 12.5 }}>Ambiente ainda em obra não pode ser finalizado — nesse caso use “Ambiente em obra”. Depois de registrar aqui, lance o agendamento no sistema interno.</div>
         </>}
