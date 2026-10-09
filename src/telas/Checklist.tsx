@@ -522,6 +522,12 @@ export function atendimentos(c: any, cfg?: any): Atend[] {
     .sort((a, b) => a.slot.localeCompare(b.slot));
   return l.map((x, i) => ({ ...x, n: i + 1, total: l.length }));
 }
+/** dias da data oferecida (aguardando resposta): o principal + os seguintes, cada um com a duração escolhida */
+export function propostaDias(c: any, cfg?: any): { slot: string; dur: number }[] {
+  const k = ck(c); if (!k.proposta) return [];
+  return [{ data: k.proposta, duracaoMin: durCk(c, cfg) }, ...(Array.isArray(k.propostaDiasExtras) ? k.propostaDiasExtras : [])]
+    .map((x: any) => ({ slot: String(x.data).slice(0, 16), dur: Number(x.duracaoMin) || durCk(c, cfg) }));
+}
 export function ocupacoes(st: any, excluirId?: string): Ocup[] {
   const cfg = cfgAgenda(st); _projs = cfg.projetistas;
   const out: Ocup[] = [];
@@ -1026,7 +1032,8 @@ function CalendarioDia() {
   const evs: Ev[] = st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).flatMap((c: any) => {
     const k = ck(c), e = etapaCk(c);
     if (e === "agendado" || e === "realizado") return atendimentos(c, cfg).filter(a => a.slot.slice(0, 10) === dia).map(a => { const ini = minDe(a.slot); return { c, ini, fim: ini + a.dur, proj: a.proj, tipo: "ag", extra: a.extra, n: a.n, total: a.total } as Ev; });
-    if (ofer && e === "aguardando" && k.proposta && String(k.proposta).slice(0, 10) === dia) { const ini = minDe(String(k.proposta).slice(0, 16)); return [{ c, ini, fim: ini + dur, proj: k.propostaProjetista || "", tipo: "of" } as Ev]; }
+    // data oferecida: ocupa o mesmo tempo escolhido na mensagem (e os dias seguintes, se for mais de um dia)
+    if (ofer && e === "aguardando" && k.proposta) return propostaDias(c, cfg).filter(x => x.slot.slice(0, 10) === dia).map(x => { const ini = minDe(x.slot); return { c, ini, fim: ini + x.dur, proj: k.propostaProjetista || "", tipo: "of" } as Ev; });
     return [];
   });
   const H_INI = Math.max(7, Math.min(9, ...evs.map(x => Math.floor(x.ini / 60))));
@@ -1144,7 +1151,7 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
   const evs = st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).map((c: any) => {
     const k = ck(c), e = etapaCk(c);
     if ((e === "agendado" || e === "realizado") && k.agendadoPara) return atendimentos(c, cfg).map(a => ({ c, quando: a.slot, tipo: "ag", proj: a.proj, enc: !!k.encaixe && a.extra < 0, n: a.n, total: a.total }));
-    if (ofer && e === "aguardando" && k.proposta) return [{ c, quando: String(k.proposta).slice(0, 16), tipo: "of", proj: k.propostaProjetista || "" }];
+    if (ofer && e === "aguardando" && k.proposta) return propostaDias(c, cfg).map(x => ({ c, quando: x.slot, tipo: "of", proj: k.propostaProjetista || "" }));
     return [];
   }).flat().filter((x: any) => !fp || x.proj === fp) as any[];
   const porDia: Record<string, any[]> = {};
