@@ -1,7 +1,7 @@
 // Service worker do ALIANÇA 360: permite instalar como aplicativo e abre rápido.
 // Páginas: rede primeiro (sempre a versão mais nova); arquivos do app (/assets): cache.
 // Dados (Supabase) nunca passam pelo cache.
-const CACHE = "a360-v2";
+const CACHE = "a360-v3";
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(["/", "/logo.png", "/icon-192.png"]).catch(() => null))); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {
@@ -22,7 +22,7 @@ self.addEventListener("fetch", e => {
 self.addEventListener("push", e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch { d = { titulo: "ALIANÇA 360", corpo: e.data ? e.data.text() : "" }; }
   e.waitUntil(self.registration.showNotification(d.titulo || "ALIANÇA 360", {
-    body: d.corpo || "", icon: "/icon-192.png", badge: "/icon-192.png", tag: d.tag || undefined, renotify: true,
+    body: d.corpo || "", icon: "/icon-192.png", badge: "/badge-96.png", tag: d.tag || undefined, renotify: true,
     vibrate: [200, 100, 200], data: { url: d.url || "/" },
   }));
 });
