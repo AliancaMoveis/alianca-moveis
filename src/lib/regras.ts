@@ -620,11 +620,16 @@ export function criarRegras(state: Estado, currentUserId: string) {
     add("darparecer", "Clientes que já vieram — falta seu parecer", "O horário na loja já passou. Registre o status: orçamento, sem resposta, reprovado, reagendado, não compareceu ou venda.", ch.filter(c => c.atendenteId === eu && semParecer(c)), "var(--warn)");
     add("meusclientes", "Seus clientes na loja", "Clientes definidos para você que ainda não tiveram desfecho registrado.", ch.filter(c => c.atendenteId === eu && EM_ATENDIMENTO.includes(statusClienteDe(c)) && !c.venda), "var(--st-respondida)");
     add("devolvido", "Vendas canceladas pela Gestão", "O cliente voltou para você. Verifique e registre novamente, se for o caso.", ch.filter(c => c.atendenteId === eu && c.venda && c.venda.status === "cancelada"), "var(--danger)");
+    // coordenação do marketing (Supervisão / Suporte): pendências contam a partir do início do uso (14/10/2026) —
+    // o que é anterior ficou da migração e não vira pendência
+    const MARCO = "2026-10-14";
+    const recente = (c: Chamado) => [c.criadoEm, c.dataLoja, c.dataVisita].some((x: any) => !!x && String(x).slice(0, 10) >= MARCO);
+    const recenteLoja = (c: Chamado) => !!c.dataLoja && String(c.dataLoja).slice(0, 10) >= MARCO;
     const semAtualizacaoMkt = ch.filter(c => {
       if (!clienteCriticoInatividade(c)) return false;
       const souResponsavel = c.consultorId === eu || c.atendenteId === eu;
       // Gestão: só o que é dela (o geral fica informativo no dashboard e nos relatórios)
-      return souResponsavel || (!ehGestao() && !ehGerenteLoja() && (temMarketing() || mySetores().includes("suporte_consultores")));
+      return souResponsavel || (!ehGestao() && !ehGerenteLoja() && (temMarketing() || mySetores().includes("suporte_consultores")) && recente(c));
     });
     add("semAtualizacaoMkt", "Sem atualização há mais de " + LIMITE_INATIVIDADE_H + "h", "Nenhuma ação registrada neste cliente. Continua pendente até alguém atualizar — vendedor, consultor, Gestão, Supervisão ou Suporte.", semAtualizacaoMkt, "var(--critico)");
     add("semcontato", "Visitas sem contato iniciado", "Você ainda não registrou contato com estes clientes.", ch.filter(c => c.consultorId === eu && c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.contatoIniciado)), "var(--warn)");
@@ -636,11 +641,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("appromis", "Promissórias em aberto", "Contam como venda, mas a comissão dessa parte só sai quando forem pagas.", p.promissorias, "var(--st-tratativa)");
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
-    if ((temMarketing() && !ehGestao() && !ehGerenteLoja()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
+    if ((temMarketing() && !ehGestao() && !ehGerenteLoja()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c) && recente(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao() && !ehGerenteLoja())) {
-      add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend), "var(--primary)");
-      add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hojeISO())), "var(--warn)");
-      add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c)), "var(--danger)");
+      add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend && recenteLoja(c)), "var(--primary)");
+      add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c) && recenteLoja(c) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hojeISO())), "var(--warn)");
+      add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c) && recenteLoja(c)), "var(--danger)");
     }
     add("retmont", "🔧 Retornos de montador para você", "O call center abriu um retorno do montador e escolheu você para tratar. Prioridade de atendimento.", ch.filter(c => c.tipo === "retorno_montador" && !["concluida", "respondida", "informar"].includes(c.status) && ((c as any).tratativa?.retorno?.atendenteId === eu)), "var(--critico)");
     add("errovend", "🚨 Erros de venda para você", "O call center registrou um erro na sua venda. Abra, corrija e escreva o que foi feito.", ch.filter(c => c.tipo === "erro_venda" && c.status !== "concluida" && (c as any).tratativa?.erroVenda?.vendedorId === eu && !((c as any).tratativa?.erroVenda?.respostas || []).length), "var(--critico)");
