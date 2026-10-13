@@ -132,7 +132,7 @@ export default function AgendaPublica() {
                 <div className={"ap-origem " + x.origem}>{x.origem === "marketing" ? "Marketing" : "Externo"}</div>
                 <div className="ap-cli"><b>{x.cliente}</b>
                   <span>{x.consultor ? "Consultor: " + soNome(x.consultor) : "Agendado pelo marketing"}{x.quer_projeto ? " · 📐 quer projeto" : ""}</span>
-                  <button className="ap-ver" disabled={!qtd[x.id]} title={qtd[x.id] ? "" : "Nenhuma imagem anexada"} onClick={() => qtd[x.id] && abrirVer(x)}>🖼 {qtd[x.id] ? "Ver imagens (" + qtd[x.id] + ")" : "Sem imagens"}</button></div>
+                  <button className="ap-ver" disabled={!qtd[x.id]} title={qtd[x.id] ? "" : x.origem === "marketing" ? "Nenhuma imagem anexada" : "As imagens deste cliente estão no Minha Visita"} onClick={() => qtd[x.id] && abrirVer(x)}>🖼 {qtd[x.id] ? "Ver imagens (" + qtd[x.id] + ")" : x.origem === "marketing" ? "Sem imagens" : "Imagens no Minha Visita"}</button></div>
                 <div className="ap-vend">{x.vendedor ? <><small>{x.externo ? "Freelancer" : "Vendedor"}</small><b>{soNome(x.vendedor)}</b>{x.assumido ? <span className="ap-assumido">{x.externo ? "sem cadastro · assumiu na fila" : "assumiu na fila"}</span> : null}</>
                   : x.pedido_vendedor ? <><small>Aguardando aprovação</small><b className="pedido">{soNome(x.pedido_vendedor)}</b></>
                   : x.situacao === "sem_vendedor" ? <b className="semv">Sem vendedor · fila</b> : <b>—</b>}</div>
