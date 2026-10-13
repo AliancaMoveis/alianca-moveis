@@ -7,7 +7,7 @@ import { ScBadge } from "../comp/Ticket";
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const maisDias = (iso: string, n: number) => { const d = parseData(iso + "T12:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
 
-const obsAg = (c: any) => ((c.tratativa && c.tratativa.obs) || "").trim() || (/importad/i.test(c.motivo || "") ? "" : (c.motivo || "").trim());
+const obsAg = (c: any) => ((c.tratativa && c.tratativa.obs) || "").trim() || (/importad|planilha|^agenda da loja/i.test(c.motivo || "") ? "" : (c.motivo || "").trim());
 
 export default function Agenda() {
   const { R } = useApp();
