@@ -20,7 +20,7 @@ import AgendaPublica from "../src/telas/AgendaPublica";
   { id: "M4", hora: "14:00", assumido: true, externo: true, cliente: "Douglas Reinert", vendedor: "Pedro Almeida", consultor: "", origem: "marketing", situacao: "com_vendedor", quer_projeto: false, pedido_vendedor: "" },
   { id: "M5", hora: "15:30", cliente: "Camila Duarte", vendedor: "", consultor: "Consultor — Priscila", origem: "externo", situacao: "sem_vendedor", quer_projeto: true, pedido_vendedor: "Vendedor — Roy" },
   { id: "M6", hora: "17:00", cliente: "Marcos Vinícius", vendedor: "", consultor: "", origem: "marketing", situacao: "sem_vendedor", quer_projeto: false, pedido_vendedor: "" },
-  { id: "M7", hora: "18:30", assumido: true, cliente: "Rodrigo Mattos", vendedor: "Vendedor — Roy", consultor: "Consultor — Anderson", origem: "externo", situacao: "com_vendedor", quer_projeto: false, pedido_vendedor: "" },
+  { id: "M7", hora: "18:30", assumido: true, avisos: 2, avisado_em: new Date(Date.now() - 300000).toISOString(), cliente: "Rodrigo Mattos", vendedor: "Vendedor — Roy", consultor: "Consultor — Anderson", origem: "externo", situacao: "com_vendedor", quer_projeto: false, pedido_vendedor: "" },
 ];
 const uid = new URLSearchParams(location.search).get("uid")!;
 if (new URLSearchParams(location.search).get("loja") !== null) ReactDOM.createRoot(document.getElementById("root")!).render(<AgendaPublica />);

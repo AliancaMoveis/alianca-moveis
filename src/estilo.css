@@ -1126,3 +1126,81 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ap-zoom img{max-width:96vw;max-height:94vh;border-radius:6px}
 .ap-ver:disabled{border-color:#d5d9e0;background:#f3f4f6;color:#9aa1ad;cursor:not-allowed}
 .ticket .cli-tel{font-weight:500;font-size:.85em;color:var(--ink-soft,#555);white-space:nowrap;margin-right:4px}
+/* agenda da loja: linhas mais estreitas (mais clientes na tela) */
+.ap-lista{gap:4px}
+.ap-lista .ap-item{padding:5px 12px;gap:10px;border-radius:10px;border-left-width:5px}
+.ap-lista .ap-hora{font-size:22px}
+.ap-lista .ap-cli b{font-size:17px;line-height:1.2}
+.ap-lista .ap-cli span{font-size:12.5px}
+.ap-lista .ap-cli .ap-obs{margin-top:2px;padding:1px 7px;font-size:12px}
+.ap-lista .ap-ver{margin-top:3px;padding:2px 8px;font-size:12px}
+.ap-lista .ap-vend b{font-size:15px}
+.ap-lista .ap-sit{padding:4px 8px;font-size:13px}
+.ap-lista .ap-origem{padding:3px 0;font-size:11px}
+.ap-lista .ap-chegou,.ap-lista .ap-iniciar{padding:6px 8px;font-size:13.5px;border-radius:9px}
+.ap-lista .ap-acao{gap:2px}
+.ap-lista .ap-acao small{font-size:11px}
+.ap-lista .ap-ematd{padding:6px 10px}
+.ap-iniciar.troca{background:#9c2f2f;margin-top:3px}
+.ap-iniciar.troca:hover{background:#7d2424}
+.ap-resumo{padding:8px 28px}
+.ap-resumo>button{padding:7px 14px}
+.ap-resumo b{font-size:24px}
+.ap-dias{padding-top:8px}
+.ap-busca{display:flex;gap:8px;padding:10px 28px 0}
+.ap-busca input{flex:1;font:inherit;font-size:16px;padding:10px 14px;border:2px solid #cfd6e3;border-radius:12px;background:#fff;color:#1b2333;min-width:0}
+.ap-busca input:focus{border-color:#27468f;outline:none}
+.ap-busca button{border:0;border-radius:12px;background:#27468f;color:#fff;font:inherit;font-weight:800;padding:0 18px;cursor:pointer}
+.ap-modal-c.ap-achados{max-width:760px;max-height:86vh;overflow:auto}
+.ap-achado{display:grid;grid-template-columns:92px 1fr auto;gap:10px;align-items:center;border:1px solid #dfe4ee;border-radius:10px;padding:8px 10px}
+.ap-achado .q{display:flex;flex-direction:column;text-transform:capitalize}.ap-achado .q b{font-size:14px}.ap-achado .q span{font-size:18px;font-weight:800}
+.ap-achado .c b{display:block;font-size:16px}.ap-achado .c span{font-size:12.5px;color:#56627a}.ap-achado .c small{display:block;font-size:12px;color:#3b4660;margin-top:2px}
+.ap-achado button{border:0;border-radius:10px;background:#27468f;color:#fff;font:inherit;font-weight:700;padding:8px 12px;cursor:pointer;white-space:nowrap}
+.ap-achado .fora{color:#7a869d;font-size:12px}
+@media (max-width:900px){.ap-busca{padding:10px 14px 0}.ap-achado{grid-template-columns:70px 1fr}.ap-achado button,.ap-achado .fora{grid-column:1/-1}}
+.ag-busca{display:flex;gap:8px;margin:8px 0}
+.ag-busca input{flex:1;min-width:0;font:inherit;padding:8px 12px;border:1px solid var(--line,#d5dbe6);border-radius:10px}
+.ag-achados{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;background:var(--surface,#fff);border:1px solid var(--line,#d5dbe6);border-radius:12px;padding:8px}
+.ag-achado{display:grid;grid-template-columns:90px 1fr auto;gap:10px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line,#eef1f6)}
+.ag-achado:last-child{border-bottom:0}
+.ag-achado .q{display:flex;flex-direction:column;text-transform:capitalize;font-size:13px}.ag-achado .q span{font-weight:700}
+.ag-achado .c b{display:block}.ag-achado .c span{font-size:12.5px;color:var(--ink-soft,#56627a)}
+.ag-achado .b{display:flex;gap:6px}
+@media (max-width:700px){.ag-achado{grid-template-columns:70px 1fr}.ag-achado .b{grid-column:1/-1}}
+/* agenda interna: cartões mais estreitos */
+.ag-card{padding:7px 12px}
+.mv-agenda .ag-card{gap:3px;padding:7px 10px}
+/* app do gerente */
+.gr-acoes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.gr-chamar,.gr-urg{display:flex;flex-direction:column;align-items:flex-start;gap:2px;border:0;border-radius:16px;padding:14px;font:inherit;color:#fff;text-align:left;cursor:pointer}
+.gr-chamar{background:linear-gradient(135deg,#284b8f,#1b3566)}
+.gr-urg{background:linear-gradient(135deg,#d0442f,#a5261a)}
+.gr-chamar span,.gr-urg span{font-size:26px;line-height:1}
+.gr-chamar b,.gr-urg b{font-size:15.5px}
+.gr-chamar small,.gr-urg small{font-size:11.5px;opacity:.85}
+.gr-urg.grande{width:100%;padding:18px;margin-bottom:12px}
+.gr-urg.grande b{font-size:18px}
+.gr-urg:disabled{opacity:.55}
+.gr-obs{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:10px}
+.gr-obs input{font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink)}
+.gr-res{background:#e3f4ea;color:#1f6e43;border-radius:12px;padding:10px 12px;font-size:13.5px;font-weight:600;margin-bottom:8px}
+.gr-res.erro{background:#f9e0df;color:#9c2f2f}
+.gr-vends{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.gr-vend{display:flex;flex-direction:column;gap:2px;align-items:flex-start;border:2px solid #2f8f5b;background:var(--surface);color:var(--ink);border-radius:14px;padding:12px;font:inherit;text-align:left;cursor:pointer}
+.gr-vend b{font-size:16px}
+.gr-vend small{font-size:11.5px;color:#2f8f5b;font-weight:700}
+.gr-vend.fora{border-color:var(--line);opacity:.65}
+.gr-vend.fora small{color:var(--ink-soft)}
+.gr-busca{display:flex;gap:8px;margin-bottom:6px}
+.gr-busca input{flex:1;min-width:0;font:inherit;font-size:15px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink)}
+.gr-busca button{border:0;border-radius:12px;background:#27468f;color:#fff;font-size:18px;padding:0 16px}
+.gr-base{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:2px;cursor:pointer}
+.gr-base span{font-size:12.5px;color:var(--ink-soft)}
+.gr-base small{font-size:11.5px;color:var(--ink-faint)}
+.gr-venda{font-size:12.5px;border-top:1px solid var(--line);padding-top:4px;margin-top:4px}
+.mv-nova .form-card,.mv-nova form{max-width:100%}
+.ap-lista .ap-item{grid-template-columns:74px 84px 1fr 200px 130px 200px}
+.ap-lista .ap-ver{display:inline-block;margin:0 0 0 8px;vertical-align:middle}
+.ap-lista .ap-iniciar,.ap-lista .ap-chegou{white-space:nowrap}
+@media (max-width:900px){.ap-lista .ap-item{grid-template-columns:70px 1fr}}
+.ap-lista .ap-iniciar.troca{white-space:normal;font-size:12.5px}

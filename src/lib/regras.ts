@@ -305,13 +305,14 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ehGestao()) return true;
     const ms = mySetores();
     if (t.presale) return ms.some((x: string) => setoresCriaMkt.includes(x));
-    return ms.some((x: string) => !ehSetorMarketing(x));
+    return ms.includes("gerente_loja") || ms.some((x: string) => !ehSetorMarketing(x));
   };
   const podeCriarCC = () => Object.keys(TIPOS).some(k => !TIPOS[k].presale && podeCriarTipo(k));
   const podeCriarMkt = () => Object.keys(TIPOS).some(k => TIPOS[k].presale && podeCriarTipo(k));
   const operacionais = () => (state.setores || []).filter(s => !(s.liberacoes && s.liberacoes.verTudo));
   const setoresVisiveis = () => operacionais().filter(s => !ehSetorMarketing(s.id) || temMarketing() || ehGestao());
-  const podeVerValor = (c: Chamado) => ehGestao() || mySetores().includes("gerente_loja") || (c.atendenteId && c.atendenteId === currentUserId) || (c.consultorId && c.consultorId === currentUserId);
+  // gerente de loja não vê valores de venda (o banco também não devolve)
+  const podeVerValor = (c: Chamado) => ehGestao() || (c.atendenteId && c.atendenteId === currentUserId) || (c.consultorId && c.consultorId === currentUserId);
   const ehConsultorExterno = () => mySetores().includes("consultor_externo");
   const ehPosvenda = () => mySetores().includes("posvenda");
   const ehJuridico = () => mySetores().includes("juridico");
@@ -348,7 +349,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
   const parecerCobrado = (c: Chamado) => !!(c.tratativa && c.tratativa.cobradoEm) && c.setorDestino === "atendente_cliente" && !c.venda && !statusFinalCliente.includes(statusClienteDe(c));
   // quem responde por definir o vendedor e cobrar parecer: Suporte = clientes dos consultores externos; Supervisão Marketing / Gerente de Loja = agendados pelo marketing
-  const souRespLoja = (c: Chamado) => (mySetores().includes("suporte_consultores") && !ehDireto(c)) || (temMarketing() && ehDireto(c));
+  // gerente de loja só (sem supervisão do marketing/suporte): app simplificado, sem as obrigações do marketing e dos consultores
+  const ehGerenteLoja = () => mySetores().includes("gerente_loja") && !ehGestao() && !mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores", "proprietario"].includes(x));
+  const souRespLoja = (c: Chamado) => (mySetores().includes("suporte_consultores") && !ehDireto(c)) || (temMarketing() && ehDireto(c) && !ehGerenteLoja());
   const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente")).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   /** Disponibilidade do vendedor para atender um cliente na loja num horário (folga, turno, almoço e outro cliente a menos de 2h) */
   const dispVendedor = (uid: string, quando: string | null | undefined, exceto?: Chamado | null): string[] => {
@@ -606,7 +609,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
       if (!clienteCriticoInatividade(c)) return false;
       const souResponsavel = c.consultorId === eu || c.atendenteId === eu;
       // Gestão: só o que é dela (o geral fica informativo no dashboard e nos relatórios)
-      return souResponsavel || (!ehGestao() && (temMarketing() || mySetores().includes("suporte_consultores")));
+      return souResponsavel || (!ehGestao() && !ehGerenteLoja() && (temMarketing() || mySetores().includes("suporte_consultores")));
     });
     add("semAtualizacaoMkt", "Sem atualização há mais de " + LIMITE_INATIVIDADE_H + "h", "Nenhuma ação registrada neste cliente. Continua pendente até alguém atualizar — vendedor, consultor, Gestão, Supervisão ou Suporte.", semAtualizacaoMkt, "var(--critico)");
     add("semcontato", "Visitas sem contato iniciado", "Você ainda não registrou contato com estes clientes.", ch.filter(c => c.consultorId === eu && c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.contatoIniciado)), "var(--warn)");
@@ -618,8 +621,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("appromis", "Promissórias em aberto", "Contam como venda, mas a comissão dessa parte só sai quando forem pagas.", p.promissorias, "var(--st-tratativa)");
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
-    if ((temMarketing() && !ehGestao()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
-    if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao())) {
+    if ((temMarketing() && !ehGestao() && !ehGerenteLoja()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c)), "var(--st-aberta)");
+    if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao() && !ehGerenteLoja())) {
       add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend), "var(--primary)");
       add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hojeISO())), "var(--warn)");
       add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c)), "var(--danger)");
@@ -643,9 +646,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
     add("informar", "Informar o cliente", "O setor registrou a solução mas não fala com o cliente. Avise o cliente e conclua.", ch.filter(c => doCC(c) && c.status === "informar" && (ehCallcenter() || c.solicitanteId === eu)), "var(--st-informar)");
     add("criticos", "Críticos no seu setor", "Mais de 24h sem resposta — precisam de ação imediata.", ch.filter(c => doCC(c) && mySetores().includes(c.setorDestino) && situacaoPrazo(c) === "critico"), "var(--critico)");
     add("meusatrasados", "Chamados que você abriu e estão atrasados", "O setor responsável ainda não respondeu dentro do prazo.", ch.filter(c => doCC(c) && c.solicitanteId === eu && estaAtrasado(c)), "var(--danger)");
+    if (ehGerenteLoja()) add("gerabertos", "Chamados que você abriu — em andamento", "Solicitações que você abriu para os setores. Acompanhe a resposta.", ch.filter(c => doCC(c) && c.solicitanteId === eu && !["concluida"].includes(c.status)), "var(--st-aberta)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => doCC(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["jurprazo", "retmont", "pvcc", "solmed", "acomp", "medalerta", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi"];
+    const PRIORIDADE = ["jurprazo", "retmont", "pvcc", "solmed", "acomp", "medalerta", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi", "gerabertos"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));
@@ -757,7 +761,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, ehGerenteLoja, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,

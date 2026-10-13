@@ -18,6 +18,14 @@ export default function Agenda() {
   const resumida = !editar;
   const [escopo, setEscopo] = useState<"loja" | "meus">("loja");
   const amanha = maisDias(dia, 1);
+  const { abrirDetalhe, toast } = useApp() as any;
+  const [q, setQ] = useState(""); const [achados, setAchados] = useState<any[] | null>(null); const [buscando, setBuscando] = useState(false);
+  const buscar = async (e?: any) => {
+    if (e) e.preventDefault();
+    if (q.trim().length < 3) { toast("Digite pelo menos 3 letras ou números"); return; }
+    setBuscando(true);
+    try { setAchados(await A.agendaLojaBuscar(q.trim()) || []); } catch (er: any) { toast(er.message || "Não foi possível buscar"); } finally { setBuscando(false); }
+  };
   return (
     <section className="view active" id="view-agenda">
       <div className="view-head"><div><h2>Agendamento loja</h2><p id="agSub">{editar ? "Todos os clientes que vêm à loja no dia (e no dia seguinte, quando já houver). Clique para abrir a ficha e definir o vendedor. Pedidos de vendedores aparecem para aprovar. Use \"Meus clientes\" para ver só os ligados a você." : "Todos os clientes que vêm à loja e quem vai atender cada um. Use \"Meus clientes\" para ver só os seus."}</p></div></div>
@@ -31,6 +39,24 @@ export default function Agenda() {
           <button className={escopo === "meus" ? "on" : ""} onClick={() => setEscopo("meus")}>Meus clientes</button>
         </span>}
       </div>
+      <form className="ag-busca" onSubmit={buscar}>
+        <input value={q} onChange={e => { setQ(e.target.value); if (!e.target.value) setAchados(null); }} placeholder="🔎 Buscar cliente em qualquer dia — nome, telefone ou endereço" />
+        <button className="btn sm primary" type="submit" disabled={buscando}>{buscando ? "Buscando…" : "Buscar"}</button>
+        {achados && <button className="btn sm ghost" type="button" onClick={() => { setAchados(null); setQ(""); }}>Limpar</button>}
+      </form>
+      {achados && <div className="ag-achados">
+        {!achados.length ? <div className="empty" style={{ padding: 12 }}>Nenhum cliente da agenda encontrado.</div> : achados.map((a: any) => {
+          const dt = String(a.data_loja || ""); const d = dt.slice(0, 10); const dd = parseData(d + "T12:00");
+          return (
+            <div key={a.id} className="ag-achado">
+              <div className="q"><b>{d === hojeISO() ? "Hoje" : DIAS[dd.getDay()]}</b><span>{fmtDate(d).slice(0, 5)} {dt.slice(11, 16)}</span></div>
+              <div className="c"><b>{a.cliente}</b><span>{a.telefone ? a.telefone + " · " : ""}{a.consultor_id ? "consultor " + R.nomeUser(a.consultor_id) : "marketing"} · {a.atendente_id ? "vendedor " + R.nomeUser(a.atendente_id) : "sem vendedor"}{a.endereco ? " · " + a.endereco : ""}</span></div>
+              <div className="b">
+                <button className="btn sm" onClick={() => { setDia(d); setAchados(null); }}>Ver o dia</button>
+                {a.meu && <button className="btn sm ghost" onClick={() => abrirDetalhe(a.id)}>Abrir</button>}
+              </div>
+            </div>); })}
+      </div>}
       <div className="ag-legenda"><span><span className="origem marketing">Marketing</span> agendado pelo marketing</span><span><span className="origem externo">Externo</span> veio do consultor externo</span><span><span className="badge b-semanexo">⚠️ Sem anexo</span> sem planta/fotos</span><span><b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b> aguardando definir</span></div>
       <Dia iso={dia} resumida={resumida} escopo={escopo} principal />
       <Dia iso={amanha} resumida={resumida} escopo={escopo} />

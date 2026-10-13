@@ -1,5 +1,5 @@
 // Agenda da loja (tela aberta): devolve as imagens do cliente com links temporários (10 min).
-// Quem chama confirma o nome; a regra (projetista programado / assumir o projeto) fica no banco: agenda_publica_imagens.
+// Quem chama confirma o nome; a regra (projetista programado / assumir o projeto com a senha) fica no banco: agenda_publica_imagens_v2.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
@@ -10,9 +10,9 @@ Deno.serve(async (req: Request) => {
   try {
     const b = await req.json().catch(() => ({}));
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-    const { data, error } = await sb.rpc("agenda_publica_imagens", { p_token: String(b.token || ""), p_id: String(b.id || ""), p_vendedor: b.vendedor || null, p_assumir: !!b.assumir });
+    const { data, error } = await sb.rpc("agenda_publica_imagens_v2", { p_token: String(b.token || ""), p_id: String(b.id || ""), p_vendedor: b.vendedor || null, p_assumir: !!b.assumir, p_senha: String(b.senha || "") });
     if (error) return resp({ erro: error.message }, 400);
-    if (!data || data.confirmar) return resp(data || {});
+    if (!data || data.confirmar || data.erro) return resp(data || {});
     const arqs = (data.arquivos || []) as any[];
     const paths = arqs.filter(a => a.path).map(a => a.path);
     let urls: Record<string, string> = {};

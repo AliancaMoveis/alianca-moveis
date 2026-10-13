@@ -10,7 +10,7 @@ import { cfgAgenda } from "./Checklist";
 const VAZIO: any = { evVendedor: "", evComprado: "", evLancado: "", rmMontador: "", rmSaiuNome: "", rmAtendente: "", pvSituacao: "", pvProjetista: "", pvProjOutro: false, pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
 type NovoAnexo = { tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; blob?: Blob };
 
-export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; pvFixo?: "cliente" | "montador" }) {
+export default function Nova({ escopo, pvFixo, pronto }: { escopo: "cc" | "mkt" | "pv"; pvFixo?: "cliente" | "montador"; pronto?: (id: string) => void }) {
   const { R, st, toast, recarregar, irPara, abrirDetalhe, setModal, preset } = useApp() as any;
   // "+ Nova solicitação" na ficha: já vem com os dados do cliente e fica ligada ao atendimento de origem
   const pre = preset && preset.prefill ? preset.prefill : null;
@@ -140,6 +140,7 @@ export default function Nova({ escopo, pvFixo }: { escopo: "cc" | "mkt" | "pv"; 
       if (extrasIds.length) { toast("Cobranças abertas: " + [id, ...extrasIds].join(", ") + " (uma por fábrica, ligadas)"); }
       else toast(finalizar ? "Atendimento " + id + " registrado e finalizado" : acionar ? "Solicitação " + id + " aberta — supervisão avisada" : "Solicitação " + id + " aberta");
       setResposta(""); setAcionar(false); setMotivoSup(""); modo.current = "aberto";
+      if (pronto) { pronto(id); return; }
       const menu = R.menuPerfil().flatMap((g: any) => g.itens.map((i: string[]) => i[0]));
       irPara(menu.includes("fila") && !presale ? "fila" : menu.includes("acompmkt") && presale ? "acompmkt" : menu.includes("carteira") && presale ? "carteira" : "dashboard");
       if (escopo === "pv") abrirDetalhe(id);
