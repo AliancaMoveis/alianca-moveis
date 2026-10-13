@@ -36,6 +36,17 @@ export const EM_ATENDIMENTO = ["com_vendedor", "orcamento", "sem_resposta", "rea
 export const LIMITE_INATIVIDADE_H = 24;
 /** setores que ganham menu próprio (o que o call center abre para eles vira a "Fila do setor") */
 export const SETORES_MENU: [string, string, string][] = [["montagem", "Montagem", "🔧"], ["assistencia", "Assistência", "🛠"], ["prazo_fabrica", "Solicitação Fábrica", "🏭"]];
+/** data que conta para filtros de período: venda → data da venda; senão loja, visita ou cadastro */
+export function dataRefCliente(c: any): string {
+  const v = c && c.venda ? String(c.venda.dataVendaReal || c.venda.dataVenda || c.venda.quando || "").slice(0, 10) : "";
+  return v || String((c && (c.dataLoja || c.dataVisita || c.criadoEm)) || "").slice(0, 10);
+}
+/** primeiro e último dia do mês atual (padrão dos filtros de período) */
+export function mesAtual(): { de: string; ate: string } {
+  const h = new Date(); const p = (n: number) => String(n).padStart(2, "0");
+  const fim = new Date(h.getFullYear(), h.getMonth() + 1, 0);
+  return { de: h.getFullYear() + "-" + p(h.getMonth() + 1) + "-01", ate: fim.getFullYear() + "-" + p(fim.getMonth() + 1) + "-" + p(fim.getDate()) };
+}
 export const DIAS_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 /** Turnos dos vendedores (escala): manhã = entra 9:00, almoço 11:00–13:00 · tarde = entra 10:40, almoço 13:30–15:30 (minutos do dia) */
 export const TURNOS: Record<string, { rot: string; entra: number; almoco: [number, number] }> = {
@@ -662,13 +673,15 @@ export function criarRegras(state: Estado, currentUserId: string) {
     return { grupos, total };
   }
 
-  function statsPessoa(uid: string, ehVend: boolean) {
+  function statsPessoa(uid: string, ehVend: boolean, de?: string, ate?: string) {
     const meus = state.chamados.filter(c => domMarketing(c) && (ehVend ? c.atendenteId === uid : c.consultorId === uid));
     const ativos = meus.filter(c => ["aguardando_consultor", "direcionado_consultor", "visita_realizada", "agendado_loja", ...EM_ATENDIMENTO].includes(statusClienteDe(c))).length;
-    const vend = meus.filter(c => vendaContaVolume(c.venda));
+    // período (vendas, total e conversão): pela data da venda ou, sem venda, da loja / visita / cadastro
+    const inP = (c: Chamado) => { if (!de && !ate) return true; const d = dataRefCliente(c); return !!d && (!de || d >= de) && (!ate || d <= ate); };
+    const vend = meus.filter(c => vendaContaVolume(c.venda) && inP(c));
     const total = vend.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
     // conversão: vendas ÷ clientes já decididos (vendidos + os que não compraram)
-    const fechados = meus.filter(c => vendaContaVolume(c.venda) || ["nao_compareceu", "venda_cancelada", "reprovado", "atendido"].includes(statusClienteDe(c))).length;
+    const fechados = meus.filter(c => inP(c) && (vendaContaVolume(c.venda) || ["nao_compareceu", "venda_cancelada", "reprovado", "atendido"].includes(statusClienteDe(c)))).length;
     const conv = fechados ? Math.round(vend.length / fechados * 100) : 0;
     return { meus, ativos, vendas: vend.length, total, conv };
   }

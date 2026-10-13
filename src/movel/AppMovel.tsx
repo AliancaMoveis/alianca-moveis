@@ -18,6 +18,7 @@ import PainelDono from "../telas/PainelDono";
 import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
 import { GerChamar, GerClientes, GerHoje } from "./Gerente";
 import Nova from "../telas/Nova";
+import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
 import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados } from "./Medidas";
@@ -168,16 +169,21 @@ function ConsClientes({ abrir }: any) {
   const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas">("fazer");
   const md = medDados(R);
   const [q, setQ] = useState("");
-  const res = d.meus.filter((c: any) => c.venda || (c.tratativa && c.tratativa.parecerEm) || R.statusClienteDe(c) === "nao_compareceu").sort((a: any, b: any) => String(b.dataLoja || "").localeCompare(String(a.dataLoja || "")));
-  const todas = d.meus.slice().sort((a: any, b: any) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
+  const [per, setPer] = usePeriodo();
+  const np = (c: any) => noPeriodo(per, c);
+  const res = d.meus.filter((c: any) => np(c)).filter((c: any) => c.venda || (c.tratativa && c.tratativa.parecerEm) || R.statusClienteDe(c) === "nao_compareceu").sort((a: any, b: any) => String(b.dataLoja || "").localeCompare(String(a.dataLoja || "")));
+  const tudo = d.meus.slice().sort((a: any, b: any) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
+  const todas = tudo.filter(np);
   const vendidos = todas.filter((c: any) => vendaContaVolume(c.venda)), cancel = todas.filter(temCancelamento);
-  const lista = busca(q ? todas : f === "fazer" ? d.aFazer : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : todas, q);
+  const comPeriodo = ["resultado", "vendidos", "cancel", "todas"].includes(f);
+  const lista = busca(q ? tudo : f === "fazer" ? d.aFazer : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : todas, q);
   const sub = (c: any) => f === "resultado" && !q ? ((c.tratativa && c.tratativa.parecer) || (c.venda ? "venda " + c.venda.numero : "—"))
     : c.dataLoja ? "loja " + diaCurto(c.dataLoja) + " " + hora(c.dataLoja) + (c.atendenteId ? " · vendedor " + primeiro(R.nomeUser(c.atendenteId)) : " · sem vendedor") : (c.endereco || c.produto);
   return <>
     <Busca q={q} setQ={setQ} />
     {!q && <div className="mv-seg">{([["fazer", "A fazer", d.aFazer.length], ["loja", "Agendar loja", d.faltaLoja.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Cancelamentos", cancel.length], ["todas", "Todos", d.meus.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
       <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
+    {!q && comPeriodo && <FiltroPeriodo p={per} setP={setPer} />}
     {f === "medidas" && !q ? <MedLista abrir={abrir} /> : lista.length ? lista.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: sub(c) }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
   </>;
 }
@@ -216,14 +222,17 @@ function VendClientes({ abrir }: any) {
   const nPend = d.cobrados.length + d.semParecer.length;
   const [f, setF] = useState<"parecer" | "abertos" | "vendidos" | "cancel" | "todos">(nPend || d.semAtual.length ? "parecer" : "abertos");
   const [q, setQ] = useState("");
-  const todos = d.meus.slice().sort((a: any, b: any) => String(b.dataLoja || "").localeCompare(String(a.dataLoja || "")));
+  const [per, setPer] = usePeriodo();
+  const tudo = d.meus.slice().sort((a: any, b: any) => String(b.dataLoja || "").localeCompare(String(a.dataLoja || "")));
+  const todos = tudo.filter((c: any) => noPeriodo(per, c));
   const grupo = (t: string, l: any[], cor: string) => l.length ? <><div className="mv-sec" style={{ color: cor }}>{t}</div>{l.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataLoja), dia: diaCurto(c.dataLoja), sub: c.produto }} destaque />)}</> : null;
   const vendidos = todos.filter((c: any) => vendaContaVolume(c.venda)), cancel = todos.filter(temCancelamento);
-  const lista = busca(q ? todos : f === "abertos" ? d.abertos : f === "vendidos" ? vendidos : f === "cancel" ? cancel : todos, q);
+  const lista = busca(q ? tudo : f === "abertos" ? d.abertos : f === "vendidos" ? vendidos : f === "cancel" ? cancel : todos, q);
   return <>
     <Busca q={q} setQ={setQ} />
-    {!q && <div className="mv-seg">{([["parecer", "Falta parecer", nPend + d.semAtual.length], ["abertos", "Em atendimento", d.abertos.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Cancelamentos", cancel.length], ["todos", "Todos", d.meus.length]] as any[]).map(([k, l, n]) =>
+    {!q && <div className="mv-seg">{([["parecer", "Falta parecer", nPend + d.semAtual.length], ["abertos", "Em atendimento", d.abertos.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Cancelamentos", cancel.length], ["todos", "Todos", todos.length]] as any[]).map(([k, l, n]) =>
       <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
+    {!q && ["vendidos", "cancel", "todos"].includes(f) && <FiltroPeriodo p={per} setP={setPer} />}
     {!q && f === "parecer" ? (!nPend && !d.semAtual.length ? <Vazio t="Tudo em dia. Nenhum parecer pendente. 👍" /> : <>
       {grupo("Parecer cobrado pelo Suporte", d.cobrados, "var(--critico)")}
       {grupo("Já vieram — falta seu parecer", d.semParecer, "var(--danger)")}

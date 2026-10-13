@@ -4,6 +4,7 @@ import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import { STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, mesmaPessoa, parseData, soDigitos , numsVenda } from "../lib/regras";
 import { useTimeMkt } from "./Gestor";
+import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const dia = (v: any) => String(v || "").slice(0, 10);
@@ -61,15 +62,18 @@ export function MktClientes({ abrir }: any) {
   const { R, st } = useApp() as any;
   const [f, setF] = useState<"abertos" | "loja" | "vendas" | "todos">("abertos");
   const [q, setQ] = useState("");
+  const [per, setPer] = usePeriodo();
   const l = meus(R, st).sort((a: any, b: any) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
-  const abertos = l.filter((c: any) => R.emAberto(c) && !c.venda), loja = l.filter((c: any) => c.dataLoja && dia(c.dataLoja) >= hojeISO()), vendas = l.filter((c: any) => c.venda);
+  const lp = l.filter((c: any) => noPeriodo(per, c));
+  const abertos = l.filter((c: any) => R.emAberto(c) && !c.venda), loja = l.filter((c: any) => c.dataLoja && dia(c.dataLoja) >= hojeISO()), vendas = lp.filter((c: any) => c.venda);
   const t = q.trim().toLowerCase(), dg = t.replace(/\D/g, "");
-  const base = t ? l : f === "abertos" ? abertos : f === "loja" ? loja : f === "vendas" ? vendas : l;
+  const base = t ? l : f === "abertos" ? abertos : f === "loja" ? loja : f === "vendas" ? vendas : lp;
   const lista = t ? base.filter((c: any) => (c.cliente + " " + (c.produto || "") + " " + c.id + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))) : base;
   return <>
     <input className="mv-busca" type="search" placeholder="🔎 Buscar cliente, telefone…" value={q} onChange={e => setQ(e.target.value)} />
-    {!t && <div className="mv-seg">{([["abertos", "Em andamento", abertos.length], ["loja", "Vêm à loja", loja.length], ["vendas", "Venderam", vendas.length], ["todos", "Todos", l.length]] as any[]).map(([k, n, x]) =>
+    {!t && <div className="mv-seg">{([["abertos", "Em andamento", abertos.length], ["loja", "Vêm à loja", loja.length], ["vendas", "Venderam", vendas.length], ["todos", "Todos", lp.length]] as any[]).map(([k, n, x]) =>
       <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{n}<i>{x}</i></button>)}</div>}
+    {!t && ["vendas", "todos"].includes(f) && <FiltroPeriodo p={per} setP={setPer} />}
     {lista.length ? lista.slice(0, 100).map((c: any) => <Linha key={c.id} c={c} abrir={abrir} />) : <div className="mv-vazio">{t ? "Nenhum cliente encontrado." : "Nada aqui."}</div>}
   </>;
 }
