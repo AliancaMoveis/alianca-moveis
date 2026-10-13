@@ -1124,3 +1124,4 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ap-zoom{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:200;cursor:zoom-out}
 .ap-zoom img{max-width:96vw;max-height:94vh;border-radius:6px}
 .ap-ver:disabled{border-color:#d5d9e0;background:#f3f4f6;color:#9aa1ad;cursor:not-allowed}
+.ticket .cli-tel{font-weight:500;font-size:.85em;color:var(--ink-soft,#555);white-space:nowrap;margin-right:4px}
