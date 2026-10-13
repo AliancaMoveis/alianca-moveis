@@ -2,7 +2,7 @@
 // o mesmo formato de `state` do protótipo, para que as regras portadas funcionem igual.
 import { sb } from "./supabase";
 
-export type Anexo = { id?: string; tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; path?: string | null };
+export type Anexo = { id?: string; tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; path?: string | null; criadoPor?: string | null };
 export type Chamado = any;
 export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean; fazProjeto?: boolean; folga?: number | null; turno?: string | null };
 export type Setor = { id: string; nome: string; liberacoes: Record<string, boolean> };
@@ -77,7 +77,7 @@ async function principal(): Promise<{ chamados: any[]; historico: any[]; anexos:
   if (!error && data) return data as any;
   const [chamados, vendas, valores, historico, anexos, itens] = await Promise.all([
     todos("chamados", "*", "criado_em"), todos("vendas", "*"), todos("vendas_valores", "*"),
-    todos("historico", "chamado_id,quando,quem_nome,texto,id", "id"), todos("anexos", "id,chamado_id,tipo,nome,url,storage_path,criado_em", "criado_em"),
+    todos("historico", "chamado_id,quando,quem_nome,texto,id", "id"), todos("anexos", "id,chamado_id,tipo,nome,url,storage_path,criado_em,criado_por", "criado_em"),
     todos("venda_itens", "*", "registrado_em").catch(() => []),
   ]);
   return { chamados, historico, anexos, vendas, valores, itens };
@@ -144,7 +144,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
   hist.forEach((h: any) => (histDe[h.chamado_id] = histDe[h.chamado_id] || []).push({ quando: h.quando, quem: h.quem_nome, texto: h.texto }));
   const anxDe: Record<string, Anexo[]> = {};
   anexos.forEach((a: any) => (anxDe[a.chamado_id] = anxDe[a.chamado_id] || []).push({
-    id: a.id, tipo: a.tipo, nome: a.nome, path: a.storage_path,
+    id: a.id, tipo: a.tipo, nome: a.nome, path: a.storage_path, criadoPor: a.criado_por || null,
     url: a.storage_path ? (cacheUrl.get(a.storage_path)?.url || "") : a.url,
   }));
 

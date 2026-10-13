@@ -10,7 +10,7 @@ function salvarBlob(blob: Blob, nome: string) {
 }
 
 export function Overlays({ lb, setLb, gal, setGal }: any) {
-  const { st, toast, executar, openImg } = useApp();
+  const { st, R, toast, executar, openImg } = useApp();
   const tx = useRef<number | null>(null);
   const [zipando, setZipando] = useState(false);
 
@@ -75,7 +75,7 @@ export function Overlays({ lb, setLb, gal, setGal }: any) {
                 <div className="gal-item" key={a.id || i}>
                   <img src={a.url} alt={a.nome || ""} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />
                   <button className="dl" title="Baixar esta foto" onClick={e => { e.stopPropagation(); baixarUm(a); }}>⬇</button>
-                  {gal.editavel && a.id && <button className="rm" title="Remover" onClick={e => { e.stopPropagation(); executar(() => A.removerAnexo(a.id)); }}>×</button>}
+                  {gal.editavel && a.id && R.podeRemoverAnexo(a) && <button className="rm" title="Remover" onClick={e => { e.stopPropagation(); executar(() => A.removerAnexo(a.id)); }}>×</button>}
                   <div className="nm">{a.nome || "foto"}</div>
                 </div>
               ))}
