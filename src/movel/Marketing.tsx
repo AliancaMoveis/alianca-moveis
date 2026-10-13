@@ -168,7 +168,7 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
     if (direto && !f.dataVisita) { toast("Informe a data e o horário na loja"); return; }
     setEnv(true);
     try {
-      const id = await A.criarChamado({ tipo, cliente: f.cliente.trim(), telefone: f.telefone, produto: f.produto.trim(), motivo: f.motivo.trim() || "—", email: f.email,
+      const id = await A.criarChamado({ tipo, cliente: f.cliente.trim(), telefone: f.telefone, produto: f.produto.trim(), motivo: f.motivo.trim(), email: f.email,
         dataVisita: f.dataVisita, endereco: direto ? "" : f.endereco, consultorId: "", clienteDoc: "", pedido: "", dataVenda: "", pedidoFabrica: "", fabrica: "", prazoTatico: "", slaManual: "",
         vinculadoA: dups.length ? dups[0].id : null, litoral: !direto && litoral, pedeVendedor: direto && pedeVend });
       setLitoral(false); setPedeVend(false);
