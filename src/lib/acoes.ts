@@ -105,7 +105,12 @@ export const A = {
   gerarLinkAgendaPublica: (ativar: boolean) => rpc<string>("gerar_link_agenda_publica", { p_ativar: ativar }),
   agendaPublicaDia: async (token: string, dia: string) => {
     if ((import.meta as any).env?.VITE_MOCK) return ((window as any).__agendaPublicaMock || []) as any[];
-    return (await rpc<any[]>("agenda_publica_dia", { p_token: token, p_dia: dia })) || [];
+    const [l, ex] = await Promise.all([
+      rpc<any[]>("agenda_publica_dia", { p_token: token, p_dia: dia }),
+      rpc<any[]>("agenda_publica_extra", { p_token: token, p_dia: dia }).catch(() => [] as any[]),
+    ]);
+    const m: Record<string, any> = {}; (ex || []).forEach((e: any) => (m[e.id] = e));
+    return (l || []).map((x: any) => ({ ...x, telefone: m[x.id]?.telefone || "", obs: m[x.id]?.obs || "" }));
   },
   agendaPublicaVendedores: async (token: string) => {
     if ((import.meta as any).env?.VITE_MOCK) return [{ id: "v1", nome: "Giovanna" }, { id: "v2", nome: "Lucas" }, { id: "v3", nome: "Roy" }];

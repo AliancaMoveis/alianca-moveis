@@ -7,6 +7,8 @@ import { ScBadge } from "../comp/Ticket";
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const maisDias = (iso: string, n: number) => { const d = parseData(iso + "T12:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
 
+const obsAg = (c: any) => ((c.tratativa && c.tratativa.obs) || "").trim() || (/importad/i.test(c.motivo || "") ? "" : (c.motivo || "").trim());
+
 export default function Agenda() {
   const { R } = useApp();
   const [dia, setDia] = useState(hojeISO());
@@ -106,6 +108,7 @@ function Dia({ iso, resumida, escopo, principal }: { iso: string; resumida: bool
                         : <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b></>}
                       {vend && t.assumidoFila ? <> <span className="marca-loja assumido">assumido na fila</span></> : null}</div>
                     {c.produto && <div className="dt">{c.produto}</div>}
+                    {!alheio && obsAg(c) ? <div className="dt">📝 {obsAg(c)}</div> : null}
                     {/* vendedor pede para assumir um cliente da fila */}
                     {souVendedor && !c.atendenteId && !R.ehGestao() && (!pedido
                       ? <div style={{ marginTop: 6 }}><button className="btn primary sm" onClick={e => { e.stopPropagation(); pedir(c); }}>Estou atendendo este cliente</button></div>
