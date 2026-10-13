@@ -10,6 +10,7 @@ const nz = (v: any) => (v === "" || v === undefined ? null : v);
 
 export const A = {
   criarChamado: (p: any) => rpc<string>("criar_chamado", { p }),
+  trocarConsultor: (id: string, consultor: string, motivo: string) => rpc("trocar_consultor", { p_id: id, p_consultor: consultor, p_motivo: motivo }),
   marcarLitoral: (id: string, sim: boolean) => rpc("marcar_litoral", { p_id: id, p_sim: sim }),
   litoralDecidir: (id: string, aprovar: boolean, obs = "") => rpc("litoral_decidir", { p_id: id, p_aprovar: aprovar, p_obs: obs }),
   pedirVendedorLoja: (id: string, sim: boolean) => rpc("pedir_vendedor_loja", { p_id: id, p_sim: sim }),

@@ -1225,3 +1225,4 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .mv-check{display:flex;gap:8px;align-items:flex-start;font-size:14px;font-weight:600;margin:6px 0 10px;line-height:1.3}
 .mv-check input{width:20px;height:20px;flex:none;margin-top:1px}
 .mv-check small{display:block;font-weight:400;color:var(--ink-soft);font-size:12px}
+.litoral-bloco .lt-acoes select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px}

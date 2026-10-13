@@ -66,6 +66,7 @@ export default function Detalhe({ id }: { id: string }) {
           {tratar && temTrat && <div className="acao-etapa"><div className="acao-etapa-tit">Ação desta etapa</div>{trat}</div>}
           {presale && <>
             <LitoralBloco c={c} />
+            <TrocarConsultor c={c} />
             <StatusCliente c={c} />
             <Venda c={c} />
             <Vendedor c={c} />
@@ -508,6 +509,25 @@ function Destaque({ c, anexar }: any) {
         </div>
       ) : R.semAnexo(c) ? <div className="aviso-anexo" style={{ marginTop: 12 }}>⚠️ <b>Sem anexo.</b> Nenhuma planta ou foto do cliente — {c.consultorId ? "o consultor precisa anexar" : "anexe a planta ou fotos"} antes do atendimento na loja.</div>
         : <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-faint)" }}>Nenhuma planta ou foto anexada ainda.</div>}
+    </div>
+  );
+}
+
+// trocar o consultor de um cliente já direcionado (mesmas pessoas que direcionam: Gestão, Supervisão Marketing, Gerente, Suporte)
+function TrocarConsultor({ c }: any) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const [aberto, setAberto] = useState(false); const [novo, setNovo] = useState(""); const [mot, setMot] = useState("");
+  const pode = R.ehGestao() || R.temMarketing() || R.mySetores().includes("suporte_consultores");
+  if (!pode || c.setorDestino !== "consultor_externo") return null;
+  return (
+    <div className="litoral-bloco" style={{ borderColor: "var(--line)" }}>
+      <div className="lt-sub">Consultor: <b>{c.consultorId ? R.nomeUser(c.consultorId) : "—"}</b>{!aberto && <> · <a href="#" onClick={e => { e.preventDefault(); setAberto(true); }}>🔁 Trocar consultor</a></>}</div>
+      {aberto && <div className="lt-acoes">
+        <select value={novo} onChange={e => setNovo(e.target.value)}><option value="">Novo consultor…</option>{R.consultores().filter((u: any) => u.id !== c.consultorId).map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>
+        <input placeholder="Motivo (opcional)" value={mot} onChange={e => setMot(e.target.value)} />
+        <button className="btn primary sm" onClick={() => { if (!novo) { toast("Escolha o novo consultor"); return; } ex(() => A.trocarConsultor(c.id, novo, mot), "Consultor trocado — os dois foram avisados").then((ok: boolean) => { if (ok) { setAberto(false); setNovo(""); setMot(""); } }); }}>Trocar</button>
+        <button className="btn ghost sm" onClick={() => setAberto(false)}>Cancelar</button>
+      </div>}
     </div>
   );
 }
