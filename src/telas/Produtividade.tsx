@@ -21,6 +21,7 @@ export default function Produtividade() {
   const ate = fim > hoje && mes === hoje.slice(0, 7) ? fim : fim;
   const gestor = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
   const valorVenda = Number((R.cfg() as any).valorVendaMkt ?? 10);
+  const oc = !gestor && R.ocultaValoresMkt(); // operadora: sem valores até a Supervisão aprovar
   const [metas, setMetas] = useState<any[] | null>(null);
   const [pags, setPags] = useState<any[]>([]);
   const [f, setF] = useState({ dia: hoje, meta: "", valor: "100", obs: "" });
@@ -60,11 +61,11 @@ export default function Produtividade() {
   return (
     <section className="view active" id="view-produtividade">
       <div className="view-head"><div><h2>{gestor ? "Produtividade e pagamento do marketing" : "Minha produtividade"}</h2>
-        <p>Cada venda fechada de cliente que a operadora agendou (consultor externo ou direto na loja) vale <b>{fmtMoeda(valorVenda)}</b>. Nos dias com meta, quem bater a meta de agendamentos ganha o bônus do dia. {gestor ? "A Supervisão Marketing aprova o pagamento do mês." : "O pagamento é aprovado pela Supervisão Marketing."}</p></div></div>
+        {oc ? <p>Seus agendamentos, quem veio à loja, vendas e metas do mês. O valor a receber aparece aqui depois que a Supervisão Marketing aprovar o pagamento, no fim do mês.</p> : <p>Cada venda fechada de cliente que a operadora agendou (consultor externo ou direto na loja) vale <b>{fmtMoeda(valorVenda)}</b>. Nos dias com meta, quem bater a meta de agendamentos ganha o bônus do dia. {gestor ? "A Supervisão Marketing aprova o pagamento do mês." : "O pagamento é aprovado pela Supervisão Marketing."}</p>}</div></div>
       <div className="toolbar"><div className="field" style={{ maxWidth: 200 }}><label>Mês</label><input type="month" value={mes} max={hoje.slice(0, 7)} onChange={e => e.target.value && setMes(e.target.value)} /></div></div>
 
       {mes === hoje.slice(0, 7) && <div className="panel" style={{ marginBottom: 16, borderColor: metaHoje ? "var(--primary)" : undefined }}>
-        <h3>Hoje, {fmtDate(hoje)} {metaHoje ? <span className="pill" style={{ marginLeft: 8 }}>meta {metaHoje.meta} agendamentos · bônus {fmtMoeda(Number(metaHoje.valor))}</span> : <span className="pill" style={{ marginLeft: 8 }}>sem meta hoje</span>}</h3>
+        <h3>Hoje, {fmtDate(hoje)} {metaHoje ? <span className="pill" style={{ marginLeft: 8 }}>meta {metaHoje.meta} agendamentos{oc ? "" : " · bônus " + fmtMoeda(Number(metaHoje.valor))}</span> : <span className="pill" style={{ marginLeft: 8 }}>sem meta hoje</span>}</h3>
         {metaHoje?.obs && <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 8 }}>{metaHoje.obs}</div>}
         {linhas.map(({ u, r }: any) => { const pct = metaHoje ? Math.min(100, r.hoje / metaHoje.meta * 100) : 0; const bateu = metaHoje && r.hoje >= metaHoje.meta; return (
           <div key={u.id} className="bar-row" style={{ gridTemplateColumns: "160px 1fr 200px", whiteSpace: "nowrap" }}><span className="nm">{u.nome}</span>
@@ -90,7 +91,10 @@ export default function Produtividade() {
           : <div className="empty" style={{ padding: "14px 8px" }}>Nenhuma meta definida neste mês.</div>}
       </div>}
 
-      <div className="kpis">
+      {oc ? <div className="kpis">
+        <Kpi n={tot.agend} l="Agendamentos no mês" /><Kpi n={tot.vendas} l="Vendas fechadas" /><Kpi n={(linhas[0] ? linhas[0].r.batidos : 0) + " de " + (linhas[0] ? linhas[0].r.diasMeta : 0)} l="Metas batidas" />
+        <Kpi n={aprovado ? fmtMoeda(aprovado) : "—"} l={aprovado ? "Aprovado para receber" : "Valor: aguardando aprovação da Supervisão"} cor={aprovado ? "var(--st-concluida)" : "var(--ink-faint)"} />
+      </div> : <div className="kpis">
         <Kpi n={tot.agend} l="Agendamentos no mês" /><Kpi n={tot.vendas} l="Vendas fechadas" />
         <Kpi n={fmtMoeda(tot.vendas * valorVenda)} l={`Vendas × ${fmtMoeda(valorVenda)}`} /><Kpi n={fmtMoeda(tot.bonus)} l="Bônus de meta" />
         {gestor ? <>
@@ -100,9 +104,17 @@ export default function Produtividade() {
           <Kpi n={fmtMoeda(aprovado)} l="Aprovado para receber" cor={aprovado ? "var(--st-concluida)" : "var(--ink-faint)"} />
           <Kpi n={fmtMoeda(pendente)} l="Pendente de aprovação" cor={pendente ? "var(--warn)" : "var(--ink-faint)"} />
         </>}
-      </div>
+      </div>}
 
-      <div className="panel" style={{ marginBottom: 16 }}><h3>{gestor ? "Pagamento por operadora" : "Meu pagamento"} — {titulo}</h3>
+      {oc ? <div className="panel" style={{ marginBottom: 16 }}><h3>Meu mês — {titulo}</h3>
+        {linhas.map(({ u, r, pag }: any) => <div key={u.id} className="dl-lista">
+          <div className="dl-l"><span className="dl-nm">Agendamentos</span><b>{r.agend} <small style={{ fontWeight: 400 }}>({r.cons} consultor · {r.loja} loja)</small></b></div>
+          <div className="dl-l"><span className="dl-nm">Vieram à loja</span><b>{r.vieram}</b></div>
+          <div className="dl-l"><span className="dl-nm">Vendas fechadas</span><b>{r.vendas}{r.pendentes ? <small style={{ color: "var(--warn)", fontWeight: 400 }}> (+{r.pendentes} aguardando)</small> : null}</b></div>
+          <div className="dl-l"><span className="dl-nm">Metas batidas</span><b>{r.batidos} de {r.diasMeta} dias</b></div>
+          <div className="dl-l"><span className="dl-nm">Pagamento</span>{pag ? <b style={{ color: "var(--st-concluida)" }}>✔ Aprovado para receber {fmtMoeda(Number(pag.total))}</b> : <b style={{ color: "var(--ink-faint)" }}>⏳ aparece quando a Supervisão Marketing aprovar, no fim do mês</b>}</div>
+        </div>)}
+      </div> : <div className="panel" style={{ marginBottom: 16 }}><h3>{gestor ? "Pagamento por operadora" : "Meu pagamento"} — {titulo}</h3>
         {linhas.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Operadora</th><th>Agendou</th><th>→ Consultor</th><th>→ Loja</th><th>Vieram</th><th>Vendas fechadas</th><th>Valor vendas</th><th>Metas batidas</th><th>Bônus</th><th>Total calculado</th><th>Valor aprovado</th><th>Aprovação</th></tr></thead>
           <tbody>{linhas.map(({ u, r, pag }: any) => (
             <tr key={u.id}><td><b>{u.nome}</b></td><td>{r.agend}</td><td>{r.cons}</td><td>{r.loja}</td><td>{r.vieram}</td>
@@ -115,18 +127,18 @@ export default function Produtividade() {
                   {pag && <button className="btn ghost sm" onClick={() => ex(() => A.cancelarAprovacaoMkt(pag.id), "Aprovação desfeita").then((ok: boolean) => ok && carregar())}>Desfazer</button>}</div>}</td></tr>))}</tbody></table></div>
           : <div className="empty" style={{ padding: "14px 8px" }}>Nenhuma operadora do marketing cadastrada.</div>}
         <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Vendas fechadas = efetivadas pela Gestão com data no mês. Vendas a confirmar e promissórias entram quando forem efetivadas. Bônus só conta dias até hoje.</div>
-      </div>
+      </div>}
 
       <div className="panel" style={{ marginBottom: 16 }}><h3>Agendamentos dia a dia</h3>
         {diasMes.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Dia</th><th>Meta</th>{linhas.map(({ u }: any) => <th key={u.id}>{u.nome}</th>)}</tr></thead>
           <tbody>{diasMes.slice().reverse().map(d => { const m = metaDe[d]; return (
-            <tr key={d}><td><b>{fmtDate(d).slice(0, 5)}</b> <small style={{ color: "var(--ink-faint)" }}>{DIAS[new Date(d + "T12:00").getDay()]}</small></td><td>{m ? <>{m.meta} <small style={{ color: "var(--ink-faint)" }}>({fmtMoeda(Number(m.valor))})</small></> : "—"}</td>
+            <tr key={d}><td><b>{fmtDate(d).slice(0, 5)}</b> <small style={{ color: "var(--ink-faint)" }}>{DIAS[new Date(d + "T12:00").getDay()]}</small></td><td>{m ? <>{m.meta}{oc ? null : <small style={{ color: "var(--ink-faint)" }}> ({fmtMoeda(Number(m.valor))})</small>}</> : "—"}</td>
               {linhas.map(({ u, r }: any) => { const n = r.porDia[d] || 0; const bateu = m && n >= m.meta; return <td key={u.id} style={bateu ? { color: "var(--st-concluida)", fontWeight: 800 } : m && n < m.meta ? { color: "var(--danger)" } : undefined}>{n}{bateu ? " ✓" : ""}</td>; })}</tr>); })}</tbody></table></div>
           : <div className="empty">Sem dias no período.</div>}
       </div>
 
       {!gestor && linhas[0] && linhas[0].r.vendasLista.length > 0 && <div className="panel" style={{ marginBottom: 16 }}><h3>Minhas vendas fechadas no mês</h3>
-        <div className="dl-lista">{linhas[0].r.vendasLista.map((c: any) => <div className="dl-l" key={c.id} onClick={() => abrirDetalhe(c.id)} style={{ cursor: "pointer" }}><span className="dl-nm">{c.cliente}<small>venda nº {c.venda.numero} · {fmtDate(c.venda.dataVenda)}</small></span><b>{fmtMoeda(valorVenda)}</b></div>)}</div></div>}
+        <div className="dl-lista">{linhas[0].r.vendasLista.map((c: any) => <div className="dl-l" key={c.id} onClick={() => abrirDetalhe(c.id)} style={{ cursor: "pointer" }}><span className="dl-nm">{c.cliente}<small>venda nº {c.venda.numero} · {fmtDate(c.venda.dataVenda)}</small></span>{oc ? null : <b>{fmtMoeda(valorVenda)}</b>}</div>)}</div></div>}
     </section>
   );
 }

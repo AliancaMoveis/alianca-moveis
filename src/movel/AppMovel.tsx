@@ -42,7 +42,7 @@ const diaCurto = (v: any) => { const d = dia(v); if (!d) return "sem data"; if (
 
 export default function AppMovel({ perfil, completa }: { perfil: Perfil; completa: () => void }) {
   const { R, detalheId, modal } = useApp() as any;
-  const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Comissão", "💰"], ["eu", "Eu", "👤"]]
+  const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
     : perfil === "dono" ? [["painel", "Painel", "📊"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : perfil === "gerente" ? [["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]

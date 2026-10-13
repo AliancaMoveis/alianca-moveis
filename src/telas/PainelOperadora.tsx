@@ -58,7 +58,8 @@ export default function PainelOperadora({ de, ate }: { de: string; ate: string }
         <Card ic="📅" n={ag.length} l="Clientes agendados" sub={<><b>{agMkt.length}</b> direto na loja · <b>{agExt.length}</b> consultor externo</>} cor="#8a2a6b" />
         <Card ic="🏬" n={vieram.length} l="Vieram à loja" sub={<>{pc(vieram.length, comLoja.length)}% de quem foi agendado na loja</>} cor="#d4a020" />
         <Card ic="🤝" n={vendas.length} l="Vendas" sub={<>{pc(vendas.length, ag.length)}% dos agendamentos viraram venda</>} cor="#2f8f5b" />
-        <Card ic="💰" n={fmtMoeda(total)} l={"Comissão de " + MESES[h.getMonth()]} sub={<><b style={{ color: "var(--st-concluida)" }}>{fmtMoeda(aprovado)}</b> aprovado · <b style={{ color: "var(--warn)" }}>{fmtMoeda(pendente)}</b> pendente</>} cor="#2d6a4f" />
+        {R.ocultaValoresMkt() ? <Card ic="💰" n={aprovado ? fmtMoeda(aprovado) : "—"} l={"Pagamento de " + MESES[h.getMonth()]} sub={aprovado ? "aprovado pela Supervisão Marketing" : "aparece aqui quando a Supervisão aprovar, no fim do mês"} cor="#2d6a4f" />
+          : <Card ic="💰" n={fmtMoeda(total)} l={"Comissão de " + MESES[h.getMonth()]} sub={<><b style={{ color: "var(--st-concluida)" }}>{fmtMoeda(aprovado)}</b> aprovado · <b style={{ color: "var(--warn)" }}>{fmtMoeda(pendente)}</b> pendente</>} cor="#2d6a4f" />}
       </div>
 
       <div className="po-grid">
@@ -88,7 +89,7 @@ export default function PainelOperadora({ de, ate }: { de: string; ate: string }
       </div>
 
       <div className="panel" style={{ marginBottom: 16 }}>
-        <h3>Agendamentos por dia {metaHoje ? <span className="pill" style={{ marginLeft: 8 }}>hoje {hojeN} de {metaHoje.meta} · bônus {fmtMoeda(Number(metaHoje.valor))}</span> : <span className="pill" style={{ marginLeft: 8 }}>hoje {hojeN}</span>}</h3>
+        <h3>Agendamentos por dia {metaHoje ? <span className="pill" style={{ marginLeft: 8 }}>hoje {hojeN} de {metaHoje.meta}{R.ocultaValoresMkt() ? "" : " · bônus " + fmtMoeda(Number(metaHoje.valor))}</span> : <span className="pill" style={{ marginLeft: 8 }}>hoje {hojeN}</span>}</h3>
         <div className="po-dias">
           {dias.map(d => { const v = porDia[d] || { m: 0, e: 0 }, n = v.m + v.e, m = metaDe[d]; const bateu = m && n >= m.meta; return (
             <div key={d} className={"po-dia" + (d === hoje ? " hoje" : "")} title={`${fmtDate(d)}: ${n} agendamento(s)${m ? " · meta " + m.meta : ""}`}>
@@ -115,14 +116,19 @@ export default function PainelOperadora({ de, ate }: { de: string; ate: string }
             </div>)) : <div className="empty" style={{ padding: "16px 8px" }}>Nenhum cliente seu marcado na loja.</div>}
         </div>
         <div className="panel">
-          <h3>Sua comissão — {MESES[h.getMonth()]}</h3>
-          <div className="po-com">
+          <h3>{R.ocultaValoresMkt() ? "Seu pagamento" : "Sua comissão"} — {MESES[h.getMonth()]}</h3>
+          {R.ocultaValoresMkt() ? <div className="po-com">
+            <div><span>Vendas efetivadas</span><b>{minha ? minha.vendas.length : 0}</b></div>
+            <div><span>Metas batidas</span><b>{minha ? minha.batidos : 0} de {minha ? minha.diasMeta : 0} dias</b></div>
+            {aprovado ? <div className="ok"><span>✔ Aprovado para receber</span><b>{fmtMoeda(aprovado)}</b></div>
+              : <div className="pend"><span>⏳ O valor aparece quando a Supervisão Marketing aprovar, no fim do mês</span><b></b></div>}
+          </div> : <div className="po-com">
             <div><span>Vendas efetivadas</span><b>{minha ? minha.vendas.length : 0} × {fmtMoeda(T.valorVenda)}</b></div>
             <div><span>Bônus de meta ({minha ? minha.batidos : 0} de {minha ? minha.diasMeta : 0} dias)</span><b>{fmtMoeda(minha ? minha.bonus : 0)}</b></div>
             <div className="tot"><span>Total calculado</span><b>{fmtMoeda(total)}</b></div>
             <div className="ok"><span>✔ Aprovado para receber</span><b>{fmtMoeda(aprovado)}</b></div>
             <div className="pend"><span>⏳ Pendente de aprovação</span><b>{fmtMoeda(pendente)}</b></div>
-          </div>
+          </div>}
           <button className="btn sm" style={{ marginTop: 10 }} onClick={() => irPara("produtividade")}>Ver minha produtividade ›</button>
         </div>
       </div>

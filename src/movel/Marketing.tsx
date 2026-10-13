@@ -41,11 +41,12 @@ export function MktHoje({ ir, abrir }: any) {
     <div className="mv-receber mk"><span>Hoje · {fmtDate(hoje)}</span>
       <b>{deHoje.length}{meta ? " / " + meta : ""} <small style={{ fontSize: 15, display: "inline" }}>agendamento(s)</small></b>
       {meta ? <><div className="mv-prog"><i style={{ width: pct + "%" }}></i></div>
-        <small>{deHoje.length >= meta ? "🎉 Meta batida! Bônus de " + fmtMoeda(Number(T.metaHoje.valor)) : "Faltam " + (meta - deHoje.length) + " para o bônus de " + fmtMoeda(Number(T.metaHoje.valor))}</small></>
+        <small>{R.ocultaValoresMkt() ? (deHoje.length >= meta ? "🎉 Meta batida!" : "Faltam " + (meta - deHoje.length) + " para bater a meta") : deHoje.length >= meta ? "🎉 Meta batida! Bônus de " + fmtMoeda(Number(T.metaHoje.valor)) : "Faltam " + (meta - deHoje.length) + " para o bônus de " + fmtMoeda(Number(T.metaHoje.valor))}</small></>
         : <small>Sem meta definida para hoje</small>}</div>
     <button className="mv-principal" onClick={() => ir("novo")}>＋ Registrar cliente</button>
     <div className="mv-tiles" style={{ marginTop: 10 }}>
-      <button className="mv-tile clic" onClick={() => ir("ganhos")}><b style={{ color: "var(--st-concluida)" }}>{fmtMoeda(eu ? eu.total : 0)}</b><span>Comissão do mês (calculada)</span></button>
+      {R.ocultaValoresMkt() ? <button className="mv-tile clic" onClick={() => ir("ganhos")}><b>{eu ? eu.ag.length : 0}</b><span>Agendamentos no mês</span></button>
+        : <button className="mv-tile clic" onClick={() => ir("ganhos")}><b style={{ color: "var(--st-concluida)" }}>{fmtMoeda(eu ? eu.total : 0)}</b><span>Comissão do mês (calculada)</span></button>}
       <button className="mv-tile clic" onClick={() => ir("ganhos")}><b>{eu ? eu.vendas.length : 0}</b><span>Vendas no mês</span></button>
     </div>
     <div className="mv-sec">Seus clientes que vêm à loja</div>
@@ -91,13 +92,15 @@ export function MktGanhos({ abrir }: any) {
   const diasMeta = T.metas.filter((m: any) => m.dia <= hoje);
   return <>
     <div className="mv-seg">{[0, 1, 2].map(o => <button key={o} className={off === o ? "on" : ""} onClick={() => { setOff(o); setVer(""); }}>{o === 0 ? "Este mês" : mesP(o).nome}</button>)}</div>
+    {R.ocultaValoresMkt() ? <div className="mv-receber"><span>Seu pagamento · {P.nome}</span><b>{pag ? fmtMoeda(aprovado) : "—"}</b>
+      <small>{pag ? "✔ Aprovado pela Supervisão Marketing" : "O valor aparece aqui quando a Supervisão Marketing aprovar, no fim do mês."}</small></div> : <>
     <div className="mv-receber"><span>Sua comissão · {P.nome}{off === 0 ? " (até hoje)" : ""}</span><b>{fmtMoeda(eu.total)}</b>
       <small>{eu.vendas.length} venda(s) × {fmtMoeda(T.valorVenda)} = {fmtMoeda(eu.vendas.length * T.valorVenda)} + bônus de meta {fmtMoeda(eu.bonus)}</small></div>
     <div className="mv-tiles">
       <div className="mv-tile din"><b style={{ color: aprovado ? "var(--st-concluida)" : "var(--ink-faint)" }}>{fmtMoeda(aprovado)}</b><span>Aprovado para receber</span></div>
       <div className="mv-tile din"><b style={{ color: pendente ? "var(--warn)" : "var(--ink-faint)" }}>{fmtMoeda(pendente)}</b><span>Pendente de aprovação</span></div>
     </div>
-    {pag && Number(pag.total) !== eu.total && <div className="mv-dica">O valor mudou depois da aprovação — a supervisora vai reaprovar.</div>}
+    {pag && Number(pag.total) !== eu.total && <div className="mv-dica">O valor mudou depois da aprovação — a supervisora vai reaprovar.</div>}</>}
     <div className="mv-sec">Sua produção</div>
     <div className="mv-tiles c3">
       <button className={"mv-tile clic" + (ver === "ag" ? " sel" : "")} onClick={() => setVer(ver === "ag" ? "" : "ag")}><b>{eu.ag.length}</b><span>Agendou</span></button>
@@ -112,9 +115,9 @@ export function MktGanhos({ abrir }: any) {
     <div className="mv-sec">Metas do mês · {eu.batidos} de {eu.diasMeta} batidas</div>
     {diasMeta.length ? <div className="mv-funil">{diasMeta.slice().reverse().map((m: any) => {
       const feitos = eu.ag.filter((c: any) => diaLocal(c.criadoEm) === m.dia).length, ok = feitos >= m.meta;
-      return <div key={m.dia} className="mv-barra"><span>{fmtDate(m.dia).slice(0, 5)} · meta {m.meta}</span><i><em style={{ width: Math.min(100, feitos / m.meta * 100) + "%", background: ok ? "var(--st-concluida)" : "var(--warn)" }}></em></i><b>{feitos}{ok ? " ✓ " + fmtMoeda(Number(m.valor)) : ""}</b></div>;
+      return <div key={m.dia} className="mv-barra"><span>{fmtDate(m.dia).slice(0, 5)} · meta {m.meta}</span><i><em style={{ width: Math.min(100, feitos / m.meta * 100) + "%", background: ok ? "var(--st-concluida)" : "var(--warn)" }}></em></i><b>{feitos}{ok ? " ✓" + (R.ocultaValoresMkt() ? "" : " " + fmtMoeda(Number(m.valor))) : ""}</b></div>;
     })}</div> : <div className="mv-vazio">Nenhum dia com meta neste mês.</div>}
-    <div className="mv-dica" style={{ marginTop: 10 }}>Cada venda <b>efetivada</b> de cliente que você agendou vale {fmtMoeda(T.valorVenda)}. Dias com meta batida somam o bônus do dia. O pagamento é aprovado pela Supervisão Marketing.</div>
+    {R.ocultaValoresMkt() ? <div className="mv-dica" style={{ marginTop: 10 }}>Cada venda <b>efetivada</b> de cliente que você agendou e cada meta batida contam para o seu pagamento, aprovado pela Supervisão Marketing no fim do mês.</div> : <div className="mv-dica" style={{ marginTop: 10 }}>Cada venda <b>efetivada</b> de cliente que você agendou vale {fmtMoeda(T.valorVenda)}. Dias com meta batida somam o bônus do dia. O pagamento é aprovado pela Supervisão Marketing.</div>}
   </>;
 }
 

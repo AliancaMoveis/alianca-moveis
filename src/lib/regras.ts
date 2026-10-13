@@ -352,6 +352,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const parecerCobrado = (c: Chamado) => !!(c.tratativa && c.tratativa.cobradoEm) && c.setorDestino === "atendente_cliente" && !c.venda && !statusFinalCliente.includes(statusClienteDe(c));
   // quem responde por definir o vendedor e cobrar parecer: Suporte = clientes dos consultores externos; Supervisão Marketing / Gerente de Loja = agendados pelo marketing
   // gerente de loja só (sem supervisão do marketing/suporte): app simplificado, sem as obrigações do marketing e dos consultores
+  // operadora do marketing: não vê valores (comissão, bônus, a receber) — só o pagamento depois que a Supervisão aprova
+  const ocultaValoresMkt = () => mySetores().includes("marketing_operadora") && !ehGestao() && !mySetores().some((x: string) => ["marketing_supervisao", "proprietario"].includes(x));
   const ehGerenteLoja = () => mySetores().includes("gerente_loja") && !ehGestao() && !mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores", "proprietario"].includes(x));
   const souRespLoja = (c: Chamado) => (mySetores().includes("suporte_consultores") && !ehDireto(c)) || (temMarketing() && ehDireto(c) && !ehGerenteLoja());
   const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente")).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -763,7 +765,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
