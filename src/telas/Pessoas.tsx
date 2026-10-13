@@ -122,7 +122,8 @@ export function Clientes() {
   const [filtro, setFiltro] = useState("todos");
   const [q, setQ] = useState(""); const [de, setDe] = useState(mesAtual().de); const [ate, setAte] = useState(mesAtual().ate);
   // período (padrão: mês atual) pela data da venda / loja / visita / cadastro
-  const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c)).filter(c => { const x = dataRefCliente(c); return (!de || x >= de) && (!ate || x <= ate); });
+  const [orig, setOrig] = useState<"" | "marketing" | "externo">("");
+  const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c) && (!orig || R.origemLoja(c) === orig)).filter(c => { const x = dataRefCliente(c); return (!de || x >= de) && (!ate || x <= ate); });
   const cont: Record<string, number> = { todos: base.length };
   Object.keys(STATUS_CLIENTE).forEach(k => (cont[k] = base.filter(c => R.statusClienteDe(c) === k).length));
   cont.cancelamentos = base.filter(temCancelamento).length;
@@ -144,6 +145,11 @@ export function Clientes() {
         <input type="date" style={{ maxWidth: 160 }} title="Até" value={ate} onChange={e => setAte(e.target.value)} />
         <button className="btn ghost sm" onClick={() => { setDe(mesAtual().de); setAte(mesAtual().ate); }}>Mês atual</button>
         <button className="btn ghost sm" onClick={() => { setDe(""); setAte(""); }}>Todo o período</button>
+      </div>
+      <div className="subnav" style={{ marginBottom: 10 }}>
+        <button className={orig === "" ? "on" : ""} onClick={() => setOrig("")}>Todos</button>
+        <button className={orig === "marketing" ? "on" : ""} onClick={() => setOrig("marketing")}>🏬 Marketing (direto na loja)</button>
+        <button className={orig === "externo" ? "on" : ""} onClick={() => setOrig("externo")}>📍 Consultor externo</button>
       </div>
       <div className="chips" id="cliFiltros">{chips.map(([k, l]) => <button key={k} className={"chip" + (filtro === k ? " on" : "")} onClick={() => setFiltro(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
       <div className="kpis" id="cliKpis">

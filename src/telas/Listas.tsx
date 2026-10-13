@@ -75,7 +75,8 @@ export function AcompMkt() {
   const [fTipo, setFTipo] = useState(""); const [fSetor, setFSetor] = useState(preset?.setor || ""); const [q, setQ] = useState("");
   useEffect(() => { if (preset?.setor) { setFSetor(preset.setor); setFiltro("andamento"); } if (preset?.filtro) setFiltro(preset.filtro); }, [preset]);
   const soMeu = !(R.ehGestao() || R.temMarketing());
-  const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c) && (!fTipo || c.tipo === fTipo) && (!fSetor || c.setorDestino === fSetor) && bate(c, q));
+  const [orig, setOrig] = useState<"" | "marketing" | "externo">("");
+  const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c) && (!orig || R.origemLoja(c) === orig) && (!fTipo || c.tipo === fTipo) && (!fSetor || c.setorDestino === fSetor) && bate(c, q));
   const FILTROS: Record<string, (c: any) => boolean> = { andamento: c => R.emAberto(c), semvendedor: c => c.setorDestino === "suporte_consultores" && !c.atendenteId, semparecer: c => R.semParecer(c), semanexo: c => R.semAnexo(c), criticos: c => R.prioridade(c) === "critico", todos: () => true };
   Object.keys(STATUS_CLIENTE).forEach(k => (FILTROS[k] = c => R.statusClienteDe(c) === k));
   const chips = [["andamento", "Em andamento"], ["semvendedor", "Sem vendedor"], ["semparecer", "Sem parecer do vendedor"], ["semanexo", "⚠️ Sem anexo"], ["criticos", "Críticos — sem atualização"]].concat(Object.keys(STATUS_CLIENTE).map(k => [k, STATUS_CLIENTE[k]])).concat([["todos", "Todos"]]);
@@ -85,6 +86,11 @@ export function AcompMkt() {
     <section className="view active" id="view-acompmkt">
       <div className="view-head"><div><h2>{soMeu ? "Minha fila" : "Acompanhamento Marketing"}</h2>
         <p>{soMeu ? "Seus clientes do marketing — os parados há mais tempo aparecem primeiro." : "Clientes do marketing — visitas de consultores externos e agendamentos diretos na loja. Os parados há mais tempo aparecem primeiro."}</p></div></div>
+      <div className="subnav" style={{ marginBottom: 10 }}>
+        <button className={orig === "" ? "on" : ""} onClick={() => setOrig("")}>Todos</button>
+        <button className={orig === "marketing" ? "on" : ""} onClick={() => setOrig("marketing")}>🏬 Marketing (direto na loja)</button>
+        <button className={orig === "externo" ? "on" : ""} onClick={() => setOrig("externo")}>📍 Consultor externo</button>
+      </div>
       <div className="toolbar">
         <Busca id="mkBusca" ph="Buscar cliente, telefone, ambiente, nº da venda" v={q} set={setQ} />
         <select id="mkTipo" value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos os motivos</option>{Object.entries(R.TIPOS).filter(([, t]: any) => t.presale).map(([k, t]: any) => <option key={k} value={k}>{t.nome}</option>)}</select>

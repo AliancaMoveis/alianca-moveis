@@ -9,6 +9,7 @@ import { numsVenda, EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoe
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import { SinoAvisos } from "../comp/Avisos";
+import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
 import { SituacaoConsultor } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
@@ -113,7 +114,7 @@ function Cartao({ c, abrir, linha, destaque }: any) {
   return (
     <button className={"mv-card" + (destaque ? " dest" : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{linha?.hora || ""}</b><small>{linha?.dia || ""}</small></div>
-      <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""}</div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
+      <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""} <SeloLitoral c={c} /></div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
       <span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>
     </button>
   );

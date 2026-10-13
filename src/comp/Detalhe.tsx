@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import {
-  EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, PV_DESFECHO, PV_ENCAMINHAR, PV_ORIGEM, PV_REEMB, PV_SITUACAO, pvPrazo, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  LITORAL_TXT, litoralDe, EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, PV_DESFECHO, PV_ENCAMINHAR, PV_ORIGEM, PV_REEMB, PV_SITUACAO, pvPrazo, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
@@ -65,6 +65,7 @@ export default function Detalhe({ id }: { id: string }) {
           {c.escalonadoAuto && semResp && <div className="ro-note" style={{ marginBottom: 14 }}>Escalonado automaticamente em {fmtDateTime(c.escaladoEm || c.slaResposta)} por falta de resposta dentro do prazo.</div>}
           {tratar && temTrat && <div className="acao-etapa"><div className="acao-etapa-tit">Ação desta etapa</div>{trat}</div>}
           {presale && <>
+            <LitoralBloco c={c} />
             <StatusCliente c={c} />
             <Venda c={c} />
             <Vendedor c={c} />
@@ -507,6 +508,33 @@ function Destaque({ c, anexar }: any) {
         </div>
       ) : R.semAnexo(c) ? <div className="aviso-anexo" style={{ marginTop: 12 }}>⚠️ <b>Sem anexo.</b> Nenhuma planta ou foto do cliente — {c.consultorId ? "o consultor precisa anexar" : "anexe a planta ou fotos"} antes do atendimento na loja.</div>
         : <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-faint)" }}>Nenhuma planta ou foto anexada ainda.</div>}
+    </div>
+  );
+}
+
+// litoral (agendamento com consultor em datas específicas — a Supervisão Marketing aprova) e "pediu vendedor" (direto na loja)
+function LitoralBloco({ c }: any) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const [obs, setObs] = useState("");
+  const t = c.tratativa || {}, l = litoralDe(c), direto = R.ehDireto(c);
+  const sup = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
+  const autor = c.solicitanteId === R.currentUserId;
+  const podeMarcar = !direto && (sup || autor) && !c.dataLoja && !c.venda;
+  const podePedir = direto && !c.atendenteId && !c.venda && (sup || autor || R.mySetores().some((x: string) => ["marketing_operadora", "suporte_consultores"].includes(x)));
+  if (!l && !podeMarcar && !(direto && (t.pedeVendedor || podePedir))) return null;
+  const cor = l === "pendente" ? "var(--warn)" : l === "aprovado" ? "var(--st-concluida)" : l === "recusado" ? "var(--danger)" : "var(--line)";
+  return (
+    <div className="litoral-bloco" style={{ borderColor: cor }}>
+      {l ? <div className="lt-tit" style={{ color: cor }}>{LITORAL_TXT[l]}</div> : null}
+      {l && t.litoral ? <div className="lt-sub">Marcado por {t.litoral.por || "—"}{t.litoral.decididoPor ? " · decidido por " + t.litoral.decididoPor : ""}{t.litoral.obs ? " — " + t.litoral.obs : ""}</div> : null}
+      {l === "pendente" && sup && <div className="lt-acoes">
+        <button className="btn primary sm" onClick={() => ex(() => A.litoralDecidir(c.id, true, obs), "Litoral aprovado")}>✅ Aprovar litoral</button>
+        <input placeholder="Observação / motivo da recusa" value={obs} onChange={e => setObs(e.target.value)} />
+        <button className="btn danger sm" onClick={() => { if (obs.trim().length < 3) { toast("Escreva o motivo da recusa"); return; } ex(() => A.litoralDecidir(c.id, false, obs), "Litoral recusado"); }}>Recusar</button>
+      </div>}
+      {podeMarcar && <button className="btn ghost sm" onClick={() => ex(() => A.marcarLitoral(c.id, !l), l ? "Desmarcado como litoral" : "Marcado como litoral — a Supervisão vai aprovar")}>{l ? "Desmarcar litoral" : "🏖 Marcar como litoral"}</button>}
+      {direto && (t.pedeVendedor ? <div className="lt-sub">🙋 Pedido à Supervisão Marketing para definir um vendedor{podePedir ? <> · <a href="#" onClick={e => { e.preventDefault(); ex(() => A.pedirVendedorLoja(c.id, false), "Pedido retirado"); }}>retirar pedido</a></> : null}</div>
+        : podePedir ? <button className="btn ghost sm" onClick={() => ex(() => A.pedirVendedorLoja(c.id, true), "Pedido enviado à Supervisão Marketing")}>🙋 Pedir vendedor à Supervisão</button> : null)}
     </div>
   );
 }

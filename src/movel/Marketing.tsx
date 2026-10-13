@@ -4,6 +4,7 @@ import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import { STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, mesmaPessoa, parseData, soDigitos , numsVenda } from "../lib/regras";
 import { useTimeMkt } from "./Gestor";
+import { SeloLitoral } from "../comp/Ticket";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -23,7 +24,7 @@ function Linha({ c, abrir }: any) {
   const quando = c.dataLoja ? "loja " + curto(c.dataLoja) + " " + hora(c.dataLoja) : c.dataVisita ? "visita " + curto(c.dataVisita) + " " + hora(c.dataVisita) : "cadastrado " + fmtDate(c.criadoEm).slice(0, 5);
   return <button className="mv-linha" onClick={() => abrir(c.id)} style={{ borderLeftColor: c.venda ? "var(--st-concluida)" : R.ehDireto(c) ? "#c0428a" : "var(--primary)" }}>
     <b>{c.cliente}<em className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</em></b>
-    <span>{R.ehDireto(c) ? "Direto na loja" : "Consultor externo"} · {quando}{c.venda ? " · venda " + c.venda.numero : ""}</span></button>;
+    <span>{R.ehDireto(c) ? "Direto na loja" : "Consultor externo"} · {quando}{c.venda ? " · venda " + c.venda.numero : ""} <SeloLitoral c={c} /></span></button>;
 }
 
 // ================= HOJE =================
@@ -139,6 +140,7 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
   const [prep, setPrep] = useState("");
   const [env, setEnv] = useState(false);
   const [dups, setDups] = useState<any[]>([]);
+  const [litoral, setLitoral] = useState(false); const [pedeVend, setPedeVend] = useState(false);
   const tD = useRef<any>();
   const set = (k: string) => (e: any) => setF((x: any) => ({ ...x, [k]: e.target.value }));
   useEffect(() => {
@@ -168,7 +170,8 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
     try {
       const id = await A.criarChamado({ tipo, cliente: f.cliente.trim(), telefone: f.telefone, produto: f.produto.trim(), motivo: f.motivo.trim() || "—", email: f.email,
         dataVisita: f.dataVisita, endereco: direto ? "" : f.endereco, consultorId: "", clienteDoc: "", pedido: "", dataVenda: "", pedidoFabrica: "", fabrica: "", prazoTatico: "", slaManual: "",
-        vinculadoA: dups.length ? dups[0].id : null });
+        vinculadoA: dups.length ? dups[0].id : null, litoral: !direto && litoral, pedeVendedor: direto && pedeVend });
+      setLitoral(false); setPedeVend(false);
       const fotos = anexos.filter(a => a.tipo === "img");
       const itens: any[] = fotos.length ? await enviarFotos(id, fotos.map(a => ({ nome: a.nome, blob: a.blob! }))) : [];
       const outros = anexos.filter(a => a.tipo === "video" || a.tipo === "pdf");
@@ -189,6 +192,8 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
       {tCons && <button className={tipo === tCons[0] ? "on" : ""} onClick={() => setTipo(tCons[0])}>📍 Visita do consultor</button>}
       {tDireto && <button className={tipo === tDireto[0] ? "on" : ""} onClick={() => setTipo(tDireto[0])}>🏬 Direto na loja</button>}
     </div>
+    {!direto && <button type="button" className={"mv-litoral" + (litoral ? " on" : "")} onClick={() => setLitoral(!litoral)}>🏖 {litoral ? "É LITORAL — a Supervisão vai aprovar" : "É litoral? Toque aqui"}</button>}
+    {direto && <label className="mv-check"><input type="checkbox" checked={pedeVend} onChange={e => setPedeVend(e.target.checked)} /> 🙋 Pedir à Supervisão Marketing para definir um vendedor <small>(sem marcar, o cliente vem direto à loja sem vendedor obrigatório)</small></label>}
     {dups.length > 0 && <div className="mv-aviso">⚠️ Cliente parecido já cadastrado:{dups.map((c: any) => <div key={c.id}><b>{c.cliente}</b> · {c.telefone || "sem telefone"} · {fmtDate(c.criadoEm)}{c.solicitanteId !== R.currentUserId ? " · por " + R.nomeUser(c.solicitanteId) : ""}</div>)}<small>Se for outro assunto, pode registrar — fica ligado ao histórico dele.</small></div>}
     <label className="mv-campo">Nome do cliente *<input value={f.cliente} onChange={set("cliente")} placeholder="Nome completo" autoComplete="off" /></label>
     <label className="mv-campo">Telefone / WhatsApp *<input type="tel" inputMode="tel" value={f.telefone} onChange={set("telefone")} placeholder="(00) 00000-0000" /></label>

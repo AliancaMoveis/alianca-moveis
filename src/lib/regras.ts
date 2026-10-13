@@ -47,6 +47,9 @@ export function mesAtual(): { de: string; ate: string } {
   const fim = new Date(h.getFullYear(), h.getMonth() + 1, 0);
   return { de: h.getFullYear() + "-" + p(h.getMonth() + 1) + "-01", ate: fim.getFullYear() + "-" + p(fim.getMonth() + 1) + "-" + p(fim.getDate()) };
 }
+/** marca "litoral" do agendamento com consultor: pendente (aguarda a Supervisão Marketing), aprovado ou recusado */
+export const litoralDe = (c: any): "" | "pendente" | "aprovado" | "recusado" => (c && c.tratativa && c.tratativa.litoral && c.tratativa.litoral.status) || "";
+export const LITORAL_TXT: Record<string, string> = { pendente: "🏖 Litoral — aguarda aprovação", aprovado: "🏖 Litoral aprovado", recusado: "🏖 Litoral recusado" };
 export const DIAS_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 /** Turnos dos vendedores (escala): manhã = entra 9:00, almoço 11:00–13:00 · tarde = entra 10:40, almoço 13:30–15:30 (minutos do dia) */
 export const TURNOS: Record<string, { rot: string; entra: number; almoco: [number, number] }> = {
@@ -644,9 +647,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if ((temMarketing() && !ehGestao() && !ehGerenteLoja()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c) && recente(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao() && !ehGerenteLoja())) {
       add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend && recenteLoja(c)), "var(--primary)");
-      add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c) && recenteLoja(c) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hojeISO())), "var(--warn)");
+      add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c) && recenteLoja(c) && (!ehDireto(c) || !!(c.tratativa && c.tratativa.pedeVendedor)) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hojeISO())), "var(--warn)");
       add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c) && recenteLoja(c)), "var(--danger)");
     }
+    if (mySetores().includes("marketing_supervisao")) add("litoral", "🏖 Litoral para aprovar", "Agendamentos com consultor no litoral (datas específicas). Abra a ficha e aprove ou recuse.", ch.filter(c => domMarketing(c) && litoralDe(c) === "pendente"), "var(--warn)");
     add("retmont", "🔧 Retornos de montador para você", "O call center abriu um retorno do montador e escolheu você para tratar. Prioridade de atendimento.", ch.filter(c => c.tipo === "retorno_montador" && !["concluida", "respondida", "informar"].includes(c.status) && ((c as any).tratativa?.retorno?.atendenteId === eu)), "var(--critico)");
     add("errovend", "🚨 Erros de venda para você", "O call center registrou um erro na sua venda. Abra, corrija e escreva o que foi feito.", ch.filter(c => c.tipo === "erro_venda" && c.status !== "concluida" && (c as any).tratativa?.erroVenda?.vendedorId === eu && !((c as any).tratativa?.erroVenda?.respostas || []).length), "var(--critico)");
     if (mySetores().includes("juridico")) add("jurprazo", "⚖️ Prazos jurídicos em até 3 dias", "Casos com prazo (Reclame Aqui, Procon, processo) vencendo. Atualize o caso.", ch.filter(c => c.tipo === "juridico" && c.status !== "concluida" && (() => { const d = String((c as any).tratativa?.juridico?.prazo || ""); if (!d) return false; const lim = new Date(); lim.setDate(lim.getDate() + 3); return d <= isoLocal(lim); })()), "var(--critico)");
@@ -669,7 +673,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ehGerenteLoja()) add("gerabertos", "Chamados que você abriu — em andamento", "Solicitações que você abriu para os setores. Acompanhe a resposta.", ch.filter(c => doCC(c) && c.solicitanteId === eu && !["concluida"].includes(c.status)), "var(--st-aberta)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => doCC(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["jurprazo", "retmont", "pvcc", "solmed", "acomp", "medalerta", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi", "gerabertos"];
+    const PRIORIDADE = ["litoral", "jurprazo", "retmont", "pvcc", "solmed", "acomp", "medalerta", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi", "gerabertos"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));

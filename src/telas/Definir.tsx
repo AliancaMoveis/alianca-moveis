@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { SelVendedor, confirmarDisp, registrarIndisp } from "../comp/SelVendedor";
+import { SeloLitoral } from "../comp/Ticket";
 import { DIAS_SEMANA, TURNOS, hojeISO, isoLocal, parseData } from "../lib/regras";
 
 const dia = (c: any) => String(c.dataLoja || "").slice(0, 10);
@@ -14,20 +15,27 @@ const rotuloDia = (iso: string) => { const d = parseData(iso + "T12:00"); return
 
 export default function Definir() {
   const { R, st, abrirDetalhe } = useApp() as any;
-  const [aba, setAba] = useState<"sem" | "definidos" | "parecer">("sem");
+  const [aba, setAba] = useState<"sem" | "definidos" | "parecer" | "passaram">("sem");
+  const [orig, setOrig] = useState<"" | "marketing" | "externo">("");
+  // começou a valer em 14/10/2026: o que é anterior ficou da migração e não aparece aqui
+  const MARCO = "2026-10-14";
   const hoje = hojeISO();
   const d = new Date(); d.setDate(d.getDate() + 1); const amanha = isoLocal(d);
   const d7 = new Date(); d7.setDate(d7.getDate() + 7); const ate7 = isoLocal(d7);
 
-  const mkt = st.chamados.filter((c: any) => R.domMarketing(c) && R.podeVer(c));
-  const sem = mkt.filter((c: any) => c.setorDestino === "suporte_consultores" && !c.atendenteId)
+  const mkt = st.chamados.filter((c: any) => R.domMarketing(c) && R.podeVer(c) && (!orig || R.origemLoja(c) === orig));
+  const valida = (c: any) => c.dataLoja ? dia(c) >= MARCO : String(c.criadoEm || "").slice(0, 10) >= MARCO;
+  const semTodos = mkt.filter((c: any) => c.setorDestino === "suporte_consultores" && !c.atendenteId && valida(c));
+  // "já passaram": data da loja vencida (a partir de 14/10) e ainda sem vendedor
+  const passaram = semTodos.filter((c: any) => c.dataLoja && dia(c) < hoje).sort((a: any, b: any) => String(b.dataLoja).localeCompare(String(a.dataLoja)));
+  const sem = semTodos.filter((c: any) => !(c.dataLoja && dia(c) < hoje))
     .sort((a: any, b: any) => String(a.dataLoja || "9").localeCompare(String(b.dataLoja || "9")));
   const comVend = mkt.filter((c: any) => c.atendenteId && c.dataLoja && dia(c) >= hoje && !c.venda && R.statusClienteDe(c) !== "nao_compareceu");
   const definidos = comVend.filter((c: any) => dia(c) <= ate7).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
   const vendedores = R.vendedores();
-  const semParecer = mkt.filter((c: any) => R.semParecer(c)).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
+  const semParecer = mkt.filter((c: any) => R.semParecer(c) && c.dataLoja && dia(c) >= MARCO).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
 
-  const passou = sem.filter((c: any) => c.dataLoja && dia(c) < hoje), nHoje = sem.filter((c: any) => dia(c) === hoje), nAm = sem.filter((c: any) => dia(c) === amanha);
+  const passou: any[] = [], nHoje = sem.filter((c: any) => dia(c) === hoje), nAm = sem.filter((c: any) => dia(c) === amanha);
   // grupos por dia (data vencida primeiro)
   const grupos: [string, string, any[]][] = [];
   if (passou.length) grupos.push(["passou", "Data da loja já passou", passou]);
@@ -42,11 +50,11 @@ export default function Definir() {
   return (
     <section className="view active" id="view-definir">
       <div className="view-head"><div><h2>Definir vendedor</h2>
-        <p>Clientes com vinda à loja agendada que ainda não têm vendedor. Escolha quem atende: o cliente vai para a fila do vendedor na hora. <b>Externos</b> (do consultor) ficam com o Suporte Consultores; <b>Marketing</b> com a Supervisão Marketing ou o Gerente de Loja.</p></div></div>
+        <p>Clientes com vinda à loja agendada (a partir de 14/10) que ainda não têm vendedor. <b>Marketing direto na loja não precisa de vendedor</b> — defina se quiser; os marcados <b>🙋 Pediu vendedor</b> foram pedidos pelas operadoras. Escolha quem atende: o cliente vai para a fila do vendedor na hora. <b>Externos</b> (do consultor) ficam com o Suporte Consultores; <b>Marketing</b> com a Supervisão Marketing ou o Gerente de Loja.</p></div></div>
 
       <div className="dv-kpis">
         <button className={"dv-kpi" + (sem.length ? " on" : "")} onClick={() => setAba("sem")}><b>{sem.length}</b><span>Sem vendedor</span></button>
-        <div className={"dv-kpi" + (passou.length ? " alerta" : "")}><b>{passou.length}</b><span>Data já passou</span></div>
+        <button className={"dv-kpi" + (passaram.length ? " alerta" : "")} onClick={() => setAba("passaram")}><b>{passaram.length}</b><span>Já passaram — sem vendedor</span></button>
         <div className={"dv-kpi" + (nHoje.length ? " hoje" : "")}><b>{nHoje.length}</b><span>Vêm hoje</span></div>
         <div className="dv-kpi"><b>{nAm.length}</b><span>Vêm amanhã</span></div>
         <button className={"dv-kpi" + (semParecer.length ? " alerta" : "")} onClick={() => setAba("parecer")}><b>{semParecer.length}</b><span>Já vieram — sem parecer</span></button>
@@ -56,6 +64,12 @@ export default function Definir() {
         <button className={aba === "sem" ? "on" : ""} onClick={() => setAba("sem")}>Sem vendedor{sem.length ? ` (${sem.length})` : ""}</button>
         <button className={aba === "parecer" ? "on" : ""} onClick={() => setAba("parecer")}>Sem parecer do vendedor{semParecer.length ? ` (${semParecer.length})` : ""}</button>
         <button className={aba === "definidos" ? "on" : ""} onClick={() => setAba("definidos")}>Já definidos — próximos 7 dias ({definidos.length})</button>
+        <button className={aba === "passaram" ? "on" : ""} onClick={() => setAba("passaram")}>Já passaram ({passaram.length})</button>
+      </div>
+      <div className="subnav" style={{ marginBottom: 14 }}>
+        <button className={orig === "" ? "on" : ""} onClick={() => setOrig("")}>Todos</button>
+        <button className={orig === "marketing" ? "on" : ""} onClick={() => setOrig("marketing")}>🏬 Marketing (direto na loja)</button>
+        <button className={orig === "externo" ? "on" : ""} onClick={() => setOrig("externo")}>📍 Consultor externo</button>
       </div>
 
       <div className="dv-grid">
@@ -67,6 +81,9 @@ export default function Definir() {
                 {arr.map((c: any) => <Cartao key={c.id} c={c} vendedores={vendedores} comVend={comVend} abrir={() => abrirDetalhe(c.id)} />)}
               </div>
             )) : <div className="empty"><div className="big">Tudo definido</div>Nenhum cliente agendado está sem vendedor.</div>
+          ) : aba === "passaram" ? (
+            passaram.length ? <div className="dv-dia"><div className="dv-dia-tit alerta">Data da loja já passou e ninguém foi definido<span>{passaram.length}</span></div>{passaram.map((c: any) => <Cartao key={c.id} c={c} vendedores={vendedores} comVend={comVend} abrir={() => abrirDetalhe(c.id)} />)}</div>
+              : <div className="empty"><div className="big">Nada aqui</div>Nenhum cliente com data já passada ficou sem vendedor.</div>
           ) : aba === "parecer" ? (
             semParecer.length ? <div className="dv-dia">{semParecer.map((c: any) => <CartaoParecer key={c.id} c={c} abrir={() => abrirDetalhe(c.id)} />)}</div>
               : <div className="empty"><div className="big">Tudo em dia</div>Todos os clientes que já vieram têm parecer do vendedor.</div>
@@ -137,7 +154,7 @@ function Cartao({ c, vendedores, comVend, abrir, troca }: any) {
       <div className="dv-info" onClick={abrir}>
         <div className="dv-nome"><span className={"origem " + R.origemLoja(c)}>{R.origemLoja(c) === "marketing" ? "Marketing" : "Externo"}</span> {c.cliente} <span className="dv-id">{c.id}</span></div>
         <div className="dv-meta">{c.produto || "—"}{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : " · agendado pelo marketing"}{c.telefone ? " · " + c.telefone : ""}</div>
-        <div className="dv-tags">{R.semAnexo(c) && <span className="badge b-semanexo">⚠️ Sem anexo</span>}{t.querProjeto === "sim" && <span className="marca-loja sim">📐 Quer projeto pronto</span>}{t.querProjeto === "nao" && <span className="marca-loja">Não quer projeto pronto</span>}{imgs > 0 && <span className="pill">planta/fotos ({imgs})</span>}{t.medidas && <span className="pill">medidas</span>}{t.obs && <span className="pill" title={t.obs}>obs. do consultor</span>}{troca && <span className="pill">com {R.nomeUser(c.atendenteId)}</span>}</div>
+        <div className="dv-tags"><SeloLitoral c={c} />{R.semAnexo(c) && <span className="badge b-semanexo">⚠️ Sem anexo</span>}{t.querProjeto === "sim" && <span className="marca-loja sim">📐 Quer projeto pronto</span>}{t.querProjeto === "nao" && <span className="marca-loja">Não quer projeto pronto</span>}{imgs > 0 && <span className="pill">planta/fotos ({imgs})</span>}{t.medidas && <span className="pill">medidas</span>}{t.obs && <span className="pill" title={t.obs}>obs. do consultor</span>}{troca && <span className="pill">com {R.nomeUser(c.atendenteId)}</span>}</div>
       </div>
       <div className="dv-acao">
         {!troca && t.pedidoAtend && <div className="dv-pedido">🙋 <b>{t.pedidoAtendNome || R.nomeUser(t.pedidoAtend)}</b> está atendendo — aguardando aprovação

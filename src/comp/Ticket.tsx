@@ -1,12 +1,20 @@
 import { SeloVenda } from "./VendaValidar";
 import { useApp } from "../estado";
 import { fmtTel } from "../lib/baseClientes";
-import { ETAPA_MEDIDA, STATUS, STATUS_CLIENTE, diasRestantes, fmtDate, fmtDateTime, fmtDiaHora } from "../lib/regras";
+import { LITORAL_TXT, litoralDe, ETAPA_MEDIDA, STATUS, STATUS_CLIENTE, diasRestantes, fmtDate, fmtDateTime, fmtDiaHora } from "../lib/regras";
 
 export function ScBadge({ c }: { c: any }) {
   const { R } = useApp();
   const k = R.statusClienteDe(c);
   return <span className={"sc sc-" + k}>{STATUS_CLIENTE[k] || "—"}</span>;
+}
+
+/** selo "litoral" (aguarda aprovação / aprovado / recusado) e "pediu vendedor" do agendamento do marketing */
+export function SeloLitoral({ c }: { c: any }) {
+  const l = litoralDe(c);
+  const pv = c && c.tratativa && c.tratativa.pedeVendedor && !c.atendenteId;
+  if (!l && !pv) return null;
+  return <>{l ? <span className={"selo-litoral " + l}>{LITORAL_TXT[l]}</span> : null}{pv ? <span className="selo-pedevend">🙋 Pediu vendedor</span> : null}</>;
 }
 
 export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
@@ -26,12 +34,13 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
   const t = c.tratativa || {};
   const marcas = presale && (c.dataLoja || c.setorDestino === "suporte_consultores" || c.setorDestino === "atendente_cliente") ? <>
     <span className={"origem " + R.origemLoja(c)}>{R.origemLoja(c) === "marketing" ? "Marketing" : "Externo"}</span>{" "}
+    <SeloLitoral c={c} />{" "}
     {R.semAnexo(c) && <><span className="badge b-semanexo">⚠️ Sem anexo</span>{" "}</>}
     {t.querProjeto === "sim" && <><span className="marca-loja sim">📐 Quer projeto</span>{" "}</>}
     {c.tipo === "medidas" ? <><span className="badge" style={{ background: R.etapaMedida(c) === "agendada" ? "var(--warn)" : R.etapaMedida(c) === "liberada" ? "var(--st-concluida)" : "var(--primary)", color: "#fff" }}>📐 {ETAPA_MEDIDA[R.etapaMedida(c)]}{c.medidorId && R.etapaMedida(c) === "agendada" ? " · " + R.nomeUser(c.medidorId) : ""}</span>{" "}</> : null}
     {R.acompAtivo(c) ? <><span className="badge b-critico">🚨 {c.tratativa.acomp.status === "pendente" ? "Supervisão chamada" : "Em acompanhamento"}</span>{" "}</> : null}
     {R.parecerCobrado(c) ? <><span className="badge b-critico">Parecer cobrado</span>{" "}</> : R.semParecer(c) ? <><span className="badge b-urgente">Sem parecer</span>{" "}</> : null}
-  </> : (presale && R.semAnexo(c) ? <><span className="badge b-semanexo">⚠️ Sem anexo</span>{" "}</> : null);
+  </> : presale ? <><SeloLitoral c={c} />{" "}{R.semAnexo(c) ? <><span className="badge b-semanexo">⚠️ Sem anexo</span>{" "}</> : null}</> : null;
 
   let linha2: React.ReactNode;
   if (presale && c.setorDestino === "atendente_cliente") {
