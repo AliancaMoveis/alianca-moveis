@@ -170,6 +170,7 @@ export const A = {
   checklistAgendadosPlanilha: (linhas: any[], aplicar: boolean, trocarProj: boolean, corrigir: boolean) => rpc<any>("checklist_agendados_planilha", { p: linhas, p_aplicar: aplicar, p_trocar_proj: trocarProj, p_corrigir: corrigir }),
   checklistDiasPlanilha: (linhas: any[], aplicar: boolean) => rpc<any>("checklist_dias_planilha", { p: linhas, p_aplicar: aplicar }),
   checklistImportar: (linhas: any[]) => rpc<{ novos: number; ignorados: number; agendados?: number }>("checklist_importar", { p: linhas }),
+  salvarMeusDados: (nomeCompleto: string, telefone: string) => rpc("salvar_meus_dados", { p_nome_completo: nomeCompleto, p_telefone: telefone }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),
   salvarChecklistAgenda: (p: any) => rpc("salvar_checklist_agenda", { p }),
   checklistExcluir: (ids: string[]) => rpc<number>("checklist_excluir", { p_ids: ids }),

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useApp } from "../estado";
 import { sb } from "../lib/supabase";
+import { A } from "../lib/acoes";
+import { fmtTel } from "../lib/baseClientes";
 
 export function Modal({ titulo, onFechar, children, tituloNode }: { titulo?: string; tituloNode?: React.ReactNode; onFechar: () => void; children: React.ReactNode }) {
   return (
@@ -29,6 +31,27 @@ export function AlterarSenha() {
       <div className="field" style={{ marginBottom: 14 }}><label>Nova senha <span className="hint">(mínimo 8 caracteres)</span></label><input type="password" value={s1} onChange={e => setS1(e.target.value)} autoComplete="new-password" /></div>
       <div className="field" style={{ marginBottom: 20 }}><label>Repita a nova senha</label><input type="password" value={s2} onChange={e => setS2(e.target.value)} autoComplete="new-password" /></div>
       <button className="btn primary" onClick={salvar}>Salvar</button>
+    </Modal>
+  );
+}
+
+/** cada usuário preenche o próprio nome completo e telefone */
+export function MeusDados() {
+  const { setModal, toast, recarregar, R } = useApp() as any;
+  const u = R.me() || {};
+  const [nome, setNome] = useState(u.nomeCompleto || ""); const [tel, setTel] = useState(u.telefone ? fmtTel(u.telefone) : "");
+  const [sal, setSal] = useState(false);
+  const fechar = () => setModal(null);
+  async function salvar() {
+    setSal(true);
+    try { await A.salvarMeusDados(nome, tel); await recarregar(); fechar(); toast("Seus dados foram salvos"); }
+    catch (e: any) { toast(e.message || "Não foi possível salvar"); setSal(false); }
+  }
+  return (
+    <Modal titulo="Meus dados" onFechar={fechar}>
+      <div className="field" style={{ marginBottom: 14 }}><label>Nome completo</label><input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome e sobrenome" autoComplete="name" /></div>
+      <div className="field" style={{ marginBottom: 20 }}><label>Telefone (WhatsApp) <span className="hint">com DDD</span></label><input value={tel} onChange={e => setTel(e.target.value)} placeholder="(41) 99999-9999" inputMode="tel" autoComplete="tel" /></div>
+      <button className="btn primary" disabled={sal} onClick={salvar}>{sal ? "Salvando…" : "Salvar"}</button>
     </Modal>
   );
 }

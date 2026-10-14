@@ -1,3 +1,4 @@
+import { fmtTel } from "../lib/baseClientes";
 import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
@@ -68,7 +69,7 @@ export function Admin() {
   const linhaUser = (u: any) => (
     <div className="fab" key={u.id} style={u.ativo ? undefined : { opacity: .6 }}><div className="fi">{inicial(u.nome)}</div>
       <div><div className="fn">{u.nome} {u.id === R.currentUserId && <span style={{ color: "var(--ink-faint)", fontWeight: 400 }}>(logado)</span>}{!u.ativo && <span className="pill" style={{ marginLeft: 6 }}>desativado</span>}</div>
-        <div className="fc">{(u.setores || []).length ? u.setores.map((id: string) => <span key={id} className="perfil-tag" style={{ marginRight: 4 }}>{R.setorNome(id)}</span>) : "sem setor"}{u.somenteAtribuidos && <span className="pill" style={{ marginLeft: 4 }}>consultor externo</span>}{u.email ? <span style={{ marginLeft: 6 }}>{u.email}</span> : null}</div></div>
+        <div className="fc">{(u.setores || []).length ? u.setores.map((id: string) => <span key={id} className="perfil-tag" style={{ marginRight: 4 }}>{R.setorNome(id)}</span>) : "sem setor"}{u.somenteAtribuidos && <span className="pill" style={{ marginLeft: 4 }}>consultor externo</span>}{u.email ? <span style={{ marginLeft: 6 }}>{u.email}</span> : null}{u.nomeCompleto || u.telefone ? <span style={{ marginLeft: 6 }}>· {[u.nomeCompleto, u.telefone ? fmtTel(u.telefone) : ""].filter(Boolean).join(" · ")}</span> : null}</div></div>
       <div className="sp">
         {u.ativo ? <>
           <button className="btn ghost sm" onClick={() => setModal(<EditUser id={u.id} />)}>Editar</button>
