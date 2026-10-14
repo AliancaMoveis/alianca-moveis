@@ -52,6 +52,7 @@ export default function Detalhe({ id }: { id: string }) {
         <div className="mh">
           <div><span className="tid">{c.id}</span>{" "}
             {presale ? <span style={{ marginLeft: 8 }}><ScBadge c={c} /></span> : <span className={"badge " + st_.cls} style={{ marginLeft: 8 }}>{st_.label}</span>}{" "}
+            {!presale && c.tratativa && c.tratativa.porGerencia && <span className="badge b-gerencia" style={{ marginLeft: 6 }}>🚨 SOLICITADO PELA GERÊNCIA · URGENTE</span>}
             {!presale && R.acompAtivo(c) && <span className="badge b-critico" style={{ marginLeft: 6 }}>🚨 {c.tratativa.acomp.status === "pendente" ? "Supervisão chamada" : "Em acompanhamento"}</span>}
             {presale && c.venda && <span style={{ marginLeft: 6 }}><SeloVenda c={c} /></span>}
             {presale && R.semAnexo(c) && <span className="badge b-semanexo" style={{ marginLeft: 6 }}>⚠️ Sem anexo</span>}

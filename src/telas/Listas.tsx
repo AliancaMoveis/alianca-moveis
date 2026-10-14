@@ -23,10 +23,13 @@ export function Fila() {
   useEffect(() => { if (preset?.setor) { setFSetor(preset.setor); setFiltro("abertos"); setFTipo(""); } }, [preset]);
   const vt = R.verTudo();
   const ccTudo = !vt && R.ehCallcenter();
+  // gerente de loja: começa nas solicitações da gerência e pode ver todo o call center
+  const ger = !vt && !ccTudo && R.mySetores().includes("gerente_loja");
   const [escopo, setEscopo] = useState<"minha" | "todos">("minha");
-  const verSetor = vt || (ccTudo && escopo === "todos");
+  const verSetor = vt || ((ccTudo || ger) && escopo === "todos");
   // base = o que está no escopo + filtros de motivo/setor/busca; os números dos botões saem daqui (batem com a lista)
   const base = st.chamados.filter(c => R.doCC(c) && R.podeVer(c) && (!ccTudo || escopo === "todos" || R.naMinhaFila(c))
+    && (!ger || escopo === "todos" || !!(c.tratativa && c.tratativa.porGerencia) || c.solicitanteId === R.currentUserId)
     && (!fTipo || c.tipo === fTipo) && (!verSetor || !fSetor || c.setorDestino === fSetor) && bate(c, q));
   const FILTROS: Record<string, (c: any) => boolean> = {
     abertos: c => c.status !== "concluida",
@@ -42,11 +45,11 @@ export function Fila() {
   return (
     <section className="view active" id="view-fila">
       <div className="view-head"><div>
-        <h2 id="filaTitulo">{vt ? "Acompanhamento Call center" : ccTudo && escopo === "todos" ? "Todo o call center" : "Minha fila — " + (R.mySetores().map(R.setorNome).join(", ") || "—")}</h2>
-        <p id="filaSub">{ccTudo && escopo === "todos" ? "Todas as solicitações de pós-venda da loja. Você pode anotar um novo contato do cliente e marcar urgente; quem trata é o setor de destino." : vt ? "Solicitações de pós-venda: entrega, fábrica, montagem, assistência, checklist e medidas. Marketing tem aba própria." : "Sua fila de trabalho: o que chegou para o seu setor e o que você abriu. Ordenada por prioridade — críticos, atrasados e urgentes no topo."}</p>
+        <h2 id="filaTitulo">{vt ? "Acompanhamento Call center" : ger ? (escopo === "todos" ? "Todo o call center" : "Solicitações da gerência") : ccTudo && escopo === "todos" ? "Todo o call center" : "Minha fila — " + (R.mySetores().map(R.setorNome).join(", ") || "—")}</h2>
+        <p id="filaSub">{ger ? (escopo === "todos" ? "Todas as solicitações do call center e dos setores, para acompanhar." : "Solicitações abertas pelos gerentes — entram como urgentes no setor de destino.") : ccTudo && escopo === "todos" ? "Todas as solicitações de pós-venda da loja. Você pode anotar um novo contato do cliente e marcar urgente; quem trata é o setor de destino." : vt ? "Solicitações de pós-venda: entrega, fábrica, montagem, assistência, checklist e medidas. Marketing tem aba própria." : "Sua fila de trabalho: o que chegou para o seu setor e o que você abriu. Ordenada por prioridade — críticos, atrasados e urgentes no topo."}</p>
       </div></div>
-      {ccTudo && <div className="subnav" style={{ marginBottom: 12 }}>
-        <button className={escopo === "minha" ? "on" : ""} onClick={() => setEscopo("minha")}>Minha fila</button>
+      {(ccTudo || ger) && <div className="subnav" style={{ marginBottom: 12 }}>
+        <button className={escopo === "minha" ? "on" : ""} onClick={() => setEscopo("minha")}>{ger ? "🚨 Da gerência" : "Minha fila"}</button>
         <button className={escopo === "todos" ? "on" : ""} onClick={() => setEscopo("todos")}>Todo o call center</button>
       </div>}
       <div className="toolbar">

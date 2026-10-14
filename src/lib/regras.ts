@@ -278,6 +278,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (domMarketing(c)) return temMarketing() || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
     if (verTudo()) return true;
     if (mySetores().includes("callcenter")) return true;
+    // gerente de loja acompanha todo o call center (menos os setores com módulo próprio)
+    if (mySetores().includes("gerente_loja") && !["checklist", "medidas", "posvenda"].includes(c.tipo)) return true;
     return mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
   }
   // fila de trabalho: o que é do meu setor ou o que eu abri (o call center vê tudo, mas a fila dele é esta)
@@ -531,7 +533,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
         return +new Date(a.criadoEm) - +new Date(b.criadoEm);
       });
     }
+    const ger = (c: Chamado) => !!(c.tratativa && (c.tratativa as any).porGerencia) && prioridade(c) !== "concluida" && prioridade(c) !== "respondida" ? 0 : 1;
     return arr.sort((a, b) => {
+      const ga = ger(a), gb = ger(b);
+      if (ga !== gb) return ga - gb; // solicitado pela gerência: sempre no topo enquanto aberto
       const pa = RANK[prioridade(a)], pb = RANK[prioridade(b)];
       if (pa !== pb) return pa - pb;
       if (pa === RANK.concluida) return +new Date(b.criadoEm) - +new Date(a.criadoEm); // encerrados: mais recentes primeiro
@@ -715,11 +720,12 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const temCC = mySetores().some((x: string) => !ehSetorMarketing(x) && !["supervisao", "gestao", "medidas", "medidas_supervisao"].includes(x));
     const temMkt = mySetores().some((x: string) => ehSetorMarketing(x));
     // menu "Call center": só o call center, a Supervisão do call center e a Gestão. Os outros setores têm o menu do próprio setor.
-    const veCC = ehGestao() || mySetores().includes("callcenter") || mySetores().includes("supervisao");
+    const gerCC = mySetores().includes("gerente_loja");
+    const veCC = ehGestao() || mySetores().includes("callcenter") || mySetores().includes("supervisao") || gerCC;
     const cc: string[][] = [];
     if (veCC) {
       if (podeCriarCC()) cc.push(["nova", "Nova solicitação"]);
-      if (verTudo()) cc.push(["fila", "Acompanhamento"]); else if (temCC) cc.push(["fila", "Minha fila"]);
+      if (verTudo()) cc.push(["fila", "Acompanhamento"]); else if (gerCC) cc.push(["fila", "Solicitações da gerência"]); else if (temCC) cc.push(["fila", "Minha fila"]);
       if (cc.length) { cc.push(["consulta", "Consulta"]); if (podeTreinamento()) cc.push(["treino", "Treinamento"]); G.push({ g: "Call center", ic: "☎", itens: cc }); }
     }
     // menus por setor (o que vem do call center vira a fila do setor)
