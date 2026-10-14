@@ -169,6 +169,8 @@ export const parseData = (v: any): Date => {
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
   return new Date(s);
 };
+/** vendedor de férias num dia (AAAA-MM-DD) — devolve o texto "férias até DD/MM" ou "" */
+export const feriasEm = (u: any, dia: string) => u && u.feriasAte && dia <= u.feriasAte && dia >= (u.feriasDe || dia) ? "férias até " + u.feriasAte.slice(8, 10) + "/" + u.feriasAte.slice(5, 7) : "";
 export const fmtDate = (iso: any) => iso ? parseData(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
 export const fmtDateTime = (iso: any) => {
   if (!iso) return "—";
@@ -376,6 +378,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const u: any = getUser(uid); if (!u || !quando) return [];
     const d = new Date(quando); if (isNaN(d.getTime())) return [];
     const mot: string[] = []; const m = d.getHours() * 60 + d.getMinutes();
+    const fe = feriasEm(u, isoLocal(d)); if (fe) mot.push("🏖 " + fe);
     if (u.folga !== null && u.folga !== undefined && d.getDay() === u.folga) mot.push("folga (" + DIAS_SEMANA[u.folga] + ")");
     const tu = TURNOS[u.turno || ""];
     if (tu) {

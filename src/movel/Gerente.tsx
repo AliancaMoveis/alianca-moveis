@@ -5,12 +5,16 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { DIAS_SEMANA, TURNOS, STATUS, STATUS_CLIENTE, fmtDate, fmtDateTime, hhmm, hojeISO, soDigitos } from "../lib/regras";
 import { fmtTel } from "../lib/baseClientes";
+import { ModalFerias, textoFerias } from "../comp/Ferias";
+import { feriasEm } from "../lib/regras";
 
 const primeiro = (n: string) => (n || "").replace(/^(Consultora?|Vendedora?)\s+—\s+/, "");
 const horaDe = (v: any) => String(v || "").slice(11, 16);
 
 /** folga / ainda não entrou / almoço — mesma regra do banco (_vend_motivo_indisp) */
 export function motivoIndisp(u: any, agora = new Date()): string {
+  const fe = feriasEm(u, agora.getFullYear() + "-" + String(agora.getMonth() + 1).padStart(2, "0") + "-" + String(agora.getDate()).padStart(2, "0"));
+  if (fe) return fe;
   if (u.folga !== null && u.folga !== undefined && agora.getDay() === u.folga) return "folga (" + DIAS_SEMANA[u.folga] + ")";
   const tu = TURNOS[u.turno || ""]; const m = agora.getHours() * 60 + agora.getMinutes();
   if (tu) {
@@ -61,7 +65,7 @@ export function GerHoje({ ir }: { ir: (aba: string) => void }) {
 
 // ---------- Chamar vendedor ----------
 export function GerChamar() {
-  const { R, toast } = useApp() as any;
+  const { R, toast, setModal } = useApp() as any;
   const [obs, setObs] = useState("");
   const [env, setEnv] = useState("");
   const [res, setRes] = useState<{ ok: boolean; t: string } | null>(null);
@@ -97,6 +101,10 @@ export function GerChamar() {
         <button key={u.id} className={"gr-vend" + (mot ? " fora" : "")} disabled={env === u.id} onClick={() => chamar(u, mot)}>
           <b>{primeiro(u.nome)}</b><small>{env === u.id ? "chamando…" : mot || "disponível"}</small></button>))}
     </div>
+    <div className="mv-sec">🏖 Férias dos vendedores</div>
+    {vend.map(({ u }: any) => { const t = textoFerias(u); return (
+      <button key={u.id} className="mv-linha" style={t ? { borderLeftColor: "var(--warn)" } : undefined} onClick={() => setModal(<ModalFerias u={u} />)}>
+        <b>{primeiro(u.nome)}</b><span>{t || "trabalhando · toque para marcar férias"}</span></button>); })}
   </>;
 }
 

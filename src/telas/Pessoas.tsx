@@ -1,3 +1,4 @@
+import { ModalFerias, podeMarcarFerias, textoFerias } from "../comp/Ferias";
 import { useState } from "react";
 import { useApp } from "../estado";
 import { dataRefCliente, mesAtual, DIAS_SEMANA, TURNOS, STATUS_CLIENTE, VENDA_STATUS, corDoSetor, fmtDate, fmtMoeda, inicial, numsVenda, parseMoeda, temCancelamento, temPendenteGestao, valorPendente, vendaContaComissao, vendaContaVolume } from "../lib/regras";
@@ -33,7 +34,7 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
           const cor = corDoSetor(setor);
           return (
             <div key={dd.u.id} className={"pcard" + (sel === dd.u.id ? " sel" : "")} onClick={() => setSel(s => s === dd.u.id ? null : dd.u.id)}>
-              <div className="t"><div className="av2" style={{ background: cor }}>{inicial(dd.u.nome.split("— ")[1] || dd.u.nome)}</div><div><div className="nm">{dd.u.nome}</div><div className="sb">{ehVend ? <>{dd.u.fazProjeto !== false ? <b style={{ color: "var(--primary)" }}>📐 Projetista</b> : "Só vendedor"}{dd.u.folga !== null && dd.u.folga !== undefined ? " · folga " + DIAS_SEMANA[dd.u.folga] : ""}{dd.u.turno && TURNOS[dd.u.turno] ? " · " + (dd.u.turno === "manha" ? "entra 9:00" : "entra 10:40") : ""}</> : "Consultor externo"}</div></div></div>
+              <div className="t"><div className="av2" style={{ background: cor }}>{inicial(dd.u.nome.split("— ")[1] || dd.u.nome)}</div><div><div className="nm">{dd.u.nome}{ehVend && textoFerias(dd.u) ? <span style={{ marginLeft: 6, fontSize: 12, color: "var(--warn)", fontWeight: 700 }}>{textoFerias(dd.u)}</span> : null}</div><div className="sb">{ehVend ? <>{dd.u.fazProjeto !== false ? <b style={{ color: "var(--primary)" }}>📐 Projetista</b> : "Só vendedor"}{dd.u.folga !== null && dd.u.folga !== undefined ? " · folga " + DIAS_SEMANA[dd.u.folga] : ""}{dd.u.turno && TURNOS[dd.u.turno] ? " · " + (dd.u.turno === "manha" ? "entra 9:00" : "entra 10:40") : ""}</> : "Consultor externo"}</div></div></div>
               <div className="num"><div>Ativos<b>{dd.ativos}</b></div><div>Vendas<b>{dd.vendas}</b></div><div>Vendido<b style={{ fontSize: 14 }}>{fmtMoeda(dd.total)}</b></div><div>Conversão<b>{dd.conv}%</b></div></div>
               <div className="bar"><i style={{ width: dd.total / maxT * 100 + "%", background: cor }}></i></div>
             </div>
@@ -51,20 +52,21 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
 
 // Meus clientes (consultor / vendedor): a fila (em andamento) e a carteira (todos) numa tela só, com busca e filtros
 function EscalaVendedor({ u }: { u: any }) {
-  const { R, executar } = useApp() as any;
+  const { R, executar, setModal } = useApp() as any;
+  const fer = textoFerias(u), btFer = podeMarcarFerias(R) ? <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => setModal(<ModalFerias u={u} />)}>🏖 {fer ? "Alterar férias" : "Marcar férias"}</button> : null;
   const pode = R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
   const [fp, setFp] = useState(u.fazProjeto !== false); const [fo, setFo] = useState(u.folga === null || u.folga === undefined ? "" : String(u.folga)); const [tu, setTu] = useState(u.turno || "");
   const tx = TURNOS[u.turno || ""];
-  if (!pode) return <div className="card" style={{ padding: "12px 16px", marginBottom: 14, fontSize: 13 }}><b>{u.nome}</b> · {u.fazProjeto !== false ? "📐 Projetista" : "Só vendedor"} · {u.folga !== null && u.folga !== undefined ? "folga " + DIAS_SEMANA[u.folga] : "folga não informada"} · {tx ? tx.rot : "horário não informado"}</div>;
+  if (!pode) return <div className="card" style={{ padding: "12px 16px", marginBottom: 14, fontSize: 13 }}>{fer && <span className="pill" style={{ marginRight: 8, background: "var(--warn)", color: "#fff" }}>{fer}</span>}{btFer}<b>{u.nome}</b> · {u.fazProjeto !== false ? "📐 Projetista" : "Só vendedor"} · {u.folga !== null && u.folga !== undefined ? "folga " + DIAS_SEMANA[u.folga] : "folga não informada"} · {tx ? tx.rot : "horário não informado"}</div>;
   return (
     <div className="card" key={u.id} style={{ padding: "14px 18px", marginBottom: 14 }}>
-      <div style={{ fontWeight: 700, marginBottom: 10 }}>Escala de {u.nome}</div>
+      <div style={{ fontWeight: 700, marginBottom: 10 }}>Escala de {u.nome}{fer && <span className="pill" style={{ marginLeft: 8, background: "var(--warn)", color: "#fff" }}>{fer}</span>}</div>
       <div className="grid">
         <div className="field"><label>Tipo</label><select value={fp ? "1" : "0"} onChange={e => setFp(e.target.value === "1")}><option value="1">📐 Projetista (faz projeto)</option><option value="0">Só vendedor (não faz projeto)</option></select></div>
         <div className="field"><label>Folga</label><select value={fo} onChange={e => setFo(e.target.value)}><option value="">Não informada</option>{DIAS_SEMANA.map((d, i) => <option key={i} value={i}>{d}</option>)}</select></div>
         <div className="field"><label>Horário</label><select value={tu} onChange={e => setTu(e.target.value)}><option value="">Não informado</option>{Object.entries(TURNOS).map(([k, t]) => <option key={k} value={k}>{t.rot}</option>)}</select></div>
       </div>
-      <div style={{ marginTop: 10 }}><button className="btn primary sm" onClick={() => executar(() => A.vendedorEscala(u.id, fp, fo === "" ? null : Number(fo), tu), "Escala salva")}>Salvar escala</button></div>
+      <div style={{ marginTop: 10 }}><button className="btn primary sm" onClick={() => executar(() => A.vendedorEscala(u.id, fp, fo === "" ? null : Number(fo), tu), "Escala salva")}>Salvar escala</button>{btFer}</div>
     </div>
   );
 }
