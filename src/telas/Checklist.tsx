@@ -1038,13 +1038,14 @@ function CalendarioDia() {
     return ofer && e === "aguardando" && k.proposta ? [String(k.proposta).slice(0, 10)] : [];
   }));
   const mover = (n: number) => { const d = parseData(dia); do { d.setDate(d.getDate() + n); } while (!diaComAgenda(cfg, isoDia(d)) && !diasComCliente.has(isoDia(d)) && Math.abs(+d - +parseData(dia)) < 8 * 864e5); setDia(isoDia(d)); };
-  type Ev = { c: any; ini: number; fim: number; proj: string; tipo: "ag" | "of"; lane?: number; lanes?: number; extra?: number; n?: number; total?: number };
+  type Ev = { c: any; ini: number; fim: number; proj: string; tipo: "ag" | "of"; venc?: boolean; lane?: number; lanes?: number; extra?: number; n?: number; total?: number };
   const minDe = (slot: string) => { const d = parseData(slot); return d.getHours() * 60 + d.getMinutes(); };
   const evs: Ev[] = st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).flatMap((c: any) => {
     const k = ck(c), e = etapaCk(c);
     if (e === "agendado" || e === "realizado") return atendimentos(c, cfg).filter(a => a.slot.slice(0, 10) === dia).map(a => { const ini = minDe(a.slot); return { c, ini, fim: ini + a.dur, proj: a.proj, tipo: "ag", extra: a.extra, n: a.n, total: a.total } as Ev; });
     // data oferecida: ocupa o mesmo tempo escolhido na mensagem (e os dias seguintes, se for mais de um dia)
-    if (ofer && e === "aguardando" && k.proposta) return propostaDias(c, cfg).filter(x => x.slot.slice(0, 10) === dia).map(x => { const ini = minDe(x.slot); return { c, ini, fim: ini + x.dur, proj: k.propostaProjetista || "", tipo: "of" } as Ev; });
+    // reserva vencida (passou do prazo sem resposta): aparece apagada e NÃO segura o horário — igual às sugestões
+    if (ofer && e === "aguardando" && k.proposta) return propostaDias(c, cfg).filter(x => x.slot.slice(0, 10) === dia).map(x => { const ini = minDe(x.slot); return { c, ini, fim: ini + x.dur, proj: k.propostaProjetista || "", tipo: "of", venc: diasDesde(k.ultimoContato) > cfg.seguraDias } as Ev; });
     return [];
   });
   const H_INI = Math.max(7, Math.min(9, ...evs.map(x => Math.floor(x.ini / 60))));
@@ -1133,15 +1134,15 @@ function CalendarioDia() {
                   <div key={x.c.id + ":" + (x.extra ?? -1)} onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + (x.tipo === "ag" && (x.extra ?? -1) < 0 ? " — arraste para outro horário ou projetista" : (x.extra ?? -1) >= 0 ? " — dia adicional (altere na ficha do cliente)" : "")}
                     draggable={x.tipo === "ag" && (x.extra ?? -1) < 0} onDragStart={e => { e.dataTransfer.setData("text/plain", x.c.id); e.dataTransfer.effectAllowed = "move"; pega.current = e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top; }}
                     style={{ position: "absolute", zIndex: 2, top: top + 1, height: alt, left: `calc(${(x.lane || 0) * w}% + 3px)`, width: `calc(${w}% - 6px)`, overflow: "hidden", cursor: "pointer",
-                      borderRadius: 4, padding: "4px 6px", fontSize: 11.5, lineHeight: 1.3, color: x.tipo === "ag" ? "#fff" : "#6b4a00",
-                      background: x.tipo === "ag" ? cor : "#ffe8a3", border: x.tipo === "ag" ? (k.encaixe ? "2.5px solid var(--danger)" : "none") : `2px dashed ${cor}` }}>
-                    <div style={{ fontWeight: 800, fontSize: compacto ? 11.5 : 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.tipo === "of" ? "⏳ " : k.encaixe ? "⚠️ " : ""}{hm(x.ini)} - {hm(x.fim)}{(x.total || 1) > 1 ? ` · dia ${x.n}/${x.total}` : ""}{x.tipo === "ag" && compacto ? (conf === "confirmada" ? " ✅" : conf === "enviada" ? " 📨" : " ⏳") : ""}</div>
-                    <div style={{ fontWeight: 700, textTransform: "uppercase", color: x.tipo === "ag" ? "#ffe9a8" : "#3d2a00", whiteSpace: compacto ? "nowrap" : undefined, overflow: "hidden", textOverflow: "ellipsis", overflowWrap: "anywhere" }}>{x.c.cliente}</div>
+                      borderRadius: 4, padding: "4px 6px", fontSize: 11.5, lineHeight: 1.3, color: x.tipo === "ag" ? "#fff" : x.venc ? "#6b7280" : "#6b4a00", opacity: x.venc ? .75 : 1,
+                      background: x.tipo === "ag" ? cor : x.venc ? "repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6 6px,#e9ebef 6px,#e9ebef 12px)" : "#ffe8a3", border: x.tipo === "ag" ? (k.encaixe ? "2.5px solid var(--danger)" : "none") : x.venc ? "2px dashed #b8bec9" : `2px dashed ${cor}` }}>
+                    <div style={{ fontWeight: 800, fontSize: compacto ? 11.5 : 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.tipo === "of" ? (x.venc ? "⌛ " : "⏳ ") : k.encaixe ? "⚠️ " : ""}{hm(x.ini)} - {hm(x.fim)}{(x.total || 1) > 1 ? ` · dia ${x.n}/${x.total}` : ""}{x.tipo === "ag" && compacto ? (conf === "confirmada" ? " ✅" : conf === "enviada" ? " 📨" : " ⏳") : ""}</div>
+                    <div style={{ fontWeight: 700, textTransform: "uppercase", color: x.tipo === "ag" ? "#ffe9a8" : x.venc ? "#4b5563" : "#3d2a00", whiteSpace: compacto ? "nowrap" : undefined, overflow: "hidden", textOverflow: "ellipsis", overflowWrap: "anywhere" }}>{x.c.cliente}</div>
                     {!mini && (compacto ? <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtTel(x.c.telefone) || "sem contato"} · {x.c.pedido}</div> : <>
                       <div>{fmtTel(x.c.telefone) || "sem contato"}</div>
                       <div>Venda {x.c.pedido}</div>
                       {x.tipo === "ag" ? <div><b>Presença:</b> {conf === "confirmada" ? "Confirmada ✅" : conf === "enviada" ? "Aguardando" : "A confirmar"}</div>
-                        : <div style={{ fontWeight: 700 }}>Aguardando resposta</div>}</>)}
+                        : <div style={{ fontWeight: 700 }}>{x.venc ? "Reserva vencida — horário liberado" : "Aguardando resposta"}</div>}</>)}
                     {x.tipo === "ag" && (x.extra ?? -1) < 0 && <div title="Arraste para aumentar ou diminuir o tempo" onClick={e => e.stopPropagation()} onMouseDown={e => esticar(e, x.c, x.ini, x.fim)}
                       style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 7, cursor: "ns-resize", background: "rgba(255,255,255,.35)" }} />}
                   </div>);
@@ -1164,7 +1165,7 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
   const evs = st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).map((c: any) => {
     const k = ck(c), e = etapaCk(c);
     if ((e === "agendado" || e === "realizado") && k.agendadoPara) return atendimentos(c, cfg).map(a => ({ c, quando: a.slot, tipo: "ag", proj: a.proj, enc: !!k.encaixe && a.extra < 0, n: a.n, total: a.total }));
-    if (ofer && e === "aguardando" && k.proposta) return propostaDias(c, cfg).map(x => ({ c, quando: x.slot, tipo: "of", proj: k.propostaProjetista || "" }));
+    if (ofer && e === "aguardando" && k.proposta) return propostaDias(c, cfg).map(x => ({ c, quando: x.slot, tipo: "of", proj: k.propostaProjetista || "", venc: diasDesde(k.ultimoContato) > cfg.seguraDias }));
     return [];
   }).flat().filter((x: any) => !fp || x.proj === fp) as any[];
   const porDia: Record<string, any[]> = {};
@@ -1178,7 +1179,7 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
   const Ev = ({ x, compacto }: any) => (
     <div onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + " · venda " + x.c.pedido + (x.proj ? " · " + x.proj : "")}
       style={{ cursor: "pointer", borderRadius: 7, padding: compacto ? "2px 6px" : "5px 7px", marginBottom: 4, fontSize: compacto ? 11.5 : 12.5, lineHeight: 1.25,
-        background: x.tipo === "ag" ? corProj(x.proj) : "#ffe8a3", color: x.tipo === "ag" ? "#fff" : "#6b4a00", border: x.tipo === "ag" ? "none" : "1.5px dashed " + (x.proj ? corProj(x.proj) : "var(--warn)"),
+        background: x.tipo === "ag" ? corProj(x.proj) : x.venc ? "#f3f4f6" : "#ffe8a3", color: x.tipo === "ag" ? "#fff" : x.venc ? "#6b7280" : "#6b4a00", border: x.tipo === "ag" ? "none" : "1.5px dashed " + (x.venc ? "#b8bec9" : x.proj ? corProj(x.proj) : "var(--warn)"), opacity: x.venc ? .75 : 1,
         outline: x.enc ? "2.5px solid var(--danger)" : undefined, outlineOffset: x.enc ? 1 : undefined,
         whiteSpace: compacto ? "nowrap" : undefined, overflow: "hidden", textOverflow: "ellipsis" }}>
       {x.enc && "⚠️ "}{compacto && <b>{x.quando.slice(11, 16)} </b>}{x.c.cliente}{(x.total || 1) > 1 && <b> · dia {x.n}/{x.total}</b>}{compacto && <span style={{ opacity: .85 }}> · {x.c.pedido}</span>}{!compacto && <div style={{ opacity: .9, fontSize: 11 }}>Venda {x.c.pedido} · {x.tipo === "ag" ? (x.proj || "sem projetista") : "oferecido" + (x.proj ? " · " + x.proj : "") + " · aguardando"}</div>}
