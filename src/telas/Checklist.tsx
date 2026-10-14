@@ -25,6 +25,8 @@ const hoje = () => hojeISO();
 /** cliente pediu encaixe: aceitou a data, mas quer ser antecipado se abrir vaga */
 /** cidade/bairro do cliente (base de clientes, pelo nº da venda) — importante para escolher o projetista */
 export const cidadeCk = (c: any) => { const l = ck(c).local; if (!l || !l.cidade) return ""; const cid = String(l.cidade).toLowerCase().replace(/(^|\s)\S/g, (x: string) => x.toUpperCase()); return cid + (l.bairro ? " · " + String(l.bairro).toLowerCase().replace(/(^|\s)\S/g, (x: string) => x.toUpperCase()) : ""); };
+/** data oferecida há mais de "seguraDias" sem resposta: continua segurando o horário até alguém liberar ou renovar */
+export const reservaVencida = (c: any, cfg: any) => { const k = ck(c); return etapaCk(c) === "aguardando" && !!k.proposta && diasDesde(k.ultimoContato) > (cfg?.seguraDias ?? 3); };
 export const querEnc = (c: any) => { const q = ck(c).querEncaixe; return q && typeof q === "object" ? q : null; };
 const diasDesde = (iso: any) => (iso ? Math.max(0, Math.floor((Date.now() - +parseData(iso)) / 864e5)) : 0);
 const somaDias = (iso: string, n: number) => { const d = parseData(iso); d.setDate(d.getDate() + n); return isoDia(d); };
@@ -110,6 +112,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       hoje: ["Para fazer hoje", aFazerHoje],
       a_contatar: ["Ainda não contatados", c => G("agendar")(c) && etapaCk(c) === "a_contatar"],
       msg: ["Mensagem enviada · aguardando resposta", c => G("agendar")(c) && etapaCk(c) === "aguardando"],
+      vencido: ["⚠️ Prazo vencido", c => G("agendar")(c) && reservaVencida(c, cfgAgenda(st))],
       todos: ["Todos a agendar", G("agendar")],
     },
     aguardando: {
@@ -241,8 +244,11 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
 }
 
 function CartaoCk({ c, aba }: any) {
-  const { abrirDetalhe, setModal, executar } = useApp() as any;
+  const { abrirDetalhe, setModal, executar, st } = useApp() as any;
   const k = ck(c), e = etapaCk(c), g = grupoCk(c), [nome, cor0] = ETAPA_CK[e] || [e, "var(--line)"];
+  const segura = cfgAgenda(st).seguraDias, venc = reservaVencida(c, cfgAgenda(st)), atrasoV = diasDesde(k.ultimoContato) - segura;
+  const liberar = () => { if (confirm("🔓 Liberar a agenda de " + c.cliente + "?\n\nO horário de " + fmtDateTime(k.proposta) + (k.propostaProjetista ? " com " + k.propostaProjetista : "") + " fica livre e o cliente volta para “A agendar”. O histórico das tentativas fica salvo.")) executar(() => A.checklistRegistrar(c.id, { acao: "liberar" }), "Agenda liberada — cliente voltou para A agendar"); };
+  const renovar = () => executar(() => A.checklistRegistrar(c.id, { acao: "renovar" }), "Reserva renovada por mais " + segura + " dias");
   const conf = CONF_CK[k.confirmacao || ""] || CONF_CK[""];
   const cor = g === "agendado" ? conf[1] : cor0;
   const atrasado = retornoVencido(c);
@@ -267,6 +273,7 @@ function CartaoCk({ c, aba }: any) {
               style={{ background: "var(--danger)", color: "#fff", fontWeight: 800, border: 0, cursor: "pointer" }}>❗ SOLICITA ENCAIXE · desde {fmtDate(querEnc(c).em)}{diasDesde(querEnc(c).em) ? " (há " + diasDesde(querEnc(c).em) + "d)" : ""}{querEnc(c).obs ? " · " + String(querEnc(c).obs).slice(0, 40) : ""}</button>}
             {(g === "agendar" || e === "aguardando") && (() => { const sg = durSugeridaCk(c); return <span className="pill" style={{ fontWeight: 700 }} title={sg.cupom ? "Cupom " + fmtBRL(sg.cupom) + " → sugerido " + fmtDur(sg.min) : "Sem valor de cupom na planilha"}>⏱ {fmtDur(Number(k.duracaoMin) || sg.min)}{k.duracaoMin ? "" : sg.cupom ? " sugerido" : " (sem cupom)"}{Array.isArray(k.propostaDiasExtras) && k.propostaDiasExtras.length ? " · " + (k.propostaDiasExtras.length + 1) + " dias" : ""}</span>; })()}
             {e === "aguardando" && <span>oferecido {fmtDateTime(k.proposta)} · {k.contatos || 1}º contato · há {diasDesde(k.ultimoContato)}d</span>}
+            {venc && <span className="pill" style={{ background: "#9a3412", color: "#fff", fontWeight: 800 }} title={"O cliente tinha " + segura + " dia(s) para responder. O horário continua reservado até alguém liberar ou renovar."}>⚠️ Prazo vencido{atrasoV > 0 ? " há " + atrasoV + " dia" + (atrasoV > 1 ? "s" : "") : ""}</span>}
             {g === "agendado" && Array.isArray(k.diasExtras) && k.diasExtras.length > 0 && <span className="pill" title={k.diasExtras.map((e: any) => fmtDateTime(e.data) + " · " + e.projetista).join("\n")}>📆 {k.diasExtras.length + 1} dias</span>}
             {g === "agendado" && <span className="pill" style={{ background: corProj(k.projetista), color: "#fff", fontWeight: 700 }}>{k.projetista ? "👤 " + k.projetista : "👤 sem projetista"}</span>}
             {g === "agendado" && <span className="pill" style={{ background: conf[1], color: "#fff", fontWeight: 700 }}>{conf[0]}</span>}
@@ -280,6 +287,8 @@ function CartaoCk({ c, aba }: any) {
           {g === "agendado" && k.confirmacao !== "confirmada" && <button className="btn sm" style={{ background: "var(--ok, #0f8a5f)", color: "#fff", borderColor: "var(--ok, #0f8a5f)", fontWeight: 700 }} onClick={() => executar(() => A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }), "Presença confirmada")}>✅ Confirmou presença</button>}
           {g === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Não pode vir</button>}
           {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
+          {e === "aguardando" && k.proposta && c.status !== "concluida" && <button className="btn sm" style={venc ? { background: "#9a3412", color: "#fff", borderColor: "#9a3412", fontWeight: 700 } : undefined} onClick={liberar} title="Libera o horário oferecido e o cliente volta para A agendar">🔓 Liberar agenda</button>}
+          {e === "aguardando" && k.proposta && c.status !== "concluida" && venc && <button className="btn sm" style={{ color: "#9a3412", borderColor: "#9a3412", fontWeight: 700 }} onClick={renovar} title={"Mantém o horário por mais " + segura + " dias"}>🔁 Renovar +{segura} dias</button>}
           {g === "agendar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="espera" />)}>⏸ Aguardando</button>}
           {c.status !== "concluida" && !querEnc(c) && ["agendar", "aguardando", "agendado"].includes(g) && <button className="btn sm" style={{ color: "var(--danger)", borderColor: "var(--danger)", fontWeight: 700 }} onClick={() => setModal(<ModalQuerEncaixe c={c} />)} title="Cliente quer ser antecipado se abrir vaga">❗ Solicita encaixe</button>}
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<Modal titulo={"Alterar agenda · " + c.cliente + " · venda " + c.pedido} onFechar={() => setModal(null)}><EditorAgenda c={c} /></Modal>)}>✏️ Projetista / horário</button>}
@@ -477,14 +486,16 @@ export function ConfirmaExcluir({ ids, rotulo, forte }: { ids: string[]; rotulo:
 }
 
 // ---------- sugestão de dias e horários livres ----------
-export const AGENDA_PADRAO: any = { dias: [1, 2, 3, 4, 5], horarios: ["09:00", "11:00", "15:00", "17:00"], duracaoMin: 120, confirmarDias: 2, vagas: 1, seguraDias: 2, projetistas: ["Silvane", "Rafael", "Angela", "Gislaine", "Cleberson", "Juliana"] };
+export const AGENDA_PADRAO: any = { dias: [1, 2, 3, 4, 5], horarios: ["09:00", "11:00", "15:00", "17:00"], duracaoMin: 120, confirmarDias: 2, vagas: 1, seguraDias: 3, projetistas: ["Angela", "Silvane", "Cleberson", "Gislaine", "Juliana", "Rafael", "Eduardo", "Giovanni"] };
 const CORES_PROJ = ["#2f6fd6", "#c2410c", "#0f8a5f", "#8b3fd1", "#b8860b", "#d6336c", "#0e7490", "#4d5b7c"];
 export const cfgAgenda = (st: any) => ({ ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) });
 let _projs: string[] = AGENDA_PADRAO.projetistas;
-export const corProj = (n?: string) => (n ? CORES_PROJ[Math.max(0, _projs.indexOf(n)) % CORES_PROJ.length] : "var(--ink-faint)");
+// cor fixa de cada projetista (não muda quando a ordem das colunas muda)
+const COR_FIXA: Record<string, string> = { Angela: "#2f6fd6", Cleberson: "#c2410c", Eduardo: "#0f8a5f", Giovanni: "#8b3fd1", Gislaine: "#b8860b", Juliana: "#d6336c", Rafael: "#0e7490", Silvane: "#4d5b7c" };
+export const corProj = (n?: string) => (n ? COR_FIXA[n] || CORES_PROJ[Math.max(0, _projs.indexOf(n)) % CORES_PROJ.length] : "var(--ink-faint)");
 const isoDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 /** quem está ocupado: agendados (com ou sem projetista) + datas oferecidas que ainda esperam o cliente (reservam o projetista por alguns dias) */
-type Ocup = { proj: string; ini: number; fim: number; cliente: string; aguardando: boolean };
+type Ocup = { proj: string; ini: number; fim: number; cliente: string; aguardando: boolean; vencida?: boolean; id?: string; dias?: number };
 /** duração do atendimento deste cliente (minutos) — a agenda oficial tem atendimentos de 1h a 10h */
 export const durCk = (c: any, cfg?: any) => Number(ck(c).duracaoMin) || (cfg?.duracaoMin) || 120;
 /** valor do cupom da venda (planilha do checklist) */
@@ -538,9 +549,11 @@ export function ocupacoes(st: any, excluirId?: string): Ocup[] {
     if (c.tipo !== "checklist" || c.status === "concluida" || c.id === excluirId) return;
     const k = ck(c), e = etapaCk(c);
     if (e === "agendado" && k.agendadoPara) atendimentos(c, cfg).forEach(a => { const ini = +parseData(a.slot); out.push({ proj: a.proj, ini, fim: ini + a.dur * 6e4, cliente: c.cliente, aguardando: false }); });
-    else if (e === "aguardando" && k.proposta && diasDesde(k.ultimoContato) <= cfg.seguraDias) {
+    // data oferecida segura o horário mesmo depois do prazo: vencida só sai da agenda quando alguém libera (ou renova)
+    else if (e === "aguardando" && k.proposta) {
+      const venc = diasDesde(k.ultimoContato) > cfg.seguraDias;
       [{ data: k.proposta, duracaoMin: durCk(c, cfg) }, ...(Array.isArray(k.propostaDiasExtras) ? k.propostaDiasExtras : [])].forEach((x: any) => {
-        const ini = +parseData(String(x.data).slice(0, 16)); out.push({ proj: k.propostaProjetista || "", ini, fim: ini + (Number(x.duracaoMin) || durCk(c, cfg)) * 6e4, cliente: c.cliente, aguardando: true }); });
+        const ini = +parseData(String(x.data).slice(0, 16)); out.push({ proj: k.propostaProjetista || "", ini, fim: ini + (Number(x.duracaoMin) || durCk(c, cfg)) * 6e4, cliente: c.cliente, aguardando: true, vencida: venc, id: c.id, dias: diasDesde(k.ultimoContato) }); });
     }
   });
   return out;
@@ -566,7 +579,7 @@ export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?:
   let livres = cfg.projetistas.filter((n: string) => !ocupadosProj.has(n) && !emerg.includes(n) && atendeNoDia(cfg, n, slot.slice(0, 10)) && !bloqueiosEm(st, n, t, t + dur).length);
   const semProj = no.filter(o => !o.proj).length;
   if (semProj) livres = livres.slice(0, Math.max(0, livres.length - semProj));
-  return { livres, ocupados: no.map(o => o.cliente + (o.proj ? " · " + o.proj : "") + (o.aguardando ? " (aguardando resposta)" : "")) };
+  return { livres, ocupados: no.map(o => o.cliente + (o.proj ? " · " + o.proj : "") + (o.vencida ? " ⚠️ prazo vencido — pode liberar" : o.aguardando ? " (aguardando resposta)" : "")) };
 }
 export function sugestoes(st: any, excluirId?: string, n = 8, projetista?: string, durMin?: number, mes?: string): { slot: string; livres: string[] }[] {
   const cfg = cfgAgenda(st), occ = ocupacoes(st, excluirId), out: { slot: string; livres: string[] }[] = [], agora = Date.now() + 2 * 36e5;
@@ -582,6 +595,31 @@ export function sugestoes(st: any, excluirId?: string, n = 8, projetista?: strin
       if (+parseData(slot) < agora) continue;
       const { livres } = livresNoHorario(st, slot, excluirId, occ, durMin);
       if (projetista ? livres.includes(projetista) : livres.length) out.push({ slot, livres });
+      if (out.length >= n) break;
+    }
+  }
+  return out;
+}
+/** horários presos só por reserva vencida: o projetista ficaria livre se a reserva fosse liberada */
+export function liberaveis(st: any, excluirId?: string, n = 12, durMin?: number, mes?: string, projetista?: string): { slot: string; proj: string; bloq: Ocup[] }[] {
+  const cfg = cfgAgenda(st), occ = ocupacoes(st, excluirId), out: { slot: string; proj: string; bloq: Ocup[] }[] = [], agora = Date.now() + 2 * 36e5;
+  const dur = (durMin || cfg.duracaoMin || 120) * 6e4, emerg: string[] = cfg.emergencia || [];
+  const ini0 = new Date(); ini0.setHours(0, 0, 0, 0);
+  const base = mes ? new Date(Math.max(+ini0, +new Date(mes + "-01T00:00"))) : ini0;
+  for (let i = 0; i < 62 && out.length < n; i++) {
+    const d = new Date(base); d.setDate(base.getDate() + i);
+    if (mes && isoDia(d).slice(0, 7) !== mes) break;
+    if (!diaComAgenda(cfg, isoDia(d))) continue;
+    for (const h of [...cfg.horarios].sort()) {
+      const slot = isoDia(d) + "T" + h, t = +parseData(slot);
+      if (t < agora) continue;
+      for (const p of cfg.projetistas as string[]) {
+        if (projetista && p !== projetista) continue;
+        if (emerg.includes(p) || !atendeNoDia(cfg, p, slot.slice(0, 10)) || bloqueiosEm(st, p, t, t + dur).length) continue;
+        const meus = occ.filter(o => o.proj === p && o.ini < t + dur && t < o.fim);
+        if (meus.length && meus.every(o => o.vencida)) out.push({ slot, proj: p, bloq: meus });
+        if (out.length >= n) break;
+      }
       if (out.length >= n) break;
     }
   }
@@ -957,6 +995,20 @@ export function Sugestoes({ valor, onPick, excluirId, projetista, durMin }: { va
   const [so, setSo] = useState(false);
   const [mes, setMes] = useState("");
   const lst = sugestoes(st, excluirId, mes ? 120 : 10, so ? projetista : undefined, durMin, mes || undefined);
+  const { recarregar, toast } = useApp() as any;
+  const [verLib, setVerLib] = useState(false);
+  const [liberando, setLiberando] = useState("");
+  const lib = liberaveis(st, excluirId, mes ? 40 : 12, durMin, mes || undefined, so ? projetista : undefined);
+  const usarLib = async (x: { slot: string; proj: string; bloq: Ocup[] }) => {
+    const nomes = Array.from(new Set(x.bloq.map(o => o.cliente))).join(" e ");
+    if (!confirm("Liberar a reserva de " + nomes + " (prazo vencido) e usar " + fmtDateTime(x.slot) + " com " + x.proj + "?\n\nO cliente volta para “A agendar” e o histórico fica salvo.")) return;
+    setLiberando(x.slot + x.proj);
+    try {
+      for (const id of Array.from(new Set(x.bloq.map(o => o.id).filter(Boolean)))) await A.checklistRegistrar(id as string, { acao: "liberar" });
+      await recarregar(); onPick(x.slot, x.proj); toast("Reserva de " + nomes + " liberada — horário selecionado");
+    } catch (er: any) { toast(er.message || "Não foi possível liberar"); }
+    finally { setLiberando(""); }
+  };
   const v16 = (valor || "").slice(0, 16);
   const atual = v16.length === 16 ? livresNoHorario(st, v16, excluirId, undefined, durMin) : null;
   const conflito = atual && projetista && !atual.livres.includes(projetista);
@@ -972,6 +1024,16 @@ export function Sugestoes({ valor, onPick, excluirId, projetista, durMin }: { va
             {DIAS[d.getDay()].slice(0, 3)} {d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · <b>{slot.slice(11, 16)}</b> <span className="n">{livres.length} livre{livres.length > 1 ? "s" : ""}</span></button>); })
           : <span className="hint">{mes ? "Nenhum horário livre nesse mês para essa duração." : "Nenhum horário livre nas próximas semanas — revise em ⚙ Horários."}</span>}
       </div>
+      {lib.length > 0 && <div style={{ marginTop: 8 }}>
+        <button type="button" className="btn ghost sm" style={{ color: "#6b7280" }} onClick={() => setVerLib(!verLib)}>{verLib ? "▾" : "▸"} 🔓 Liberáveis (prazo vencido) · {lib.length}</button>
+        {verLib && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, ...(mes ? { maxHeight: 200, overflowY: "auto" } : {}) }}>
+          {lib.map(x => { const d = parseData(x.slot); return (
+            <button type="button" key={x.slot + x.proj} className="chip" disabled={!!liberando} style={{ background: "#f3f4f6", color: "#4b5563", borderStyle: "dashed" }}
+              title={"Ocupado só por reserva vencida: " + x.bloq.map(o => o.cliente + " (sem resposta há " + (o.dias ?? 0) + "d)").join("; ") + "\nClique para liberar e usar este horário"}
+              onClick={() => usarLib(x)}>
+              🔓 {DIAS[d.getDay()].slice(0, 3)} {d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · <b>{x.slot.slice(11, 16)}</b> · {x.proj} <span className="n">{liberando === x.slot + x.proj ? "liberando…" : x.bloq[0].cliente.split(" ")[0]}</span></button>); })}
+        </div>}
+      </div>}
       {atual && <span className="hint" style={{ color: conflito || !atual.livres.length ? "var(--danger)" : "var(--ink-soft)" }}>
         {conflito ? `⚠️ ${projetista} já está ocupado nesse horário. ` : !atual.livres.length ? "⚠️ Nenhum projetista livre nesse horário. " : ""}
         {atual.livres.length ? "Livres nesse horário: " + atual.livres.join(", ") + "." : ""}{atual.ocupados.length ? " Ocupados: " + atual.ocupados.join("; ") + "." : ""}</span>}
@@ -1044,7 +1106,7 @@ function CalendarioDia() {
     const k = ck(c), e = etapaCk(c);
     if (e === "agendado" || e === "realizado") return atendimentos(c, cfg).filter(a => a.slot.slice(0, 10) === dia).map(a => { const ini = minDe(a.slot); return { c, ini, fim: ini + a.dur, proj: a.proj, tipo: "ag", extra: a.extra, n: a.n, total: a.total } as Ev; });
     // data oferecida: ocupa o mesmo tempo escolhido na mensagem (e os dias seguintes, se for mais de um dia)
-    // reserva vencida (passou do prazo sem resposta): aparece apagada e NÃO segura o horário — igual às sugestões
+    // reserva vencida (passou do prazo sem resposta): continua segurando o horário, em laranja, até alguém liberar ou renovar
     if (ofer && e === "aguardando" && k.proposta) return propostaDias(c, cfg).filter(x => x.slot.slice(0, 10) === dia).map(x => { const ini = minDe(x.slot); return { c, ini, fim: ini + x.dur, proj: k.propostaProjetista || "", tipo: "of", venc: diasDesde(k.ultimoContato) > cfg.seguraDias } as Ev; });
     return [];
   });
@@ -1134,15 +1196,15 @@ function CalendarioDia() {
                   <div key={x.c.id + ":" + (x.extra ?? -1)} onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + (x.tipo === "ag" && (x.extra ?? -1) < 0 ? " — arraste para outro horário ou projetista" : (x.extra ?? -1) >= 0 ? " — dia adicional (altere na ficha do cliente)" : "")}
                     draggable={x.tipo === "ag" && (x.extra ?? -1) < 0} onDragStart={e => { e.dataTransfer.setData("text/plain", x.c.id); e.dataTransfer.effectAllowed = "move"; pega.current = e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top; }}
                     style={{ position: "absolute", zIndex: 2, top: top + 1, height: alt, left: `calc(${(x.lane || 0) * w}% + 3px)`, width: `calc(${w}% - 6px)`, overflow: "hidden", cursor: "pointer",
-                      borderRadius: 4, padding: "4px 6px", fontSize: 11.5, lineHeight: 1.3, color: x.tipo === "ag" ? "#fff" : x.venc ? "#6b7280" : "#6b4a00", opacity: x.venc ? .75 : 1,
-                      background: x.tipo === "ag" ? cor : x.venc ? "repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6 6px,#e9ebef 6px,#e9ebef 12px)" : "#ffe8a3", border: x.tipo === "ag" ? (k.encaixe ? "2.5px solid var(--danger)" : "none") : x.venc ? "2px dashed #b8bec9" : `2px dashed ${cor}` }}>
-                    <div style={{ fontWeight: 800, fontSize: compacto ? 11.5 : 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.tipo === "of" ? (x.venc ? "⌛ " : "⏳ ") : k.encaixe ? "⚠️ " : ""}{hm(x.ini)} - {hm(x.fim)}{(x.total || 1) > 1 ? ` · dia ${x.n}/${x.total}` : ""}{x.tipo === "ag" && compacto ? (conf === "confirmada" ? " ✅" : conf === "enviada" ? " 📨" : " ⏳") : ""}</div>
-                    <div style={{ fontWeight: 700, textTransform: "uppercase", color: x.tipo === "ag" ? "#ffe9a8" : x.venc ? "#4b5563" : "#3d2a00", whiteSpace: compacto ? "nowrap" : undefined, overflow: "hidden", textOverflow: "ellipsis", overflowWrap: "anywhere" }}>{x.c.cliente}</div>
+                      borderRadius: 4, padding: "4px 6px", fontSize: 11.5, lineHeight: 1.3, color: x.tipo === "ag" ? "#fff" : x.venc ? "#7c2d12" : "#6b4a00",
+                      background: x.tipo === "ag" ? cor : x.venc ? "repeating-linear-gradient(45deg,#ffedd5,#ffedd5 6px,#fed7aa 6px,#fed7aa 12px)" : "#ffe8a3", border: x.tipo === "ag" ? (k.encaixe ? "2.5px solid var(--danger)" : "none") : x.venc ? "2.5px dashed #9a3412" : `2px dashed ${cor}` }}>
+                    <div style={{ fontWeight: 800, fontSize: compacto ? 11.5 : 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.tipo === "of" ? (x.venc ? "⚠️ " : "⏳ ") : k.encaixe ? "⚠️ " : ""}{hm(x.ini)} - {hm(x.fim)}{(x.total || 1) > 1 ? ` · dia ${x.n}/${x.total}` : ""}{x.tipo === "ag" && compacto ? (conf === "confirmada" ? " ✅" : conf === "enviada" ? " 📨" : " ⏳") : ""}</div>
+                    <div style={{ fontWeight: 700, textTransform: "uppercase", color: x.tipo === "ag" ? "#ffe9a8" : x.venc ? "#7c2d12" : "#3d2a00", whiteSpace: compacto ? "nowrap" : undefined, overflow: "hidden", textOverflow: "ellipsis", overflowWrap: "anywhere" }}>{x.c.cliente}</div>
                     {!mini && (compacto ? <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtTel(x.c.telefone) || "sem contato"} · {x.c.pedido}</div> : <>
                       <div>{fmtTel(x.c.telefone) || "sem contato"}</div>
                       <div>Venda {x.c.pedido}</div>
                       {x.tipo === "ag" ? <div><b>Presença:</b> {conf === "confirmada" ? "Confirmada ✅" : conf === "enviada" ? "Aguardando" : "A confirmar"}</div>
-                        : <div style={{ fontWeight: 700 }}>{x.venc ? "Reserva vencida — horário liberado" : "Aguardando resposta"}</div>}</>)}
+                        : <div style={{ fontWeight: 700 }}>{x.venc ? "⚠️ Prazo vencido — liberar ou renovar" : "Aguardando resposta"}</div>}</>)}
                     {x.tipo === "ag" && (x.extra ?? -1) < 0 && <div title="Arraste para aumentar ou diminuir o tempo" onClick={e => e.stopPropagation()} onMouseDown={e => esticar(e, x.c, x.ini, x.fim)}
                       style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 7, cursor: "ns-resize", background: "rgba(255,255,255,.35)" }} />}
                   </div>);
@@ -1179,10 +1241,10 @@ function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; 
   const Ev = ({ x, compacto }: any) => (
     <div onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + " · venda " + x.c.pedido + (x.proj ? " · " + x.proj : "")}
       style={{ cursor: "pointer", borderRadius: 7, padding: compacto ? "2px 6px" : "5px 7px", marginBottom: 4, fontSize: compacto ? 11.5 : 12.5, lineHeight: 1.25,
-        background: x.tipo === "ag" ? corProj(x.proj) : x.venc ? "#f3f4f6" : "#ffe8a3", color: x.tipo === "ag" ? "#fff" : x.venc ? "#6b7280" : "#6b4a00", border: x.tipo === "ag" ? "none" : "1.5px dashed " + (x.venc ? "#b8bec9" : x.proj ? corProj(x.proj) : "var(--warn)"), opacity: x.venc ? .75 : 1,
+        background: x.tipo === "ag" ? corProj(x.proj) : x.venc ? "repeating-linear-gradient(45deg,#ffedd5,#ffedd5 6px,#fed7aa 6px,#fed7aa 12px)" : "#ffe8a3", color: x.tipo === "ag" ? "#fff" : x.venc ? "#7c2d12" : "#6b4a00", border: x.tipo === "ag" ? "none" : x.venc ? "2px dashed #9a3412" : "1.5px dashed " + (x.proj ? corProj(x.proj) : "var(--warn)"),
         outline: x.enc ? "2.5px solid var(--danger)" : undefined, outlineOffset: x.enc ? 1 : undefined,
         whiteSpace: compacto ? "nowrap" : undefined, overflow: "hidden", textOverflow: "ellipsis" }}>
-      {x.enc && "⚠️ "}{compacto && <b>{x.quando.slice(11, 16)} </b>}{x.c.cliente}{(x.total || 1) > 1 && <b> · dia {x.n}/{x.total}</b>}{compacto && <span style={{ opacity: .85 }}> · {x.c.pedido}</span>}{!compacto && <div style={{ opacity: .9, fontSize: 11 }}>Venda {x.c.pedido} · {x.tipo === "ag" ? (x.proj || "sem projetista") : "oferecido" + (x.proj ? " · " + x.proj : "") + " · aguardando"}</div>}
+      {(x.enc || x.venc) && "⚠️ "}{compacto && <b>{x.quando.slice(11, 16)} </b>}{x.c.cliente}{(x.total || 1) > 1 && <b> · dia {x.n}/{x.total}</b>}{compacto && <span style={{ opacity: .85 }}> · {x.c.pedido}</span>}{!compacto && <div style={{ opacity: .9, fontSize: 11 }}>Venda {x.c.pedido} · {x.tipo === "ag" ? (x.proj || "sem projetista") : "oferecido" + (x.proj ? " · " + x.proj : "") + (x.venc ? " · prazo vencido" : " · aguardando")}</div>}
     </div>);
   const titulo = modo === "semana" ? `Semana de ${seg.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : r.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const ini = new Date(r.getFullYear(), r.getMonth(), 1); const g0 = new Date(ini); g0.setDate(1 - ((ini.getDay() + 6) % 7));
@@ -1256,7 +1318,7 @@ function ModalHorarios() {
         <div className="field full"><label>Só para emergência <span className="hint">(aparecem na agenda e podem ser escolhidos à mão, mas não entram nas sugestões de horário)</span></label><input value={emerg} onChange={e => setEmerg(e.target.value)} placeholder="Giovanni" /></div>
         <div className="field"><label>Duração de cada atendimento (horas)</label><input inputMode="decimal" value={dur} onChange={e => setDur(e.target.value)} /><span className="hint">Cada projetista atende um cliente por vez.</span></div>
         <div className="field"><label>Pedir confirmação de presença com (dias de antecedência)</label><input type="number" min={0} max={15} value={confD} onChange={e => setConfD(e.target.value)} /><span className="hint">Agendados com data nesse prazo aparecem em “Confirmação de presença”.</span></div>
-        <div className="field"><label>Segurar a data oferecida por (dias)</label><input type="number" min={0} max={15} value={seg} onChange={e => setSeg(e.target.value)} /><span className="hint">Enquanto o cliente não responde, o horário oferecido não é sugerido para outro.</span></div>
+        <div className="field"><label>Segurar a data oferecida por (dias)</label><input type="number" min={0} max={15} value={seg} onChange={e => setSeg(e.target.value)} /><span className="hint">Prazo para o cliente responder. Depois disso a reserva fica “⚠️ Prazo vencido” e continua segurando o horário até alguém liberar ou renovar.</span></div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}><button className="btn primary" onClick={salvar}>Salvar</button><button className="btn ghost" onClick={fechar}>Cancelar</button></div>
     </Modal>
@@ -1325,7 +1387,7 @@ export function ModalWhats({ c, inicial }: any) {
         <button className="btn primary" onClick={enviar}>Abrir WhatsApp{tipo === "confirmacao" ? "" : " e registrar o contato"}</button>
         <button className="btn ghost" onClick={fechar}>Cancelar</button>
       </div>
-      {comData && <div className="hint" style={{ marginTop: 10 }}>O horário fica reservado para {proj || "o projetista"} por {cfgAgenda(st).seguraDias} dia(s) enquanto o cliente não responde.</div>}
+      {comData && <div className="hint" style={{ marginTop: 10 }}>O horário fica reservado para {proj || "o projetista"} — o cliente tem {cfgAgenda(st).seguraDias} dia(s) para responder; depois disso aparece “Prazo vencido” para liberar ou renovar.</div>}
     </Modal>
   );
 }
