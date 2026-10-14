@@ -113,15 +113,18 @@ const Num = ({ n, l, cor, on }: any) => <button className={"mv-num" + (on ? " on
 function Cartao({ c, abrir, linha, destaque }: any) {
   const { R } = useApp() as any;
   const sc = R.statusClienteDe(c);
+  const ctt = contatoFeito(c, R.currentUserId);
   return (
-    <button className={"mv-card" + (destaque ? " dest" : "")} onClick={() => abrir(c.id)}>
+    <button className={"mv-card" + (destaque ? " dest" : "") + (ctt ? " ctt" : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{linha?.hora || ""}</b><small>{linha?.dia || ""}</small></div>
       <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""} <SeloLitoral c={c} /></div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
-      <span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>
+      <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{ctt && <span className="mv-ctt">✅ Contato feito</span>}</div>
     </button>
   );
 }
 const Vazio = ({ t }: { t: string }) => <div className="mv-vazio">{t}</div>;
+/** já falou com o cliente? consultor: "Contato realizado"; vendedor: "Já estou em contato" */
+const contatoFeito = (c: any, eu: string) => { const t = c.tratativa || {}; return c.consultorId === eu ? !!t.contatoIniciado : c.atendenteId === eu ? !!t.emContato : false; };
 
 // ---------- consultor ----------
 function consDados(R: any, st: any) {
@@ -172,6 +175,7 @@ function ConsClientes({ abrir }: any) {
   const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas">("fazer");
   const md = medDados(R);
   const [q, setQ] = useState("");
+  const [ctF, setCtF] = useState<"" | "com" | "sem">("");
   const [per, setPer] = usePeriodo();
   const np = (c: any) => noPeriodo(per, c);
   const res = d.meus.filter((c: any) => np(c)).filter((c: any) => c.venda || (c.tratativa && c.tratativa.parecerEm) || R.statusClienteDe(c) === "nao_compareceu").sort((a: any, b: any) => String(b.dataLoja || "").localeCompare(String(a.dataLoja || "")));
@@ -179,7 +183,10 @@ function ConsClientes({ abrir }: any) {
   const todas = tudo.filter(np);
   const vendidos = todas.filter((c: any) => vendaContaVolume(c.venda)), cancel = todas.filter(temCancelamento);
   const comPeriodo = ["resultado", "vendidos", "cancel", "todas"].includes(f);
-  const lista = busca(q ? tudo : f === "fazer" ? d.aFazer : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : todas, q);
+  const eu = R.currentUserId;
+  const nCom = d.aFazer.filter((c: any) => contatoFeito(c, eu)).length;
+  const aFazerF = ctF === "com" ? d.aFazer.filter((c: any) => contatoFeito(c, eu)) : ctF === "sem" ? d.aFazer.filter((c: any) => !contatoFeito(c, eu)) : d.aFazer;
+  const lista = busca(q ? tudo : f === "fazer" ? aFazerF : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : todas, q);
   const sub = (c: any) => f === "resultado" && !q ? ((c.tratativa && c.tratativa.parecer) || (c.venda ? "venda " + c.venda.numero : "—"))
     : c.dataLoja ? "loja " + diaCurto(c.dataLoja) + " " + hora(c.dataLoja) + (c.atendenteId ? " · vendedor " + primeiro(R.nomeUser(c.atendenteId)) : " · sem vendedor") : (c.endereco || c.produto);
   return <>
@@ -187,6 +194,8 @@ function ConsClientes({ abrir }: any) {
     {!q && <div className="mv-seg">{([["fazer", "A fazer", d.aFazer.length], ["loja", "Agendar loja", d.faltaLoja.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Cancelamentos", cancel.length], ["todas", "Todos", d.meus.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
       <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
     {!q && comPeriodo && <FiltroPeriodo p={per} setP={setPer} />}
+    {!q && f === "fazer" && d.aFazer.length > 0 && <div className="mv-seg mv-seg-ctt">{([["", "Todos", d.aFazer.length], ["com", "✅ Contato feito", nCom], ["sem", "⏳ Sem contato", d.aFazer.length - nCom]] as [any, string, number][]).map(([k, l, n]) =>
+      <button key={k} className={ctF === k ? "on" : ""} onClick={() => setCtF(k)}>{l}<i>{n}</i></button>)}</div>}
     {f === "medidas" && !q ? <MedLista abrir={abrir} /> : lista.length ? lista.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: sub(c) }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
   </>;
 }
