@@ -8,6 +8,7 @@ import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "
 import { numsVenda, EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, temCancelamento } from "../lib/regras";
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
+import { AlterarSenha } from "../comp/Modal";
 import { SinoAvisos } from "../comp/Avisos";
 import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
@@ -511,7 +512,7 @@ function AcoesVendedor({ c }: any) {
 
 // ---------- eu / mais ----------
 function Eu({ perfil, completa, irTime }: any) {
-  const { R, st } = useApp() as any;
+  const { R, st, setModal } = useApp() as any;
   const u = R.me();
   const hoje = hojeISO(), de = hoje.slice(0, 8) + "01";
   return <>
@@ -521,6 +522,7 @@ function Eu({ perfil, completa, irTime }: any) {
     {irTime && <><div className="mv-sec">Marketing</div><button className="mv-linha" onClick={irTime}><b>🎯 Metas e pagamento do time de marketing</b><span>Meta do dia, bônus, produtividade e aprovação</span></button></>}
     <div className="mv-sec">Aplicativo</div>
     <Instalar />
+    <button className="mv-linha" onClick={() => setModal(<AlterarSenha />)}><b>🔑 Alterar minha senha</b><span>Troque a senha inicial por uma só sua</span></button>
     <button className="mv-linha" onClick={completa}><b>Abrir versão completa</b><span>Todas as telas do sistema (melhor no computador)</span></button>
     <button className="mv-linha" onClick={() => sair()} style={{ borderLeftColor: "var(--danger)" }}><b>Sair</b><span>Encerrar a sessão neste aparelho</span></button>
   </>;
