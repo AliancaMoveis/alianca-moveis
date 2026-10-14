@@ -17,9 +17,9 @@ export function Notificacoes() {
   const { toast } = useApp() as any;
   const { e, atualizar } = useEstadoPush();
   const [ind, setInd] = useState(false);
+  const [erro, setErro] = useState("");
   const sim = !!simulacao();
   if (e === null) return null;
-  const [erro, setErro] = useState("");
   const faz = async (f: () => Promise<any>, ok: string) => { setInd(true); setErro(""); try { await f(); toast(ok); } catch (x: any) { setErro(x.message || "Não foi possível ativar"); } finally { setInd(false); atualizar(); } };
   return (
     <div className="mv-bloco" style={{ marginTop: 0, marginBottom: 12 }}>
