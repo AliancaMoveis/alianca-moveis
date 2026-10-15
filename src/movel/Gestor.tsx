@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { A } from "../lib/acoes";
 import { fmtTempo, mediaHoras } from "../lib/atendimento";
 import { useApp } from "../estado";
+import { ck, etapaCk, grupoCk, reservaVencida, querEnc, aConfirmar, cfgAgenda } from "../telas/Checklist";
 import { numsVenda, temPendenteGestao, STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -34,11 +35,18 @@ export function areas(R: any, st: any) {
   const todos = st.chamados.filter(R.podeVer);
   const mkt = R.ehGestao() || R.temMarketing() || R.mySetores().includes("suporte_consultores");
   const cc = todos.some((c: any) => doPainelCC(R, c));
-  return { mkt, cc, todos };
+  const cons = mkt && (R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x)));
+  const ckA = R.podeChecklist() && todos.some((c: any) => c.tipo === "checklist");
+  return { mkt, cc, cons, ck: ckA, todos };
 }
-function SelArea({ area, setArea, a }: any) {
-  if (!(a.mkt && a.cc)) return null;
-  return <div className="mv-area"><button className={area === "mkt" ? "on" : ""} onClick={() => setArea("mkt")}>📣 Marketing</button><button className={area === "cc" ? "on" : ""} onClick={() => setArea("cc")}>☎ Call center</button></div>;
+function SelArea({ area, setArea, a, todas }: any) {
+  const ops: [string, string][] = [];
+  if (a.mkt) ops.push(["mkt", "📣 Marketing"]);
+  if (a.cc) ops.push(["cc", "☎ Call center"]);
+  if (todas && a.cons) ops.push(["cons", "🧭 Consultores"]);
+  if (todas && a.ck) ops.push(["ck", "✓ Checklist"]);
+  if (ops.length < 2) return null;
+  return <div className="mv-area">{ops.map(([k, l]) => <button key={k} className={area === k ? "on" : ""} onClick={() => setArea(k)}>{l}</button>)}</div>;
 }
 
 // quem vê R$ das vendas da loja: Gestão e Gerente de Loja (o banco também só entrega o valor para eles)
@@ -115,8 +123,8 @@ function buscar(todos: any[], q: string) {
 export function GestResumo() {
   const { R, st, abrirDetalhe } = useApp() as any;
   const a = areas(R, st);
-  const [area, setArea] = useState<"mkt" | "cc">(a.mkt ? "mkt" : "cc");
-  const [per, setPer] = useState<Per>("mes");
+  const [area, setArea] = useState<"mkt" | "cc" | "cons" | "ck">(a.mkt ? "mkt" : "cc");
+  const [per, setPer] = useState<Per>("hoje");
   const L = useLista();
   const P = periodo(per);
   const noPer = (v: any) => !!v && R.dentroPeriodo(v, P.de, P.ate);
@@ -125,9 +133,9 @@ export function GestResumo() {
   return <>
     <input className="mv-busca" type="search" placeholder="🔎 Consultar cliente: nome, telefone, nº…" value={q} onChange={e => setQ(e.target.value)} />
     {q.trim().length >= 2 ? <><div className="mv-sec">Resultado <i>{achados.length}</i></div>{achados.length ? achados.map((c: any) => <LinhaCliente key={c.id} c={c} R={R} abrir={() => abrirDetalhe(c.id)} />) : <div className="mv-vazio">Nenhum cliente encontrado.</div>}</> : <>
-    <SelArea area={area} setArea={(x: any) => { setArea(x); L.fechar(); }} a={a} />
+    <SelArea area={area} setArea={(x: any) => { setArea(x); L.fechar(); }} a={a} todas />
     <SelPer per={per} setPer={p => { setPer(p); L.fechar(); }} />
-    {area === "mkt" ? <ResMkt todos={a.todos} noPer={noPer} P={P} L={L} /> : <ResCC todos={a.todos} noPer={noPer} P={P} L={L} />}
+    {area === "mkt" ? <ResMkt todos={a.todos} noPer={noPer} P={P} L={L} /> : area === "cons" ? <ResCons todos={a.todos} noPer={noPer} P={P} L={L} /> : area === "ck" ? <ResCk todos={a.todos} noPer={noPer} P={P} L={L} /> : <ResCC todos={a.todos} noPer={noPer} P={P} L={L} />}
     <ListaClientes sel={L.sel} fechar={L.fechar} />
     {!L.sel && <div className="mv-dica" style={{ marginTop: 10 }}>Toque nos quadros com “ver lista” para ver os clientes e abrir a ficha.</div>}
     </>}
@@ -181,9 +189,12 @@ function ResMkt({ todos, noPer, P, L }: any) {
 
     <TimeMkt P={P} L={L} />
 
-    <div className="mv-sec">⚡ Agora — precisa de atenção</div>
-    <div className="mv-tiles c3">
+    <div className="mv-sec">🏬 Agenda da loja</div>
+    <div className="mv-tiles">
       {T("lh", lojaHoje.length, "Na loja hoje", lojaHoje)}{T("la", lojaAmanha.length, "Na loja amanhã", lojaAmanha)}
+    </div>
+    <div className="mv-sec">⏳ Pendente total — todas as datas</div>
+    <div className="mv-tiles c3">
       {T("sv", semVend.length, "Sem vendedor (fila)", semVend, semVend.length ? "var(--warn)" : undefined)}{T("pd", pedidos.length, "Pedidos de atendimento", pedidos, pedidos.length ? "var(--primary)" : undefined)}
       {T("sp", semParecer.length, "Sem parecer do vendedor", semParecer, semParecer.length ? "var(--danger)" : undefined)}{T("cb", cobrados.length, "Parecer cobrado", cobrados, cobrados.length ? "var(--critico)" : undefined)}
       {T("va", visAtras.length, "Visitas atrasadas", visAtras, visAtras.length ? "var(--danger)" : undefined)}{T("sa", semAnexo.length, "Sem anexo", semAnexo, semAnexo.length ? "#b07a00" : undefined)}
@@ -245,6 +256,7 @@ export function ResCC({ todos, noPer, P, L }: any) {
   const crit = cc.filter((c: any) => pr(c) === "critico"), atr = cc.filter((c: any) => pr(c) === "atrasado"), urg = cc.filter((c: any) => pr(c) === "urgente");
   const perto = cc.filter((c: any) => pr(c) === "perto"), inf = cc.filter((c: any) => c.status === "informar"), resp = cc.filter((c: any) => c.status === "respondida");
   const novos = cc.filter((c: any) => noPer(c.criadoEm)), conc = cc.filter((c: any) => c.status === "concluida" && noPer(concluidoEm(c)));
+  const novosFora = novos.filter((c: any) => c.status !== "concluida" && ["critico", "atrasado"].includes(pr(c)));
   const transf = cc.filter((c: any) => c.transferencia && c.transferencia.status === "pendente");
   const noPrazo = abertos.filter((c: any) => !["critico", "atrasado"].includes(pr(c)));
   // tempo médio de conclusão (dias) no período
@@ -259,7 +271,13 @@ export function ResCC({ todos, noPer, P, L }: any) {
   const tipos = Object.entries(porTipo).sort((a, b) => b[1].length - a[1].length).slice(0, 8);
   const maxT = Math.max(1, ...tipos.map(x => x[1].length));
   return <>
-    <div className="mv-receber cc"><span>Call center e pós-venda · agora</span><b>{abertos.length} em aberto</b>
+    <div className="mv-receber cc"><span>📅 Movimento · {P.nome}</span><b>{novos.length} aberto(s)</b><small>{conc.length} concluído(s) · {novosFora.length} dos abertos já fora do prazo</small></div>
+    <div className="mv-tiles">
+      {T("nv", novos.length, "Abertos no período", novos)}{T("cc", conc.length, "Concluídos no período", conc, "var(--st-concluida)")}
+      <Tile n={tm === null ? "—" : tm.toFixed(1).replace(".", ",") + " dias"} l="Tempo médio p/ concluir" />
+      <Tile n={pc(conc.length, novos.length)} l="Concluídos / abertos" />
+    </div>
+    <div className="mv-receber cc"><span>⏳ Pendente total — todas as datas</span><b>{abertos.length} em aberto</b>
       <small>{crit.length + atr.length} fora do prazo · {pc(noPrazo.length, abertos.length)} no prazo · {hojeAbertos.length} aberto(s) hoje</small></div>
     {sup && <><div className="mv-sec">Supervisão · com você</div>
       <div className="mv-tiles">
@@ -274,12 +292,6 @@ export function ResCC({ todos, noPer, P, L }: any) {
       {T("in", inf.length, "Informar cliente", inf, "var(--st-informar)")}{T("rp", resp.length, "Respondidas (revisar)", resp, "var(--st-respondida)")}
       {T("tr", transf.length, "Transferências pendentes", transf, transf.length ? "var(--warn)" : undefined)}{T("ab", abertos.length, "Todos em aberto", abertos)}
     </div>
-    <div className="mv-sec">Movimento · {P.nome}</div>
-    <div className="mv-tiles">
-      {T("nv", novos.length, "Abertos no período", novos)}{T("cc", conc.length, "Concluídos no período", conc, "var(--st-concluida)")}
-      <Tile n={tm === null ? "—" : tm.toFixed(1).replace(".", ",") + " dias"} l="Tempo médio p/ concluir" />
-      <Tile n={pc(conc.length, novos.length)} l="Concluídos / abertos" />
-    </div>
     <div className="mv-sec">Em aberto por setor <small style={{ textTransform: "none", fontWeight: 500 }}>(vermelho = fora do prazo)</small></div>
     <div className="mv-funil">
       {porSetor.length ? porSetor.map((x: any) => <div key={x.s.id} onClick={() => L.abrirLista("s" + x.s.id, x.s.nome, R.ordenar(x.l))} style={{ cursor: "pointer" }}>
@@ -287,6 +299,94 @@ export function ResCC({ todos, noPer, P, L }: any) {
     </div>
     {tipos.length > 0 && <><div className="mv-sec">Assuntos mais abertos · {P.nome}</div>
       <div className="mv-funil">{tipos.map(([k, l]) => <div key={k} onClick={() => L.abrirLista("t" + k, R.tipoNome(k), R.ordenar(l))} style={{ cursor: "pointer" }}><Barra l={R.tipoNome(k)} n={l.length} max={maxT} cor="var(--st-tratativa)" /></div>)}</div></>}
+  </>;
+}
+
+// ================= CONSULTORES =================
+export function ResCons({ todos, noPer, P, L }: any) {
+  const { R } = useApp() as any;
+  const hoje = hojeISO();
+  const mk = todos.filter((c: any) => R.domMarketing(c) && !R.ehDireto(c));
+  const T = (k: string, n: any, l: string, lista?: any[], cor?: string, sub?: string) => <Tile k={k} n={n} l={l} cor={cor} sub={sub} sel={L.sel} lista={lista ? () => L.abrirLista(k, l, lista) : undefined} />;
+  const feita = (c: any) => !!(c.tratativa && c.tratativa.realizada);
+  const vis = mk.filter((c: any) => c.consultorId && noPer(c.dataVisita));
+  const feitas = vis.filter(feita), naoFeitas = vis.filter((c: any) => !feita(c));
+  const novos = mk.filter((c: any) => noPer(c.criadoEm));
+  const lojaPer = mk.filter((c: any) => c.consultorId && noPer(c.dataLoja)), vieram = lojaPer.filter(R.compareceu);
+  const vendas = vendasDoPeriodo(mk.filter((c: any) => c.consultorId), P.de, P.ate);
+  // pendente total (qualquer data)
+  const semCons = R.pendentesDirecionamento();
+  const aFazer = mk.filter((c: any) => c.setorDestino === "consultor_externo" && !feita(c));
+  const atras = aFazer.filter((c: any) => c.dataVisita && dia(c.dataVisita) < hoje);
+  const semData = aFazer.filter((c: any) => !c.dataVisita);
+  const faltaLoja = mk.filter((c: any) => c.setorDestino === "consultor_externo" && feita(c) && !c.dataLoja);
+  const semAnexo = mk.filter((c: any) => R.semAnexo(c) && !c.venda && R.emAberto(c));
+  const linhas = R.consultores().map((u: any) => {
+    const v = vis.filter((c: any) => c.consultorId === u.id), f = v.filter(feita);
+    const pend = aFazer.filter((c: any) => c.consultorId === u.id), at = pend.filter((c: any) => c.dataVisita && dia(c.dataVisita) < hoje);
+    return { u, v, f, pend, at };
+  }).sort((a: any, b: any) => b.v.length - a.v.length || b.pend.length - a.pend.length);
+  return <>
+    <div className="mv-receber mk"><span>📅 Visitas · {P.nome}</span><b>{vis.length}</b><small><b>{feitas.length}</b> realizadas · <b>{naoFeitas.length}</b> ainda não · {novos.length} cliente(s) novo(s) de consultor</small></div>
+    <div className="mv-tiles c3">
+      {T("cv", vis.length, "Visitas", vis)}{T("cf", feitas.length, "Realizadas", feitas, "var(--st-concluida)")}{T("cn", naoFeitas.length, "Não realizadas", naoFeitas, naoFeitas.length ? "var(--warn)" : undefined)}
+      {T("cl", lojaPer.length, "Agend. na loja", lojaPer)}{T("cvr", vieram.length, "Vieram", vieram)}{T("cvd", vendas.length, "Vendas", vendas, "var(--st-concluida)")}
+    </div>
+    <div className="mv-sec">⏳ Pendente total — todas as datas</div>
+    <div className="mv-tiles c3">
+      {T("csc", semCons.length, "Sem consultor", semCons, semCons.length ? "var(--warn)" : undefined)}{T("caf", aFazer.length, "Visitas a fazer", aFazer)}{T("cat", atras.length, "Visitas atrasadas", atras, atras.length ? "var(--danger)" : undefined)}
+      {T("csd", semData.length, "Sem data de visita", semData, semData.length ? "var(--warn)" : undefined)}{T("cfl", faltaLoja.length, "Falta agendar loja", faltaLoja, faltaLoja.length ? "var(--primary)" : undefined)}{T("csa", semAnexo.length, "Sem anexo", semAnexo, semAnexo.length ? "#b07a00" : undefined)}
+    </div>
+    <div className="mv-sec">Por consultor · {P.nome}</div>
+    {linhas.map((x: any) => <div key={x.u.id} className="mv-pessoa">
+      <button className="mv-pessoa-h" onClick={() => L.abrirLista("cpp" + x.u.id, primeiro(x.u.nome) + " — visitas a fazer", x.pend)}><b>{x.u.nome}</b><em>{x.v.length} no período</em></button>
+      <div className="mv-pessoa-n">
+        <div onClick={() => L.abrirLista("cpv" + x.u.id, primeiro(x.u.nome) + " — visitas no período", x.v)}><b>{x.v.length}</b><span>No período</span></div>
+        <div onClick={() => L.abrirLista("cpf" + x.u.id, primeiro(x.u.nome) + " — realizadas", x.f)}><b style={{ color: "var(--st-concluida)" }}>{x.f.length}</b><span>Realizadas</span></div>
+        <div onClick={() => L.abrirLista("cpp" + x.u.id, primeiro(x.u.nome) + " — a fazer", x.pend)}><b>{x.pend.length}</b><span>A fazer</span></div>
+        <div onClick={() => L.abrirLista("cpa" + x.u.id, primeiro(x.u.nome) + " — atrasadas", x.at)}><b style={x.at.length ? { color: "var(--danger)" } : undefined}>{x.at.length}</b><span>Atrasadas</span></div>
+      </div>
+    </div>)}
+  </>;
+}
+
+// ================= CHECKLIST =================
+export function ResCk({ todos, noPer, P, L }: any) {
+  const { st } = useApp() as any;
+  const cfg = cfgAgenda(st), hoje = hojeISO();
+  const cl = todos.filter((c: any) => c.tipo === "checklist");
+  const T = (k: string, n: any, l: string, lista?: any[], cor?: string, sub?: string) => <Tile k={k} n={n} l={l} cor={cor} sub={sub} sel={L.sel} lista={lista ? () => L.abrirLista(k, l, lista) : undefined} />;
+  const diaAg = (c: any) => dia(ck(c).agendadoPara);
+  const agPer = cl.filter((c: any) => ["agendado", "realizado"].includes(etapaCk(c)) && noPer(ck(c).agendadoPara));
+  const realPer = cl.filter((c: any) => etapaCk(c) === "realizado" && noPer(ck(c).realizadoEm || ck(c).agendadoPara));
+  const contPer = cl.filter((c: any) => noPer(ck(c).ultimoContato));
+  const novos = cl.filter((c: any) => noPer(c.criadoEm));
+  const ab = cl.filter((c: any) => c.status !== "concluida");
+  const aAgendar = ab.filter((c: any) => grupoCk(c) === "agendar");
+  const semContato = aAgendar.filter((c: any) => !(ck(c).contatos > 0));
+  const aguardResp = ab.filter((c: any) => etapaCk(c) === "aguardando" && ck(c).proposta);
+  const venc = ab.filter((c: any) => reservaVencida(c, cfg));
+  const aguard = ab.filter((c: any) => grupoCk(c) === "aguardando");
+  const conf = ab.filter((c: any) => aConfirmar(c, cfg.confirmarDias ?? 2));
+  const enc = ab.filter((c: any) => querEnc(c));
+  const passou = ab.filter((c: any) => grupoCk(c) === "agendado" && diaAg(c) && diaAg(c) < hoje);
+  const futuros = ab.filter((c: any) => grupoCk(c) === "agendado" && diaAg(c) >= hoje);
+  const porProj: Record<string, number> = {}; agPer.forEach((c: any) => { const p = ck(c).projetista || "—"; porProj[p] = (porProj[p] || 0) + 1; });
+  const projs = Object.entries(porProj).sort((a, b) => b[1] - a[1]); const maxP = Math.max(1, ...projs.map(x => x[1]));
+  return <>
+    <div className="mv-receber cc"><span>📅 Checklist · {P.nome}</span><b>{agPer.length} agendado(s)</b><small><b>{realPer.length}</b> realizado(s) · <b>{contPer.length}</b> cliente(s) contatado(s) · {novos.length} venda(s) nova(s)</small></div>
+    <div className="mv-tiles">
+      {T("ka", agPer.length, "Checklists no período", agPer)}{T("kr", realPer.length, "Realizados", realPer, "var(--st-concluida)")}
+      {T("kc", contPer.length, "Clientes contatados", contPer)}{T("kn", novos.length, "Vendas que entraram", novos)}
+    </div>
+    {projs.length > 0 && <><div className="mv-sec">Por projetista · {P.nome}</div>
+      <div className="mv-funil">{projs.map(([p, n]) => <div key={p} onClick={() => L.abrirLista("kp" + p, p + " — checklists", agPer.filter((c: any) => (ck(c).projetista || "—") === p))} style={{ cursor: "pointer" }}><Barra l={p} n={n} max={maxP} cor="var(--primary)" /></div>)}</div></>}
+    <div className="mv-sec">⏳ Pendente total — todas as datas</div>
+    <div className="mv-tiles c3">
+      {T("kaa", aAgendar.length, "A agendar", aAgendar, "var(--primary)")}{T("ksc", semContato.length, "Sem nenhum contato", semContato, semContato.length ? "var(--danger)" : undefined)}{T("kar", aguardResp.length, "Aguardando resposta", aguardResp, "var(--warn)")}
+      {T("kv", venc.length, "⚠️ Prazo vencido", venc, venc.length ? "#c2410c" : undefined)}{T("kag", aguard.length, "Aguardando (obra etc.)", aguard)}{T("kcf", conf.length, "Confirmar presença", conf, conf.length ? "var(--warn)" : undefined)}
+      {T("ke", enc.length, "❗ Pedem encaixe", enc, enc.length ? "var(--danger)" : undefined)}{T("kps", passou.length, "Passou sem baixa", passou, passou.length ? "var(--danger)" : undefined)}{T("kf", futuros.length, "Agendados futuros", futuros, "var(--st-concluida)")}
+    </div>
   </>;
 }
 

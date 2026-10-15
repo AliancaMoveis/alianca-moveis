@@ -1234,3 +1234,12 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .mv-check input{width:20px;height:20px;flex:none;margin-top:1px}
 .mv-check small{display:block;font-weight:400;color:var(--ink-soft);font-size:12px}
 .litoral-bloco .lt-acoes select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px}
+/* app — distribuição (consultor / vendedor) */
+.ds-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:10px}
+.ds-top{display:grid;grid-template-columns:56px 1fr;gap:10px;cursor:pointer}
+.ds-hora b{display:block;font-size:16px}.ds-hora span{font-size:11px;color:var(--ink-faint)}
+.ds-info{min-width:0;display:flex;flex-direction:column;gap:2px}.ds-info b{font-size:15px}.ds-info span{font-size:12.5px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis}
+.ds-acao{display:flex;flex-direction:column;gap:7px;margin-top:9px}
+.ds-acao select,.ds-data input{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);font:inherit;font-size:14px;color:var(--ink)}
+.ds-data{display:flex;flex-direction:column;font-size:12px;color:var(--ink-faint);gap:3px}
+.ds-pedido{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--warn-bg);font-size:13px}.ds-pedido div{display:flex;gap:6px;margin-top:6px}

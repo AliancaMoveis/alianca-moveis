@@ -20,6 +20,7 @@ import Agenda from "../telas/Agenda";
 import PainelDono from "../telas/PainelDono";
 import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
 import { GerChamar, GerClientes, GerHoje } from "./Gerente";
+import { Distribuir, podeDistribuir } from "./Distribuir";
 import Nova from "../telas/Nova";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 import { ConviteNotif, Notificacoes } from "./Notif";
@@ -52,7 +53,8 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["urgente", "Urgente", "🚨"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
-    : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["time", "Time", "🎯"], ["equipe", "Equipe", "👥"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
+    : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["time", "Time", "🎯"], ["equipe", "Equipe", "👥"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
+    : podeDistribuir(R) ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]];
   const [aba, setAba] = useState(abas[0][0]);
   const [aberto, setAberto] = useState<string | null>(null);
@@ -94,6 +96,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "gestor" && aba === "equipe" && <GestEquipe irTime={gereMkt ? () => setAba("time") : undefined} />}
         {perfil === "gestor" && aba === "time" && <GestTime voltar={!abas.some(x => x[0] === "time") ? () => setAba("equipe") : undefined} />}
         {perfil === "gestor" && aba === "acao" && <GestAcao />}
+        {perfil === "gestor" && aba === "distribuir" && <Distribuir />}
         {aba === "loja" && <div className="mv-agenda">{perfil === "marketing" && <button className="mv-voltar" onClick={() => setAba("hoje")}>‹ Voltar</button>}<Agenda /></div>}
         {aba === "eu" && <Eu perfil={perfil} completa={completa} irTime={gereMkt && !abas.some(x => x[0] === "time") ? () => setAba("time") : undefined} />}
       </main>
