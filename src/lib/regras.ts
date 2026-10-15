@@ -9,12 +9,12 @@ export const STATUS: Record<string, { label: string; cls: string }> = {
 export const STATUS_CLIENTE: Record<string, string> = {
   aguardando_consultor: "Aguardando consultor", direcionado_consultor: "Direcionado ao consultor", visita_realizada: "Visita realizada",
   agendado_loja: "Agendado loja", com_vendedor: "Com vendedor", orcamento: "Orçamento", sem_resposta: "Sem resposta", reagendado: "Reagendado", reprovado: "Reprovado",
-  em_obras: "Em obras", standby: "Standby", em_analise: "Em análise", ausente_endereco: "Ausente no endereço", atendido: "Atendimento finalizado", vendido_revisao: "Vendido — a confirmar",
+  em_obras: "Em obras", standby: "Standby", em_analise: "Em análise", ausente_endereco: "Ausente no endereço", visita_cancelada: "Cancelou a visita", atendido: "Atendimento finalizado", vendido_revisao: "Vendido — a confirmar",
   vendido_entrada: "Vendido — entrada + promissória", vendido_promissoria: "Vendido — 100% promissória", vendido: "Vendido — efetivado", venda_cancelada: "Venda cancelada", nao_compareceu: "Não compareceu",
 };
 // pareceres extras (menu "Mais opções")
 export const SITUACOES_EXTRA = ["em_obras", "standby", "em_analise"];
-export const SITUACOES_CONSULTOR = ["ausente_endereco", "em_obras", "standby", "em_analise"];
+export const SITUACOES_CONSULTOR = ["ausente_endereco", "visita_cancelada", "em_obras", "standby", "em_analise"];
 export const TIPO_VENDA_INFORMADO: Record<string, string> = { efetivada: "à vista (paga)", entrada: "entrada + promissória", promissoria: "100% promissória" };
 export const TIPO_REEMBOLSO: Record<string, string> = { pedagio: "Pedágio", estacionamento: "Estacionamento", combustivel: "Combustível", outro: "Outro" };
 export const ETAPA_MEDIDA: Record<string, string> = { pendente: "Pendente para medir", agendada: "Aguardando medição", validar: "Aguardando análise (medidas do consultor)", realizada: "Aguardando análise", em_obra: "Em obra", liberada: "Aprovada — medida oficial" };
@@ -652,6 +652,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("appromis", "Promissórias em aberto", "Contam como venda, mas a comissão dessa parte só sai quando forem pagas.", p.promissorias, "var(--st-tratativa)");
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
+    // cliente cancelou a visita do consultor: a Supervisão do Marketing acompanha (reagenda, redireciona ou encerra)
+    if (mySetores().includes("marketing_supervisao") || (ehGestao() && !ehProprietario())) add("visitacanc", "Clientes que cancelaram a visita", "O consultor marcou que o cliente cancelou. Fale com o cliente: reagende, redirecione ou encerre.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "visita_cancelada"), "var(--danger)");
     if ((temMarketing() && !ehGestao() && !ehGerenteLoja()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c) && recente(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao() && !ehGerenteLoja())) {
       add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend && recenteLoja(c)), "var(--primary)");
@@ -681,7 +683,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ehGerenteLoja()) add("gerabertos", "Chamados que você abriu — em andamento", "Solicitações que você abriu para os setores. Acompanhe a resposta.", ch.filter(c => doCC(c) && c.solicitanteId === eu && !["concluida"].includes(c.status)), "var(--st-aberta)");
     add("responder", "Respondidos — conclua o atendimento", "Seu setor registrou a solução. Confirme com o cliente e conclua.", ch.filter(c => doCC(c) && mySetores().includes(c.setorDestino) && c.status === "respondida"), "var(--st-respondida)");
     // cada chamado aparece em uma só pendência: a de maior gravidade vence (sem contar duas vezes)
-    const PRIORIDADE = ["litoral", "jurprazo", "retmont", "pvcc", "solmed", "acomp", "medalerta", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi", "gerabertos"];
+    const PRIORIDADE = ["litoral", "visitacanc", "jurprazo", "retmont", "pvcc", "solmed", "acomp", "medalerta", "medvalidar", "medfazer", "cobrado", "aceite", "apvendas", "aptransf", "appromis", "informar", "semparecer", "darparecer", "pedidoatend", "semAtualizacaoMkt", "criticos", "visitaatrasada", "devolvido", "meusatrasados", "responder", "designar", "direcionar", "agendarloja", "semcontato", "meusclientes", "pedi", "gerabertos"];
     const dono: Record<string, string> = {};
     [...G].sort((a, b) => { const ia = PRIORIDADE.indexOf(a.chave), ib = PRIORIDADE.indexOf(b.chave); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); })
       .forEach(g => g.itens.forEach((c: Chamado) => { if (!dono[c.id]) dono[c.id] = g.chave; }));

@@ -321,6 +321,7 @@ export function ResCons({ todos, noPer, P, L }: any) {
   const semData = aFazer.filter((c: any) => !c.dataVisita);
   const faltaLoja = mk.filter((c: any) => c.setorDestino === "consultor_externo" && feita(c) && !c.dataLoja);
   const semAnexo = mk.filter((c: any) => R.semAnexo(c) && !c.venda && R.emAberto(c));
+  const cancel = mk.filter((c: any) => R.statusClienteDe(c) === "visita_cancelada");
   const linhas = R.consultores().map((u: any) => {
     const v = vis.filter((c: any) => c.consultorId === u.id), f = v.filter(feita);
     const pend = aFazer.filter((c: any) => c.consultorId === u.id), at = pend.filter((c: any) => c.dataVisita && dia(c.dataVisita) < hoje);
@@ -336,6 +337,7 @@ export function ResCons({ todos, noPer, P, L }: any) {
     <div className="mv-tiles c3">
       {T("csc", semCons.length, "Sem consultor", semCons, semCons.length ? "var(--warn)" : undefined)}{T("caf", aFazer.length, "Visitas a fazer", aFazer)}{T("cat", atras.length, "Visitas atrasadas", atras, atras.length ? "var(--danger)" : undefined)}
       {T("csd", semData.length, "Sem data de visita", semData, semData.length ? "var(--warn)" : undefined)}{T("cfl", faltaLoja.length, "Falta agendar loja", faltaLoja, faltaLoja.length ? "var(--primary)" : undefined)}{T("csa", semAnexo.length, "Sem anexo", semAnexo, semAnexo.length ? "#b07a00" : undefined)}
+      {T("ccn", cancel.length, "❌ Cancelaram a visita", cancel, cancel.length ? "var(--danger)" : undefined)}
     </div>
     <div className="mv-sec">Por consultor · {P.nome}</div>
     {linhas.map((x: any) => <div key={x.u.id} className="mv-pessoa">

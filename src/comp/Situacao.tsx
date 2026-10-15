@@ -24,8 +24,9 @@ export function SituacaoConsultor({ c, movel }: { c: any; movel?: boolean }) {
         {SITUACOES_CONSULTOR.filter(k => k !== sc).map(k => <option key={k} value={k}>{STATUS_CLIENTE[k]}</option>)}
         {ativa && <option value="normal">Voltar ao normal (seguir com a visita)</option>}
       </select>
-      {sel && sel !== "normal" && <textarea rows={2} style={{ width: "100%", marginTop: 8 }} placeholder={sel === "ausente_endereco" ? "Ex.: fui às 14h, ninguém atendeu; liguei e não atendeu" : "O que aconteceu, previsão de retorno…"} value={obs} onChange={e => setObs(e.target.value)} />}
+      {sel && sel !== "normal" && <textarea rows={2} style={{ width: "100%", marginTop: 8 }} placeholder={sel === "ausente_endereco" ? "Ex.: fui às 14h, ninguém atendeu; liguei e não atendeu" : sel === "visita_cancelada" ? "Motivo: o que o cliente disse (desistiu, comprou em outro lugar, quer outra data…)" : "O que aconteceu, previsão de retorno…"} value={obs} onChange={e => setObs(e.target.value)} />}
       {sel && <button className={movel ? "mv-principal" : "btn primary sm"} style={{ marginTop: 8 }} onClick={salvar}>Salvar situação</button>}
+      {sel === "visita_cancelada" && <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>A Haisla (supervisão do marketing) e a operadora que agendou serão avisadas para acompanhar.</div>}
       {sel === "ausente_endereco" && <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>A supervisão do marketing e a operadora que agendou serão avisadas para reagendar.</div>}
     </div>
   );
