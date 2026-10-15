@@ -8,6 +8,7 @@ import PainelGestao from "./PainelGestao";
 import { fmtTempo, mediaHoras } from "../lib/atendimento";
 import { ck, etapaCk, grupoCk, reservaVencida, querEnc, aConfirmar, cfgAgenda } from "./Checklist";
 import { pagamentosVenda, parseMoeda } from "../lib/regras";
+import { calcGeral } from "../lib/geral";
 
 const FIM_TXT = (t: string) => t.startsWith("Status → Concluída") || t.startsWith("✓ Atendimento finalizado");
 const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => FIM_TXT(String(x.texto))); return h.length ? h[h.length - 1].quando : null; };
@@ -33,25 +34,10 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const agora = new Date();
   const todos = st.chamados;
 
-  // ---------- faixa: precisa de você agora ----------
-  const pg = R.pendenciasGestao();
+  // ---------- faixa "precisa de você agora" + 5 cartões: mesma conta do celular ----------
+  const G = calcGeral(R, st, de, ate);
   const acomp = todos.filter((c: any) => R.acompAtivo(c));
   const criticos = todos.filter((c: any) => R.doCC(c) && R.prioridade(c) === "critico");
-  const reemb = (st.reembolsos || []).filter((r: any) => r.status === "pendente");
-  const medParadas = todos.filter((c: any) => c.tipo === "medidas" && c.status !== "concluida" && (+agora - +new Date(c.criadoEm)) > 2 * 86400000 && ["validar", "realizada"].includes(R.etapaMedida(c)));
-  const semVendHoje = todos.filter((c: any) => R.domMarketing(c) && !c.atendenteId && R.precisaDefinirVendedor(c) && String(c.dataLoja || "").slice(0, 10) === isoLocal(agora) && !c.venda);
-  const semAtual = todos.filter((c: any) => R.domMarketing(c) && R.clienteCriticoInatividade(c));
-  const alertas: [string, number, string, string, () => void][] = [
-    ["🧾", pg.vendasConfirmar.length, "vendas a confirmar", "warn", () => irPara("aprovacoes")],
-    ["🚨", acomp.length, "acompanhamentos urgentes", "crit", () => irPara("pendencias")],
-    ["🔴", criticos.length, "chamados críticos (+24h)", "crit", () => irPara("fila")],
-    ["💵", reemb.length, "reembolsos para aprovar", "warn", () => irPara("aprovacoes")],
-    ["📐", medParadas.length, "medidas paradas há +2 dias", "warn", () => irPara("fila")],
-    ["🏬", semVendHoje.length, "clientes hoje sem vendedor", "warn", () => irPara("definir")],
-    ["🕒", semAtual.length, "clientes sem atualização +24h", "warn", () => irPara("pendencias")],
-  ];
-  const ativos = alertas.filter(a => a[1] > 0);
-
   // ---------- call center ----------
   const cc = todos.filter((c: any) => R.doCC(c));
   const regs = (a: string, b: string) => cc.filter((c: any) => dentro(c.criadoEm, a, b));
@@ -139,16 +125,12 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const Tab = ({ k, l, n }: any) => <button className={aba === k ? "on" : ""} onClick={() => setAba(k)}>{l}{n ? <i>{n}</i> : null}</button>;
   return (
     <div className="pb">
-      <div className={"pb-faixa" + (ativos.length ? "" : " ok")}>
-        <b>{ativos.length ? "Precisa de você agora" : "✓ Nada urgente agora"}</b>
-        <div className="pb-alertas">{ativos.map(([ic, n, l, cls, go]) => <button key={l} className={"pb-al " + cls} onClick={go}><span>{ic}</span><b>{n}</b>{l}</button>)}</div>
+      <div className={"pb-faixa" + (G.alertas.length ? "" : " ok")}>
+        <b>{G.alertas.length ? "Precisa de você agora" : "✓ Nada urgente agora"}</b>
+        <div className="pb-alertas">{G.alertas.map(x => <button key={x.l} className={"pb-al " + x.cls} onClick={() => irPara(x.ir)}><span>{x.ic}</span><b>{x.n}</b>{x.l}</button>)}</div>
       </div>
       <div className="pg-grid">
-        <Geral k="cc" ic="☎" t="Call center" n={R1.length} l="registrados" linhas={[["Finalizados", F1.length], ["No prazo", prazo1 == null ? "—" : prazo1 + "%"]]} pend={abertos.length + " em aberto · " + atrasados.length + " fora do prazo"} alerta={atrasados.length > 0} />
-        <Geral k="ag" ic="◎" t="Agendamentos" n={A1.length} l="agendados" linhas={[["Marketing", oM], ["Externos", oE], ["Vieram", V1.length]]} pend={agHojeLoja.length + " na loja hoje · " + semVendT.length + " sem vendedor"} alerta={semVendT.length > 0} />
-        <Geral k="cons" ic="🧭" t="Externos" n={visPer.length} l="visitas" linhas={[["Realizadas", visFeitas.length], ["Atrasadas", visAtras.length]]} pend={semConsT.length + " sem consultor · " + visAFazer.length + " a fazer" + (cancelT.length ? " · " + cancelT.length + " cancelaram" : "")} alerta={semConsT.length + visAtras.length + cancelT.length > 0} />
-        <Geral k="ck" ic="✓" t="Checklist" n={ckAg.length} l="agendados" linhas={[["Realizados", ckReal.length], ["Contatados", ckCont.length]]} pend={ckAgendar.length + " a agendar · " + ckVenc.length + " prazo vencido · " + ckConf.length + " confirmar"} alerta={ckVenc.length + ckEnc.length + ckPassou.length > 0} />
-        <Geral k="vendas" ic="💰" t="Vendas" n={vendasPer.length} l="vendas" linhas={[["Valor", fmtMoeda(valorPer)]]} pend={vendasAConf.length + " a confirmar"} alerta={vendasAConf.length > 0} />
+        {G.cartoes.map(x => <Geral key={x.k} {...x} />)}
       </div>
       <div className="subnav pb-abas"><Tab k="cc" l="☎ Call center" n={atrasados.length} /><Tab k="ag" l="◎ Agendamentos" /><Tab k="cons" l="🧭 Externos" n={cons.filter((x: any) => x.alerta).length} /><Tab k="ck" l="✓ Checklist" n={ckVenc.length + ckEnc.length} /><Tab k="vendas" l="💰 Vendas" n={vendasAConf.length} /></div>
       <div className="pb-per">Comparando {fmtDate(de)}–{fmtDate(ate)} com {fmtDate(dePrev)}–{fmtDate(atePrev)}</div>

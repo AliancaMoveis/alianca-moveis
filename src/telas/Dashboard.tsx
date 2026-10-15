@@ -26,12 +26,13 @@ export default function Dashboard() {
   const { R, st, irPara, abrirDetalhe, currentUserId } = useApp() as any;
   // período: padrão = mês atual. O que está em aberto (fila, atrasos, críticos) aparece sempre, de qualquer data;
   // o período vale para o que aconteceu nele: abertos, concluídos, agendamentos, vendas.
-  const [preset, setPreset] = useState<"hoje" | "mes" | "30" | "90" | "periodo">(R.ehGestao() && !R.ehProprietario() ? "hoje" : "mes");
+  const [preset, setPreset] = useState<"hoje" | "7" | "mes" | "ant" | "periodo">(R.ehGestao() && !R.ehProprietario() ? "hoje" : "mes");
   const hoje = hojeISO();
   const menos = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return isoLocal(d); };
   const [pDe, setPDe] = useState(hoje.slice(0, 8) + "01"); const [pAte, setPAte] = useState(hoje);
-  const de = preset === "hoje" ? hoje : preset === "mes" ? hoje.slice(0, 8) + "01" : preset === "30" ? menos(29) : preset === "90" ? menos(89) : pDe;
-  const ate = preset === "periodo" ? pAte : hoje;
+  const hj = new Date(); const antIni = isoLocal(new Date(hj.getFullYear(), hj.getMonth() - 1, 1)), antFim = isoLocal(new Date(hj.getFullYear(), hj.getMonth(), 0));
+  const de = preset === "hoje" ? hoje : preset === "mes" ? hoje.slice(0, 8) + "01" : preset === "7" ? menos(6) : preset === "ant" ? antIni : pDe;
+  const ate = preset === "periodo" ? pAte : preset === "ant" ? antFim : hoje;
   const noPeriodo = (v: any) => { if (!v) return false; const d = new Date(v); return (!de || d >= new Date(de + "T00:00:00")) && (!ate || d <= new Date(ate + "T23:59:59")); };
   // área: quem vê call center e marketing (Gestão) pode separar. Pós-venda Projetados conta como call center.
   const veAmbos = R.ehGestao() || (R.verTudo() && R.temMarketing());
@@ -96,7 +97,7 @@ export default function Dashboard() {
       <div className="card" style={{ padding: "14px 18px", marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div className="chips" style={{ margin: 0 }}>
-            {([["hoje", "Hoje"], ["mes", "Mês atual"], ["30", "Últimos 30 dias"], ["90", "Últimos 90 dias"], ["periodo", "Escolher período"]] as [any, string][]).map(([k, l]) =>
+            {([["hoje", "Hoje"], ["7", "7 dias"], ["mes", "Mês"], ["ant", "Mês anterior"], ["periodo", "📅 Livre"]] as [any, string][]).map(([k, l]) =>
               <button key={k} className={"chip" + (preset === k ? " on" : "")} onClick={() => setPreset(k)}>{l}</button>)}
           </div>
           {preset === "periodo" && <>

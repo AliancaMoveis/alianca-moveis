@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { A } from "../lib/acoes";
 import { fmtTempo, mediaHoras } from "../lib/atendimento";
 import { useApp } from "../estado";
+import { calcGeral } from "../lib/geral";
 import { ck, etapaCk, grupoCk, reservaVencida, querEnc, aConfirmar, cfgAgenda } from "../telas/Checklist";
-import { numsVenda, temPendenteGestao, STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
+import { ValidarVenda } from "../comp/VendaValidar";
+import { itensPendentes, TIPO_REEMBOLSO, numsVenda, temPendenteGestao, STATUS, STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaComissao, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const dia = (v: any) => String(v || "").slice(0, 10);
@@ -13,18 +15,36 @@ const addDias = (n: number) => { const d = parseData(hojeISO() + "T12:00"); d.se
 const pc = (a: number, b: number) => b ? Math.round(a / b * 100) + "%" : "—";
 const primeiro = (n: string) => (n || "").replace(/^(Consultora?|Vendedora?|Suporte)\s+—\s+/, "").split(" ")[0];
 
-export type Per = "hoje" | "7" | "mes" | "ant";
-export function periodo(p: Per) {
+export type Per = "hoje" | "7" | "mes" | "ant" | "livre";
+type Livre = { de: string; ate: string };
+export function periodo(p: Per, lv?: Livre) {
   const h = hojeISO(), d = parseData(h + "T12:00");
   if (p === "hoje") return { de: h, ate: h, nome: "hoje" };
   if (p === "7") return { de: addDias(-6), ate: h, nome: "últimos 7 dias" };
   if (p === "mes") return { de: h.slice(0, 8) + "01", ate: h, nome: MESES[d.getMonth()] + " (até hoje)" };
+  if (p === "livre") { const de = lv?.de || h.slice(0, 8) + "01", ate = lv?.ate || h; return { de, ate, nome: fmtDate(de).slice(0, 5) + " a " + fmtDate(ate).slice(0, 5) }; }
   const ini = new Date(d.getFullYear(), d.getMonth() - 1, 1), fim = new Date(d.getFullYear(), d.getMonth(), 0);
   return { de: isoLocal(ini), ate: isoLocal(fim), nome: MESES[ini.getMonth()] };
 }
-export function SelPer({ per, setPer }: { per: Per; setPer: (p: Per) => void }) {
-  return <div className="mv-seg">{([["hoje", "Hoje"], ["7", "7 dias"], ["mes", "Este mês"], ["ant", "Mês anterior"]] as [Per, string][]).map(([k, l]) =>
-    <button key={k} className={per === k ? "on" : ""} onClick={() => setPer(k)}>{l}</button>)}</div>;
+// o período escolhido vale para Painel e Equipe (troca de aba não volta ao padrão)
+let perAtual: Per = "hoje"; let livreAtual: Livre = { de: "", ate: "" };
+export function usePer() {
+  const [per, setPerS] = useState<Per>(() => perAtual);
+  const [livre, setLivreS] = useState<Livre>(() => livreAtual.de ? livreAtual : { de: hojeISO().slice(0, 8) + "01", ate: hojeISO() });
+  const setPer = (p: Per) => { perAtual = p; setPerS(p); };
+  const setLivre = (l: Livre) => { livreAtual = l; setLivreS(l); };
+  return { per, setPer, livre, setLivre, P: periodo(per, livre) };
+}
+export function SelPer({ per, setPer, livre, setLivre }: { per: Per; setPer: (p: Per) => void; livre?: Livre; setLivre?: (l: Livre) => void }) {
+  const ops: [Per, string][] = [["hoje", "Hoje"], ["7", "7 dias"], ["mes", "Mês"], ["ant", "Mês anterior"]];
+  if (setLivre) ops.push(["livre", "📅 Livre"]);
+  return <>
+    <div className="mv-seg">{ops.map(([k, l]) => <button key={k} className={per === k ? "on" : ""} onClick={() => setPer(k)}>{l}</button>)}</div>
+    {per === "livre" && livre && setLivre && <div className="mv-datas">
+      <label>De<input type="date" value={livre.de} max={livre.ate} onChange={e => e.target.value && setLivre({ ...livre, de: e.target.value })} /></label>
+      <label>Até<input type="date" value={livre.ate} min={livre.de} onChange={e => e.target.value && setLivre({ ...livre, ate: e.target.value })} /></label>
+    </div>}
+  </>;
 }
 
 // call center (mesma regra do computador): sem as filas próprias do checklist e das medidas (importadas),
@@ -41,9 +61,9 @@ export function areas(R: any, st: any) {
 }
 function SelArea({ area, setArea, a, todas }: any) {
   const ops: [string, string][] = [];
-  if (a.mkt) ops.push(["mkt", "📣 Marketing"]);
+  if (a.mkt) ops.push(["mkt", "◎ Agendamentos"]);
   if (a.cc) ops.push(["cc", "☎ Call center"]);
-  if (todas && a.cons) ops.push(["cons", "🧭 Consultores"]);
+  if (todas && a.cons) ops.push(["cons", "🧭 Externos"]);
   if (todas && a.ck) ops.push(["ck", "✓ Checklist"]);
   if (ops.length < 2) return null;
   return <div className="mv-area">{ops.map(([k, l]) => <button key={k} className={area === k ? "on" : ""} onClick={() => setArea(k)}>{l}</button>)}</div>;
@@ -120,21 +140,42 @@ function buscar(todos: any[], q: string) {
   if (t.length < 2) return [];
   return todos.filter((c: any) => (c.cliente + " " + c.id + " " + (c.produto || "") + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))).slice(0, 60);
 }
-export function GestResumo() {
+// visão geral da Gestão no celular: mesma faixa e mesmos 5 cartões do computador
+function VisaoGeral({ P, area, setArea, ir }: any) {
+  const { R, st } = useApp() as any;
+  const G = calcGeral(R, st, P.de, P.ate);
+  const ARE: Record<string, string> = { cc: "cc", ag: "mkt", cons: "cons", ck: "ck", vendas: "mkt" };
+  const alvo = (x: string) => x === "definir" ? "distribuir" : "acao";
+  return <>
+    <div className={"pb-faixa mv-faixa" + (G.alertas.length ? "" : " ok")}>
+      <b>{G.alertas.length ? "Precisa de você agora" : "✓ Nada urgente agora"}</b>
+      {G.alertas.length > 0 && <div className="pb-alertas">{G.alertas.map(x => <button key={x.l} className={"pb-al " + x.cls} onClick={() => ir && ir(alvo(x.ir))}><span>{x.ic}</span><b>{x.n}</b>{x.l}</button>)}</div>}
+    </div>
+    <div className="pg-grid mv-geral">
+      {G.cartoes.map(x => <button key={x.k} className={"pg-card" + (ARE[x.k] === area ? " on" : "") + (x.alerta ? " alerta" : "")} onClick={() => setArea(ARE[x.k])}>
+        <div className="pg-t">{x.ic} {x.t}</div><div className="pg-n"><b>{x.n}</b><span>{x.l}</span></div>
+        {x.linhas.length > 0 && <div className="pg-l">{x.linhas.map(([l, n]) => <span key={l}>{l} <b>{n}</b></span>)}</div>}
+        <div className="pg-p">⏳ {x.pend}</div></button>)}
+    </div>
+  </>;
+}
+
+export function GestResumo({ ir }: { ir?: (aba: string) => void }) {
   const { R, st, abrirDetalhe } = useApp() as any;
   const a = areas(R, st);
   const [area, setArea] = useState<"mkt" | "cc" | "cons" | "ck">(a.mkt ? "mkt" : "cc");
-  const [per, setPer] = useState<Per>("hoje");
+  const geral = R.ehGestao() && !R.ehProprietario();
+  const { per, setPer, livre, setLivre, P } = usePer();
   const L = useLista();
-  const P = periodo(per);
   const noPer = (v: any) => !!v && R.dentroPeriodo(v, P.de, P.ate);
   const [q, setQ] = useState("");
   const achados = buscar(a.todos, q);
   return <>
     <input className="mv-busca" type="search" placeholder="🔎 Consultar cliente: nome, telefone, nº…" value={q} onChange={e => setQ(e.target.value)} />
     {q.trim().length >= 2 ? <><div className="mv-sec">Resultado <i>{achados.length}</i></div>{achados.length ? achados.map((c: any) => <LinhaCliente key={c.id} c={c} R={R} abrir={() => abrirDetalhe(c.id)} />) : <div className="mv-vazio">Nenhum cliente encontrado.</div>}</> : <>
+    <SelPer per={per} setPer={p => { setPer(p); L.fechar(); }} livre={livre} setLivre={setLivre} />
+    {geral && <VisaoGeral P={P} area={area} setArea={(x: any) => { setArea(x); L.fechar(); }} ir={ir} />}
     <SelArea area={area} setArea={(x: any) => { setArea(x); L.fechar(); }} a={a} todas />
-    <SelPer per={per} setPer={p => { setPer(p); L.fechar(); }} />
     {area === "mkt" ? <ResMkt todos={a.todos} noPer={noPer} P={P} L={L} /> : area === "cons" ? <ResCons todos={a.todos} noPer={noPer} P={P} L={L} /> : area === "ck" ? <ResCk todos={a.todos} noPer={noPer} P={P} L={L} /> : <ResCC todos={a.todos} noPer={noPer} P={P} L={L} />}
     <ListaClientes sel={L.sel} fechar={L.fechar} />
     {!L.sel && <div className="mv-dica" style={{ marginTop: 10 }}>Toque nos quadros com “ver lista” para ver os clientes e abrir a ficha.</div>}
@@ -397,11 +438,10 @@ export function GestEquipe({ irTime }: { irTime?: () => void }) {
   const { R, st } = useApp() as any;
   const a = areas(R, st);
   const [area, setArea] = useState<"mkt" | "cc">(a.mkt ? "mkt" : "cc");
-  const [per, setPer] = useState<Per>("mes");
+  const { per, setPer, livre, setLivre, P } = usePer();
   const [grupo, setGrupo] = useState<"cons" | "vend" | "op">(R.ehGestao() ? "cons" : "op");
   const [aberto, setAberto] = useState("");
   const L = useLista();
-  const P = periodo(per);
   const noPer = (v: any) => !!v && R.dentroPeriodo(v, P.de, P.ate);
   const mk = a.todos.filter((c: any) => R.domMarketing(c));
   const veValor = veValorLoja(R);
@@ -444,7 +484,7 @@ export function GestEquipe({ irTime }: { irTime?: () => void }) {
   linhas.sort((x, y) => y.chave - x.chave);
   return <>
     <SelArea area={area} setArea={(x: any) => { setArea(x); setAberto(""); L.fechar(); }} a={a} />
-    <SelPer per={per} setPer={p => { setPer(p); L.fechar(); }} />
+    <SelPer per={per} setPer={p => { setPer(p); L.fechar(); }} livre={livre} setLivre={setLivre} />
     {area === "mkt" && <div className="mv-seg">{((R.ehGestao() ? [["cons", "Consultores"], ["vend", "Vendedores"], ["op", "Time marketing"]] : [["op", "Time marketing"], ["cons", "Consultores"], ["vend", "Vendedores"]]) as any[]).map(([k, l]) =>
       <button key={k} className={grupo === k ? "on" : ""} onClick={() => { setGrupo(k); setAberto(""); L.fechar(); }}>{l}</button>)}</div>}
     {area === "mkt" && grupo === "op" && irTime && <button className="mv-principal" style={{ marginBottom: 10 }} onClick={irTime}>🎯 Metas do dia e aprovação de pagamento</button>}
@@ -461,6 +501,44 @@ export function GestEquipe({ irTime }: { irTime?: () => void }) {
     </div>) : <div className="mv-vazio">Ninguém com movimento no período.</div>}
     <div className="mv-dica" style={{ marginTop: 10 }}>Toque no nome para ver mais números e as listas de clientes.</div>
   </>;
+}
+
+// ================= APROVAÇÕES (Gestão): vendas, transferências e reembolsos =================
+function Aprovar() {
+  const { R, st, abrirDetalhe, executar: ex, toast } = useApp() as any;
+  const [abre, setAbre] = useState("");
+  const p = R.pendenciasGestao();
+  const reemb = (st.reembolsos || []).filter((r: any) => r.status === "pendente").sort((a: any, b: any) => String(a.criadoEm).localeCompare(String(b.criadoEm)));
+  if (!p.vendasConfirmar.length && !p.transferencias.length && !reemb.length) return null;
+  const pend = (c: any) => Array.isArray(c.venda.itens) ? itensPendentes(c.venda) : [];
+  const val = (c: any) => Array.isArray(c.venda.itens) ? pend(c).reduce((x: number, i: any) => x + i.valor, 0) : parseMoeda(c.venda.valor);
+  const nums = (c: any) => (Array.isArray(c.venda.itens) ? pend(c).map((i: any) => i.numero).join(", ") : "") || c.venda.numero || "—";
+  const vendedor = (c: any) => c.atendenteId ? R.nomeUser(c.atendenteId) : (c.venda.vendedor || "—");
+  const efetivar = (c: any) => { if (!confirm(`EFETIVAR a venda ${nums(c)} · ${c.cliente} · ${fmtMoeda(val(c))}?`)) return; ex(() => A.validarVendasLote([c.id], "efetivada"), "Venda efetivada"); };
+  const verComp = async (r: any) => { const u = await A.urlComprovante(r.path); if (!u) { toast("Não foi possível abrir o comprovante"); return; } window.open(u, "_blank", "noopener"); };
+  const recusar = (r: any) => { const m = (prompt("Motivo da recusa do reembolso:") || "").trim(); if (m.length < 3) { if (m) toast("Escreva o motivo da recusa"); return; } ex(() => A.decidirReembolso(r.id, false, m), "Reembolso recusado"); };
+  return <div className="mv-aprov">
+    <div className="mv-sec">✅ Para você aprovar <i>{p.vendasConfirmar.length + p.transferencias.length + reemb.length}</i></div>
+    {p.vendasConfirmar.length > 0 && <div className="mv-bloco-t">🧾 Vendas a confirmar ({p.vendasConfirmar.length})</div>}
+    {p.vendasConfirmar.map((c: any) => <div key={c.id} className="mv-ap">
+      <div className="mv-ap-c" onClick={() => abrirDetalhe(c.id)}><b>{c.cliente}</b><span>Venda {nums(c)} · {fmtDate(c.venda.dataVendaReal || c.venda.dataVenda || c.venda.quando)} · {vendedor(c)}{c.consultorId ? " · cons. " + primeiro(R.nomeUser(c.consultorId)) : ""}</span>
+        {pend(c).length > 0 && <small>{pend(c).map((i: any) => (i.tipo === "promissoria" ? "📄 promissória " : "💵 paga ") + fmtMoeda(i.valor)).join(" · ")}</small>}</div>
+      <div className="mv-ap-v"><b>{fmtMoeda(val(c))}</b></div>
+      <div className="mv-ap-b"><button className="btn primary sm" onClick={() => efetivar(c)}>✅ Efetivar</button><button className="btn ghost sm" onClick={() => setAbre(abre === c.id ? "" : c.id)}>{abre === c.id ? "Fechar" : "Validar nº a nº"}</button></div>
+      {abre === c.id && <div className="mv-ap-x"><ValidarVenda c={c} onFeito={() => setAbre("")} /></div>}
+    </div>)}
+    {p.transferencias.length > 0 && <div className="mv-bloco-t">🔁 Transferências de vendedor ({p.transferencias.length})</div>}
+    {p.transferencias.map((c: any) => { const tr = c.transferencia; return <div key={c.id} className="mv-ap">
+      <div className="mv-ap-c" onClick={() => abrirDetalhe(c.id)}><b>{c.cliente}</b><span>{R.nomeUser(tr.de)} → <b>{R.nomeUser(tr.para)}</b> · pedido por {primeiro(R.nomeUser(tr.solicitadoPor))} em {fmtDate(tr.quando)}</span></div>
+      <div className="mv-ap-b"><button className="btn primary sm" onClick={() => ex(() => A.responderTransferencia(c.id, true, "aprovacoes"), "Transferência aprovada")}>Aprovar</button><button className="btn danger sm" onClick={() => ex(() => A.responderTransferencia(c.id, false, "aprovacoes"), "Transferência recusada")}>Recusar</button></div>
+    </div>; })}
+    {reemb.length > 0 && <div className="mv-bloco-t">💵 Reembolsos ({reemb.length})</div>}
+    {reemb.map((r: any) => <div key={r.id} className="mv-ap">
+      <div className="mv-ap-c"><b>{R.nomeUser(r.usuarioId)} · {TIPO_REEMBOLSO[r.tipo] || r.tipo}</b><span>{fmtDate(r.data)}{r.descricao ? " · " + r.descricao : ""}{r.chamadoId ? " · cliente " + r.chamadoId : ""}</span></div>
+      <div className="mv-ap-v"><b>{fmtMoeda(r.valor)}</b></div>
+      <div className="mv-ap-b"><button className="btn primary sm" onClick={() => ex(() => A.decidirReembolso(r.id, true), "Reembolso aprovado")}>Aprovar</button><button className="btn danger sm" onClick={() => recusar(r)}>Recusar</button>{r.path && <button className="btn ghost sm" onClick={() => verComp(r)}>Comprovante</button>}</div>
+    </div>)}
+  </div>;
 }
 
 // ================= AÇÃO =================
@@ -483,6 +561,7 @@ export function GestAcao() {
   return <>
     <input className="mv-busca" type="search" placeholder="🔎 Consultar cliente: nome, telefone, nº, venda…" value={q} onChange={e => setQ(e.target.value)} />
     {t.length >= 2 ? <><div className="mv-sec">Resultado <i>{achados.length}</i></div>{achados.length ? achados.map((c: any) => <LinhaCliente key={c.id} c={c} R={R} abrir={() => abrirDetalhe(c.id)} />) : <div className="mv-vazio">Nenhum cliente encontrado.</div>}</> : <>
+      {R.ehGestao() && <Aprovar />}
       <SelArea area={area} setArea={(x: any) => { setArea(x); L.fechar(); }} a={a} />
       {grupos.map((g: any) => <div key={g.chave} className="mv-grupo">
         <button className="mv-grupo-h" onClick={() => L.abrirLista(g.chave, g.titulo, g.itens)} style={{ borderLeftColor: g.cor }}><b>{g.titulo}</b><i style={{ background: g.cor }}>{g.itens.length}</i></button>
@@ -490,7 +569,7 @@ export function GestAcao() {
       <div className="mv-grupo"><button className="mv-grupo-h" onClick={() => L.abrirLista("urg", area === "mkt" ? "Clientes que precisam de ação" : "Críticos, atrasados e urgentes", R.ordenar(urg))} style={{ borderLeftColor: "var(--danger)" }}>
         <b>{area === "mkt" ? "Clientes que precisam de ação" : "Críticos, atrasados e urgentes"}</b><i style={{ background: "var(--danger)" }}>{urg.length}</i></button>
         {L.sel && L.sel.k === "urg" && <ListaClientes sel={L.sel} fechar={L.fechar} />}</div>
-      {!grupos.length && !urg.length && <div className="mv-vazio">Tudo sob controle. 👍</div>}
+      {!grupos.length && !urg.length && !(R.ehGestao() && R.pendenciasGestao().total) && <div className="mv-vazio">Tudo sob controle. 👍</div>}
     </>}
   </>;
 }

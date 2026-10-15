@@ -36,11 +36,13 @@ export function GerHoje({ ir }: { ir: (aba: string) => void }) {
     .sort((a: any, b: any) => String(b.criadoEm).localeCompare(String(a.criadoEm)));
   const { grupos } = R.minhasPendencias();
   const pend = grupos.filter((g: any) => g.chave !== "gerabertos");
+  const defN = st.chamados.filter((c: any) => R.domMarketing(c) && R.podeVer(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && R.statusClienteDe(c) === "agendado_loja" && R.precisaDefinirVendedor(c) && c.dataLoja && String(c.dataLoja).slice(0, 10) >= hoje).length;
   return <>
     <div className="gr-acoes">
       <button className="gr-chamar" onClick={() => ir("chamar")}><span>📣</span><b>Chamar vendedor</b><small>apita no app do vendedor</small></button>
       <button className="gr-urg" onClick={() => ir("chamar")}><span>🚨</span><b>Todos para a fila</b><small>urgente · só quem está disponível</small></button>
     </div>
+    {defN > 0 && <button className="mv-principal" style={{ marginBottom: 10 }} onClick={() => ir("distribuir")}>🔀 Definir vendedor · {defN} pendente{defN > 1 ? "s" : ""}</button>}
     <div className="mv-nums">
       <button className="mv-num" onClick={() => ir("loja")}><b>{loja.length}</b><span>clientes hoje</span></button>
       <button className="mv-num" onClick={() => ir("loja")} style={semVend.length ? { color: "var(--warn)" } : undefined}><b>{semVend.length}</b><span>sem vendedor</span></button>

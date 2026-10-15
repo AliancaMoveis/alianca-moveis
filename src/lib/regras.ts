@@ -750,7 +750,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
       mk.push(["acompmkt", "Acompanhamento"]);
       if (ehProprietario()) mk.push(["definir", "Definir vendedor"]);
       mk.push(["agenda", "Agendamento loja"], ["operadoras", "Controle das operadoras"]);
-      if (!coord) mk.push(["produtividade", "Produtividade e pagamento"]);
+      if (!coord && !ehGerenteLoja()) mk.push(["produtividade", "Produtividade e pagamento"]);
       mk.push(["clientes", "Clientes"], ["vendedores", "Vendedores"]);
     } else if (temMkt) {
       // consultor e vendedor (só esse papel no marketing): menu enxuto — "Meus clientes" já tem busca, status, período e cancelamentos

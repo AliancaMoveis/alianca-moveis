@@ -16,7 +16,7 @@ const rotulo = (iso: string) => { if (!iso) return "sem data"; const h = hojeISO
 
 export const podeDistribuir = (R: any) => R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
 
-export function Distribuir() {
+export function Distribuir({ soVend }: { soVend?: boolean } = {}) {
   const { R, st } = useApp() as any;
   const hoje = hojeISO();
   const semCons = R.ordenar(R.pendentesDirecionamento().slice());
@@ -26,15 +26,15 @@ export function Distribuir() {
   const passaram = semTodos.filter((c: any) => c.dataLoja && dia(c.dataLoja) < hoje).sort((a: any, b: any) => String(b.dataLoja).localeCompare(String(a.dataLoja)));
   const semVend = semTodos.filter((c: any) => !(c.dataLoja && dia(c.dataLoja) < hoje)).sort((a: any, b: any) => String(a.dataLoja || "9").localeCompare(String(b.dataLoja || "9")));
   const comVend = mkt.filter((c: any) => c.atendenteId && c.dataLoja && dia(c.dataLoja) >= hoje && !c.venda && R.statusClienteDe(c) !== "nao_compareceu");
-  const [aba, setAba] = useState<"cons" | "vend" | "pass">(semCons.length || !semVend.length ? "cons" : "vend");
+  const [aba, setAba] = useState<"cons" | "vend" | "pass">(!soVend && (semCons.length || !semVend.length) ? "cons" : "vend");
   const lista = aba === "cons" ? semCons : aba === "vend" ? semVend : passaram;
   return <>
     <div className="mv-seg">
-      <button className={aba === "cons" ? "on" : ""} onClick={() => setAba("cons")}>🧭 Consultor<i>{semCons.length}</i></button>
+      {!soVend && <button className={aba === "cons" ? "on" : ""} onClick={() => setAba("cons")}>🧭 Consultor<i>{semCons.length}</i></button>}
       <button className={aba === "vend" ? "on" : ""} onClick={() => setAba("vend")}>🛒 Vendedor<i>{semVend.length}</i></button>
       <button className={aba === "pass" ? "on" : ""} onClick={() => setAba("pass")}>⛔ Já passaram<i>{passaram.length}</i></button>
     </div>
-    <div className="mv-dica" style={{ marginBottom: 10 }}>{aba === "cons" ? "Clientes que pediram visita e ainda não têm consultor externo." : aba === "vend" ? "Clientes com vinda à loja e sem vendedor. Marketing direto na loja não é obrigatório." : "A data da loja já passou e ninguém foi definido."}</div>
+    <div className="mv-dica" style={{ marginBottom: 10 }}>{aba === "cons" ? "Clientes que pediram visita e ainda não têm consultor externo." : aba === "vend" ? "Clientes com vinda à loja e sem vendedor. Do marketing, só quem quer projeto pronto (o resto vai para a fila automática)." : "A data da loja já passou e ninguém foi definido."}</div>
     {!lista.length ? <div className="mv-vazio">Nada para distribuir aqui. 👍</div>
       : lista.map((c: any) => aba === "cons" ? <CartaoCons key={c.id} c={c} /> : <CartaoVend key={c.id} c={c} comVend={comVend} />)}
   </>;
