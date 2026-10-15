@@ -21,6 +21,7 @@ import PainelDono from "../telas/PainelDono";
 import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
 import { GerChamar, GerClientes, GerHoje } from "./Gerente";
 import { Distribuir, podeDistribuir } from "./Distribuir";
+import { BuscaAssumir } from "../comp/BuscaAssumir";
 import Nova from "../telas/Nova";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 import { ConviteNotif, Notificacoes } from "./Notif";
@@ -253,6 +254,7 @@ function VendClientes({ abrir }: any) {
       {grupo("Já vieram — falta seu parecer", d.semParecer, "var(--danger)")}
       {grupo("Sem atualização há mais de 24h", d.semAtual, "var(--warn)")}</>)
       : lista.length ? lista.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataLoja), dia: diaCurto(c.dataLoja), sub: (c.venda ? "venda " + c.venda.numero + " · " : "") + (c.produto || "—") }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
+    {q.trim().length >= 3 && <BuscaAssumir q={q} movel />}
   </>;
 }
 

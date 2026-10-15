@@ -1,0 +1,3 @@
+-- 0138 · vendedor_buscar_clientes(q) e vendedor_assumir(id): o vendedor acha qualquer cliente do marketing pelo nome/telefone
+-- (mesmo sem agenda na loja) e assume o atendimento quando o cliente ainda não tem vendedor. Avisa a supervisão do marketing,
+-- quem agendou e o consultor. (Definição aplicada direto no banco; ver pg_get_functiondef.)

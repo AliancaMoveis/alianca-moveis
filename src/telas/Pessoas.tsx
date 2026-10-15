@@ -1,3 +1,4 @@
+import { BuscaAssumir } from "../comp/BuscaAssumir";
 import { ModalFerias, podeMarcarFerias, textoFerias } from "../comp/Ferias";
 import { useState } from "react";
 import { useApp } from "../estado";
@@ -115,6 +116,7 @@ export function Carteira() {
       </div>
       <div className="chips">{Object.entries(FILTROS).filter(([k]) => ["andamento", "cancelados", "todos", f].includes(k) || cont[k]).map(([k, [l]]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
       <div className="list" id="carLista">{arr.length ? arr.map((c: any) => <Ticket key={c.id} c={c} />) : <div className="empty"><div className="big">Nenhum cliente</div>{d.meus.length ? "Nada neste filtro." : "Você ainda não tem clientes atribuídos."}</div>}</div>
+      {ehVend && q.trim().length >= 3 && <BuscaAssumir q={q} />}
     </section>
   );
 }
