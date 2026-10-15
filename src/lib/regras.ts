@@ -250,7 +250,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (c.statusCliente === "nao_compareceu") return "nao_compareceu";
     if (c.setorDestino === "marketing_supervisao") return "aguardando_consultor";
     if (c.setorDestino === "consultor_externo") return SITUACOES_CONSULTOR.includes(c.statusCliente) ? c.statusCliente : (c.tratativa && c.tratativa.realizada) ? "visita_realizada" : "direcionado_consultor";
-    if (c.setorDestino === "suporte_consultores") return "agendado_loja";
+    // agendado na loja: vale o status que a equipe escolheu (standby, em obras, orçamento…); sem escolha = agendado loja
+    if (c.setorDestino === "suporte_consultores") return ["orcamento", "sem_resposta", "reagendado", "reprovado", "atendido", "em_obras", "standby", "em_analise", "visita_cancelada"].includes(c.statusCliente) ? c.statusCliente : "agendado_loja";
     if (c.setorDestino === "atendente_cliente") return ["orcamento", "sem_resposta", "reagendado", "reprovado", "atendido", ...SITUACOES_EXTRA].includes(c.statusCliente) ? c.statusCliente : "com_vendedor";
     return c.statusCliente || "aguardando_consultor";
   }

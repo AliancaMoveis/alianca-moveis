@@ -25,7 +25,7 @@ export default function Definir() {
 
   const mkt = st.chamados.filter((c: any) => R.domMarketing(c) && R.podeVer(c) && (!orig || R.origemLoja(c) === orig));
   const valida = (c: any) => c.dataLoja ? dia(c) >= MARCO : String(c.criadoEm || "").slice(0, 10) >= MARCO;
-  const semTodos = mkt.filter((c: any) => c.setorDestino === "suporte_consultores" && !c.atendenteId && valida(c));
+  const semTodos = mkt.filter((c: any) => c.setorDestino === "suporte_consultores" && !c.atendenteId && valida(c) && R.statusClienteDe(c) === "agendado_loja");
   // "já passaram": data da loja vencida (a partir de 14/10) e ainda sem vendedor
   const passaram = semTodos.filter((c: any) => c.dataLoja && dia(c) < hoje).sort((a: any, b: any) => String(b.dataLoja).localeCompare(String(a.dataLoja)));
   const sem = semTodos.filter((c: any) => !(c.dataLoja && dia(c) < hoje))

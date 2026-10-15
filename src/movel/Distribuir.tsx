@@ -22,7 +22,7 @@ export function Distribuir() {
   const semCons = R.ordenar(R.pendentesDirecionamento().slice());
   const mkt = st.chamados.filter((c: any) => R.domMarketing(c) && R.podeVer(c));
   const valida = (c: any) => c.dataLoja ? dia(c.dataLoja) >= MARCO : dia(c.criadoEm) >= MARCO;
-  const semTodos = mkt.filter((c: any) => c.setorDestino === "suporte_consultores" && !c.atendenteId && valida(c));
+  const semTodos = mkt.filter((c: any) => c.setorDestino === "suporte_consultores" && !c.atendenteId && valida(c) && R.statusClienteDe(c) === "agendado_loja");
   const passaram = semTodos.filter((c: any) => c.dataLoja && dia(c.dataLoja) < hoje).sort((a: any, b: any) => String(b.dataLoja).localeCompare(String(a.dataLoja)));
   const semVend = semTodos.filter((c: any) => !(c.dataLoja && dia(c.dataLoja) < hoje)).sort((a: any, b: any) => String(a.dataLoja || "9").localeCompare(String(b.dataLoja || "9")));
   const comVend = mkt.filter((c: any) => c.atendenteId && c.dataLoja && dia(c.dataLoja) >= hoje && !c.venda && R.statusClienteDe(c) !== "nao_compareceu");
