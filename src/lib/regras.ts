@@ -276,7 +276,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || trPendPara(c) || (c.tipo === "erro_venda" && (c as any).tratativa?.erroVenda?.vendedorId === currentUserId);
     if (ehGestao()) return true;
     if (c.tipo === "juridico") return mySetores().includes("juridico"); // caso jurídico: só o Jurídico e a Gestão
-    if (domMarketing(c)) return temMarketing() || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
+    if (domMarketing(c)) return temMarketing() || !!(me() as any)?.editaAgenda || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
     if (verTudo()) return true;
     if (mySetores().includes("callcenter")) return true;
     // gerente de loja acompanha todo o call center (menos os setores com módulo próprio)
@@ -310,6 +310,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ehGestao()) return true;
     if (domMarketing(c)) {
       if (mySetores().includes("atendente_cliente") && !mySetores().some((s: string) => ["marketing_supervisao", "suporte_consultores"].includes(s))) return false;
+      // operadora do marketing anexa a qualquer momento nos clientes que cadastrou; a supervisão do marketing em todos
+      if (c.solicitanteId === currentUserId || mySetores().includes("marketing_supervisao")) return true;
       return podeTratar(c);
     }
     return podeTratar(c) || temLib("criar");
@@ -344,7 +346,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const responsaveisChecklist = () => state.usuarios.filter(u => (u.setores || []).includes("checklist"));
   const medidores = () => state.usuarios.filter(u => (u.setores || []).includes("medidas"));
   const nomeMontador = (id: string) => ((state.montadores || []).find(m => m.id === id) || ({} as any)).nome || "—";
-  const podeEditarAgenda = () => ehGestao() || temMarketing() || mySetores().includes("suporte_consultores");
+  // edita a agenda da loja: Gestão, marketing, Suporte e quem tem a permissão avulsa (ex.: Camila no fim de semana)
+  const podeEditarAgenda = () => ehGestao() || temMarketing() || mySetores().includes("suporte_consultores") || !!(me() as any)?.editaAgenda;
   const podeMudarDataLoja = (c: Chamado) => !(c.venda && c.venda.status !== "cancelada") && (podeEditarAgenda() || (c.consultorId && c.consultorId === currentUserId) || (c.setorDestino === "atendente_cliente" && c.atendenteId === currentUserId));
   const podeMudarDataVisita = (c: Chamado) => ["marketing_supervisao", "consultor_externo"].includes(c.setorDestino) && (ehGestao() || temMarketing() || (!!c.consultorId && c.consultorId === currentUserId));
   const podeEditarCliente = () => ehGestao() || mySetores().some((s: string) => ["supervisao", "marketing_supervisao"].includes(s));
@@ -789,6 +792,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (!veCC && consultaNoSetor && (ehJuridico() || podeChecklist() || ehSupMedidas() || ehPosvenda())) {
       const gi = G.findIndex(g => ["Jurídico", "Checklist", "Medidas", "Pós-venda"].includes(g.g)); if (gi >= 0) G[gi].itens.push(["consulta", "Consulta"]);
     }
+    // permissão avulsa de agenda da loja (ex.: Camila no fim de semana), para quem não é do marketing
+    if ((me() as any)?.editaAgenda && !temMarketing() && !ehGestao()) G.push({ g: "Loja", ic: "🏬", itens: [["agenda", "Agendamento loja"], ["definir", "Definir vendedor"]] });
     if (podeBaseClientes()) G.push({ g: "Clientes", ic: "📇", itens: [["cli_base", "Base de clientes"]] });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);

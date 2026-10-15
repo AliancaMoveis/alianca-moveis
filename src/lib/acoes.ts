@@ -227,7 +227,7 @@ export const A = {
 
 // envio de fotos: comprime como o protótipo (máx. 1000px, JPEG 0,55) e guarda no Storage
 export async function comprimir(file: File): Promise<Blob | null> {
-  if (!file.type.startsWith("image/")) return null;
+  if (!(file.type.startsWith("image/") || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name))) return null;
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
@@ -235,11 +235,16 @@ export async function comprimir(file: File): Promise<Blob | null> {
     if (w > max || h > max) { const r = Math.min(max / w, max / h); w = Math.round(w * r); h = Math.round(h * r); }
     const cv = document.createElement("canvas"); cv.width = w; cv.height = h; cv.getContext("2d")!.drawImage(img, 0, 0, w, h);
     return await new Promise<Blob | null>(res => cv.toBlob(b => res(b), "image/jpeg", 0.55));
-  } finally { URL.revokeObjectURL(url); }
+  } catch { return null; } // formato que o navegador não abre (ex.: HEIC no Windows/Android): vai o arquivo original
+  finally { URL.revokeObjectURL(url); }
 }
 // ---------- vídeos e PDFs ----------
 export const LIMITE_ARQUIVO = 30 * 1024 * 1024; // igual ao limite do armazenamento
-const tipoArquivo = (f: File) => f.type.startsWith("image/") ? "img" : f.type.startsWith("video/") ? "video" : (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) ? "pdf" : null;
+// pelo tipo do arquivo e, quando o celular não informa o tipo, pela extensão do nome
+const tipoArquivo = (f: File) => (f.type.startsWith("image/") || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(f.name)) ? "img"
+  : (f.type.startsWith("video/") || /\.(mp4|mov|m4v|3gp|3gpp|webm|mkv|avi|mpe?g)$/i.test(f.name)) ? "video"
+  : (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) ? "pdf" : null;
+const mimeImg = (f: File) => f.type || (/\.png$/i.test(f.name) ? "image/png" : /\.hei[cf]$/i.test(f.name) ? "image/heic" : "image/jpeg");
 export { tipoArquivo };
 // vídeo: reduz para ~640px e ~0,8 Mbps (gravando o vídeo num canvas). Leva o tempo do vídeo. Se o navegador não suportar, envia o original (até 30 MB).
 export async function comprimirVideo(file: File, progresso?: (pct: number) => void): Promise<Blob> {
@@ -294,7 +299,12 @@ export async function prepararArquivos(files: File[], status?: (txt: string) => 
   const fotos: { nome: string; blob: Blob }[] = [], outros: { nome: string; blob: Blob; tipo: "video" | "pdf" }[] = [], recusados: string[] = [];
   for (const f of files) {
     const tp = tipoArquivo(f);
-    if (tp === "img") { const b = await comprimir(f); if (b) fotos.push({ nome: f.name, blob: b }); else recusados.push(f.name); }
+    if (tp === "img") {
+      const b = await comprimir(f);
+      if (b) fotos.push({ nome: f.name, blob: b });
+      else if (f.size > LIMITE_ARQUIVO) recusados.push(f.name + " (maior que 30 MB)");
+      else fotos.push({ nome: f.name, blob: f.slice(0, f.size, mimeImg(f)), original: true } as any);
+    }
     else if (tp === "pdf") { if (f.size > LIMITE_ARQUIVO) recusados.push(f.name + " (maior que 30 MB)"); else outros.push({ nome: f.name, blob: f, tipo: "pdf" }); }
     else if (tp === "video") {
       try { status && status("Reduzindo o vídeo " + f.name + "…"); const b = await comprimirVideo(f, p => status && status("Reduzindo o vídeo " + f.name + "… " + p + "%")); outros.push({ nome: f.name, blob: b, tipo: "video" }); }
@@ -304,15 +314,18 @@ export async function prepararArquivos(files: File[], status?: (txt: string) => 
   status && status("");
   return { fotos, outros, recusados };
 }
-export const ACEITA_ANEXO = "image/*,video/*,application/pdf,.pdf";
+export const ACEITA_ANEXO = "image/*,video/*,application/pdf,.pdf,.heic,.heif,.jpg,.jpeg,.png,.mp4,.mov,.3gp";
 
 export async function enviarFotos(chamadoId: string, arquivos: { nome: string; blob: Blob }[]) {
   const itens: any[] = [];
   for (const a of arquivos) {
-    const nomeLimpo = (a.nome || "foto").replace(/[^\w.\-]+/g, "_").replace(/\.[^.]+$/, "") + ".jpg";
+    // foto comprimida = JPEG; original (formato que o navegador não abre, ex.: HEIC) vai como está
+    const orig = (a as any).original, tipo = orig ? (a.blob.type || "image/jpeg") : "image/jpeg";
+    const ext = orig ? (tipo.includes("png") ? ".png" : tipo.includes("hei") ? ".heic" : ".jpg") : ".jpg";
+    const nomeLimpo = (a.nome || "foto").replace(/[^\w.\-]+/g, "_").replace(/\.[^.]+$/, "") + ext;
     const path = `${chamadoId}/${crypto.randomUUID()}-${nomeLimpo}`;
-    const { error } = await sb.storage.from("anexos").upload(path, a.blob, { contentType: "image/jpeg" });
-    if (error) throw new Error("Não foi possível enviar a foto " + a.nome);
+    const { error } = await sb.storage.from("anexos").upload(path, a.blob, { contentType: tipo });
+    if (error) throw new Error("Não foi possível enviar a foto " + a.nome + (error.message ? " (" + error.message + ")" : ""));
     itens.push({ tipo: "img", nome: a.nome || nomeLimpo, storage_path: path });
   }
   return itens;

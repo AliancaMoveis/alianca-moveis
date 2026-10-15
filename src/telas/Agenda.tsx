@@ -17,6 +17,8 @@ export default function Agenda() {
   // e pode filtrar só os seus clientes. Consultor vê os clientes dos outros só como "Outro cliente".
   const resumida = !editar;
   const [escopo, setEscopo] = useState<"loja" | "meus">("loja");
+  // origem do cliente: Marketing (agendado pelas operadoras), Externo (consultor) e Porta (entrou direto na loja)
+  const [orig, setOrig] = useState<"" | "marketing" | "externo" | "porta">("");
   const amanha = maisDias(dia, 1);
   const { abrirDetalhe, toast } = useApp() as any;
   const [q, setQ] = useState(""); const [achados, setAchados] = useState<any[] | null>(null); const [buscando, setBuscando] = useState(false);
@@ -38,6 +40,10 @@ export default function Agenda() {
           <button className={escopo === "loja" ? "on" : ""} onClick={() => setEscopo("loja")}>Toda a loja</button>
           <button className={escopo === "meus" ? "on" : ""} onClick={() => setEscopo("meus")}>Meus clientes</button>
         </span>}
+        <span className="subnav" style={{ margin: 0 }}>
+          {([["", "Todos"], ["marketing", "Marketing"], ["externo", "Externo"], ["porta", "Porta"]] as [any, string][]).map(([k, l]) =>
+            <button key={k} className={orig === k ? "on" : ""} onClick={() => setOrig(k)} title={k === "porta" ? "Clientes que entraram direto na loja (cadastro manual)" : undefined}>{l}</button>)}
+        </span>
       </div>
       <form className="ag-busca" onSubmit={buscar}>
         <input value={q} onChange={e => { setQ(e.target.value); if (!e.target.value) setAchados(null); }} placeholder="🔎 Buscar cliente em qualquer dia — nome, telefone ou endereço" />
@@ -58,13 +64,13 @@ export default function Agenda() {
             </div>); })}
       </div>}
       <div className="ag-legenda"><span><span className="origem marketing">Marketing</span> agendado pelo marketing</span><span><span className="origem externo">Externo</span> veio do consultor externo</span><span><span className="badge b-semanexo">⚠️ Sem anexo</span> sem planta/fotos</span><span><b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b> aguardando definir</span></div>
-      <Dia iso={dia} resumida={resumida} escopo={escopo} principal />
-      <Dia iso={amanha} resumida={resumida} escopo={escopo} />
+      <Dia iso={dia} resumida={resumida} escopo={escopo} orig={orig} principal />
+      <Dia iso={amanha} resumida={resumida} escopo={escopo} orig={orig} />
     </section>
   );
 }
 
-function Dia({ iso, resumida, escopo, principal }: { iso: string; resumida: boolean; escopo: string; principal?: boolean }) {
+function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; resumida: boolean; escopo: string; principal?: boolean; orig?: string }) {
   const { R, st, abrirDetalhe, executar: ex } = useApp() as any;
   const eu = R.currentUserId;
   const souVendedor = R.mySetores().includes("atendente_cliente");
@@ -91,11 +97,11 @@ function Dia({ iso, resumida, escopo, principal }: { iso: string; resumida: bool
     doDia = st.chamados.filter((c: any) => R.domMarketing(c) && c.dataLoja && R.podeVer(c) && String(c.dataLoja).slice(0, 10) === iso)
       .map((c: any) => ({ ...c, _pedidoVendedor: (c.tratativa && c.tratativa.pedidoAtend) || "" }));
   }
-  const arr = doDia.filter((c: any) => escopo === "loja" || meuCliente(c)).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
+  const origem = (c: any) => (c.tipo === "porta" || (c.tratativa && c.tratativa.porta)) ? "porta" : (c.tipo === "__direto" || R.ehDireto(c)) ? "marketing" : "externo";
+  const arr = doDia.filter((c: any) => (escopo === "loja" || meuCliente(c)) && (!orig || origem(c) === orig)).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
   if (!principal && !arr.length) return null;
-  const origem = (c: any) => (c.tipo === "__direto" || R.ehDireto(c)) ? "marketing" : "externo";
   const semAnexo = (c: any) => c._alheio ? c._semAnexo && !c.venda : R.semAnexo(c);
-  const nMkt = arr.filter((c: any) => origem(c) === "marketing").length, nExt = arr.length - nMkt;
+  const nMkt = arr.filter((c: any) => origem(c) === "marketing").length, nExt = arr.filter((c: any) => origem(c) === "externo").length;
   const nFila = arr.filter((c: any) => !c.atendenteId).length, nSemAnexo = arr.filter(semAnexo).length;
   const porHora: Record<string, any[]> = {};
   arr.forEach((c: any) => { const dt = String(c.dataLoja); const h = dt.length > 10 ? dt.slice(11, 16) : "sem hora"; (porHora[h] = porHora[h] || []).push(c); });
