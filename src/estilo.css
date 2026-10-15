@@ -1244,3 +1244,14 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ds-acao select,.ds-data input{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);font:inherit;font-size:14px;color:var(--ink)}
 .ds-data{display:flex;flex-direction:column;font-size:12px;color:var(--ink-faint);gap:3px}
 .ds-pedido{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--warn-bg);font-size:13px}.ds-pedido div{display:flex;gap:6px;margin-top:6px}
+
+/* dashboard da gestão — visão geral por área */
+.pg-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px;align-items:stretch}
+@media (max-width:1100px){.pg-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.pg-card{margin:0;height:100%;justify-content:flex-start;align-self:stretch;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;font:inherit;color:var(--ink);display:flex;flex-direction:column;gap:6px}
+.pg-card:hover{border-color:var(--primary)}.pg-card.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+.pg-card.alerta .pg-p{color:var(--danger);font-weight:700}
+.pg-t{font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft)}
+.pg-n b{font-size:26px;line-height:1}.pg-n span{font-size:12.5px;color:var(--ink-faint);margin-left:6px}
+.pg-l{display:flex;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-soft)}
+.pg-p{font-size:12px;color:var(--ink-soft);border-top:1px dashed var(--line);padding-top:6px}

@@ -26,7 +26,7 @@ export default function Dashboard() {
   const { R, st, irPara, abrirDetalhe, currentUserId } = useApp() as any;
   // período: padrão = mês atual. O que está em aberto (fila, atrasos, críticos) aparece sempre, de qualquer data;
   // o período vale para o que aconteceu nele: abertos, concluídos, agendamentos, vendas.
-  const [preset, setPreset] = useState<"hoje" | "mes" | "30" | "90" | "periodo">("mes");
+  const [preset, setPreset] = useState<"hoje" | "mes" | "30" | "90" | "periodo">(R.ehGestao() && !R.ehProprietario() ? "hoje" : "mes");
   const hoje = hojeISO();
   const menos = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return isoLocal(d); };
   const [pDe, setPDe] = useState(hoje.slice(0, 8) + "01"); const [pAte, setPAte] = useState(hoje);

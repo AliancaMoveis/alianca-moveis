@@ -6,6 +6,8 @@ import { fmtDate, fmtMoeda, isoLocal, parseData, vendaContaVolume } from "../lib
 import { BarRow, Kpi } from "./Dashboard";
 import PainelGestao from "./PainelGestao";
 import { fmtTempo, mediaHoras } from "../lib/atendimento";
+import { ck, etapaCk, grupoCk, reservaVencida, querEnc, aConfirmar, cfgAgenda } from "./Checklist";
+import { pagamentosVenda, parseMoeda } from "../lib/regras";
 
 const FIM_TXT = (t: string) => t.startsWith("Status → Concluída") || t.startsWith("✓ Atendimento finalizado");
 const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => FIM_TXT(String(x.texto))); return h.length ? h[h.length - 1].quando : null; };
@@ -21,7 +23,7 @@ const Big = ({ n, l, a, b, inverso, suf, cor }: any) => <div className="pb-big">
 
 export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const { R, st, irPara, abrirDetalhe } = useApp() as any;
-  const [aba, setAba] = useState<"cc" | "ag" | "cons" | "vendas">("cc");
+  const [aba, setAba] = useState<"cc" | "ag" | "cons" | "ck" | "vendas">("cc");
   // período anterior com o mesmo número de dias
   const d0 = new Date(de + "T00:00:00"), d1 = new Date(ate + "T23:59:59");
   const dias = Math.max(1, Math.round((+d1 - +d0) / 86400000));
@@ -104,6 +106,36 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
     return { u, F, ex, semAnexo, parados, pend, atras, alerta: semAnexo + parados + atras };
   }).sort((a: any, b: any) => b.alerta - a.alerta || b.ex.total - a.ex.total);
 
+  // ---------- checklist ----------
+  const cfgCk = cfgAgenda(st), hojeS = isoLocal(agora);
+  const cl = todos.filter((c: any) => c.tipo === "checklist");
+  const clAb = cl.filter((c: any) => c.status !== "concluida");
+  const ckAg = cl.filter((c: any) => ["agendado", "realizado"].includes(etapaCk(c)) && dentro(ck(c).agendadoPara, de, ate));
+  const ckReal = cl.filter((c: any) => etapaCk(c) === "realizado" && dentro(ck(c).realizadoEm || ck(c).agendadoPara, de, ate));
+  const ckCont = cl.filter((c: any) => dentro(ck(c).ultimoContato, de, ate));
+  const ckNovos = cl.filter((c: any) => dentro(c.criadoEm, de, ate));
+  const ckAgendar = clAb.filter((c: any) => grupoCk(c) === "agendar"), ckSemCont = ckAgendar.filter((c: any) => !(ck(c).contatos > 0));
+  const ckResp = clAb.filter((c: any) => etapaCk(c) === "aguardando" && ck(c).proposta), ckVenc = clAb.filter((c: any) => reservaVencida(c, cfgCk));
+  const ckEspera = clAb.filter((c: any) => grupoCk(c) === "aguardando"), ckConf = clAb.filter((c: any) => aConfirmar(c, cfgCk.confirmarDias ?? 2));
+  const ckEnc = clAb.filter((c: any) => querEnc(c)), ckPassou = clAb.filter((c: any) => grupoCk(c) === "agendado" && String(ck(c).agendadoPara || "").slice(0, 10) < hojeS && !!ck(c).agendadoPara);
+  // ---------- externos (consultores) ----------
+  const ext = mk.filter((c: any) => !R.ehDireto(c));
+  const feita = (c: any) => !!(c.tratativa && c.tratativa.realizada);
+  const visPer = ext.filter((c: any) => c.consultorId && dentro(c.dataVisita, de, ate)), visFeitas = visPer.filter(feita);
+  const semConsT = R.pendentesDirecionamento(), visAFazer = ext.filter((c: any) => c.setorDestino === "consultor_externo" && !feita(c));
+  const visAtras = visAFazer.filter((c: any) => c.dataVisita && String(c.dataVisita).slice(0, 10) < hojeS);
+  const cancelT = ext.filter((c: any) => R.statusClienteDe(c) === "visita_cancelada");
+  // ---------- vendas ----------
+  const vendasPer = mk.filter((c: any) => vendaContaVolume(c.venda) && pagamentosVenda(c.venda).some((p: any) => dentro(p.data + "T12:00", de, ate)));
+  const valorPer = vendasPer.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0);
+  const vendasAConf = mk.filter((c: any) => c.venda && c.venda.status === "registrada");
+  const agHojeLoja = mk.filter((c: any) => String(c.dataLoja || "").slice(0, 10) === hojeS);
+  const semVendT = mk.filter((c: any) => c.dataLoja && String(c.dataLoja).slice(0, 10) >= hojeS && !c.atendenteId && !c.venda);
+  // ---------- visão geral: um cartão por área (período × pendente total) ----------
+  const Geral = ({ k, ic, t, n, l, linhas, pend, alerta }: any) => <button className={"pg-card" + (aba === k ? " on" : "") + (alerta ? " alerta" : "")} onClick={() => setAba(k)}>
+    <div className="pg-t">{ic} {t}</div><div className="pg-n"><b>{n}</b><span>{l}</span></div>
+    <div className="pg-l">{linhas.map(([a, b]: any) => <span key={a}>{a} <b>{b}</b></span>)}</div>
+    <div className="pg-p">⏳ {pend}</div></button>;
   const Tab = ({ k, l, n }: any) => <button className={aba === k ? "on" : ""} onClick={() => setAba(k)}>{l}{n ? <i>{n}</i> : null}</button>;
   return (
     <div className="pb">
@@ -111,7 +143,14 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
         <b>{ativos.length ? "Precisa de você agora" : "✓ Nada urgente agora"}</b>
         <div className="pb-alertas">{ativos.map(([ic, n, l, cls, go]) => <button key={l} className={"pb-al " + cls} onClick={go}><span>{ic}</span><b>{n}</b>{l}</button>)}</div>
       </div>
-      <div className="subnav pb-abas"><Tab k="cc" l="☎ Call center" n={atrasados.length} /><Tab k="ag" l="◎ Agendamentos" /><Tab k="cons" l="🧭 Consultores" n={cons.filter((x: any) => x.alerta).length} /><Tab k="vendas" l="💰 Vendas" /></div>
+      <div className="pg-grid">
+        <Geral k="cc" ic="☎" t="Call center" n={R1.length} l="registrados" linhas={[["Finalizados", F1.length], ["No prazo", prazo1 == null ? "—" : prazo1 + "%"]]} pend={abertos.length + " em aberto · " + atrasados.length + " fora do prazo"} alerta={atrasados.length > 0} />
+        <Geral k="ag" ic="◎" t="Agendamentos" n={A1.length} l="agendados" linhas={[["Marketing", oM], ["Externos", oE], ["Vieram", V1.length]]} pend={agHojeLoja.length + " na loja hoje · " + semVendT.length + " sem vendedor"} alerta={semVendT.length > 0} />
+        <Geral k="cons" ic="🧭" t="Externos" n={visPer.length} l="visitas" linhas={[["Realizadas", visFeitas.length], ["Atrasadas", visAtras.length]]} pend={semConsT.length + " sem consultor · " + visAFazer.length + " a fazer" + (cancelT.length ? " · " + cancelT.length + " cancelaram" : "")} alerta={semConsT.length + visAtras.length + cancelT.length > 0} />
+        <Geral k="ck" ic="✓" t="Checklist" n={ckAg.length} l="agendados" linhas={[["Realizados", ckReal.length], ["Contatados", ckCont.length]]} pend={ckAgendar.length + " a agendar · " + ckVenc.length + " prazo vencido · " + ckConf.length + " confirmar"} alerta={ckVenc.length + ckEnc.length + ckPassou.length > 0} />
+        <Geral k="vendas" ic="💰" t="Vendas" n={vendasPer.length} l="vendas" linhas={[["Valor", fmtMoeda(valorPer)]]} pend={vendasAConf.length + " a confirmar"} alerta={vendasAConf.length > 0} />
+      </div>
+      <div className="subnav pb-abas"><Tab k="cc" l="☎ Call center" n={atrasados.length} /><Tab k="ag" l="◎ Agendamentos" /><Tab k="cons" l="🧭 Externos" n={cons.filter((x: any) => x.alerta).length} /><Tab k="ck" l="✓ Checklist" n={ckVenc.length + ckEnc.length} /><Tab k="vendas" l="💰 Vendas" n={vendasAConf.length} /></div>
       <div className="pb-per">Comparando {fmtDate(de)}–{fmtDate(ate)} com {fmtDate(dePrev)}–{fmtDate(atePrev)}</div>
 
       {aba === "cc" && <>
@@ -175,6 +214,37 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
           </div>))}
         {!cons.length && <div className="dn-vazio">Nenhum consultor cadastrado.</div>}
       </div>}
+
+      {aba === "cons" && <div className="kpis" style={{ marginTop: 14 }}>
+        <Kpi n={semConsT.length} l="Sem consultor (direcionar)" cls={semConsT.length ? "alert" : ""} />
+        <Kpi n={visAFazer.length} l="Visitas a fazer" />
+        <Kpi n={visAtras.length} l="Visitas atrasadas" cls={visAtras.length ? "alert" : ""} />
+        <Kpi n={cancelT.length} l="Cancelaram a visita" cls={cancelT.length ? "alert" : ""} />
+      </div>}
+      {aba === "cons" && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "4px 0 16px" }}><button className="btn sm primary" onClick={() => irPara("direcionamento")}>Direcionar consultor</button><button className="btn sm" onClick={() => irPara("ce_visitas")}>Visitas</button><button className="btn sm" onClick={() => irPara("ce_painel")}>Painel dos consultores</button></div>}
+
+      {aba === "ck" && <>
+        <div className="pb-bigs">
+          <Big n={ckAg.length} l="Checklists no período" />
+          <Big n={ckReal.length} l="Realizados" cor="var(--st-concluida)" />
+          <Big n={ckCont.length} l="Clientes contatados" />
+          <Big n={ckNovos.length} l="Vendas que entraram" />
+        </div>
+        <div className="sec-label" style={{ margin: "0 0 8px" }}>⏳ Pendente total — todas as datas</div>
+        <div className="kpis">
+          <Kpi n={ckAgendar.length} l="A agendar" />
+          <Kpi n={ckSemCont.length} l="Sem nenhum contato" cls={ckSemCont.length ? "alert" : ""} />
+          <Kpi n={ckResp.length} l="Aguardando resposta" />
+          <Kpi n={ckVenc.length} l="⚠️ Prazo vencido" cls={ckVenc.length ? "alert" : ""} />
+          <Kpi n={ckEspera.length} l="Aguardando (obra etc.)" />
+          <Kpi n={ckConf.length} l="Confirmar presença" cls={ckConf.length ? "urg" : ""} />
+          <Kpi n={ckEnc.length} l="❗ Pedem encaixe" cls={ckEnc.length ? "alert" : ""} />
+          <Kpi n={ckPassou.length} l="Passou sem baixa" cls={ckPassou.length ? "alert" : ""} />
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "4px 0 16px" }}>
+          <button className="btn sm primary" onClick={() => irPara("ck_agendar")}>A agendar</button><button className="btn sm" onClick={() => irPara("ck_agenda")}>Agenda</button>
+          <button className="btn sm" onClick={() => irPara("ck_confirmar")}>Confirmação de presença</button><button className="btn sm" onClick={() => irPara("ck_produtividade")}>📈 Produtividade</button></div>
+      </>}
 
       {aba === "vendas" && <PainelGestao de={de} ate={ate} />}
     </div>
