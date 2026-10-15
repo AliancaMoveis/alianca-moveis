@@ -39,7 +39,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const criticos = todos.filter((c: any) => R.doCC(c) && R.prioridade(c) === "critico");
   const reemb = (st.reembolsos || []).filter((r: any) => r.status === "pendente");
   const medParadas = todos.filter((c: any) => c.tipo === "medidas" && c.status !== "concluida" && (+agora - +new Date(c.criadoEm)) > 2 * 86400000 && ["validar", "realizada"].includes(R.etapaMedida(c)));
-  const semVendHoje = todos.filter((c: any) => R.domMarketing(c) && !c.atendenteId && String(c.dataLoja || "").slice(0, 10) === isoLocal(agora) && !c.venda);
+  const semVendHoje = todos.filter((c: any) => R.domMarketing(c) && !c.atendenteId && R.precisaDefinirVendedor(c) && String(c.dataLoja || "").slice(0, 10) === isoLocal(agora) && !c.venda);
   const semAtual = todos.filter((c: any) => R.domMarketing(c) && R.clienteCriticoInatividade(c));
   const alertas: [string, number, string, string, () => void][] = [
     ["🧾", pg.vendasConfirmar.length, "vendas a confirmar", "warn", () => irPara("aprovacoes")],
