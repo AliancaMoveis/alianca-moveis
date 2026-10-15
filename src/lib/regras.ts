@@ -359,6 +359,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const consultores = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("consultor_externo"));
   // ---------- agendamento na loja / vendedor ----------
   const ehDireto = (c: Chamado) => !!(TIPOS[c.tipo] && TIPOS[c.tipo].direto);
+  // marketing (direto na loja): só precisa definir vendedor quando o cliente quer projeto pronto (ou pediram vendedor); o resto vai para a fila automática
+  const precisaDefinirVendedor = (c: Chamado) => !ehDireto(c) || !!(c.tratativa && (c.tratativa.querProjeto === "sim" || c.tratativa.pedeVendedor));
   const origemLoja = (c: Chamado) => ehDireto(c) ? "marketing" : "externo";
   // cliente que vem (ou veio) à loja sem planta/fotos anexadas
   const semAnexo = (c: Chamado) => domMarketing(c) && !(c.tratativa && c.tratativa.importadoVisita) && !(c.anexos || []).length && !c.venda && !statusFinalCliente.includes(statusClienteDe(c))
@@ -661,7 +663,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if ((temMarketing() && !ehGestao() && !ehGerenteLoja()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c) && recente(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao() && !ehGerenteLoja())) {
       add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend && recenteLoja(c)), "var(--primary)");
-      add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c) && recenteLoja(c) && (!ehDireto(c) || !!(c.tratativa && c.tratativa.pedeVendedor)) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hojeISO())), "var(--warn)");
+      add("designar", "Clientes sem vendedor", "Já têm data na loja, mas ninguém foi definido para atender. Use a tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && souRespLoja(c) && recenteLoja(c) && precisaDefinirVendedor(c) && !(c.dataLoja && String(c.dataLoja).slice(0, 10) < hojeISO())), "var(--warn)");
       add("semparecer", "Sem parecer do vendedor", "O cliente já veio e o vendedor não registrou o resultado. Cobre o parecer.", ch.filter(c => semParecer(c) && souRespLoja(c) && recenteLoja(c)), "var(--danger)");
     }
     if (mySetores().includes("marketing_supervisao")) add("litoral", "🏖 Litoral para aprovar", "Agendamentos com consultor no litoral (datas específicas). Abra a ficha e aprove ou recuse.", ch.filter(c => domMarketing(c) && litoralDe(c) === "pendente"), "var(--warn)");
@@ -808,7 +810,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    ehDireto, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
+    ehDireto, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };

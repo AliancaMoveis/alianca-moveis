@@ -112,6 +112,7 @@ export default function Nova({ escopo, pvFixo, pronto }: { escopo: "cc" | "mkt" 
     if (finalizar && resposta.trim().length < 3) { toast("Escreva o que foi informado ao cliente"); return; }
     if (acionar && !finalizar && (motivoSup.trim() || f.motivo || "").trim().length < 5) { toast("Escreva por que a supervisão precisa acompanhar"); return; }
     if (!f.cliente.trim()) { toast("Informe o nome do cliente"); return; }
+    if (presale && direto && !f.querProjeto) { toast("Informe se o cliente quer projeto pronto"); return; }
     if (!ehMkt && !pvMont && soDigitos(f.clienteDoc).length < 11) { toast("Informe o CPF/CNPJ do cliente"); (document.querySelector('input[name="clienteDoc"]') as HTMLInputElement | null)?.focus(); return; }
     if (!pvMont && String(f.telefone || "").replace(/\D/g, "").length < 10) { toast("Informe o telefone do cliente com DDD"); (document.querySelector('input[name="telefone"]') as HTMLInputElement | null)?.focus(); return; }
     setEnviando(true);
@@ -260,7 +261,7 @@ export default function Nova({ escopo, pvFixo, pronto }: { escopo: "cc" | "mkt" 
             <div className="grid">
               <div className="field"><label>E-mail do cliente</label><input name="email" placeholder="cliente@exemplo.com" value={f.email} onChange={set("email")} /></div>
               {presale && !direto && <div className="field full"><button type="button" className={"btn-litoral" + (f.litoral ? " on" : "")} onClick={() => setF((x: any) => ({ ...x, litoral: !x.litoral }))}>🏖 {f.litoral ? "É LITORAL — a Supervisão Marketing vai aprovar (toque para desmarcar)" : "É litoral? Clique aqui"}</button></div>}
-              {presale && direto && <div className="field full"><label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 600 }}><input type="checkbox" checked={!!f.pedeVendedor} onChange={e => setF((x: any) => ({ ...x, pedeVendedor: e.target.checked }))} style={{ width: "auto" }} /> 🙋 Pedir à Supervisão Marketing para definir um vendedor <span className="hint">(sem marcar, o cliente vem à loja sem vendedor obrigatório)</span></label></div>}
+              {presale && direto && <div className="field"><label>Cliente quer projeto pronto? <span className="req-star">*</span></label><select value={f.querProjeto || ""} onChange={e => setF((x: any) => ({ ...x, querProjeto: e.target.value }))}><option value="">Selecione…</option><option value="sim">Sim — vai para definir o vendedor</option><option value="nao">Não — fila automática da loja</option></select></div>}
               {!direto && (R.ehGestao() || R.temMarketing()) && <div className="field" id="fieldConsultor"><label>Consultor designado <span className="hint">(se já souber)</span></label>
                 <select name="consultorId" value={f.consultorId} onChange={set("consultorId")}><option value="">Selecione…</option>{R.consultores().map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>}
               <div className="field"><label id="lblDataAgendamento">{direto ? <>Data/horário na loja <span className="hint">(cliente já vem direto)</span></> : <>Data/horário da visita <span className="hint">(se já souber)</span></>}</label>

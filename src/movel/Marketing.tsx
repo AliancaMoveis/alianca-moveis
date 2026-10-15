@@ -140,7 +140,7 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
   const [prep, setPrep] = useState("");
   const [env, setEnv] = useState(false);
   const [dups, setDups] = useState<any[]>([]);
-  const [litoral, setLitoral] = useState(false); const [pedeVend, setPedeVend] = useState(false);
+  const [litoral, setLitoral] = useState(false); const [querProj, setQuerProj] = useState("");
   const tD = useRef<any>();
   const set = (k: string) => (e: any) => setF((x: any) => ({ ...x, [k]: e.target.value }));
   useEffect(() => {
@@ -166,12 +166,13 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
     if (soDigitos(f.telefone).length < 10) { toast("Informe o telefone com DDD"); return; }
     if (!f.produto.trim()) { toast("Informe o ambiente de interesse"); return; }
     if (direto && !f.dataVisita) { toast("Informe a data e o horário na loja"); return; }
+    if (direto && !querProj) { toast("Informe se o cliente quer projeto pronto"); return; }
     setEnv(true);
     try {
       const id = await A.criarChamado({ tipo, cliente: f.cliente.trim(), telefone: f.telefone, produto: f.produto.trim(), motivo: f.motivo.trim(), email: f.email,
         dataVisita: f.dataVisita, endereco: direto ? "" : f.endereco, consultorId: "", clienteDoc: "", pedido: "", dataVenda: "", pedidoFabrica: "", fabrica: "", prazoTatico: "", slaManual: "",
-        vinculadoA: dups.length ? dups[0].id : null, litoral: !direto && litoral, pedeVendedor: direto && pedeVend });
-      setLitoral(false); setPedeVend(false);
+        vinculadoA: dups.length ? dups[0].id : null, litoral: !direto && litoral, querProjeto: direto ? querProj : "" });
+      setLitoral(false); setQuerProj("");
       const fotos = anexos.filter(a => a.tipo === "img");
       const itens: any[] = fotos.length ? await enviarFotos(id, fotos.map(a => ({ nome: a.nome, blob: a.blob! }))) : [];
       const outros = anexos.filter(a => a.tipo === "video" || a.tipo === "pdf");
@@ -193,7 +194,9 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
       {tDireto && <button className={tipo === tDireto[0] ? "on" : ""} onClick={() => setTipo(tDireto[0])}>🏬 Direto na loja</button>}
     </div>
     {!direto && <button type="button" className={"mv-litoral" + (litoral ? " on" : "")} onClick={() => setLitoral(!litoral)}>🏖 {litoral ? "É LITORAL — a Supervisão vai aprovar" : "É litoral? Toque aqui"}</button>}
-    {direto && <label className="mv-check"><input type="checkbox" checked={pedeVend} onChange={e => setPedeVend(e.target.checked)} /> 🙋 Pedir à Supervisão Marketing para definir um vendedor <small>(sem marcar, o cliente vem direto à loja sem vendedor obrigatório)</small></label>}
+    {direto && <><div className="mv-sec">Cliente quer projeto pronto? *</div>
+      <div className="mv-area"><button className={querProj === "sim" ? "on" : ""} onClick={() => setQuerProj("sim")}>📐 Sim, quer projeto</button><button className={querProj === "nao" ? "on" : ""} onClick={() => setQuerProj("nao")}>Não</button></div>
+      <div className="mv-dica" style={{ marginTop: 0 }}>{querProj === "sim" ? "Vai para a Supervisão Marketing definir o vendedor (para preparar o projeto)." : querProj === "nao" ? "Entra na fila automática da loja — não precisa definir vendedor." : "Escolha uma opção."}</div></>}
     {dups.length > 0 && <div className="mv-aviso">⚠️ Cliente parecido já cadastrado:{dups.map((c: any) => <div key={c.id}><b>{c.cliente}</b> · {c.telefone || "sem telefone"} · {fmtDate(c.criadoEm)}{c.solicitanteId !== R.currentUserId ? " · por " + R.nomeUser(c.solicitanteId) : ""}</div>)}<small>Se for outro assunto, pode registrar — fica ligado ao histórico dele.</small></div>}
     <label className="mv-campo">Nome do cliente *<input value={f.cliente} onChange={set("cliente")} placeholder="Nome completo" autoComplete="off" /></label>
     <label className="mv-campo">Telefone / WhatsApp *<input type="tel" inputMode="tel" value={f.telefone} onChange={set("telefone")} placeholder="(00) 00000-0000" /></label>
@@ -207,6 +210,6 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
       {anexos.map((a, i) => <span key={i} className="mv-anx">{a.tipo === "img" ? <img src={a.url} /> : a.tipo === "pdf" ? "📄" : "🎬"}<button onClick={() => setAnexos(x => x.filter((_, j) => j !== i))}>×</button></span>)}
     </div>
     <button className="mv-principal" disabled={env || !!prep} onClick={enviar}>{env ? "Registrando…" : "Registrar cliente"}</button>
-    <div className="mv-dica" style={{ marginTop: 8 }}>{direto ? "O cliente entra na agenda da loja e na fila para definir o vendedor." : "A Supervisão Marketing direciona o consultor e completa o que faltar."}</div>
+    <div className="mv-dica" style={{ marginTop: 8 }}>{direto ? "O cliente entra na agenda da loja." : "A Supervisão Marketing direciona o consultor e completa o que faltar."}</div>
   </div>;
 }
