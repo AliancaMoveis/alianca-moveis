@@ -11,6 +11,7 @@ import Detalhe from "../comp/Detalhe";
 import { AlterarSenha, MeusDados } from "../comp/Modal";
 import { fmtTel } from "../lib/baseClientes";
 import { SinoAvisos } from "../comp/Avisos";
+import { ChatMovel } from "../comp/Chat";
 import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
 import { CancelouLoja, SituacaoConsultor } from "../comp/Situacao";
@@ -85,6 +86,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
       <header className="mv-top">
         <img src="/logo.png" alt="" className="mv-logo" />
         <div className="mv-tit"><b>{papel} · Aliança Móveis</b><span>{u?.nome ? primeiro(u.nome) : ""}</span></div>
+        <ChatMovel />
         <SinoAvisos claro />
       </header>
       <Simulando />

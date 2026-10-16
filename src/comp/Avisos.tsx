@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import { sb } from "../lib/supabase";
 import { fmtDateTime } from "../lib/regras";
+import { abrirChat } from "../lib/chat";
 
 type Aviso = { id: number; titulo: string; corpo: string; chamado_id: string | null; criado_em: string; lida_em: string | null };
 const MOCK = !!(import.meta as any).env?.VITE_MOCK;
@@ -15,7 +16,8 @@ async function carregar(): Promise<Aviso[]> {
     { id: 2, titulo: "📈 Resumo do dia · 25/09", corpo: "Vendas hoje: 4 · R$ 58.300,00 · ticket R$ 14.575,00\nLoja: 19 agendados · 12 atendidos · 3 não vieram\nMês até hoje: 38 vendas · R$ 512.400,00 · ticket R$ 13.484,21\nDestaque: Lucas (2 · R$ 31.000,00)\nNovos agendamentos: 17 · visitas de consultor: 6", chamado_id: null, criado_em: new Date().toISOString(), lida_em: null },
     { id: 1, titulo: "💎 Venda alta: R$ 42.000,00", corpo: "Helena Duarte · Lucas · ger. Adriel", chamado_id: "ALM-0023", criado_em: new Date(Date.now() - 3600e3).toISOString(), lida_em: new Date().toISOString() },
   ];
-  const { data } = await sb.from("notificacoes").select("id,titulo,corpo,chamado_id,criado_em,lida_em").order("id", { ascending: false }).limit(60);
+  // mensagens do chat têm o próprio contador (botão 💬) — não entram no sino
+  const { data } = await sb.from("notificacoes").select("id,titulo,corpo,chamado_id,criado_em,lida_em").or("chave.is.null,chave.not.like.chat:*").order("id", { ascending: false }).limit(60);
   return (data as Aviso[]) || [];
 }
 const marcarLidas = (ids: number[] | null) => MOCK ? Promise.resolve() : sb.rpc("marcar_notificacoes_lidas", { p_ids: ids }).then(() => undefined);
@@ -33,6 +35,7 @@ export function SinoAvisos({ claro }: { claro?: boolean }) {
     window.addEventListener("focus", foco);
     // aberto por uma notificação do celular: mostra a notificação inteira
     const abrirPorId = async (id: number) => {
+      if (!MOCK) { const { data: n } = await sb.from("notificacoes").select("id,chave").eq("id", id).maybeSingle(); const k = (n as any)?.chave || ""; if (k.startsWith("chat:")) { abrirChat(k.split(":")[1]); return; } }
       let l = await carregar(); setLista(l);
       let a = l.find(x => x.id === id);
       if (!a && !MOCK) { const { data } = await sb.from("notificacoes").select("id,titulo,corpo,chamado_id,criado_em,lida_em").eq("id", id).maybeSingle(); a = (data as Aviso) || undefined; }

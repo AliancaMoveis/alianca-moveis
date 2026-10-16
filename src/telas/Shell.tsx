@@ -1,4 +1,5 @@
 import { SinoAvisos } from "../comp/Avisos";
+import { ChatFlutuante } from "../comp/Chat";
 import EncontrarVendas360 from "./EncontrarVendas360";
 import ControleVendedores from "./ControleVendedores";
 import { useEffect, useMemo, useState } from "react";
@@ -87,6 +88,7 @@ export default function Shell() {
 
   return (
     <div id="telaApp">
+      <ChatFlutuante />
       <div className={"backdrop" + (mob ? " on" : "")} id="backdrop" onClick={() => setMob(false)}></div>
       <div className="app">
         <aside className={"side" + (mini ? " mini" : "") + (mob ? " abertoMob" : "")} id="side">
