@@ -71,7 +71,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const vieram = (l: any[]) => l.filter(R.compareceu), naoVeio = (l: any[]) => l.filter((c: any) => R.statusClienteDe(c) === "nao_compareceu");
   const vend = (l: any[]) => l.filter((c: any) => vendaContaVolume(c.venda));
   const V1 = vieram(L1), V0 = vieram(L0), C1 = vend(L1), C0 = vend(L0);
-  const ops = R.state.usuarios.filter((u: any) => u.ativo && (u.setores || []).includes("marketing_operadora")).map((u: any) => {
+  const ops = R.state.usuarios.filter((u: any) => u.ativo && (u.setores || []).some((x: string) => ["marketing_operadora", "marketing_supervisao"].includes(x))).map((u: any) => {
     const a = A1.filter((c: any) => c.solicitanteId === u.id), l = L1.filter((c: any) => c.solicitanteId === u.id);
     return { nome: u.nome, ag: a.length, hoje: mk.filter((c: any) => c.solicitanteId === u.id && String(c.criadoEm).slice(0, 10) === isoLocal(agora)).length,
       vieram: vieram(l).length, nao: naoVeio(l).length, vendas: vend(l).length };

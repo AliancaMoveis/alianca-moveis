@@ -173,6 +173,7 @@ export const A = {
   checklistImportar: (linhas: any[]) => rpc<{ novos: number; ignorados: number; agendados?: number }>("checklist_importar", { p: linhas }),
   vendedorEscalaV2: (id: string, fazProjeto: boolean, folga: number | null, turno: string, domingo: string | null, naAgenda: boolean) => rpc("vendedor_escala_v2", { p_id: id, p_faz_projeto: fazProjeto, p_folga: folga, p_turno: turno, p_domingo: domingo, p_na_agenda: naAgenda }),
   vendedorDia: (id: string, dia: string, tipo: string, obs = "") => rpc("vendedor_dia", { p_id: id, p_dia: dia, p_tipo: tipo, p_obs: obs }),
+  mktDefinirResponsavel: (id: string, uid: string) => rpc("mkt_definir_responsavel", { p_id: id, p_uid: uid }),
   cienteCancelamento: (id: string) => rpc("ciente_cancelamento", { p_id: id }),
   excluirClienteMkt: async (id: string, motivo: string) => {
     const paths = await rpc<string[]>("mkt_excluir_cliente", { p_id: id, p_motivo: motivo });

@@ -28,7 +28,7 @@ export default function Produtividade() {
   const carregar = () => { A.listarMetasMkt(de, ate).then(setMetas).catch((e: any) => { setMetas([]); toast(e.message); }); A.listarPagamentosMkt(de, ate).then(setPags).catch(() => setPags([])); };
   useEffect(() => { carregar(); }, [mes]);
 
-  const ops = st.usuarios.filter((u: any) => u.ativo && (u.setores || []).includes("marketing_operadora") && (gestor || u.id === R.currentUserId));
+  const ops = st.usuarios.filter((u: any) => u.ativo && (u.setores || []).some((x: string) => ["marketing_operadora", "marketing_supervisao"].includes(x)) && (gestor || u.id === R.currentUserId));
   const metaDe: Record<string, any> = {}; (metas || []).forEach((m: any) => (metaDe[m.dia] = m));
   const meusCli = (uid: string) => st.chamados.filter((c: any) => R.domMarketing(c) && c.solicitanteId === uid);
   const calc = (uid: string) => {

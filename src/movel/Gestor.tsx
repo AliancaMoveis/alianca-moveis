@@ -79,7 +79,7 @@ export function useTimeMkt(P: { de: string; ate: string }, tick = 0) {
   const [metas, setMetas] = useState<any[]>([]);
   useEffect(() => { let v = true; A.listarMetasMkt(P.de, P.ate).then(m => { if (v) setMetas(m || []); }).catch(() => setMetas([])); return () => { v = false; }; }, [P.de, P.ate, tick]);
   const hoje = hojeISO(), valorVenda = Number((R.cfg() as any).valorVendaMkt ?? 10);
-  const ops = st.usuarios.filter((u: any) => u.ativo && doMkt(u) && (u.setores || []).includes("marketing_operadora"));
+  const ops = st.usuarios.filter((u: any) => u.ativo && doMkt(u));
   const linhas = ops.map((u: any) => {
     const l = st.chamados.filter((c: any) => R.domMarketing(c) && c.solicitanteId === u.id);
     const ag = l.filter((c: any) => { const d = diaLocal(c.criadoEm); return d >= P.de && d <= P.ate; });

@@ -178,7 +178,8 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       const t = trDe[c.id];
       return {
         id: c.id, tipo: c.tipo, setorDestino: c.setor_destino, status: c.status, criadoEm: c.criado_em, slaResposta: c.sla_resposta,
-        solicitanteId: c.solicitante_id, solicitante: c.solicitante_nome, setor: c.solicitante_setor,
+        // marketing: quem conta (produção, comissão) é a responsável escolhida no cadastro; sem escolha, quem cadastrou
+        solicitanteId: c.responsavel_mkt || c.solicitante_id, cadastradoPorId: c.solicitante_id, responsavelMkt: c.responsavel_mkt || null, solicitante: c.solicitante_nome, setor: c.solicitante_setor,
         cliente: c.cliente, clienteDoc: c.cliente_doc, telefone: c.telefone, email: c.email, pedido: c.pedido,
         dataVenda: c.data_venda || "", pedidoFabrica: c.pedido_fabrica, produto: c.produto, fabrica: c.fabrica_id || "",
         prazoTatico: c.prazo_tatico || "", motivo: c.motivo, urgente: c.urgente, escalonadoAuto: c.escalonado_auto, escaladoEm: c.escalado_em,

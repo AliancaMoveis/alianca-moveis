@@ -1,6 +1,7 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
 import { EditarCliente, RemarcarData } from "./Remarcar";
 import { CancelouLoja, SituacaoConsultor } from "./Situacao";
+import { RespMktFicha } from "./RespMkt";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
@@ -71,6 +72,7 @@ export default function Detalhe({ id }: { id: string }) {
             <StatusCliente c={c} />
             <CancelouLoja c={c} />
             <CienteExcluir c={c} />
+            <RespMktFicha c={c} />
             <Venda c={c} />
             <Vendedor c={c} />
             <DataLoja c={c} />

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SelRespMkt } from "../comp/RespMkt";
 import { BC, docValido, enderecoTxt, fmtTel } from "../lib/baseClientes";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
@@ -261,6 +262,7 @@ export default function Nova({ escopo, pvFixo, pronto }: { escopo: "cc" | "mkt" 
             <div className="grid">
               <div className="field"><label>E-mail do cliente</label><input name="email" placeholder="cliente@exemplo.com" value={f.email} onChange={set("email")} /></div>
               {presale && !direto && <div className="field full"><button type="button" className={"btn-litoral" + (f.litoral ? " on" : "")} onClick={() => setF((x: any) => ({ ...x, litoral: !x.litoral }))}>🏖 {f.litoral ? "É LITORAL — a Supervisão Marketing vai aprovar (toque para desmarcar)" : "É litoral? Clique aqui"}</button></div>}
+              {presale && !(R.mySetores().includes("consultor_externo") && !R.ehGestao() && !R.temMarketing()) && <SelRespMkt valor={f.responsavelId || ""} mudar={v => setF((x: any) => ({ ...x, responsavelId: v }))} />}
               {presale && direto && <div className="field"><label>Cliente quer projeto pronto? <span className="req-star">*</span></label><select value={f.querProjeto || ""} onChange={e => setF((x: any) => ({ ...x, querProjeto: e.target.value }))}><option value="">Selecione…</option><option value="sim">Sim — vai para definir o vendedor</option><option value="nao">Não — fila automática da loja</option></select></div>}
               {!direto && (R.ehGestao() || R.temMarketing()) && <div className="field" id="fieldConsultor"><label>Consultor designado <span className="hint">(se já souber)</span></label>
                 <select name="consultorId" value={f.consultorId} onChange={set("consultorId")}><option value="">Selecione…</option>{R.consultores().map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}</select></div>}
