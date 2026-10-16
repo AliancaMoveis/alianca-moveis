@@ -1,0 +1,5 @@
+-- 0146 · (aplicado via SQL) Chat interno
+-- tabelas: chat_conversas (privada | setor | contato_setor | grupo), chat_membros, chat_mensagens, chat_auditoria
+-- RLS: só quem participa lê (chat_participa). chat_auditoria sem política de leitura: só o desenvolvedor, por auditoria.
+-- RPCs: chat_minhas, chat_abrir_privada, chat_abrir_setor, chat_enviar, chat_editar (15 min, guarda o original), chat_lido
+-- storage: bucket chat (pasta = id da conversa); realtime em chat_mensagens
