@@ -28,7 +28,7 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
   const tDup = useRef<any>();
   const set = (k: string) => (e: any) => setF((x: any) => ({ ...x, [k]: e.target.value }));
 
-  const tipos = Object.entries(R.TIPOS).filter(([k, t]: any) => R.podeCriarTipo(k) && (escopo === "pv" ? ["posvenda", "assistencia", "montagem"].includes(k) : escopo === "mkt" ? !!t.presale : !t.presale)).sort((a: any, b: any) => 0);
+  const tipos = Object.entries(R.TIPOS).filter(([k, t]: any) => R.podeCriarTipo(k) && (escopo === "pv" ? ["posvenda", "assistencia", "vistoria", "montagem"].includes(k) : escopo === "mkt" ? !!t.presale : !t.presale)).sort((a: any, b: any) => 0);
   const t = f.tipo ? R.TIPOS[f.tipo] : null;
   const ehMkt = t ? !!t.presale : escopo === "mkt";
   const presale = !!(t && t.presale), direto = !!(t && t.direto);
