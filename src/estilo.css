@@ -1271,3 +1271,29 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .mv-ap-c{display:flex;flex-direction:column;gap:2px;cursor:pointer;min-width:0}.mv-ap-c span{font-size:12.5px;color:var(--ink-soft)}.mv-ap-c small{font-size:11.5px;color:var(--ink-faint)}
 .mv-ap-v b{font-size:15px;white-space:nowrap}
 .mv-ap-b{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}.mv-ap-x{grid-column:1/-1}
+/* faixa "Precisa de você agora" no modo escuro: fundo escuro e texto claro (antes o texto sumia no fundo bege) */
+.pb-faixa>b{color:#7a4b00}.pb-al{color:#1a1d21}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .pb-faixa{background:#2e2410;border-color:#8a6a1a}
+  :root:not([data-theme="light"]) .pb-faixa>b{color:#f5c55a}
+  :root:not([data-theme="light"]) .pb-faixa.ok{background:#12301f;border-color:#2f7a4c}
+  :root:not([data-theme="light"]) .pb-faixa.ok>b{color:#8fd0a8}
+  :root:not([data-theme="light"]) .pb-al{background:#1f232b;color:#e8eaee}
+  :root:not([data-theme="light"]) .pb-al.warn{border-color:#c99a2e}:root:not([data-theme="light"]) .pb-al.warn b{color:#f5c55a}
+  :root:not([data-theme="light"]) .pb-al.crit{border-color:#e0575e}:root:not([data-theme="light"]) .pb-al.crit b{color:#ff7a80}
+}
+:root[data-theme="dark"] .pb-faixa{background:#2e2410;border-color:#8a6a1a}
+:root[data-theme="dark"] .pb-faixa>b{color:#f5c55a}
+:root[data-theme="dark"] .pb-faixa.ok{background:#12301f;border-color:#2f7a4c}
+:root[data-theme="dark"] .pb-faixa.ok>b{color:#8fd0a8}
+:root[data-theme="dark"] .pb-al{background:#1f232b;color:#e8eaee}
+:root[data-theme="dark"] .pb-al.warn{border-color:#c99a2e}:root[data-theme="dark"] .pb-al.warn b{color:#f5c55a}
+:root[data-theme="dark"] .pb-al.crit{border-color:#e0575e}:root[data-theme="dark"] .pb-al.crit b{color:#ff7a80}
+/* cartões da visão geral: número em cor normal; o pendente em âmbar (vermelho dava a impressão de tudo atrasado) */
+.pg-card.alerta b,.pg-card b{color:var(--ink)}
+.pg-card .pg-p b{color:inherit}
+.pg-card.alerta .pg-p{color:var(--warn);font-weight:700}
+.pg-card .pg-n b{color:var(--primary)}
+.pb-al.crit{border-color:#e07b39}.pb-al.crit b{color:#c25e1b}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .pb-al.crit{border-color:#e08a4f}:root:not([data-theme="light"]) .pb-al.crit b{color:#f0a06a}:root:not([data-theme="light"]) .pg-card .pg-n b{color:#8fb0ff}}
+:root[data-theme="dark"] .pb-al.crit{border-color:#e08a4f}:root[data-theme="dark"] .pb-al.crit b{color:#f0a06a}:root[data-theme="dark"] .pg-card .pg-n b{color:#8fb0ff}
