@@ -26,17 +26,19 @@ import { Juridico } from "../telas/Setores";
 import ControleVendedores, { podeGerirVendedores } from "../telas/ControleVendedores";
 import { BuscaAssumir } from "../comp/BuscaAssumir";
 import Nova from "../telas/Nova";
+import PosVenda from "../telas/PosVenda";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
 import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados } from "./Medidas";
 
-export type Perfil = "consultor" | "vendedor" | "gestor" | "gerente" | "marketing" | "medidor" | "dono" | "juridico";
+export type Perfil = "consultor" | "vendedor" | "gestor" | "gerente" | "marketing" | "medidor" | "dono" | "juridico" | "posvenda";
 export function perfilMovel(R: any): Perfil | null {
   const s = R.mySetores();
   if (s.includes("proprietario")) return "dono";
   if (R.ehGerenteLoja()) return "gerente";
   if (s.includes("juridico") && !R.ehGestao()) return "juridico";
+  if (s.includes("posvenda") && !R.ehGestao()) return "posvenda";
   if (R.ehGestao() || R.temMarketing() || R.verTudo() || s.includes("suporte_consultores")) return "gestor";
   if (s.includes("consultor_externo")) return "consultor";
   if (s.includes("medidas") && R.me()?.somenteAtribuidos) return "medidor";
@@ -54,6 +56,20 @@ function JurMovel() {
   </div>;
 }
 
+// Pós-venda no celular: solicitações de clientes e montadores, números e nova solicitação (mesmas telas do computador)
+function PvMovel({ aba }: { aba: string }) {
+  const [a, setA] = useState(aba === "nova" ? "cliente" : "clientes");
+  const { abrirDetalhe } = useApp() as any;
+  if (aba === "nova") return <div className="mv-pv">
+    <div className="mv-seg">{([["cliente", "👤 Do cliente"], ["montador", "🔧 Do montador"]] as [string, string][]).map(([k, l]) => <button key={k} className={a === k ? "on" : ""} onClick={() => setA(k)}>{l}</button>)}</div>
+    <Nova key={a} escopo="pv" pvFixo={a as any} pronto={(id: string) => abrirDetalhe(id)} />
+  </div>;
+  return <div className="mv-pv">
+    <div className="mv-seg">{([["clientes", "Clientes"], ["montadores", "Montadores"], ["numeros", "Números"]] as [string, string][]).map(([k, l]) => <button key={k} className={a === k ? "on" : ""} onClick={() => setA(k)}>{l}</button>)}</div>
+    <PosVenda key={a} aba={a} semNovo />
+  </div>;
+}
+
 const primeiro = (n: string) => (n || "").replace(/^(Consultora?|Vendedora?)\s+—\s+/, "").split(" ")[0];
 const hora = (v: any) => { const s = String(v || ""); return s.length > 10 ? s.slice(11, 16) : ""; };
 const dia = (v: any) => String(v || "").slice(0, 10);
@@ -65,6 +81,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : perfil === "dono" ? [["painel", "Painel", "📊"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : perfil === "gerente" ? [["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
+    : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["urgente", "Urgente", "🚨"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
@@ -77,7 +94,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const gereMkt = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
   const { abrirDetalhe } = useApp() as any;
   const podeRegistrar = perfil === "marketing" || perfil === "consultor" || (perfil === "gestor" && (R.ehGestao() || R.temMarketing()));
-  const papel = perfil === "juridico" ? "Jurídico" : perfil === "dono" ? "Proprietário" : perfil === "gerente" ? "Gerente" : perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
+  const papel = perfil === "juridico" ? "Jurídico" : perfil === "posvenda" ? "Pós-venda" : perfil === "dono" ? "Proprietário" : perfil === "gerente" ? "Gerente" : perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
   const urg = perfil === "vendedor" ? pendUrgentes(R) : 0;
   const apv = perfil === "gestor" && R.ehGestao() ? R.pendenciasGestao().total - R.pendenciasGestao().promissorias.length + (R.state.reembolsos || []).filter((r: any) => r.status === "pendente").length : 0;
   const pend = perfil === "vendedor" ? R.state.chamados.filter((c: any) => c.atendenteId === R.currentUserId && (R.parecerCobrado(c) || R.semParecer(c))).length : 0;
@@ -118,6 +135,8 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "juridico" && aba === "distribuir" && <Distribuir soVend />}
         {aba === "vendedores" && <><button className="mv-voltar" onClick={() => setAba(abas[0][0])}>‹ Voltar</button><ControleVendedores movel /></>}
         {perfil === "juridico" && aba === "jur" && <JurMovel />}
+        {perfil === "posvenda" && aba === "pv" && <PvMovel aba="lista" />}
+        {perfil === "posvenda" && aba === "pvnova" && <PvMovel aba="nova" />}
         {aba === "loja" && <div className="mv-agenda">{perfil === "marketing" && <button className="mv-voltar" onClick={() => setAba("hoje")}>‹ Voltar</button>}<Agenda /></div>}
         {aba === "eu" && <Eu perfil={perfil} completa={completa} irTime={gereMkt && !abas.some(x => x[0] === "time") ? () => setAba("time") : undefined} />}
       </main>

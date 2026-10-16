@@ -15,12 +15,12 @@ const ABAS_PV: Record<string, [string, string]> = {
   numeros: ["Números do pós-venda", "Qualidade: responsabilidades, custos, montadores com mais pedidos de suporte, projetistas e medições com erro."],
   cadastro: ["Montadores", "Cadastro de montadores (WhatsApp e região preferencial) e contas para pagamento — só a Gestão."],
 };
-export default function PosVenda({ aba = "clientes" }: { aba?: string }) {
+export default function PosVenda({ aba = "clientes", semNovo }: { aba?: string; semNovo?: boolean }) {
   const [t, d] = ABAS_PV[aba] || ABAS_PV.clientes;
   return (
     <section className="view active" id="view-posvenda">
       <div className="view-head"><div><h2>{t}</h2><p>{d}</p></div></div>
-      {aba === "montadores" ? <Abertos origem="montador" /> : aba === "numeros" ? <Numeros /> : aba === "cadastro" ? <CadastroMontadores /> : <Abertos origem="cliente" />}
+      {aba === "montadores" ? <Abertos origem="montador" semNovo={semNovo} /> : aba === "numeros" ? <Numeros /> : aba === "cadastro" ? <CadastroMontadores /> : <Abertos origem="cliente" semNovo={semNovo} />}
     </section>
   );
 }
@@ -139,7 +139,7 @@ function Numeros() {
 }
 
 // Painel do dia do Pós-venda: montador parado primeiro, depois prazo vencido, prazo de hoje, sem prazo; e pendências de dinheiro
-function Abertos({ origem }: { origem: "cliente" | "montador" }) {
+function Abertos({ origem, semNovo }: { origem: "cliente" | "montador"; semNovo?: boolean }) {
   const { R, st, abrirDetalhe, irPara } = useApp() as any;
   const todos = st.chamados.filter((c: any) => c.tipo === "posvenda" && R.podeVer(c) && ((c.posvenda || {}).origem || "cliente") === origem);
   const pv = (c: any) => c.posvenda || {};
@@ -168,7 +168,7 @@ function Abertos({ origem }: { origem: "cliente" | "montador" }) {
   };
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", margin: "14px 0 0" }}>{R.ehPosvenda() && <button className="btn primary sm" onClick={() => irPara(origem === "montador" ? "novopv_mont" : "novopv_cli")}>{origem === "montador" ? "+ Nova solicitação do montador" : "+ Nova solicitação do cliente"}</button>}</div>
+      <div style={{ display: "flex", justifyContent: "flex-end", margin: "14px 0 0" }}>{R.ehPosvenda() && !semNovo && <button className="btn primary sm" onClick={() => irPara(origem === "montador" ? "novopv_mont" : "novopv_cli")}>{origem === "montador" ? "+ Nova solicitação do montador" : "+ Nova solicitação do cliente"}</button>}</div>
       <div className="kpis" style={{ marginTop: 12 }}>
         <Kpi n={abertos.length} l="Em aberto" />
         {origem === "montador" && <Kpi n={abertos.filter((c: any) => pv(c).paradoObra).length} l="Montador parado na obra" cls={abertos.some((c: any) => pv(c).paradoObra) ? "alert" : ""} />}
