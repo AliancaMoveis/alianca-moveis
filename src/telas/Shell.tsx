@@ -2,6 +2,7 @@ import { NotifPC } from "../comp/NotifPC";
 import { SinoAvisos } from "../comp/Avisos";
 import { ChatFlutuante } from "../comp/Chat";
 import EncontrarVendas360 from "./EncontrarVendas360";
+import MontagemAgend from "./MontagemAgend";
 import ControleVendedores from "./ControleVendedores";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
@@ -175,6 +176,7 @@ export default function Shell() {
             {(atual === "checklist" || (atual.startsWith("ck_") && atual !== "ck_produtividade")) && <Checklist key={atual} aba={atual === "checklist" ? "agendar" : atual.slice(3)} />}
             {atual.startsWith("md_") && <Medidas key={atual} aba={atual.slice(3)} />}
             {atual === "encontrar_vendas" && R.podeEncontrarVendas() && <EncontrarVendas />}
+            {atual === "montagem_agend" && <MontagemAgend />}
             {atual === "encontrar_vendas360" && R.podeEncontrarVendas() && <EncontrarVendas360 />}
             {atual === "treino" && <Treino />}
             {atual.startsWith("st_") && (() => { const m = atual.match(/^st_(.+)_([a-z]+)$/); return m ? <SetorFila key={atual} setor={m[1]} aba={m[2]} /> : null; })()}

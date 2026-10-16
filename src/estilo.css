@@ -1428,3 +1428,22 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .vinda.pend { background: rgba(214,150,40,.14); color: #8a5a00; border: 1px solid rgba(214,150,40,.5); }
 :root[data-theme="dark"] .vinda.ok { color: #7fe0b5; } :root[data-theme="dark"] .vinda.pend { color: #f0c24b; }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .vinda.ok { color: #7fe0b5; } :root:not([data-theme="light"]) .vinda.pend { color: #f0c24b; }}
+
+/* Montagem · agendamentos */
+.ma-topo { padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+.ma-envio { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.ma-filtros { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.ma-filtros .field { margin: 0; min-width: 140px; }
+.ma-cab { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.ma-cab b { flex: 1; min-width: 200px; }
+.ma-valor { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); }
+.ma-valor input { width: 70px; padding: 4px 8px; }
+.ma-tab { width: 100%; border-collapse: collapse; min-width: 560px; font-size: 13.5px; }
+.ma-tab th { text-align: left; font-size: 12px; color: var(--ink-faint); padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.ma-tab td { padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
+.ma-tab .n { text-align: right; white-space: nowrap; }
+.ma-tab tfoot td { font-weight: 800; border-top: 2px solid var(--line); }
+.ma-lin { cursor: pointer; } .ma-lin:hover, .ma-lin.on { background: var(--primary-soft); }
+.ma-barra { height: 10px; background: var(--line-soft); border-radius: 6px; overflow: hidden; } .ma-barra i { display: block; height: 100%; background: var(--primary); border-radius: 6px; }
+.ma-dias td { background: var(--bg); } .ma-dias span { display: inline-flex; flex-direction: column; align-items: center; min-width: 44px; margin: 2px 4px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.ma-dias small { font-size: 10.5px; color: var(--ink-faint); }
