@@ -9,3 +9,5 @@ create or replace function public._so_gestao_setor() returns boolean language sq
   select exists (select 1 from public.usuario_setores where usuario_id = auth.uid() and setor_id = 'gestao') $$;
 create policy montagem_agend_ler on public.montagem_agend for select to authenticated using (public._so_gestao_setor());
 -- montagem_importar(p jsonb): upsert por chave (O.S.¦montador¦data montagem¦agendadora); sem nome/endereço do cliente.
+-- montagem_efet (montagens efetivadas: os, montador, status, datas, produtos, adicionais, total) + montagem_vinculo (nome do Exact → montadores.id)
+-- RPCs montagem_efet_importar(p jsonb), montagem_vincular(p_nome, p_montador) — só Gestão (_so_gestao_setor).
