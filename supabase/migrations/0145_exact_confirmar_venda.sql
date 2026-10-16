@@ -1,0 +1,3 @@
+-- 0145 · (aplicado via SQL) exact_confirmar_venda(p_id, p_numero, p_valor, p_data, p_vendedor, p_situacao, p_vendedor_id):
+-- Gestão confirma no 360 uma venda encontrada no relatório do Exact. Vale o Exact: lança o nº (pago, ou promissória quando
+-- "Reserva com Promissória"), efetiva (menos "Aguardando Aprovação"), grava o vendedor do Exact e corrige o vendedor do cliente.

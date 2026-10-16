@@ -1,4 +1,5 @@
 import { BuscaAssumir } from "../comp/BuscaAssumir";
+import { baixarXlsx } from "../lib/planilha";
 import { ModalFerias, podeMarcarFerias, textoFerias } from "../comp/Ferias";
 import { useState } from "react";
 import { useApp } from "../estado";
@@ -149,6 +150,9 @@ export function Clientes() {
         <input type="date" style={{ maxWidth: 160 }} title="Até" value={ate} onChange={e => setAte(e.target.value)} />
         <button className="btn ghost sm" onClick={() => { setDe(mesAtual().de); setAte(mesAtual().ate); }}>Mês atual</button>
         <button className="btn ghost sm" onClick={() => { setDe(""); setAte(""); }}>Todo o período</button>
+        {(R.ehGestao() || R.mySetores().includes("marketing_supervisao")) && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => baixarXlsx("clientes-" + (orig || "todos") + (de || ate ? "-" + (de || "inicio") + "_a_" + (ate || "hoje") : ""), ["Nº", "Cliente", "Telefone", "CPF/CNPJ", "Origem", "Status", "Cadastro", "Responsável marketing", "Consultor", "Data visita", "Data loja", "Vendedor", "Ambiente", "Venda nº", "Valor venda", "Situação venda", "Data venda", "Vendedor da venda"],
+          arr.map((c: any) => { const v = c.venda; return [c.id, c.cliente, c.telefone || "", c.clienteDoc || "", R.origemLoja(c) === "externo" ? "Consultor externo" : "Marketing", STATUS_CLIENTE[R.statusClienteDe(c)] || "", fmtDate(c.criadoEm), R.nomeUser(c.solicitanteId), c.consultorId ? R.nomeUser(c.consultorId) : "", c.dataVisita ? fmtDate(c.dataVisita) : "", c.dataLoja ? fmtDate(c.dataLoja) : "", c.atendenteId ? R.nomeUser(c.atendenteId) : "", c.produto || "",
+            v ? v.numero : "", v && R.podeVerValor(c) && v.valor ? parseMoeda(v.valor) : "", v ? VENDA_STATUS[v.status] || v.status : "", v && v.dataVenda ? fmtDate(v.dataVenda) : "", v ? v.vendedor || "" : ""]; }), "Clientes")}>⬇ Exportar Excel ({arr.length})</button>}
       </div>
       <div className="subnav" style={{ marginBottom: 10 }}>
         <button className={orig === "" ? "on" : ""} onClick={() => setOrig("")}>Todos</button>

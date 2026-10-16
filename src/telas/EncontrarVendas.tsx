@@ -143,7 +143,7 @@ export default function EncontrarVendas() {
 
   return (
     <section className="view active">
-      <div className="view-head"><div><h2>Encontrar vendas</h2>
+      <div className="view-head"><div><h2>Encontrar vendas da Minha Visita</h2>
         <p>Confere as vendas da loja com os clientes do Minha Visita. Anexe o <b>relatório de vendas do Exact</b> e as planilhas <b>customers do Minha Visita</b> (quantas precisar). O cruzamento é pelo <b>telefone</b> e, quando o telefone não bate, pelo <b>endereço</b> (rua, número e cidade) comparando o complemento (bloco, apto, casa). As planilhas ficam só nesta tela — nada é gravado.</p></div></div>
 
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", margin: "10px 0" }}>
