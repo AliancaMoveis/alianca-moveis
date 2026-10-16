@@ -434,7 +434,7 @@ export function ResCk({ todos, noPer, P, L }: any) {
 }
 
 // ================= EQUIPE =================
-export function GestEquipe({ irTime }: { irTime?: () => void }) {
+export function GestEquipe({ irTime, irVend }: { irTime?: () => void; irVend?: () => void }) {
   const { R, st } = useApp() as any;
   const a = areas(R, st);
   const [area, setArea] = useState<"mkt" | "cc">(a.mkt ? "mkt" : "cc");
@@ -487,6 +487,7 @@ export function GestEquipe({ irTime }: { irTime?: () => void }) {
     <SelPer per={per} setPer={p => { setPer(p); L.fechar(); }} livre={livre} setLivre={setLivre} />
     {area === "mkt" && <div className="mv-seg">{((R.ehGestao() ? [["cons", "Consultores"], ["vend", "Vendedores"], ["op", "Time marketing"]] : [["op", "Time marketing"], ["cons", "Consultores"], ["vend", "Vendedores"]]) as any[]).map(([k, l]) =>
       <button key={k} className={grupo === k ? "on" : ""} onClick={() => { setGrupo(k); setAberto(""); L.fechar(); }}>{l}</button>)}</div>}
+    {area === "mkt" && grupo === "vend" && irVend && <button className="mv-principal" style={{ marginBottom: 10 }} onClick={irVend}>📅 Folgas, domingos e férias dos vendedores</button>}
     {area === "mkt" && grupo === "op" && irTime && <button className="mv-principal" style={{ marginBottom: 10 }} onClick={irTime}>🎯 Metas do dia e aprovação de pagamento</button>}
     {area === "cc" && <div className="mv-sec">Chamados abertos por atendente · {P.nome}</div>}
     {linhas.length ? linhas.map((x, i) => <div key={x.u.id} className={"mv-pessoa" + (aberto === x.u.id ? " on" : "")}>

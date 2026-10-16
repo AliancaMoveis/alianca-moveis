@@ -7,7 +7,7 @@ import { PromissoriasAbertas, ValidarVenda } from "../comp/VendaValidar";
 import { promAbertas, itensPendentes, parseMoeda } from "../lib/regras";
 
 export function Pendencias() {
-  const { R, abrirDetalhe } = useApp();
+  const { R, abrirDetalhe, executar } = useApp() as any;
   const { grupos, total } = R.minhasPendencias();
   const u = R.me()!;
   const urgentes = grupos.filter((g: any) => ["visitaatrasada", "semAtualizacaoMkt", "meusatrasados", "criticos", "devolvido"].includes(g.chave)).reduce((s: number, g: any) => s + g.itens.length, 0);
@@ -36,7 +36,7 @@ export function Pendencias() {
               return (
                 <div className="ap-item" key={c.id} style={{ borderLeftColor: g.cor }} onClick={() => abrirDetalhe(c.id)}>
                   <div><div className="nm">{c.cliente}</div><div className="meta">{linha}</div></div>
-                  <div className="acoes"><span className="pill">{c.id}</span></div>
+                  <div className="acoes">{["visitacanc", "lojacanc"].includes(g.chave) && <button className="btn primary sm" onClick={e => { e.stopPropagation(); executar(() => A.cienteCancelamento(c.id), "Ciente registrado"); }}>✓ Estou ciente</button>}<span className="pill">{c.id}</span></div>
                 </div>
               );
             })}

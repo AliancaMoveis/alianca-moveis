@@ -4,7 +4,7 @@ import { sb } from "./supabase";
 
 export type Anexo = { id?: string; tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; path?: string | null; criadoPor?: string | null };
 export type Chamado = any;
-export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean; fazProjeto?: boolean; folga?: number | null; turno?: string | null; nomeCompleto?: string | null; telefone?: string | null; feriasDe?: string | null; feriasAte?: string | null; editaAgenda?: boolean };
+export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean; fazProjeto?: boolean; folga?: number | null; turno?: string | null; nomeCompleto?: string | null; telefone?: string | null; feriasDe?: string | null; feriasAte?: string | null; editaAgenda?: boolean; domingoRef?: string | null; naAgenda?: boolean };
 export type Setor = { id: string; nome: string; liberacoes: Record<string, boolean> };
 export type Estado = {
   setores: Setor[];
@@ -20,6 +20,7 @@ export type Estado = {
   medidasCruz?: Record<string, MedidaCruz>;
   /** períodos com a agenda do checklist fechada (feriado, folga, consulta…); projetista "" = todos */
   ckBloqueios?: CkBloqueio[];
+  vendedorDias?: Record<string, Record<string, string>>;
 };
 export type CkBloqueio = { id: number; projetista: string; inicio: string; fim: string; motivo: string; obs: string; criadoPor: string };
 export type MedidaCruz = { venda: string; comprador: string; telefone: string; visitado: string; consultor: string; statusMv: string; visitaEm: string; medidor: string; situacao: string; resultado: "ok" | "sem"; tratativa: string; obs: string; cruzadoEm: string; atualizadoEm: string; atualizadoPor: string };
@@ -83,10 +84,10 @@ async function principal(): Promise<{ chamados: any[]; historico: any[]; anexos:
   return { chamados, historico, anexos, vendas, valores, itens };
 }
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, mconta] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
-    todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em,faz_projeto,folga,turno,nome_completo,telefone,ferias_de,ferias_ate,edita_agenda", "criado_em"),
+    todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em,faz_projeto,folga,turno,nome_completo,telefone,ferias_de,ferias_ate,edita_agenda,domingo_ref,na_agenda", "criado_em"),
     todos("usuario_setores", "*", "ordem"),
     todos("representantes", "*", "criado_em"),
     todos("fabricas", "*", "criado_em"),
@@ -98,6 +99,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("reembolsos", "*", "criado_em").catch(() => []), // o próprio pedido ou a Gestão (RLS)
     todos("medidas_cruzamento", "*", "venda").catch(() => []), // Medidas e Checklist (RLS)
     todos("checklist_bloqueios", "*", "inicio").catch(() => []), // agenda fechada do checklist (RLS)
+    todos("vendedor_dias", "*", "dia").catch(() => []), // trocas de folga dos vendedores
     todos("montadores_conta", "*").catch(() => []), // conta de pagamento do montador — só Pós-venda e Gestão (RLS)
   ]);
   const { chamados, vendas, valores, historico: hist, anexos } = P; const proms = P.itens;
@@ -156,7 +158,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       id: s.id, nome: s.nome,
       liberacoes: { criar: s.lib_criar, verTudo: s.lib_ver_tudo, cadastros: s.lib_cadastros, admin: s.lib_admin, verMarketing: s.lib_ver_marketing, viaCallcenter: !!s.via_callcenter },
     })),
-    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo, fazProjeto: u.faz_projeto !== false, folga: u.folga ?? null, turno: u.turno || null, nomeCompleto: u.nome_completo || null, telefone: u.telefone || null, feriasDe: u.ferias_de || null, feriasAte: u.ferias_ate || null, editaAgenda: !!u.edita_agenda })),
+    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo, fazProjeto: u.faz_projeto !== false, folga: u.folga ?? null, turno: u.turno || null, nomeCompleto: u.nome_completo || null, telefone: u.telefone || null, feriasDe: u.ferias_de || null, feriasAte: u.ferias_ate || null, editaAgenda: !!u.edita_agenda, domingoRef: u.domingo_ref || null, naAgenda: u.na_agenda !== false })),
     representantes: reps.map((r: any) => ({ id: r.id, nome: r.nome, whats: r.whats, email: r.email })),
     fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })).sort((a: any, b: any) => { const na = /n[aã]o informad/i.test(a.nome) ? 1 : 0, nb = /n[aã]o informad/i.test(b.nome) ? 1 : 0; return na - nb || a.nome.localeCompare(b.nome, "pt-BR"); }),
     tipos: tiposMap,
@@ -165,12 +167,13 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     montadores: montadores.map((m: any) => { const k: any = (mconta as any[]).find((x: any) => x.montador_id === m.id);
       return { id: m.id, nome: m.nome, telefone: m.telefone || "", regiao: m.regiao || "", ativo: m.ativo,
         conta: k ? { titular: k.titular, docTitular: k.doc_titular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipoConta: k.tipo_conta, pixTipo: k.pix_tipo, pixChave: k.pix_chave, obs: k.obs, atualizadoEm: k.atualizado_em, atualizadoPor: k.atualizado_por } : null }; }),
+    vendedorDias: (vdias as any[]).reduce((m: any, r: any) => { (m[r.usuario_id] = m[r.usuario_id] || {})[r.dia] = r.tipo; return m; }, {}),
     ckBloqueios: (bloqs as any[]).filter((b: any) => b.ativo).map((b: any) => ({ id: b.id, projetista: b.projetista || "", inicio: String(b.inicio).slice(0, 16).replace(" ", "T"), fim: String(b.fim).slice(0, 16).replace(" ", "T"), motivo: b.motivo, obs: b.obs || "", criadoPor: b.criado_por || "" })),
     medidasCruz: Object.fromEntries((mcruz as any[]).map((m: any) => [m.venda, { venda: m.venda, comprador: m.comprador, telefone: m.telefone, visitado: m.visitado, consultor: m.consultor,
       statusMv: m.status_mv, visitaEm: m.visita_em, medidor: m.medidor, situacao: m.situacao_exact, resultado: m.resultado, tratativa: m.tratativa, obs: m.obs,
       cruzadoEm: m.cruzado_em, atualizadoEm: m.atualizado_em, atualizadoPor: m.atualizado_por }])),
     config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), valorVendaMkt: cfg.data.valor_venda_mkt != null ? Number(cfg.data.valor_venda_mkt) : 10, modoTeste: !!cfg.data.modo_teste, auxilioFixo: cfg.data.auxilio_fixo != null ? Number(cfg.data.auxilio_fixo) : 1500, diaAuxilio: Number(cfg.data.dia_auxilio) || 15, checklistAgenda: cfg.data.checklist_agenda || null } : { comissaoPct: 1.5, pagamentoVisita: 40 },
-    chamados: chamados.map((c: any) => {
+    chamados: chamados.filter((c: any) => !(c.tratativa && c.tratativa.excluido)).map((c: any) => {
       const v = vendaDe[c.id];
       const t = trDe[c.id];
       return {

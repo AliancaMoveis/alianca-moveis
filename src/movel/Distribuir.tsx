@@ -73,7 +73,7 @@ function CartaoVend({ c, comVend }: any) {
   const { R, executar: ex, toast, abrirDetalhe } = useApp() as any;
   const [v, setV] = useState("");
   const t = c.tratativa || {};
-  const vendedores = R.vendedores();
+  const vendedores = R.vendAgenda();
   const noDia = (uid: string) => comVend.filter((x: any) => x.atendenteId === uid && x.id !== c.id && dia(x.dataLoja) === dia(c.dataLoja)).length;
   const sug = c.dataLoja ? vendedores.filter((a: any) => !R.dispVendedor(a.id, c.dataLoja, c).length).sort((a: any, b: any) => noDia(a.id) - noDia(b.id))[0] || null : null;
   const definir = async () => {

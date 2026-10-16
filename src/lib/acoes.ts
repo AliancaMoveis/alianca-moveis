@@ -171,6 +171,14 @@ export const A = {
   checklistAgendadosPlanilha: (linhas: any[], aplicar: boolean, trocarProj: boolean, corrigir: boolean) => rpc<any>("checklist_agendados_planilha", { p: linhas, p_aplicar: aplicar, p_trocar_proj: trocarProj, p_corrigir: corrigir }),
   checklistDiasPlanilha: (linhas: any[], aplicar: boolean) => rpc<any>("checklist_dias_planilha", { p: linhas, p_aplicar: aplicar }),
   checklistImportar: (linhas: any[]) => rpc<{ novos: number; ignorados: number; agendados?: number }>("checklist_importar", { p: linhas }),
+  vendedorEscalaV2: (id: string, fazProjeto: boolean, folga: number | null, turno: string, domingo: string | null, naAgenda: boolean) => rpc("vendedor_escala_v2", { p_id: id, p_faz_projeto: fazProjeto, p_folga: folga, p_turno: turno, p_domingo: domingo, p_na_agenda: naAgenda }),
+  vendedorDia: (id: string, dia: string, tipo: string, obs = "") => rpc("vendedor_dia", { p_id: id, p_dia: dia, p_tipo: tipo, p_obs: obs }),
+  cienteCancelamento: (id: string) => rpc("ciente_cancelamento", { p_id: id }),
+  excluirClienteMkt: async (id: string, motivo: string) => {
+    const paths = await rpc<string[]>("mkt_excluir_cliente", { p_id: id, p_motivo: motivo });
+    if (paths && paths.length) await sb.storage.from("anexos").remove(paths).catch(() => null);
+    return paths;
+  },
   vendedorFerias: (id: string, de: string | null, ate: string | null) => rpc("vendedor_ferias", { p_id: id, p_de: de, p_ate: ate }),
   vendedorBuscar: (q: string) => rpc<any[]>("vendedor_buscar_clientes", { p_q: q }),
   vendedorAssumir: (id: string) => rpc("vendedor_assumir", { p_id: id }),

@@ -6,17 +6,20 @@ import { A } from "../lib/acoes";
 import { DIAS_SEMANA, TURNOS, STATUS, STATUS_CLIENTE, fmtDate, fmtDateTime, hhmm, hojeISO, soDigitos } from "../lib/regras";
 import { fmtTel } from "../lib/baseClientes";
 import { ModalFerias, textoFerias } from "../comp/Ferias";
-import { feriasEm } from "../lib/regras";
+import { feriasEm, folgaEm, fimDeSemana } from "../lib/regras";
 
 const primeiro = (n: string) => (n || "").replace(/^(Consultora?|Vendedora?)\s+—\s+/, "");
 const horaDe = (v: any) => String(v || "").slice(11, 16);
 
 /** folga / ainda não entrou / almoço — mesma regra do banco (_vend_motivo_indisp) */
-export function motivoIndisp(u: any, agora = new Date()): string {
-  const fe = feriasEm(u, agora.getFullYear() + "-" + String(agora.getMonth() + 1).padStart(2, "0") + "-" + String(agora.getDate()).padStart(2, "0"));
+export function motivoIndisp(u: any, agora = new Date(), dias?: Record<string, string>): string {
+  const hoje = agora.getFullYear() + "-" + String(agora.getMonth() + 1).padStart(2, "0") + "-" + String(agora.getDate()).padStart(2, "0");
+  const fe = feriasEm(u, hoje);
   if (fe) return fe;
-  if (u.folga !== null && u.folga !== undefined && agora.getDay() === u.folga) return "folga (" + DIAS_SEMANA[u.folga] + ")";
+  if (folgaEm(u, hoje, dias)) return "folga (" + DIAS_SEMANA[agora.getDay()] + ")";
   const tu = TURNOS[u.turno || ""]; const m = agora.getHours() * 60 + agora.getMinutes();
+  // sábado e domingo: todos 9:00–18:00, almoço de 1h livre
+  if (fimDeSemana(agora)) return m < 540 ? "entra às 9:00" : m >= 1080 ? "saiu às 18:00" : "";
   if (tu) {
     if (m < tu.entra) return "entra às " + hhmm(tu.entra);
     if (m >= tu.almoco[0] && m < tu.almoco[1]) return "almoço até " + hhmm(tu.almoco[1]);
@@ -43,6 +46,7 @@ export function GerHoje({ ir }: { ir: (aba: string) => void }) {
       <button className="gr-urg" onClick={() => ir("chamar")}><span>🚨</span><b>Todos para a fila</b><small>urgente · só quem está disponível</small></button>
     </div>
     {defN > 0 && <button className="mv-principal" style={{ marginBottom: 10 }} onClick={() => ir("distribuir")}>🔀 Definir vendedor · {defN} pendente{defN > 1 ? "s" : ""}</button>}
+    <button className="mv-mais" style={{ marginBottom: 10, width: "100%" }} onClick={() => ir("vendedores")}>👥 Controle dos vendedores — folgas, domingos, férias</button>
     <div className="mv-nums">
       <button className="mv-num" onClick={() => ir("loja")}><b>{loja.length}</b><span>clientes hoje</span></button>
       <button className="mv-num" onClick={() => ir("loja")} style={semVend.length ? { color: "var(--warn)" } : undefined}><b>{semVend.length}</b><span>sem vendedor</span></button>
@@ -72,7 +76,7 @@ export function GerChamar() {
   const [env, setEnv] = useState("");
   const [res, setRes] = useState<{ ok: boolean; t: string } | null>(null);
   const agora = new Date();
-  const vend = R.projetistas().map((u: any) => ({ u, mot: motivoIndisp(u, agora) }))
+  const vend = R.vendAgenda().map((u: any) => ({ u, mot: motivoIndisp(u, agora, (R.state.vendedorDias || {})[u.id]) }))
     .sort((a: any, b: any) => Number(!!a.mot) - Number(!!b.mot) || a.u.nome.localeCompare(b.u.nome, "pt-BR"));
   const disp = vend.filter((v: any) => !v.mot).length;
   const chamar = async (u: any, mot: string) => {

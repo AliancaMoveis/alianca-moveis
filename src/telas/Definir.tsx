@@ -32,7 +32,7 @@ export default function Definir() {
     .sort((a: any, b: any) => String(a.dataLoja || "9").localeCompare(String(b.dataLoja || "9")));
   const comVend = mkt.filter((c: any) => c.atendenteId && c.dataLoja && dia(c) >= hoje && !c.venda && R.statusClienteDe(c) !== "nao_compareceu");
   const definidos = comVend.filter((c: any) => dia(c) <= ate7).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
-  const vendedores = R.vendedores();
+  const vendedores = R.vendAgenda();
   const semParecer = mkt.filter((c: any) => R.semParecer(c) && c.dataLoja && dia(c) >= MARCO).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
 
   const passou: any[] = [], nHoje = sem.filter((c: any) => dia(c) === hoje), nAm = sem.filter((c: any) => dia(c) === amanha);

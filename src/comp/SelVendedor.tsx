@@ -6,7 +6,7 @@ export function rotuloVend(u: any) { return u.nome + (u.fazProjeto === false ? "
 
 export function SelVendedor({ value, onChange, quando, c, lista, placeholder = "Selecione…", extra }: { value: string; onChange: (v: string) => void; quando?: string | null; c?: any; lista?: any[]; placeholder?: string; extra?: (u: any) => string }) {
   const { R } = useApp() as any;
-  const vs = lista || R.projetistas();
+  const vs = lista || R.vendAgenda();
   const proj = vs.filter((u: any) => u.fazProjeto !== false), so = vs.filter((u: any) => u.fazProjeto === false);
   const opt = (u: any) => { const m = R.dispVendedor(u.id, quando, c); return <option key={u.id} value={u.id}>{(m.length ? "⛔ " : "") + u.nome + (extra ? extra(u) : "") + (m.length ? " — " + m.join(" · ") : "")}</option>; };
   const mot = value ? R.dispVendedor(value, quando, c) : [];

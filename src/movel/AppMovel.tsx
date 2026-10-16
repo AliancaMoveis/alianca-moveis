@@ -22,6 +22,7 @@ import { GestAcao, GestEquipe, GestResumo, GestTime } from "./Gestor";
 import { GerChamar, GerClientes, GerHoje } from "./Gerente";
 import { Distribuir, podeDistribuir } from "./Distribuir";
 import { Juridico } from "../telas/Setores";
+import ControleVendedores, { podeGerirVendedores } from "../telas/ControleVendedores";
 import { BuscaAssumir } from "../comp/BuscaAssumir";
 import Nova from "../telas/Nova";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
@@ -107,12 +108,13 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {podeRegistrar && aba === "novo" && <>{perfil === "gestor" && <button className="mv-voltar" onClick={() => setAba("resumo")}>‹ Voltar</button>}<MktNovo pronto={id => { if (perfil === "consultor") { setAba("clientes"); setAberto(id); return; } setAba(perfil === "marketing" ? "clientes" : "resumo"); abrirDetalhe(id); }} /></>}
         {(perfil === "consultor" || perfil === "vendedor" || perfil === "medidor") && aba === "painel" && <Painel perfil={perfil} abrir={setAberto} />}
         {perfil === "gestor" && aba === "resumo" && <GestResumo ir={k => abas.some(x => x[0] === k) && setAba(k)} />}
-        {perfil === "gestor" && aba === "equipe" && <GestEquipe irTime={gereMkt ? () => setAba("time") : undefined} />}
+        {perfil === "gestor" && aba === "equipe" && <GestEquipe irTime={gereMkt ? () => setAba("time") : undefined} irVend={podeGerirVendedores(R) ? () => setAba("vendedores") : undefined} />}
         {perfil === "gestor" && aba === "time" && <GestTime voltar={!abas.some(x => x[0] === "time") ? () => setAba("equipe") : undefined} />}
         {perfil === "gestor" && aba === "acao" && <GestAcao />}
         {perfil === "gestor" && aba === "distribuir" && <Distribuir />}
         {perfil === "gerente" && aba === "distribuir" && <><button className="mv-voltar" onClick={() => setAba("hoje")}>‹ Voltar</button><Distribuir soVend /></>}
         {perfil === "juridico" && aba === "distribuir" && <Distribuir soVend />}
+        {aba === "vendedores" && <><button className="mv-voltar" onClick={() => setAba(abas[0][0])}>‹ Voltar</button><ControleVendedores movel /></>}
         {perfil === "juridico" && aba === "jur" && <JurMovel />}
         {aba === "loja" && <div className="mv-agenda">{perfil === "marketing" && <button className="mv-voltar" onClick={() => setAba("hoje")}>‹ Voltar</button>}<Agenda /></div>}
         {aba === "eu" && <Eu perfil={perfil} completa={completa} irTime={gereMkt && !abas.some(x => x[0] === "time") ? () => setAba("time") : undefined} />}

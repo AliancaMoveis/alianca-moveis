@@ -170,6 +170,21 @@ export const parseData = (v: any): Date => {
   return new Date(s);
 };
 /** vendedor de férias num dia (AAAA-MM-DD) — devolve o texto "férias até DD/MM" ou "" */
+// folga no dia (mesma regra do banco, _vend_folga_em): troca do dia > domingo do rodízio (trabalha 2, folga 1) >
+// folga da semana — que só vale na semana (seg–dom) em que ele trabalha o domingo
+const diasEntre = (a: string, b: string) => Math.round((Date.parse(a + "T12:00:00Z") - Date.parse(b + "T12:00:00Z")) / 864e5);
+const somaDias = (iso: string, n: number) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+export const domingoDeFolga = (u: any, dom: string, dias?: Record<string, string>) => { const ex = dias && dias[dom]; if (ex) return ex === "folga"; return !!u.domingoRef && ((diasEntre(dom, u.domingoRef) % 21) + 21) % 21 === 0; };
+export function folgaEm(u: any, dia: string, dias?: Record<string, string>): boolean {
+  if (!u) return false;
+  const ex = dias && dias[dia]; if (ex) return ex === "folga";
+  const dow = new Date(dia + "T12:00:00Z").getUTCDay();
+  if (dow === 0) return domingoDeFolga(u, dia, dias);
+  if (u.folga === null || u.folga === undefined || dow !== u.folga) return false;
+  if (!u.domingoRef) return true;
+  return !domingoDeFolga(u, somaDias(dia, 7 - dow), dias);
+}
+export const fimDeSemana = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
 export const feriasEm = (u: any, dia: string) => u && u.feriasAte && dia <= u.feriasAte && dia >= (u.feriasDe || dia) ? "férias até " + u.feriasAte.slice(8, 10) + "/" + u.feriasAte.slice(5, 7) : "";
 export const fmtDate = (iso: any) => iso ? parseData(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
 export const fmtDateTime = (iso: any) => {
@@ -380,6 +395,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const ocultaValoresMkt = () => mySetores().includes("marketing_operadora") && !ehGestao() && !mySetores().some((x: string) => ["marketing_supervisao", "proprietario"].includes(x));
   const ehGerenteLoja = () => mySetores().includes("gerente_loja") && !ehGestao() && !mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores", "proprietario"].includes(x));
   const souRespLoja = (c: Chamado) => (mySetores().includes("suporte_consultores") && !ehDireto(c)) || (temMarketing() && ehDireto(c) && !ehGerenteLoja());
+  // quem entra na agenda (definir vendedor, fila, chamar): sem os que estão "fora da agenda" (ex.: freelance)
+  const cienteDe = (c: Chamado, sc: string) => !!(c.tratativa && c.tratativa["ciente_" + sc] && c.tratativa["ciente_" + sc][currentUserId]);
+  const vendAgenda = () => projetistas().filter((u: any) => u.naAgenda !== false);
+  const folgaDia = (uid: string, dia: string) => folgaEm(getUser(uid), dia, (state.vendedorDias || {})[uid]);
   const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente")).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   /** Disponibilidade do vendedor para atender um cliente na loja num horário (folga, turno, almoço e outro cliente a menos de 2h) */
   const dispVendedor = (uid: string, quando: string | null | undefined, exceto?: Chamado | null): string[] => {
@@ -387,9 +406,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const d = new Date(quando); if (isNaN(d.getTime())) return [];
     const mot: string[] = []; const m = d.getHours() * 60 + d.getMinutes();
     const fe = feriasEm(u, isoLocal(d)); if (fe) mot.push("🏖 " + fe);
-    if (u.folga !== null && u.folga !== undefined && d.getDay() === u.folga) mot.push("folga (" + DIAS_SEMANA[u.folga] + ")");
+    if (folgaEm(u, isoLocal(d), (state.vendedorDias || {})[uid])) mot.push("folga (" + DIAS_SEMANA[d.getDay()] + ")");
     const tu = TURNOS[u.turno || ""];
-    if (tu) {
+    if (fimDeSemana(d)) { if (m < 540) mot.push("só entra às 9:00"); else if (m >= 1080) mot.push("sai às 18:00"); }
+    else if (tu) {
       if (m < tu.entra) mot.push("só entra às " + hhmm(tu.entra));
       else if (m >= tu.almoco[0] && m < tu.almoco[1]) mot.push("no almoço (" + hhmm(tu.almoco[0]) + "–" + hhmm(tu.almoco[1]) + ")");
     }
@@ -659,8 +679,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
     // cliente cancelou a visita do consultor: a Supervisão do Marketing acompanha (reagenda, redireciona ou encerra)
-    if (mySetores().includes("marketing_supervisao") || (ehGestao() && !ehProprietario())) add("visitacanc", "Cancelaram a visita do consultor", "Voltaram para você: fale com o cliente e direcione de novo (Direcionar consultor) ou encerre.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "visita_cancelada"), "var(--danger)");
-    if (mySetores().includes("suporte_consultores") || (ehGestao() && !ehProprietario())) add("lojacanc", "Cancelaram a visita na loja", "O cliente cancelou a vinda à loja. Fale com ele: reagende a loja ou encerre.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "loja_cancelada" && recente(c)), "var(--warn)");
+    if (mySetores().includes("marketing_supervisao") || (ehGestao() && !ehProprietario())) add("visitacanc", "Cancelaram a visita do consultor", "Voltaram para direcionar de novo (Direcionar consultor). Clique em “Estou ciente” depois de ver.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "visita_cancelada" && !cienteDe(c, "visita_cancelada")), "var(--danger)");
+    if (mySetores().includes("marketing_supervisao") || (ehGestao() && !ehProprietario())) add("lojacanc", "Cancelaram a visita na loja", "O cliente cancelou a vinda à loja. Clique em “Estou ciente” depois de ver.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "loja_cancelada" && !cienteDe(c, "loja_cancelada") && recente(c)), "var(--warn)");
     add("minhalojacanc", "Seus clientes que cancelaram a loja", "Fale com o cliente e tente reagendar a vinda à loja.", ch.filter(c => domMarketing(c) && statusClienteDe(c) === "loja_cancelada" && (c.consultorId === eu || c.atendenteId === eu) && recente(c)), "var(--warn)");
     if ((temMarketing() && !ehGestao() && !ehGerenteLoja()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c) && recente(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao() && !ehGerenteLoja())) {
@@ -753,7 +773,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
       if (ehProprietario()) mk.push(["definir", "Definir vendedor"]);
       mk.push(["agenda", "Agendamento loja"], ["operadoras", "Controle das operadoras"]);
       if (!coord && !ehGerenteLoja()) mk.push(["produtividade", "Produtividade e pagamento"]);
-      mk.push(["clientes", "Clientes"], ["vendedores", "Vendedores"]);
+      mk.push(["clientes", "Clientes"], ["vendedores", "Vendedores"], ["ctl_vendedores", "Controle dos vendedores"]);
     } else if (temMkt) {
       // consultor e vendedor (só esse papel no marketing): menu enxuto — "Meus clientes" já tem busca, status, período e cancelamentos
       soMeusClientes = (ehConsultorExterno() || mySetores().includes("atendente_cliente")) && !mySetores().some((x: string) => ["suporte_consultores", "marketing_operadora"].includes(x));
@@ -761,7 +781,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
       if (ehConsultorExterno() && !mySetores().includes("atendente_cliente")) { /* consultor externo: menu próprio "Consultor externo" */ }
       else if (ehConsultorExterno() || mySetores().includes("atendente_cliente")) mk.push(["carteira", "Meus clientes"], ["agenda", "Agendamento loja"]);
       else mk.push(["acompmkt", "Minha fila"], ["carteira", "Minha carteira"], ["agenda", "Agendamento loja"]);
-      if (mySetores().includes("suporte_consultores")) mk.push(["vendedores", "Vendedores"]);
+      if (mySetores().includes("suporte_consultores")) mk.push(["vendedores", "Vendedores"], ["ctl_vendedores", "Controle dos vendedores"]);
       if (!soMeusClientes) mk.push(["clientes", "Clientes"]);
       if (mySetores().includes("marketing_operadora")) mk.push(["produtividade", "Minha produtividade"]);
     }
@@ -812,7 +832,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    ehDireto, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
+    ehDireto, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };

@@ -70,6 +70,7 @@ export default function Detalhe({ id }: { id: string }) {
             <TrocarConsultor c={c} />
             <StatusCliente c={c} />
             <CancelouLoja c={c} />
+            <CienteExcluir c={c} />
             <Venda c={c} />
             <Vendedor c={c} />
             <DataLoja c={c} />
@@ -305,6 +306,26 @@ function Tratativa({ c }: any) {
   return null;
 }
 
+// Gestão e Supervisão Marketing: "Estou ciente" do cancelamento e excluir o cliente (sem venda; fica guardado em clientes_excluidos)
+function CienteExcluir({ c }: any) {
+  const { R, executar: ex, toast, recarregar, fecharDetalhe } = useApp() as any;
+  if (!(R.ehGestao() || R.mySetores().includes("marketing_supervisao")) || R.ehProprietario()) return null;
+  const sc = R.statusClienteDe(c);
+  const canc = ["visita_cancelada", "loja_cancelada"].includes(sc);
+  const ci = canc && c.tratativa && c.tratativa["ciente_" + sc] && c.tratativa["ciente_" + sc][R.currentUserId];
+  const excluir = async () => {
+    const m = (prompt("Excluir o cliente " + c.cliente + " (" + c.id + ")?\n\nEscreva o motivo (ex.: cadastro duplicado):") || "").trim();
+    if (!m) return; if (m.length < 3) { toast("Escreva o motivo da exclusão"); return; }
+    if (!confirm("Confirma EXCLUIR " + c.cliente + " (" + c.id + ")? O cliente some de todas as listas (fica guardado no histórico de excluídos).")) return;
+    try { await A.excluirClienteMkt(c.id, m); fecharDetalhe(); await recarregar(); toast("Cliente " + c.id + " excluído"); } catch (e: any) { toast(e.message || "Não foi possível excluir"); }
+  };
+  return <div className="resp-box" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "10px 14px" }}>
+    {canc && (ci ? <span className="pill">✓ Ciente ({R.me()?.nome?.split(" ")[0]}) · {fmtDateTime(ci.em)}</span>
+      : <button className="btn primary sm" onClick={() => ex(() => A.cienteCancelamento(c.id), "Ciente registrado")}>✓ Estou ciente que {sc === "loja_cancelada" ? "cancelou a visita na loja" : "cancelou a visita do consultor"}</button>)}
+    {!c.venda && <button className="btn danger sm" style={{ marginLeft: "auto" }} onClick={excluir}>🗑 Excluir cliente</button>}
+  </div>;
+}
+
 function StatusCliente({ c }: any) {
   const { R, executar: ex, toast } = useApp();
   const atual = R.statusClienteDe(c);
@@ -433,7 +454,7 @@ function Vendedor({ c }: any) {
   const atual = R.getUser(c.atendenteId);
   const tr = c.transferencia && c.transferencia.status === "pendente" ? c.transferencia : null;
   const autoridade = R.podeEditarAgenda(), souAtual = c.atendenteId === R.currentUserId, souDestino = tr && tr.para === R.currentUserId;
-  const projs = R.projetistas().filter(p => p.id !== c.atendenteId);
+  const projs = R.vendAgenda().filter((p: any) => p.id !== c.atendenteId);
   const sel = (label: string) => <div className="field"><label>{label}</label><SelVendedor value={novo} onChange={setNovo} quando={c.dataLoja} c={c} lista={projs} /></div>;
   return (
     <div className="resp-box"><h4>Vendedor definido</h4>

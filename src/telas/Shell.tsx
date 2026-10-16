@@ -1,4 +1,5 @@
 import { SinoAvisos } from "../comp/Avisos";
+import ControleVendedores from "./ControleVendedores";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { inicial } from "../lib/regras";
@@ -152,6 +153,7 @@ export default function Shell() {
             {atual === "aprovacoes" && <Aprovacoes />}
             {atual === "agenda" && <Agenda />}
             {atual === "vendedores" && <Pessoas key="v" qual="vendedores" />}
+            {atual === "ctl_vendedores" && <ControleVendedores />}
             {atual === "consultores" && <Pessoas key="c" qual="consultores" />}
             {atual === "carteira" && <Carteira />}
             {atual === "clientes" && <Clientes />}
