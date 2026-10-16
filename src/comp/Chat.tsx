@@ -2,8 +2,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../estado";
-import { chat, abrirChat, EVENTO_CHAT, type Conversa, type Msg, type Anexo } from "../lib/chat";
+import { chat, chatExtra, iniciarPresenca, ouvirOnline, abrirChat, EVENTO_CHAT, type Conversa, type Msg, type Anexo } from "../lib/chat";
 import { prepararArquivos } from "../lib/acoes";
+import { numsVenda } from "../lib/regras";
+import { Modal } from "./Modal";
+import Nova from "../telas/Nova";
 
 const hhmm = (iso: string) => { const d = new Date(iso); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
 const quando = (iso: string) => { if (!iso) return ""; const d = new Date(iso), h = new Date(); if (d.toDateString() === h.toDateString()) return hhmm(iso); const o = new Date(); o.setDate(o.getDate() - 1); if (d.toDateString() === o.toDateString()) return "ontem"; return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); };
@@ -20,9 +23,11 @@ function useChat() {
   const { R } = useApp() as any;
   const eu = R.currentUserId;
   const [convs, setConvs] = useState<Conversa[]>([]);
+  const [on, setOn] = useState<Set<string>>(new Set());
   const carregar = () => chat.minhas(eu).then(setConvs).catch(() => null);
+  useEffect(() => { iniciarPresenca(eu); return ouvirOnline(s => setOn(new Set(s))); }, [eu]);
   useEffect(() => { (window as any).__eu = eu; carregar(); const t = setInterval(() => { if (document.visibilityState === "visible") carregar(); }, 60000); return () => clearInterval(t); }, [eu]);
-  return { convs, setConvs, carregar, eu };
+  return { convs, setConvs, carregar, eu, on };
 }
 
 export function ChatFlutuante() {
@@ -58,6 +63,7 @@ export function ChatMovel() {
   const [aberto, setAberto] = useState(false); const [conv, setConv] = useState("");
   const aberta = useRef(""); aberta.current = aberto ? conv : "";
   const FECHAR = () => setAberto(false);
+  useEffect(() => { document.body.style.overflow = aberto ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [aberto]);
   useEffect(() => {
     const ev = (e: any) => { setAberto(true); if (e.detail) setConv(String(e.detail)); C.carregar(); };
     window.addEventListener(EVENTO_CHAT, ev);
@@ -90,7 +96,7 @@ function ChatApp({ C, conv, setConv, cab }: any) {
     <div className="chat-lista">
       {lista.map((x: Conversa) => { const nm = x.nome || (x.outro_id ? R.nomeUser(x.outro_id) : "Conversa"); const set = x.tipo === "setor" || x.tipo === "contato_setor"; return (
         <button key={x.id} className={"chat-item" + (x.nao_lidas ? " nl" : "")} onClick={() => setConv(x.id)}>
-          <span className="chat-av" style={{ background: set ? "#5b6b8c" : cor(nm) }}>{set ? (ICO_SETOR[x.setor_id || ""] || "#") : ini(nm)}</span>
+          <span className={"chat-av" + (x.outro_id && C.on.has(x.outro_id) ? " on" : "")} style={{ background: set ? "#5b6b8c" : cor(nm) }}>{set ? (ICO_SETOR[x.setor_id || ""] || "#") : ini(nm)}</span>
           <span className="chat-it"><b>{set && x.tipo === "setor" ? "# " : ""}{nm}</b><small>{x.ultima_autor && x.ultima_autor === C.eu ? "Você: " : x.ultima_autor && x.tipo !== "privada" && R.getUser(x.ultima_autor) ? R.nomeUser(x.ultima_autor).split(" ")[0] + ": " : ""}{x.ultima_txt || (x.tipo === "setor" ? "Canal do setor — todos do setor participam" : "Sem mensagens")}</small></span>
           <span className="chat-q">{x.ultima_txt ? quando(x.ultima_em) : ""}{x.nao_lidas > 0 && <i>{x.nao_lidas}</i>}</span>
         </button>); })}
@@ -123,13 +129,22 @@ function NovaConversa({ voltar, abrir, cab }: any) {
 }
 
 function Conversa_({ c, id, voltar, cab, C }: { c?: Conversa; id: string; voltar: () => void; cab: any; C: any }) {
-  const { R, st, toast, abrirDetalhe } = useApp() as any;
+  const { R, st, toast, abrirDetalhe, setModal, recarregar } = useApp() as any;
   const eu = R.currentUserId;
   const [msgs, setMsgs] = useState<Msg[]>([]); const [urls, setUrls] = useState<Record<string, string>>({});
   const [txt, setTxt] = useState(""); const [env, setEnv] = useState(false); const [fim, setFim] = useState(false);
   const [editando, setEditando] = useState<Msg | null>(null); const [menu, setMenu] = useState(0); const [ver, setVer] = useState("");
   const [pend, setPend] = useState<{ nome: string; blob: Blob; url: string }[]>([]);
   const box = useRef<HTMLDivElement>(null); const arq = useRef<HTMLInputElement>(null); const ta = useRef<HTMLTextAreaElement>(null);
+  const [membros, setMembros] = useState<Record<string, string>>({});
+  const [visto, setVisto] = useState("");
+  useEffect(() => {
+    chatExtra.membros(id).then(l => setMembros(Object.fromEntries(l.map(x => [x.usuario_id, x.lido_em]))));
+    const off = chatExtra.ouvirMembros(r => { if (r.conversa_id === id) setMembros(m => ({ ...m, [r.usuario_id]: r.lido_em })); });
+    if (c?.outro_id) chatExtra.vistoEm(c.outro_id).then(setVisto);
+    return off;
+  }, [id, c?.outro_id]);
+  const leram = (m: Msg) => Object.entries(membros).filter(([u, l]) => u !== eu && l && +new Date(l) >= +new Date(m.criado_em)).map(([u]) => u);
   const descer = () => setTimeout(() => { if (box.current) box.current.scrollTop = box.current.scrollHeight; }, 30);
   const assinar = async (l: Msg[]) => { const ps = l.flatMap(m => (m.anexos || []).map(a => a.path)).filter(p => !urls[p]); if (ps.length) { const u = await chat.urls(ps); setUrls(x => ({ ...x, ...u })); } };
   useEffect(() => {
@@ -145,7 +160,8 @@ function Conversa_({ c, id, voltar, cab, C }: { c?: Conversa; id: string; voltar
   const mais = async () => { if (!msgs.length) return; const l = await chat.mensagens(id, msgs[0].id); setFim(l.length < 60); setMsgs(x => [...l, ...x]); assinar(l); };
   const nome = c ? (c.nome || (c.outro_id ? R.nomeUser(c.outro_id) : "")) : "Conversa";
   const ehSetor = c && (c.tipo === "setor" || c.tipo === "contato_setor");
-  const sub = !c ? "" : c.tipo === "privada" ? "conversa privada" : c.tipo === "setor" ? "canal do setor · " + R.state.usuarios.filter((u: any) => u.ativo && (u.setores || []).includes(c.setor_id)).length + " pessoas" : c.tipo === "contato_setor" ? (c.pessoa_id === eu ? "você fala com o setor · quem estiver livre responde" : "pedido de " + R.nomeUser(c.pessoa_id)) : "grupo";
+  const fmtVisto = (iso: string) => { if (!iso) return "conversa privada"; const d = new Date(iso), h = new Date(); return "visto por último " + (d.toDateString() === h.toDateString() ? "hoje às " + hhmm(iso) : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " às " + hhmm(iso)); };
+  const sub = !c ? "" : c.tipo === "privada" ? (c.outro_id && C.on.has(c.outro_id) ? "🟢 online" : fmtVisto(visto)) : c.tipo === "setor" ? "canal do setor · " + R.state.usuarios.filter((u: any) => u.ativo && (u.setores || []).includes(c.setor_id)).length + " pessoas" : c.tipo === "contato_setor" ? (c.pessoa_id === eu ? "você fala com o setor · quem estiver livre responde" : "pedido de " + R.nomeUser(c.pessoa_id)) : "grupo";
   async function addArq(files: FileList | null) {
     if (!files || !files.length) return;
     try { const { fotos, outros, recusados } = await prepararArquivos(Array.from(files)); if (recusados.length) toast("Não anexado: " + recusados.join(", "));
@@ -162,6 +178,31 @@ function Conversa_({ c, id, voltar, cab, C }: { c?: Conversa; id: string; voltar
       if (ta.current) ta.current.style.height = "";
     } catch (e: any) { toast(e.message || "Não foi possível enviar"); } finally { setEnv(false); ta.current?.focus(); }
   }
+  // "Abrir chamado": só quando a pessoa decide. Identifica cliente (ALM-…), nº da venda e telefone no texto e já escolhe o setor da conversa.
+  function abrirChamado(texto: string, autor: string) {
+    const ids = Array.from(new Set((texto.match(/ALM-\d{4,}/g) || [])));
+    const venda = (texto.match(/\b1\d{6}\b/) || [""])[0];
+    const tel = (texto.match(/\(?\d{2}\)?\s?9?\d{4}[-.\s]?\d{4}/) || [""])[0];
+    let cli: any = ids.map(i => st.chamados.find((x: any) => x.id === i)).find(Boolean) || null;
+    if (!cli && venda) cli = st.chamados.find((x: any) => x.pedido === venda || String(numsVenda(x)).split(" ").includes(venda)) || null;
+    const setor = c && (c.tipo === "setor" || c.tipo === "contato_setor") ? c.setor_id : "";
+    const tipos = Object.entries(R.TIPOS).filter(([k, t]: any) => !t.presale && R.podeCriarTipo(k) && t.destino === setor);
+    const quem = autor && autor !== eu ? R.nomeUser(autor) : "";
+    const pre: any = {
+      cliente: cli ? cli.cliente : "", clienteDoc: cli ? cli.clienteDoc || "" : "", telefone: cli ? cli.telefone || "" : tel, pedido: cli ? cli.pedido || venda : venda,
+      dataVenda: cli ? cli.dataVenda || "" : "", produto: cli ? cli.produto || "" : "", vinculadoA: cli ? cli.id : null,
+      tipo: tipos.length === 1 ? tipos[0][0] : "", motivo: texto.trim() + "\n\n(aberto pelo chat" + (quem ? " · pedido de " + quem : "") + " · conversa " + (c?.tipo === "setor" ? "#" : "") + nome + ")",
+    };
+    window.dispatchEvent(new Event("a360-chat-fechar"));
+    setModal(<Modal titulo="📋 Abrir chamado pelo chat" onFechar={() => { setModal(null); abrirChat(id); }}>
+      <div className="hint" style={{ marginBottom: 8 }}>Confira os dados que o chat identificou{cli ? <> — cliente <b>{cli.cliente}</b> ({cli.id})</> : venda ? <> — venda <b>{venda}</b></> : ""} e escolha o motivo. A conversa recebe o número do chamado.</div>
+      <Nova escopo="cc" prefill={pre} pronto={async (nid: string) => {
+        setModal(null);
+        try { await chat.enviar(id, "✅ Chamado " + nid + " aberto pelo chat" + (setor ? " para " + R.setorNome(setor) : "") + "."); } catch { /* segue */ }
+        await recarregar(); abrirChat(id); toast("Chamado " + nid + " aberto");
+      }} />
+    </Modal>);
+  }
   const podeAlterar = (m: Msg) => m.autor_id === eu && !m.apagado && Date.now() - +new Date(m.criado_em) < 15 * 60000;
   const nomesUsuarios = useMemo(() => st.usuarios.filter((u: any) => u.ativo).map((u: any) => u.nome.split(" ")[0]).filter((n: string) => n.length >= 3), [st.usuarios]);
   const renderTxt = (s: string) => s.split(/(ALM-\d{4,}|@[A-Za-zÀ-ú]+)/g).map((p, i) => {
@@ -174,7 +215,8 @@ function Conversa_({ c, id, voltar, cab, C }: { c?: Conversa; id: string; voltar
   return <>
     <div className="chat-cab"><button onClick={voltar} title="Voltar">‹</button>
       <span className="chat-av pq" style={{ background: ehSetor ? "#5b6b8c" : cor(nome) }}>{ehSetor ? (ICO_SETOR[c?.setor_id || ""] || "#") : ini(nome)}</span>
-      <span className="chat-tt"><b>{c?.tipo === "setor" ? "# " : ""}{nome}</b><small>{sub}</small></span>{cab}</div>
+      <span className="chat-tt"><b>{c?.tipo === "setor" ? "# " : ""}{nome}</b><small>{sub}</small></span>
+      <button title="Abrir chamado a partir desta conversa" className="chat-ch" onClick={() => abrirChamado(msgs.filter(m => !m.apagado && m.texto).slice(-6).map(m => m.texto).join("\n"), "")}>📋 Chamado</button>{cab}</div>
     <div className="chat-msgs" ref={box} onClick={() => setMenu(0)}>
       {!fim && msgs.length > 0 && <button className="chat-mais" onClick={mais}>Carregar mensagens anteriores</button>}
       {!msgs.length && <div className="chat-vazio">{c?.tipo === "contato_setor" && c.pessoa_id === eu ? "Escreva sua mensagem para o setor. Todos do setor recebem, e quem estiver livre responde." : "Nenhuma mensagem ainda. Diga oi 👋"}</div>}
@@ -186,11 +228,14 @@ function Conversa_({ c, id, voltar, cab, C }: { c?: Conversa; id: string; voltar
             {(m.anexos || []).map((a, i) => a.tipo === "img" ? <img key={i} className="chat-img" src={urls[a.path] || a.url} alt={a.nome} onClick={() => setVer(urls[a.path] || a.url || "")} /> :
               <a key={i} className="chat-arq" href={urls[a.path] || a.url} target="_blank" rel="noopener">{a.tipo === "pdf" ? "📄" : a.tipo === "video" ? "🎬" : a.tipo === "audio" ? "🎧" : "📎"} {a.nome}</a>)}
             {m.texto && <div className="chat-tx">{renderTxt(m.texto)}</div>}</>}
-          <div className="chat-h">{m.editado_em && !m.apagado ? "editada · " : ""}{hhmm(m.criado_em)}{podeAlterar(m) && <button className="chat-op" onClick={e => { e.stopPropagation(); setMenu(menu === m.id ? 0 : m.id); }}>⋯</button>}</div>
+          <div className="chat-h">{m.editado_em && !m.apagado ? "editada · " : ""}{hhmm(m.criado_em)}{meu && !m.apagado && (() => { const l = leram(m); const nomes = l.map(u => R.nomeUser(u)).join(", ");
+            return <span className={"chat-tick" + (l.length ? " lido" : "")} title={l.length ? (c?.tipo === "privada" ? "Visualizada" : "Visto por: " + nomes) : "Enviada"}>{l.length ? "✓✓" : "✓"}{l.length && c?.tipo !== "privada" ? " " + l.length : ""}</span>; })()}{!m.apagado && <button className="chat-op" title="Opções" onClick={e => { e.stopPropagation(); setMenu(menu === m.id ? 0 : m.id); }}>⋯</button>}</div>
           {menu === m.id && <div className="chat-menu" onClick={e => e.stopPropagation()}>
-            <button onClick={() => { setEditando(m); setTxt(m.texto); setMenu(0); ta.current?.focus(); }}>✏️ Editar</button>
-            <button onClick={() => { setMenu(0); if (confirm("Apagar esta mensagem? Para todos aparece “mensagem apagada”.")) chat.editar(m.id, "", true).catch((e: any) => toast(e.message)); }}>🗑 Apagar</button>
-            <small>até 15 min depois de enviar</small></div>}
+            <button onClick={() => { setMenu(0); abrirChamado(m.texto, m.autor_id); }}>📋 Abrir chamado desta mensagem</button>
+            {podeAlterar(m) && <>
+              <button onClick={() => { setEditando(m); setTxt(m.texto); setMenu(0); ta.current?.focus(); }}>✏️ Editar</button>
+              <button onClick={() => { setMenu(0); if (confirm("Apagar esta mensagem? Para todos aparece “mensagem apagada”.")) chat.editar(m.id, "", true).catch((e: any) => toast(e.message)); }}>🗑 Apagar</button>
+              <small>editar/apagar: até 15 min depois de enviar</small></>}</div>}
         </div></div>; })}
     </div>
     {pend.length > 0 && <div className="chat-pend">{pend.map((p, i) => <span key={i}>{p.url ? <img src={p.url} alt="" /> : "📎"} {p.nome.slice(0, 18)}<button onClick={() => setPend(x => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
@@ -198,7 +243,7 @@ function Conversa_({ c, id, voltar, cab, C }: { c?: Conversa; id: string; voltar
     <div className="chat-comp">
       {!editando && <button title="Anexar foto, PDF ou vídeo" onClick={() => arq.current?.click()}>📎</button>}
       <input ref={arq} type="file" multiple accept="image/*,application/pdf,video/*" style={{ display: "none" }} onChange={e => { addArq(e.target.files); e.target.value = ""; }} />
-      <textarea ref={ta} rows={1} value={txt} placeholder="Mensagem… (ALM-1234 cita o cliente, @nome chama a pessoa)"
+      <textarea ref={ta} rows={1} value={txt} placeholder={window.innerWidth < 700 ? "Mensagem…" : "Mensagem… (ALM-1234 cita o cliente, @nome chama a pessoa)"}
         onChange={e => { setTxt(e.target.value); e.target.style.height = ""; e.target.style.height = Math.min(120, e.target.scrollHeight) + "px"; }}
         onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !(window.innerWidth < 700)) { e.preventDefault(); enviar(); } }} />
       <button className="chat-env" disabled={env || (!txt.trim() && !pend.length)} onClick={enviar}>{env ? "…" : "➤"}</button>

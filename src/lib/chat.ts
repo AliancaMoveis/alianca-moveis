@@ -78,6 +78,35 @@ export const chat = {
   },
 };
 
+// ---------- quem leu (✓✓) e quem está online ----------
+export const chatExtra = {
+  async membros(conv: string): Promise<{ usuario_id: string; lido_em: string }[]> {
+    if (MOCK) return [{ usuario_id: "00000000-0000-4000-a000-000000000013", lido_em: new Date(Date.now() - 4 * 6e4).toISOString() }];
+    const { data } = await sb.from("chat_membros").select("usuario_id,lido_em").eq("conversa_id", conv); return (data || []) as any[];
+  },
+  ouvirMembros(f: (r: { conversa_id: string; usuario_id: string; lido_em: string }) => void): () => void {
+    if (MOCK) return () => {};
+    const ch = sb.channel("chatm-" + Math.random().toString(36).slice(2)).on("postgres_changes", { event: "*", schema: "public", table: "chat_membros" }, (p: any) => p.new && f(p.new)).subscribe();
+    return () => { sb.removeChannel(ch); };
+  },
+  async vistoEm(uid: string): Promise<string> {
+    if (MOCK) return new Date(Date.now() - 25 * 6e4).toISOString();
+    const { data } = await sb.from("usuarios").select("visto_em").eq("id", uid).maybeSingle(); return (data as any)?.visto_em || "";
+  },
+};
+let online = new Set<string>(); let ouvOn: ((s: Set<string>) => void)[] = []; let iniciado = false;
+/** presença: quem está com o 360 aberto agora (bolinha verde) */
+export function iniciarPresenca(eu: string) {
+  if (iniciado || !eu) return; iniciado = true;
+  if (MOCK) { online = new Set([eu, "00000000-0000-4000-a000-000000000013"]); return; }
+  const ch = sb.channel("online-360", { config: { presence: { key: eu } } });
+  ch.on("presence", { event: "sync" }, () => { online = new Set(Object.keys(ch.presenceState())); ouvOn.forEach(f => f(online)); })
+    .subscribe((st: string) => { if (st === "SUBSCRIBED") ch.track({ em: new Date().toISOString() }); });
+  const ping = () => { if (document.visibilityState === "visible") sb.rpc("chat_ping").then(() => null, () => null); };
+  ping(); setInterval(ping, 60000);
+}
+export function ouvirOnline(f: (s: Set<string>) => void): () => void { ouvOn.push(f); f(online); return () => { ouvOn = ouvOn.filter(x => x !== f); }; }
+
 export const EVENTO_CHAT = "a360-chat";
 /** abre o chat (opcionalmente numa conversa) de qualquer lugar do sistema */
 export const abrirChat = (conv?: string) => window.dispatchEvent(new CustomEvent(EVENTO_CHAT, { detail: conv || "" }));

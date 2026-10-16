@@ -1,0 +1,1 @@
+-- 0147 · (aplicado via SQL) chat: usuarios.visto_em + chat_ping() (visto por último); chat_membros no realtime (✓✓ visualizado)

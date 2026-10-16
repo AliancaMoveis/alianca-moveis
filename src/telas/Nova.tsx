@@ -11,11 +11,11 @@ import { cfgAgenda } from "./Checklist";
 const VAZIO: any = { evVendedor: "", evComprado: "", evLancado: "", rmMontador: "", rmSaiuNome: "", rmAtendente: "", pvSituacao: "", pvProjetista: "", pvProjOutro: false, pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
 type NovoAnexo = { tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; blob?: Blob };
 
-export default function Nova({ escopo, pvFixo, pronto }: { escopo: "cc" | "mkt" | "pv"; pvFixo?: "cliente" | "montador"; pronto?: (id: string) => void }) {
+export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc" | "mkt" | "pv"; pvFixo?: "cliente" | "montador"; pronto?: (id: string) => void; prefill?: any }) {
   const { R, st, toast, recarregar, irPara, abrirDetalhe, setModal, preset } = useApp() as any;
   // "+ Nova solicitação" na ficha: já vem com os dados do cliente e fica ligada ao atendimento de origem
-  const pre = preset && preset.prefill ? preset.prefill : null;
-  const inicialF = () => ({ ...VAZIO, pvOrigem: pvFixo || "cliente", tipo: escopo === "pv" ? "posvenda" : "", ...(pre ? { cliente: pre.cliente || "", clienteDoc: pre.clienteDoc || "", telefone: pre.telefone || "", pedido: pre.pedido || "", dataVenda: pre.dataVenda ? String(pre.dataVenda).slice(0, 10) : "", produto: pre.produto || "" } : {}) });
+  const pre = prefill || (preset && preset.prefill ? preset.prefill : null);
+  const inicialF = () => ({ ...VAZIO, pvOrigem: pvFixo || "cliente", tipo: escopo === "pv" ? "posvenda" : "", ...(pre ? { cliente: pre.cliente || "", clienteDoc: pre.clienteDoc || "", telefone: pre.telefone || "", pedido: pre.pedido || "", dataVenda: pre.dataVenda ? String(pre.dataVenda).slice(0, 10) : "", produto: pre.produto || "", ...(pre.tipo ? { tipo: pre.tipo } : {}), ...(pre.motivo ? { motivo: pre.motivo } : {}) } : {}) });
   const [origem, setOrigem] = useState<string | null>(pre ? pre.vinculadoA || null : null);
   const [f, setF] = useState<any>(inicialF);
   const [anexos, setAnexos] = useState<NovoAnexo[]>([]);
