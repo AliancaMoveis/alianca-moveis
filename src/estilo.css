@@ -1452,3 +1452,6 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ma-os { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--card); border-radius: 8px; }
 .ma-os th, .ma-os td { padding: 5px 8px; border-bottom: 1px solid var(--line-soft); text-align: left; }
 .ma-os .n { text-align: right; }
+
+.ma-av { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; background: var(--card); border: 1px dashed var(--primary); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.ma-av .field { margin: 0; min-width: 120px; }

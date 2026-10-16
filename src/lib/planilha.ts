@@ -80,8 +80,13 @@ export function agendaPlanilha(datas: string, agenda: string): { data: string; p
   return pares.filter((p, i) => !pares.slice(0, i).some(x => x.data.slice(0, 10) === p.data.slice(0, 10)));
 }
 
+export type AbaXlsx = { nome: string; cab: string[]; linhas: (string | number | null | undefined)[][] };
 /** Gera e baixa um .xlsx simples (1 aba, texto e números), sem biblioteca extra */
 export async function baixarXlsx(nome: string, cab: string[], linhas: (string | number | null | undefined)[][], aba = "Planilha") {
+  return baixarXlsxAbas(nome, [{ nome: aba, cab, linhas }]);
+}
+/** .xlsx com várias abas (ex.: Resumo + uma aba por pessoa) */
+export async function baixarXlsxAbas(nome: string, abas: AbaXlsx[]) {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
   const letra = (i: number) => { let s = ""; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
   const cel = (v: any, r: number, c: number) => {
@@ -90,15 +95,20 @@ export async function baixarXlsx(nome: string, cab: string[], linhas: (string | 
     if (typeof v === "number" && isFinite(v)) return `<c r="${ref}"><v>${v}</v></c>`;
     return `<c r="${ref}" t="inlineStr"${r === 1 ? ' s="1"' : ""}><is><t xml:space="preserve">${esc(String(v))}</t></is></c>`;
   };
-  const rows = [cab, ...linhas].map((l, i) => `<row r="${i + 1}">${l.map((v, j) => cel(v, i + 1, j)).join("")}</row>`).join("");
-  const largura = cab.map((h, j) => Math.min(60, Math.max(10, h.length + 2, ...linhas.slice(0, 300).map(l => String(l[j] ?? "").length + 2))));
+  const usados = new Set<string>();
+  const nomeAba = (n: string) => { let b = (n || "Aba").replace(/[\\\/\?\*\[\]:]/g, " ").slice(0, 28).trim() || "Aba"; let k = b, i = 2; while (usados.has(k.toLowerCase())) k = b.slice(0, 26) + " " + i++; usados.add(k.toLowerCase()); return k; };
+  const lista = abas.map(a => ({ ...a, nome: nomeAba(a.nome) }));
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${lista.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
   zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
-  zip.file("xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${esc(aba.slice(0, 31))}" sheetId="1" r:id="rId1"/></sheets></workbook>`);
-  zip.file("xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  zip.file("xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${lista.map((a, i) => `<sheet name="${esc(a.nome)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>`);
+  zip.file("xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${lista.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}<Relationship Id="rId${lista.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
   zip.file("xl/styles.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf/><xf fontId="1" applyFont="1"/></cellXfs></styleSheet>`);
-  zip.file("xl/worksheets/sheet1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${largura.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols><sheetData>${rows}</sheetData><autoFilter ref="A1:${letra(cab.length - 1)}${linhas.length + 1}"/></worksheet>`);
+  lista.forEach((a, k) => {
+    const rows = [a.cab, ...a.linhas].map((l, i) => `<row r="${i + 1}">${l.map((v, j) => cel(v, i + 1, j)).join("")}</row>`).join("");
+    const largura = a.cab.map((h, j) => Math.min(60, Math.max(10, h.length + 2, ...a.linhas.slice(0, 300).map(l => String(l[j] ?? "").length + 2))));
+    zip.file(`xl/worksheets/sheet${k + 1}.xml`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"${k === 0 ? ' tabSelected="1"' : ""}><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${largura.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols><sheetData>${rows}</sheetData>${a.cab.length ? `<autoFilter ref="A1:${letra(a.cab.length - 1)}${a.linhas.length + 1}"/>` : ""}</worksheet>`);
+  });
   const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const el = document.createElement("a"); el.href = URL.createObjectURL(blob); el.download = nome.endsWith(".xlsx") ? nome : nome + ".xlsx"; el.click(); setTimeout(() => URL.revokeObjectURL(el.href), 3000);
 }

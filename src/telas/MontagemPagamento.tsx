@@ -12,8 +12,9 @@ import { fmtMoeda } from "../lib/regras";
 import { col, lerArquivo } from "./Medidas";
 import { Kpi } from "./Dashboard";
 import { podeMontagemAgend } from "./MontagemAgend";
+import { Modal } from "../comp/Modal";
 
-type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number };
+type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number; origem?: string; descricao?: string | null; criado_por?: string | null };
 
 const iso = (s: string) => { const m = String(s || "").match(/(\d{2})[-\/](\d{2})[-\/](\d{4})/); return m ? m[3] + "-" + m[2] + "-" + m[1] : ""; };
 const num = (s: string) => { const t = String(s || "0").trim(); const n = Number(/,\d{1,2}$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "")); return isFinite(n) ? n : 0; };
@@ -46,7 +47,7 @@ async function carregar(): Promise<{ ef: Ef[]; vinc: Record<string, string | nul
   if (MOCK) return { ef: mockEf, vinc: { ...mockVinc } };
   const ef: Ef[] = [];
   for (let i = 0; ; i += 1000) {
-    const { data, error } = await sb.from("montagem_efet").select("chave,os,montador,status,data_montagem,data_finalizacao,produtos,adicionais,total").order("chave").range(i, i + 999);
+    const { data, error } = await sb.from("montagem_efet").select("chave,os,montador,status,data_montagem,data_finalizacao,produtos,adicionais,total,origem,descricao,criado_por").is("excluido_em", null).order("chave").range(i, i + 999);
     if (error) throw new Error(error.message);
     ef.push(...((data || []) as any[]).map(a => ({ ...a, produtos: Number(a.produtos) || 0, adicionais: Number(a.adicionais) || 0, total: Number(a.total) || 0 })));
     if (!data || data.length < 1000) break;
@@ -65,6 +66,34 @@ async function enviar(ef: Ef[]) {
   }
   return r;
 }
+async function salvarAvulsa(p: any): Promise<string> {
+  if (MOCK) { const ch = p.chave || "AVULSA¦" + Math.random().toString(36).slice(2); const prod = Number(p.prod) || 0, adic = Number(p.adic) || 0;
+    mockEf = [...mockEf.filter(a => a.chave !== ch), { chave: ch, os: "Ordem avulsa", montador: p.montador, status: p.status === "aprovado" ? "PAGAMENTO EFETUADO" : "AGUARDANDO APROVAÇÃO DE PAGAMENTO", data_montagem: p.data, data_finalizacao: p.data, produtos: prod, adicionais: adic, total: prod + adic, origem: "avulsa", descricao: p.descricao, criado_por: "você" }]; return ch; }
+  const { data, error } = await sb.rpc("montagem_avulsa_salvar", { p }); if (error) throw new Error(error.message); return data as string;
+}
+async function excluirAvulsa(ch: string) {
+  if (MOCK) { mockEf = mockEf.filter(a => a.chave !== ch); return; }
+  const { error } = await sb.rpc("montagem_avulsa_excluir", { p_chave: ch }); if (error) throw new Error(error.message);
+}
+let mockFech: any[] = []; let mockItens: any[] = [];
+async function fechar(p: any): Promise<number> {
+  if (MOCK) { if (mockFech.some(f => f.referencia === p.referencia && f.ativo) && !p.substituir) throw new Error("Já existe um fechamento de " + p.referencia + " — confirme para substituir (o anterior fica guardado no histórico)");
+    mockFech.forEach(f => { if (f.referencia === p.referencia && f.ativo) { f.ativo = false; f.substituido_em = new Date().toISOString(); } });
+    const id = mockFech.length + 1; const it = (p._itens || []).map((x: any) => ({ ...x, fechamento_id: id }));
+    mockItens.push(...it); mockFech.push({ id, referencia: p.referencia, de: p.de, ate: p.ate, pelo: p.pelo, filtro: p.filtro, obs: p.obs, total: it.reduce((s: number, x: any) => s + x.total, 0), aprovado: it.reduce((s: number, x: any) => s + x.aprovado, 0), aguardando: it.reduce((s: number, x: any) => s + x.aguardando, 0), n_montadores: it.length, n_os: it.reduce((s: number, x: any) => s + x.montagens, 0), criado_em: new Date().toISOString(), criado_por: "você", ativo: true }); return id; }
+  const { _itens, ...q } = p; const { data, error } = await sb.rpc("montagem_fechar", { p: q }); if (error) throw new Error(error.message); return data as number;
+}
+async function listaFech(): Promise<any[]> {
+  if (MOCK) return mockFech.slice().reverse();
+  const { data, error } = await sb.from("montagem_fechamentos").select("*").order("referencia", { ascending: false }).order("criado_em", { ascending: false }); if (error) throw new Error(error.message); return data || [];
+}
+async function itensFech(id: number): Promise<any[]> {
+  if (MOCK) return mockItens.filter(x => x.fechamento_id === id);
+  const { data, error } = await sb.from("montagem_fech_itens").select("*").eq("fechamento_id", id).order("total", { ascending: false }); if (error) throw new Error(error.message); return data || [];
+}
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const nomeMes = (ref: string) => MESES[Number(ref.slice(5, 7)) - 1] + "/" + ref.slice(0, 4);
+const CAB_FIN = ["Montador", "Nome no Exact", "Titular da conta", "CPF/CNPJ", "Banco", "Agência", "Conta", "Tipo de conta", "PIX (tipo)", "PIX (chave)", "Montagens", "Total produtos", "Adicionais", "TOTAL A PAGAR", "Aprovado p/ pagamento", "Aguardando aprovação", "Período", "Obs."];
 async function vincular(nome: string, id: string | null) {
   if (MOCK) { mockVinc[nome] = id; return; }
   const { error } = await sb.rpc("montagem_vincular", { p_nome: nome, p_montador: id }); if (error) throw new Error(error.message);
@@ -81,6 +110,8 @@ export default function MontagemPagamento() {
   const [fs, setFs] = useState<"todos" | "aprov" | "agu">("todos");
   const [q, setQ] = useState(""); const [aberto, setAberto] = useState("");
   const [enviando, setEnviando] = useState(""); const inp = useRef<HTMLInputElement>(null);
+  const [tela, setTela] = useState<"periodo" | "hist">("periodo");
+  const { setModal } = useApp() as any;
   const recarregar = () => carregar().then(setDados).catch(e => setErro(e.message));
   useEffect(() => { recarregar(); }, []);
 
@@ -93,6 +124,8 @@ export default function MontagemPagamento() {
   };
 
   if (!podeMontagemAgend(R)) return <section className="view active"><div className="empty">Só a Gestão vê esta tela.</div></section>;
+  const abas = <div className="subnav" style={{ margin: "0 0 14px" }}><button className={tela === "periodo" ? "on" : ""} onClick={() => setTela("periodo")}>📋 Montagens e pagamento</button><button className={tela === "hist" ? "on" : ""} onClick={() => setTela("hist")}>📚 Histórico de pagamentos (fechamentos)</button></div>;
+  if (tela === "hist") return <section className="view active"><div className="view-head"><div><h2>💰 Montagem · Histórico de pagamentos</h2><p>Cada fechamento guarda o que foi gerado para o financeiro naquele mês (valores, contas e as O.S.). Se um mês for fechado de novo, o anterior fica guardado como “substituído” — nada se perde.</p></div></div>{abas}<Historico /></section>;
 
   const subir = async (f: File) => {
     setEnviando("Lendo " + f.name + "…");
@@ -128,20 +161,21 @@ export default function MontagemPagamento() {
   const stTxt = fs === "aprov" ? "só aprovados para pagamento" : fs === "agu" ? "só aguardando aprovação" : "aprovados + aguardando aprovação";
 
   const relFinanceiro = () => {
-    const cab = ["Montador", "Nome no Exact", "Titular da conta", "CPF/CNPJ", "Banco", "Agência", "Conta", "Tipo de conta", "PIX (tipo)", "PIX (chave)", "Montagens", "Total produtos", "Adicionais", "TOTAL A PAGAR", "Aprovado p/ pagamento", "Aguardando aprovação", "Período", "Obs."];
+    const cab = CAB_FIN;
     const linhas = grupos.map(g => { const k = g.cad?.conta || {}; return [g.cad?.nome || g.nome, g.nome, k.titular || "", k.docTitular || "", k.banco || "", k.agencia || "", k.conta || "", k.tipoConta || "", k.pixTipo || "", k.pixChave || "", g.n, r2(g.prod), r2(g.adic), r2(g.total), r2(g.aprov), r2(g.agu), per, temConta(g) ? "" : "SEM CONTA CADASTRADA"]; });
     linhas.push(["TOTAL", "", "", "", "", "", "", "", "", "", soma(g => g.n), soma(g => g.prod), soma(g => g.adic), soma(g => g.total), soma(g => g.aprov), soma(g => g.agu), per, ""]);
     baixarXlsx("pagamento_montadores_" + de + "_a_" + ate + ".xlsx", cab, linhas, "Pagamento montadores");
   };
   const relDetalhado = () => {
     const cab = ["Montador", "O.S.", "Status", "Data montagem", "Data finalização", "Total produtos", "Adicionais", "Total O.S."];
-    const linhas = grupos.flatMap(g => g.itens.slice().sort((a, b) => dataDe(a).localeCompare(dataDe(b))).map(e => [g.cad?.nome || g.nome, e.os, aprovado(e) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(e.data_montagem), br(e.data_finalizacao), e.produtos, e.adicionais, e.total]));
+    const linhas = grupos.flatMap(g => g.itens.slice().sort((a, b) => dataDe(a).localeCompare(dataDe(b))).map(e => [g.cad?.nome || g.nome, e.origem === "avulsa" ? "Avulsa: " + (e.descricao || "") : e.os, aprovado(e) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(e.data_montagem), br(e.data_finalizacao), e.produtos, e.adicionais, e.total]));
     baixarXlsx("montagens_detalhadas_" + de + "_a_" + ate + ".xlsx", cab, linhas, "Montagens");
   };
 
   return (
     <section className="view active">
       <div className="view-head"><div><h2>💰 Montagem · Pagamento dos montadores</h2><p>Montagens efetivadas do Exact por montador: total dos produtos, adicionais e total a pagar. “Aguardando aprovação de pagamento” conta, mas fica separado do “Pagamento efetuado” (aprovado). Gere o relatório com a conta de cada montador para o financeiro.</p></div></div>
+      {abas}
       <div className="card ma-topo">
         <div className="ma-envio">
           <input ref={inp} type="file" accept=".csv,.xlsx" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) subir(f); }} />
@@ -183,10 +217,12 @@ export default function MontagemPagamento() {
           <input type="search" placeholder="🔎 Buscar montador" value={q} onChange={e => setQ(e.target.value)} style={{ maxWidth: 220 }} />
           <button className="btn primary sm" onClick={relFinanceiro} disabled={!grupos.length}>⬇ Relatório para o financeiro</button>
           <button className="btn sm" onClick={relDetalhado} disabled={!grupos.length}>⬇ Detalhado por O.S.</button>
+          <button className="btn sm" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} />)}>＋ Ordem avulsa</button>
+          <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} mapa={Object.fromEntries(grupos.map(g => [g.nome, g.cad?.id || ""]))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento do mês</button>
         </div>
         {!vis.length ? <div className="empty" style={{ padding: 24 }}>{dados && dados.ef.length ? "Nenhuma montagem efetivada neste período." : "Envie o relatório do Exact para começar."}</div> :
           <table className="ma-tab"><thead><tr><th>Montador</th><th className="n">Montagens</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total a pagar</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Conta para pagamento</th></tr></thead>
-            <tbody>{vis.map(g => <Linha key={g.nome} g={g} aberto={aberto === g.nome} abrir={() => setAberto(aberto === g.nome ? "" : g.nome)} cadastro={cadastro} temConta={temConta(g)}
+            <tbody>{vis.map(g => <Linha key={g.nome} g={g} recarregar={recarregar} aberto={aberto === g.nome} abrir={() => setAberto(aberto === g.nome ? "" : g.nome)} cadastro={cadastro} temConta={temConta(g)}
               vincular={async (id: string | null) => { try { await vincular(g.nome, id); await recarregar(); toast("Vínculo salvo"); } catch (e: any) { toast(e.message); } }} dataDe={dataDe} />)}</tbody>
             <tfoot><tr><td>Total</td><td className="n">{soma(g => g.n)}</td><td className="n">{fmtMoeda(soma(g => g.prod))}</td><td className="n">{fmtMoeda(soma(g => g.adic))}</td><td className="n">{fmtMoeda(soma(g => g.total))}</td><td className="n">{fmtMoeda(soma(g => g.aprov))}</td><td className="n">{fmtMoeda(soma(g => g.agu))}</td><td></td></tr></tfoot>
           </table>}
@@ -196,9 +232,14 @@ export default function MontagemPagamento() {
   );
 }
 
-function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe }: any) {
+function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarregar }: any) {
   const k = g.cad?.conta;
   const [trocar, setTrocar] = useState(false);
+  const [av, setAv] = useState<any>(null);
+  const { toast } = useApp() as any;
+  const novaAv = () => setAv({ chave: "", montador: g.nome, descricao: "", data: hoje(), prod: "", adic: "", status: "aprovado" });
+  const salvarAv = async () => { try { await salvarAvulsa({ ...av, prod: num(av.prod), adic: num(av.adic) }); toast("Ordem avulsa salva"); setAv(null); await recarregar(); } catch (e: any) { toast(e.message); } };
+  const excluirAv = async (e: Ef) => { if (!confirm("Excluir a ordem avulsa “" + (e.descricao || "") + "” de " + fmtMoeda(e.total) + "? Ela sai do pagamento (fica registrada no histórico do banco).")) return; try { await excluirAvulsa(e.chave); toast("Ordem avulsa excluída"); await recarregar(); } catch (x: any) { toast(x.message); } };
   return <>
     <tr className={"ma-lin" + (aberto ? " on" : "")} onClick={abrir}>
       <td><b>{g.cad?.nome || g.nome}</b>{g.cad && g.cad.nome !== g.nome ? <small className="hint"> · Exact: {g.nome}</small> : null}</td>
@@ -215,9 +256,89 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe }: any) 
       </td>
     </tr>
     {aberto && <tr className="ma-dias"><td colSpan={8}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "2px 0 8px" }}>
+        {!av && <button className="btn sm primary" onClick={novaAv}>＋ Incluir ordem avulsa</button>}
+        <span className="hint">Serviço feito dentro da loja ou pagamento manual — entra no total deste montador.</span>
+      </div>
+      {av && <div className="ma-av">
+        <div className="field" style={{ flex: 2, minWidth: 220 }}><label>Serviço / descrição *</label><input value={av.descricao} onChange={e => setAv({ ...av, descricao: e.target.value })} placeholder="Ex.: montagem do mostruário da loja, ajuste de porta no showroom" /></div>
+        <div className="field"><label>Data *</label><input type="date" value={av.data} onChange={e => setAv({ ...av, data: e.target.value })} /></div>
+        <div className="field" style={{ maxWidth: 130 }}><label>Valor (R$) *</label><input inputMode="decimal" value={av.prod} onChange={e => setAv({ ...av, prod: e.target.value })} placeholder="0,00" /></div>
+        <div className="field" style={{ maxWidth: 130 }}><label>Adicional (R$)</label><input inputMode="decimal" value={av.adic} onChange={e => setAv({ ...av, adic: e.target.value })} placeholder="0,00" /></div>
+        <div className="field"><label>Status</label><select value={av.status} onChange={e => setAv({ ...av, status: e.target.value })}><option value="aprovado">✅ Aprovado p/ pagamento</option><option value="aguardando">⏳ Aguardando aprovação</option></select></div>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}><button className="btn primary sm" onClick={salvarAv}>Salvar</button><button className="btn ghost sm" onClick={() => setAv(null)}>Cancelar</button></div>
+      </div>}
       <table className="ma-os"><thead><tr><th>O.S.</th><th>Montagem</th><th>Finalização</th><th>Status</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th></tr></thead>
-        <tbody>{g.itens.slice().sort((a: any, b: any) => dataDe(a).localeCompare(dataDe(b))).map((e: any) => <tr key={e.chave}><td>{e.os}</td><td>{br(e.data_montagem)}</td><td>{br(e.data_finalizacao)}</td>
+        <tbody>{g.itens.slice().sort((a: any, b: any) => dataDe(a).localeCompare(dataDe(b))).map((e: any) => <tr key={e.chave}><td>{e.origem === "avulsa" ? <><span className="pill" style={{ background: "var(--primary)", color: "#fff", fontSize: 10.5 }}>AVULSA</span> {e.descricao} <a href="#" onClick={x => { x.preventDefault(); setAv({ chave: e.chave, montador: e.montador, descricao: e.descricao || "", data: e.data_montagem, prod: String(e.produtos), adic: e.adicionais ? String(e.adicionais) : "", status: aprovado(e) ? "aprovado" : "aguardando" }); }}>editar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); excluirAv(e); }}>excluir</a></> : e.os}</td><td>{br(e.data_montagem)}</td><td>{br(e.data_finalizacao)}</td>
           <td>{aprovado(e) ? <span className="vinda ok">✅ Aprovado</span> : <span className="vinda pend">⏳ Aguardando</span>}</td><td className="n">{fmtMoeda(e.produtos)}</td><td className="n">{e.adicionais ? fmtMoeda(e.adicionais) : "—"}</td><td className="n"><b>{fmtMoeda(e.total)}</b></td></tr>)}</tbody></table>
     </td></tr>}
   </>;
+}
+
+// ---------- fechar o pagamento do mês: guarda uma foto do que foi gerado para o financeiro ----------
+function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto }: any) {
+  const { setModal, toast } = useApp() as any;
+  const [ref, setRef] = useState(ate.slice(0, 7)); const [obs, setObs] = useState(""); const [ind, setInd] = useState(false);
+  const tot = grupos.reduce((s: number, g: any) => s + g.total, 0), n = grupos.reduce((s: number, g: any) => s + g.n, 0);
+  const _itens = grupos.map((g: any) => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, nome_exact: g.nome, montador_id: g.cad?.id || null, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipo_conta: k.tipoConta, pix_tipo: k.pixTipo, pix_chave: k.pixChave, montagens: g.n, produtos: r2(g.prod), adicionais: r2(g.adic), total: r2(g.total), aprovado: r2(g.aprov), aguardando: r2(g.agu), ordens: g.itens.map((e: any) => ({ os: e.os, desc: e.descricao, origem: e.origem, status: e.status, mont: e.data_montagem, fin: e.data_finalizacao, prod: e.produtos, adic: e.adicionais, total: e.total })) }; });
+  const ir = async (substituir: boolean) => {
+    setInd(true);
+    try { await fechar({ referencia: ref, de, ate, pelo, filtro: fs, obs, mapa, substituir, _itens }); toast("Pagamento de " + nomeMes(ref) + " fechado e guardado no histórico"); setModal(null); pronto(); }
+    catch (e: any) { if (/já existe/i.test(e.message) && !substituir) { if (confirm("Já existe um fechamento de " + nomeMes(ref) + ".\n\nSubstituir? O fechamento anterior NÃO é apagado: fica guardado no histórico como “substituído”.")) { setInd(false); return ir(true); } } else toast(e.message); }
+    finally { setInd(false); }
+  };
+  return <Modal titulo="🔒 Fechar pagamento do mês" onFechar={() => setModal(null)}>
+    <p style={{ marginTop: 0 }}>Guarda uma foto deste relatório (valores por montador, contas e as O.S.) no histórico, para consultar depois.</p>
+    <div className="field"><label>Mês de referência</label><input type="month" value={ref} onChange={e => setRef(e.target.value)} /></div>
+    <div className="resp-box" style={{ margin: "10px 0" }}>Período {br(de)} a {br(ate)} · pela data de {pelo === "fin" ? "finalização" : "montagem"} · {fs === "aprov" ? "só aprovados" : fs === "agu" ? "só aguardando" : "aprovados + aguardando"}<br /><b>{grupos.length} montadores · {n} O.S. · {fmtMoeda(tot)}</b></div>
+    <div className="field"><label>Observação (opcional)</label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: enviado ao financeiro em 05/11" /></div>
+    <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" disabled={ind || !ref} onClick={() => ir(false)}>{ind ? "Guardando…" : "Fechar e guardar"}</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
+  </Modal>;
+}
+
+function Historico() {
+  const [l, setL] = useState<any[] | null>(null); const [erro, setErro] = useState(""); const [ab, setAb] = useState<number | null>(null); const [itens, setItens] = useState<any[]>([]);
+  useEffect(() => { listaFech().then(setL).catch(e => setErro(e.message)); }, []);
+  useEffect(() => { if (ab) itensFech(ab).then(setItens).catch(() => setItens([])); }, [ab]);
+  if (erro) return <div className="empty">{erro}</div>;
+  if (!l) return <div className="empty">Carregando…</div>;
+  if (!l.length) return <div className="empty" style={{ padding: 24 }}>Nenhum pagamento fechado ainda. Na aba “Montagens e pagamento”, filtre o mês e clique em “🔒 Fechar pagamento do mês”.</div>;
+  const f = l.find(x => x.id === ab);
+  const per = (x: any) => br(x.de) + " a " + br(x.ate);
+  const baixarFin = () => { if (!f) return; const linhas = itens.map(x => [x.montador, x.nome_exact, x.titular || "", x.doc || "", x.banco || "", x.agencia || "", x.conta || "", x.tipo_conta || "", x.pix_tipo || "", x.pix_chave || "", x.montagens, Number(x.produtos), Number(x.adicionais), Number(x.total), Number(x.aprovado), Number(x.aguardando), per(f), (x.conta || x.pix_chave) ? "" : "SEM CONTA CADASTRADA"]);
+    linhas.push(["TOTAL", "", "", "", "", "", "", "", "", "", f.n_os, "", "", Number(f.total), Number(f.aprovado), Number(f.aguardando), per(f), f.ativo ? "" : "FECHAMENTO SUBSTITUÍDO"]);
+    baixarXlsx("pagamento_montadores_" + f.referencia + (f.ativo ? "" : "_substituido_" + f.id) + ".xlsx", CAB_FIN, linhas, "Pagamento " + f.referencia); };
+  const baixarDet = () => { if (!f) return; const linhas = itens.flatMap(x => (x.ordens || []).map((o: any) => [x.montador, o.origem === "avulsa" ? "Avulsa: " + (o.desc || "") : o.os, /efetuado/i.test(o.status) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(o.mont), br(o.fin), Number(o.prod), Number(o.adic), Number(o.total)]));
+    baixarXlsx("montagens_" + f.referencia + ".xlsx", ["Montador", "O.S.", "Status", "Data montagem", "Data finalização", "Total produtos", "Adicionais", "Total O.S."], linhas, "Montagens " + f.referencia); };
+  return <>
+    <div className="card" style={{ padding: 0 }}>
+      <table className="ma-tab"><thead><tr><th>Mês</th><th>Período</th><th className="n">Montadores</th><th className="n">O.S.</th><th className="n">Total</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Fechado por</th><th></th></tr></thead>
+        <tbody>{l.map(x => <tr key={x.id} className={"ma-lin" + (ab === x.id ? " on" : "")} style={x.ativo ? undefined : { opacity: .55 }} onClick={() => setAb(ab === x.id ? null : x.id)}>
+          <td><b>{nomeMes(x.referencia)}</b>{!x.ativo && <span className="pill" style={{ marginLeft: 6 }}>substituído</span>}</td><td>{per(x)}</td><td className="n">{x.n_montadores}</td><td className="n">{x.n_os}</td><td className="n"><b>{fmtMoeda(Number(x.total))}</b></td><td className="n">{fmtMoeda(Number(x.aprovado))}</td><td className="n">{fmtMoeda(Number(x.aguardando))}</td>
+          <td><small>{x.criado_por || ""} · {new Date(x.criado_em).toLocaleString("pt-BR").slice(0, 16)}{x.obs ? " · " + x.obs : ""}{x.substituido_em ? " · substituído em " + new Date(x.substituido_em).toLocaleDateString("pt-BR") : ""}</small></td><td className="g">ver ›</td></tr>)}</tbody></table>
+    </div>
+    {f && <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
+      <div className="ma-cab"><b>{nomeMes(f.referencia)}{f.ativo ? "" : " (substituído)"} · {per(f)}</b><button className="btn primary sm" onClick={baixarFin}>⬇ Relatório para o financeiro</button><button className="btn sm" onClick={baixarDet}>⬇ Detalhado por O.S.</button></div>
+      <table className="ma-tab"><thead><tr><th>Montador</th><th>Conta</th><th className="n">Montagens</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th></tr></thead>
+        <tbody>{itens.map(x => <tr key={x.id || x.nome_exact}><td><b>{x.montador}</b></td><td><small>{x.conta || x.pix_chave ? [x.banco, x.agencia && "ag " + x.agencia, x.conta && "cc " + x.conta, x.pix_chave && "PIX " + x.pix_chave].filter(Boolean).join(" · ") : <span style={{ color: "var(--warn)" }}>sem conta</span>}</small></td><td className="n">{x.montagens}</td><td className="n">{fmtMoeda(Number(x.produtos))}</td><td className="n">{fmtMoeda(Number(x.adicionais))}</td><td className="n"><b>{fmtMoeda(Number(x.total))}</b></td></tr>)}</tbody></table>
+    </div>}
+  </>;
+}
+
+// ordem avulsa para qualquer montador do cadastro (mesmo sem O.S. do Exact no período)
+function ModalAvulsa({ cadastro, pronto }: any) {
+  const { setModal, toast } = useApp() as any;
+  const [f, setF] = useState<any>({ montador: "", descricao: "", data: hoje(), prod: "", adic: "", status: "aprovado" });
+  const ir = async () => { try { await salvarAvulsa({ ...f, prod: num(f.prod), adic: num(f.adic) }); toast("Ordem avulsa salva"); setModal(null); await pronto(); } catch (e: any) { toast(e.message); } };
+  return <Modal titulo="＋ Ordem avulsa (serviço na loja / pagamento manual)" onFechar={() => setModal(null)}>
+    <div className="field"><label>Montador *</label><select value={f.montador} onChange={e => setF({ ...f, montador: e.target.value })}><option value="">Selecione…</option>{cadastro.map((m: any) => <option key={m.id} value={m.nome}>{m.nome}</option>)}</select></div>
+    <div className="field"><label>Serviço / descrição *</label><input value={f.descricao} onChange={e => setF({ ...f, descricao: e.target.value })} placeholder="Ex.: montagem do mostruário da loja" /></div>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div className="field"><label>Data *</label><input type="date" value={f.data} onChange={e => setF({ ...f, data: e.target.value })} /></div>
+      <div className="field" style={{ maxWidth: 140 }}><label>Valor (R$) *</label><input inputMode="decimal" value={f.prod} onChange={e => setF({ ...f, prod: e.target.value })} /></div>
+      <div className="field" style={{ maxWidth: 140 }}><label>Adicional (R$)</label><input inputMode="decimal" value={f.adic} onChange={e => setF({ ...f, adic: e.target.value })} /></div>
+      <div className="field"><label>Status</label><select value={f.status} onChange={e => setF({ ...f, status: e.target.value })}><option value="aprovado">✅ Aprovado p/ pagamento</option><option value="aguardando">⏳ Aguardando aprovação</option></select></div>
+    </div>
+    <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" onClick={ir}>Salvar</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
+  </Modal>;
 }

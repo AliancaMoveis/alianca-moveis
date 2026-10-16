@@ -1,6 +1,8 @@
 // Dashboard da GESTÃO (operação): faixa "Precisa de você agora" + abas Call center / Agendamentos / Consultores / Vendas.
 // Cada número importante vem com a comparação ao período anterior de mesmo tamanho.
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { sb } from "../lib/supabase";
+import { MOCK } from "../lib/chat";
 import { useApp } from "../estado";
 import { fmtDate, fmtMoeda, isoLocal, parseData, vendaContaVolume } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
@@ -24,7 +26,8 @@ const Big = ({ n, l, a, b, inverso, suf, cor }: any) => <div className="pb-big">
 
 export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const { R, st, irPara, abrirDetalhe } = useApp() as any;
-  const [aba, setAba] = useState<"cc" | "ag" | "cons" | "ck" | "vendas">("cc");
+  const [aba, setAba] = useState<"cc" | "ag" | "cons" | "ck" | "vendas" | "mont">("cc");
+  const veMont = R.mySetores().includes("gestao");
   // período anterior com o mesmo número de dias
   const d0 = new Date(de + "T00:00:00"), d1 = new Date(ate + "T23:59:59");
   const dias = Math.max(1, Math.round((+d1 - +d0) / 86400000));
@@ -132,7 +135,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
       <div className="pg-grid">
         {G.cartoes.map(x => <Geral key={x.k} {...x} />)}
       </div>
-      <div className="subnav pb-abas"><Tab k="cc" l="☎ Call center" n={atrasados.length} /><Tab k="ag" l="◎ Agendamentos" /><Tab k="cons" l="🧭 Externos" n={cons.filter((x: any) => x.alerta).length} /><Tab k="ck" l="✓ Checklist" n={ckVenc.length + ckEnc.length} /><Tab k="vendas" l="💰 Vendas" n={vendasAConf.length} /></div>
+      <div className="subnav pb-abas"><Tab k="cc" l="☎ Call center" n={atrasados.length} /><Tab k="ag" l="◎ Agendamentos" /><Tab k="cons" l="🧭 Externos" n={cons.filter((x: any) => x.alerta).length} /><Tab k="ck" l="✓ Checklist" n={ckVenc.length + ckEnc.length} /><Tab k="vendas" l="💰 Vendas" n={vendasAConf.length} />{veMont && <Tab k="mont" l="🔧 Montagem" />}</div>
       <div className="pb-per">Comparando {fmtDate(de)}–{fmtDate(ate)} com {fmtDate(dePrev)}–{fmtDate(atePrev)}</div>
 
       {aba === "cc" && <>
@@ -229,6 +232,50 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
       </>}
 
       {aba === "vendas" && <PainelGestao de={de} ate={ate} />}
+      {aba === "mont" && veMont && <PainelMontagem de={de.slice(0, 10)} ate={ate.slice(0, 10)} dePrev={String(dePrev).slice(0, 10)} atePrev={String(atePrev).slice(0, 10)} />}
     </div>
   );
+}
+
+// ---------- Montagem (Exact): agendamentos, montagens efetivadas e pagamentos no período — só a Gestão ----------
+async function resumoMont(de: string, ate: string): Promise<any> {
+  if (MOCK) return null;
+  const { data, error } = await sb.rpc("montagem_resumo", { p_de: de, p_ate: ate }); if (error) throw new Error(error.message); return data;
+}
+function PainelMontagem({ de, ate, dePrev, atePrev }: { de: string; ate: string; dePrev: string; atePrev: string }) {
+  const { irPara } = useApp() as any;
+  const [m, setM] = useState<any>(undefined); const [m0, setM0] = useState<any>(null); const [erro, setErro] = useState("");
+  useEffect(() => { setM(undefined); resumoMont(de, ate).then(setM).catch(e => { setErro(e.message); setM(null); }); resumoMont(dePrev, atePrev).then(setM0).catch(() => setM0(null)); }, [de, ate, dePrev, atePrev]);
+  if (m === undefined) return <div className="dn-vazio">Carregando a montagem…</div>;
+  if (!m) return <div className="dn-vazio">{erro || "Os números da montagem aparecem aqui depois que os relatórios do Exact forem enviados (Montagem → Agendamentos e Montagens efetivadas)."}</div>;
+  const n = (x: any) => Number(x) || 0; const p0 = m0 || {};
+  const pc = (a: number, b: number) => (b ? Math.round(a / b * 100) : 0);
+  const mxT = Math.max(1, ...(m.top_montadores || []).map((x: any) => n(x.total))); const mxA = Math.max(1, ...(m.agendadoras || []).map((x: any) => n(x.n)));
+  return <>
+    <div className="pb-bigs">
+      <Big n={n(m.ag_total)} l={`Agendamentos feitos · ${n(m.ag_montagem)} montagens · ${n(m.ag_assist)} assistências`} a={n(m.ag_total)} b={m0 ? n(p0.ag_total) : null} />
+      <Big n={n(m.ef_qtd)} l={`Montagens efetivadas (finalizadas) · ${n(m.ef_assist)} assistências`} a={n(m.ef_qtd)} b={m0 ? n(p0.ef_qtd) : null} cor="var(--st-concluida)" />
+      <Big n={fmtMoeda(n(m.ef_total))} l={`A pagar aos montadores (${n(m.ef_montadores)} montadores)`} a={Math.round(n(m.ef_total))} b={m0 ? Math.round(n(p0.ef_total)) : null} />
+      <Big n={fmtMoeda(n(m.ag_pagas) * n(m.valor_agend))} l={`Agendadoras · ${n(m.ag_pagas)} agendamentos × ${fmtMoeda(n(m.valor_agend))}`} />
+    </div>
+    <div className="kpis">
+      <Kpi n={fmtMoeda(n(m.ef_produtos))} l="Total das O.S. (produtos)" fs={20} />
+      <Kpi n={fmtMoeda(n(m.ef_adicionais))} l="Adicionais pagos" fs={20} />
+      <Kpi n={fmtMoeda(n(m.ef_aprovado))} l="✅ Aprovado p/ pagamento" fs={20} />
+      <Kpi n={fmtMoeda(n(m.ef_aguardando))} l="⏳ Aguardando aprovação" fs={20} cls={n(m.ef_aguardando) ? "alert" : ""} />
+      <Kpi n={pc(n(m.ag_assist), n(m.ag_total)) + "%"} l="Dos agendamentos são assistência" cls={pc(n(m.ag_assist), n(m.ag_total)) >= 40 ? "alert" : ""} />
+      <Kpi n={m.prazo_medio == null ? "—" : String(m.prazo_medio).replace(".", ",") + " dias"} l="Prazo médio: agendou → data da montagem" fs={20} />
+      <Kpi n={n(m.mont_marcadas)} l={`Montagens marcadas no período (${n(m.mont_marcadas_assist)} assist.)`} />
+      <Kpi n={n(m.aguardando_montagem_atras)} l={`“Aguardando montagem” com data já passada (de ${n(m.aguardando_montagem)} aguardando)`} cls={n(m.aguardando_montagem_atras) ? "alert" : ""} />
+      <Kpi n={n(m.ag_indisp)} l="Clientes indisponíveis para montagem" />
+      <Kpi n={n(m.ag_cancel)} l="Cancelados / rejeitados" />
+      {n(m.ef_avulsas) > 0 && <Kpi n={n(m.ef_avulsas)} l="Ordens avulsas (serviço na loja)" />}
+    </div>
+    <div className="panel-grid">
+      <div className="panel"><h3>Montadores que mais receberam</h3>{(m.top_montadores || []).length ? m.top_montadores.map((x: any) => <BarRow key={x.nome} nm={x.nome + " (" + x.n + ")"} pct={n(x.total) / mxT * 100} v={fmtMoeda(n(x.total))} />) : <div className="dn-vazio">Sem montagens efetivadas no período.</div>}</div>
+      <div className="panel"><h3>Agendamentos por agendadora</h3>{(m.agendadoras || []).length ? m.agendadoras.map((x: any) => <BarRow key={x.nome} nm={x.nome} pct={n(x.n) / mxA * 100} v={x.n + " · " + fmtMoeda(n(x.n) * n(m.valor_agend))} cor="#c0428a" />) : <div className="dn-vazio">Sem agendamentos no período.</div>}</div>
+    </div>
+    <div className="pb-per" style={{ marginTop: 6 }}>Dados do Exact: agendamentos até {m.ultimo_agend ? fmtDate(m.ultimo_agend) : "—"} · montagens efetivadas até {m.ultimo_efet ? fmtDate(m.ultimo_efet) : "—"}. Envie os relatórios novos para atualizar.</div>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0 16px" }}><button className="btn sm primary" onClick={() => irPara("montagem_agend")}>Agendamentos (Exact)</button><button className="btn sm" onClick={() => irPara("montagem_pag")}>Montagens efetivadas e pagamento</button></div>
+  </>;
 }

@@ -1,0 +1,5 @@
+-- 0150 (aplicado via execute_sql): ordens avulsas (montagem_efet.origem='avulsa', soft delete excluido_em),
+-- fechamentos mensais com histórico (montagem_fechamentos + montagem_fech_itens; substituir guarda o anterior ativo=false),
+-- agendadoras: montagem_cfg (agendadoras_pagas, valor_agendamento), montagem_agend.bruto (linhas completas do Exact),
+-- montagem_ag_fech (fechamento mensal das agendadoras com resumo + todas as O.S.), montagem_resumo(de, ate) para o dashboard.
+-- RPCs: montagem_avulsa_salvar, montagem_avulsa_excluir, montagem_fechar, montagem_cfg_salvar, montagem_ag_fechar, montagem_resumo — só Gestão.

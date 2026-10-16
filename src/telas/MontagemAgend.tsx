@@ -6,12 +6,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { sb } from "../lib/supabase";
 import { MOCK } from "../lib/chat";
-import { baixarXlsx } from "../lib/planilha";
+import { baixarXlsx, baixarXlsxAbas, type AbaXlsx } from "../lib/planilha";
+import { Modal } from "../comp/Modal";
 import { fmtMoeda } from "../lib/regras";
 import { col, lerArquivo } from "./Medidas";
 import { Kpi } from "./Dashboard";
 
-type Ag = { chave: string; os: string; lider: string; montador: string; status: string; indisponivel: boolean; data_inclusao: string; data_montagem: string; data_finalizacao: string | null; tipos: string; total: number };
+type Ag = { chave: string; os: string; lider: string; montador: string; status: string; indisponivel: boolean; data_inclusao: string; data_montagem: string; data_finalizacao: string | null; tipos: string; total: number; bruto?: any[] | null };
 
 export const podeMontagemAgend = (R: any) => R.mySetores().includes("gestao");
 
@@ -35,19 +36,67 @@ function converter(linhas: any[]): Ag[] {
     const chave = [os, mont, dm, lider].join("¦");
     const tipo = col(l, "Tipo").trim(); const tot = num(col(l, "Total OS"));
     const ex = m.get(chave);
-    if (ex) { ex.total = Math.round((ex.total + tot) * 100) / 100; if (tipo && !ex.tipos.includes(tipo)) ex.tipos = ex.tipos ? ex.tipos + " + " + tipo : tipo; continue; }
+    if (ex) { ex.total = Math.round((ex.total + tot) * 100) / 100; if (tipo && !ex.tipos.includes(tipo)) ex.tipos = ex.tipos ? ex.tipos + " + " + tipo : tipo; (ex.bruto = ex.bruto || []).push(l); continue; }
     m.set(chave, { chave, os, lider, montador: mont, status: col(l, "status", "Status").trim(), indisponivel: /^sim/i.test(col(l, "Cliente indisponível para montagem")),
-      data_inclusao: iso(col(l, "Data Inclusao", "Data Inclusão")), data_montagem: dm, data_finalizacao: iso(col(l, "Data Finalizacao", "Data Finalização")) || null, tipos: tipo, total: tot });
+      data_inclusao: iso(col(l, "Data Inclusao", "Data Inclusão")), data_montagem: dm, data_finalizacao: iso(col(l, "Data Finalizacao", "Data Finalização")) || null, tipos: tipo, total: tot, bruto: [l] });
   }
   return Array.from(m.values());
 }
 
 let mockDados: Ag[] = [];
+let mockCfg: any = { agendadoras_pagas: ["francilene", "bruna.gisele", "Natallia", "Jaqueline de Jesus Jorge"], valor_agendamento: 2 };
+async function lerCfg(): Promise<{ pagas: string[]; valor: number }> {
+  if (MOCK) return { pagas: mockCfg.agendadoras_pagas, valor: mockCfg.valor_agendamento };
+  const { data } = await sb.from("montagem_cfg").select("chave,valor");
+  const m = Object.fromEntries(((data || []) as any[]).map(x => [x.chave, x.valor]));
+  return { pagas: Array.isArray(m.agendadoras_pagas) ? m.agendadoras_pagas : [], valor: Number(m.valor_agendamento ?? 2) || 0 };
+}
+async function salvarCfg(chave: string, valor: any) {
+  if (MOCK) { mockCfg[chave] = valor; return; }
+  const { error } = await sb.rpc("montagem_cfg_salvar", { p_chave: chave, p_valor: valor }); if (error) throw new Error(error.message);
+}
+let mockFech: any[] = [];
+async function fecharAg(p: any, ags: Ag[], pagas: string[], valor: number): Promise<number> {
+  if (MOCK) { if (mockFech.some(f => f.referencia === p.referencia && f.ativo) && !p.substituir) throw new Error("Já existe um fechamento de " + p.referencia);
+    mockFech.forEach(f => { if (f.referencia === p.referencia && f.ativo) f.ativo = false; });
+    const it = ags.filter(a => ehPaga(a.lider, pagas) && !fora(a) && a.data_inclusao >= p.de && a.data_inclusao <= p.ate);
+    const res = Object.values(it.reduce((m: any, a) => { const g = (m[a.lider] = m[a.lider] || { lider: a.lider, qtd: 0, montagem: 0, assistencia: 0, valor: 0 }); g.qtd++; if (ehAssist(a)) g.assistencia++; else g.montagem++; g.valor += valor; return m; }, {}));
+    mockFech.push({ id: mockFech.length + 1, ...p, valor_unit: valor, qtd: it.length, total: it.length * valor, resumo: res, itens: it.map(a => ({ lider: a.lider, os: a.os, montador: a.montador, status: a.status, inc: a.data_inclusao, mont: a.data_montagem, fin: a.data_finalizacao, tipos: a.tipos, total: a.total, bruto: a.bruto })), criado_em: new Date().toISOString(), criado_por: "você", ativo: true }); return mockFech.length; }
+  const { data, error } = await sb.rpc("montagem_ag_fechar", { p }); if (error) throw new Error(error.message); return data as number;
+}
+async function listaFechAg(): Promise<any[]> {
+  if (MOCK) return mockFech.slice().reverse();
+  const { data, error } = await sb.from("montagem_ag_fech").select("id,referencia,de,ate,valor_unit,qtd,total,resumo,obs,criado_em,criado_por,ativo,substituido_em").order("referencia", { ascending: false }).order("criado_em", { ascending: false });
+  if (error) throw new Error(error.message); return data || [];
+}
+async function itensFechAg(id: number): Promise<any[]> {
+  if (MOCK) return (mockFech.find(f => f.id === id) || {}).itens || [];
+  const { data, error } = await sb.from("montagem_ag_fech").select("itens").eq("id", id).maybeSingle(); if (error) throw new Error(error.message); return (data as any)?.itens || [];
+}
+const ehPaga = (lider: string, pagas: string[]) => pagas.some(x => x.trim().toLowerCase() === (lider || "").trim().toLowerCase());
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const nomeMes = (ref: string) => MESES[Number(ref.slice(5, 7)) - 1] + "/" + ref.slice(0, 4);
+/** arquivo para o financeiro: aba "Resumo" (valores a pagar) + uma aba por agendadora com todas as informações das O.S. */
+function arquivoAgendadoras(nome: string, titulo: string, resumo: { lider: string; qtd: number; montagem: number; assistencia: number; valor: number }[], valorUnit: number, itens: any[]) {
+  const tot = resumo.reduce((s, r) => s + r.qtd, 0);
+  const abas: AbaXlsx[] = [{ nome: "Resumo", cab: ["Agendadora", "Agendamentos", "Montagem", "Assistência", "Valor por agendamento", "A PAGAR", "Período"],
+    linhas: [...resumo.map(r => [r.lider, r.qtd, r.montagem, r.assistencia, valorUnit, r2(r.qtd * valorUnit), titulo]), ["TOTAL", tot, resumo.reduce((s, r) => s + r.montagem, 0), resumo.reduce((s, r) => s + r.assistencia, 0), valorUnit, r2(tot * valorUnit), titulo]] }];
+  resumo.forEach(r => {
+    const meus = itens.filter(i => i.lider === r.lider);
+    const brutos = meus.flatMap(i => (i.bruto && i.bruto.length ? i.bruto : [null]).map((b: any) => ({ i, b })));
+    const chaves: string[] = Array.from(new Set(brutos.flatMap(x => x.b ? Object.keys(x.b) : [])));
+    const cab = chaves.length ? chaves : ["Lider", "Montador", "os", "status", "Data Inclusao", "Data Montagem", "Data Finalizacao", "Tipo", "Total OS"];
+    const linhas = brutos.map(({ i, b }) => b ? cab.map(k => b[k] ?? "") : cab.map(k => ({ "Lider": i.lider, "Montador": i.montador, "os": i.os, "status": i.status, "Data Inclusao": br(i.inc || i.data_inclusao), "Data Montagem": br(i.mont || i.data_montagem), "Data Finalizacao": br(i.fin || i.data_finalizacao), "Tipo": i.tipos, "Total OS": i.total } as any)[k] ?? ""));
+    abas.push({ nome: r.lider + " (" + r.qtd + ")", cab, linhas });
+  });
+  return baixarXlsxAbas(nome, abas);
+}
+const r2 = (n: number) => Math.round(n * 100) / 100;
 async function carregar(): Promise<Ag[]> {
   if (MOCK) return mockDados;
   const out: Ag[] = [];
   for (let i = 0; ; i += 1000) {
-    const { data, error } = await sb.from("montagem_agend").select("chave,os,lider,montador,status,indisponivel,data_inclusao,data_montagem,data_finalizacao,tipos,total").order("chave").range(i, i + 999);
+    const { data, error } = await sb.from("montagem_agend").select("chave,os,lider,montador,status,indisponivel,data_inclusao,data_montagem,data_finalizacao,tipos,total,bruto").order("chave").range(i, i + 999);
     if (error) throw new Error(error.message);
     out.push(...((data || []) as Ag[]).map(a => ({ ...a, total: Number(a.total) || 0 })));
     if (!data || data.length < 1000) break;
@@ -57,8 +106,8 @@ async function carregar(): Promise<Ag[]> {
 async function enviar(ags: Ag[]): Promise<{ novos: number; atualizados: number; total: number }> {
   if (MOCK) { const k = new Set(mockDados.map(a => a.chave)); const novos = ags.filter(a => !k.has(a.chave)); mockDados = [...mockDados.filter(a => !ags.some(b => b.chave === a.chave)), ...ags]; return { novos: novos.length, atualizados: ags.length - novos.length, total: mockDados.length }; }
   let r = { novos: 0, atualizados: 0, total: 0 };
-  for (let i = 0; i < ags.length; i += 500) {
-    const p = ags.slice(i, i + 500).map(a => ({ chave: a.chave, os: a.os, lider: a.lider, montador: a.montador, status: a.status, indisp: a.indisponivel, inc: a.data_inclusao, mont: a.data_montagem, fin: a.data_finalizacao || "", tipos: a.tipos, total: a.total }));
+  for (let i = 0; i < ags.length; i += 300) {
+    const p = ags.slice(i, i + 300).map(a => ({ chave: a.chave, os: a.os, lider: a.lider, montador: a.montador, status: a.status, indisp: a.indisponivel, inc: a.data_inclusao, mont: a.data_montagem, fin: a.data_finalizacao || "", tipos: a.tipos, total: a.total, bruto: a.bruto || null }));
     const { data, error } = await sb.rpc("montagem_importar", { p });
     if (error) throw new Error(error.message);
     r = { novos: r.novos + (data as any).novos, atualizados: r.atualizados + (data as any).atualizados, total: (data as any).total };
@@ -84,13 +133,19 @@ export default function MontagemAgend() {
   const [aba, setAba] = useState<"agend" | "mont">("agend");
   const h = hoje();
   const [de, setDe] = useState(h.slice(0, 8) + "01"); const [ate, setAte] = useState(h);
-  const [valor, setValor] = useState(() => { try { return localStorage.getItem("a360-mont-valor") || "2"; } catch { return "2"; } });
+  const [valor, setValor] = useState("2");
+  const [pagas, setPagas] = useState<string[]>([]);
+  const [tela, setTela] = useState<"periodo" | "hist">("periodo");
+  const { setModal } = useApp() as any;
+  useEffect(() => { lerCfg().then(c => { setPagas(c.pagas); setValor(String(c.valor).replace(".", ",")); }).catch(() => null); }, []);
   const [tipoM, setTipoM] = useState<"todos" | "mont" | "assist">("todos");
   const [aberto, setAberto] = useState("");
   const [enviando, setEnviando] = useState(""); const inp = useRef<HTMLInputElement>(null);
   const recarregar = () => carregar().then(setDados).catch(e => setErro(e.message));
   useEffect(() => { recarregar(); }, []);
   if (!podeMontagemAgend(R)) return <section className="view active"><div className="empty">Só a Gestão vê esta tela.</div></section>;
+  const abasTela = <div className="subnav" style={{ margin: "0 0 14px" }}><button className={tela === "periodo" ? "on" : ""} onClick={() => setTela("periodo")}>📋 Agendamentos</button><button className={tela === "hist" ? "on" : ""} onClick={() => setTela("hist")}>📚 Histórico de pagamentos das agendadoras</button></div>;
+  if (tela === "hist") return <section className="view active"><div className="view-head"><div><h2>🔧 Montagem · Histórico das agendadoras</h2><p>Cada fechamento guarda os valores pagos e todas as O.S. de cada agendadora daquele mês. Se o mês for fechado de novo, o anterior fica como “substituído” — nada se perde.</p></div></div>{abasTela}<HistoricoAg /></section>;
 
   const subir = async (f: File) => {
     setEnviando("Lendo " + f.name + "…");
@@ -112,7 +167,9 @@ export default function MontagemAgend() {
   const dAg = (a: Ag) => a.data_inclusao, dMo = (a: Ag) => a.data_montagem;
   const noPer = (d: string) => !!d && d >= de && d <= ate;
   const lAg = base.filter(a => noPer(dAg(a))), lMo = base.filter(a => noPer(dMo(a)));
-  const gAg = agrupar(lAg, a => a.lider, dAg), gMo = agrupar(lMo, a => a.montador, dMo);
+  const gAg = agrupar(lAg.filter(a => ehPaga(a.lider, pagas)), a => a.lider, dAg), gMo = agrupar(lMo, a => a.montador, dMo);
+  const naoPagas = Array.from(new Set(lAg.filter(a => !ehPaga(a.lider, pagas)).map(a => a.lider)));
+  const todasLideres = Array.from(new Set([...(dados || []).map(a => a.lider), ...pagas])).sort((a, b) => a.localeCompare(b));
   const g = aba === "agend" ? gAg : gMo;
   const tot = g.reduce((s, x) => s + x.n, 0), totFora = g.reduce((s, x) => s + x.fora, 0);
   const mx = Math.max(1, ...g.map(x => x.n));
@@ -129,6 +186,7 @@ export default function MontagemAgend() {
   return (
     <section className="view active">
       <div className="view-head"><div><h2>🔧 Montagem · Agendamentos</h2><p>Acompanhamento dos agendamentos feitos no Exact — só para a Gestão. Envie o relatório exportado e filtre o período: quantos cada agendadora fez (para o pagamento) e quantos cada montador recebeu.</p></div></div>
+      {abasTela}
       <div className="card ma-topo">
         <div className="ma-envio">
           <input ref={inp} type="file" accept=".csv,.xlsx" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) subir(f); }} />
@@ -169,8 +227,12 @@ export default function MontagemAgend() {
       <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
         <div className="ma-cab">
           <b>{aba === "agend" ? "Agendamentos por agendadora" : "Agendamentos por montador"} · {br(de)} a {br(ate)}</b>
-          {aba === "agend" && <label className="ma-valor">R$ por agendamento <input value={valor} onChange={e => { setValor(e.target.value); try { localStorage.setItem("a360-mont-valor", e.target.value); } catch { /* */ } }} inputMode="decimal" /></label>}
-          <button className="btn sm" onClick={exportar} disabled={!g.length}>⬇ Excel</button>
+          {aba === "agend" && <label className="ma-valor">R$ por agendamento <input value={valor} onChange={e => setValor(e.target.value)} onBlur={() => salvarCfg("valor_agendamento", num(valor)).then(() => toast("Valor por agendamento salvo"), (e: any) => toast(e.message))} inputMode="decimal" /></label>}
+          {aba === "agend" ? <>
+            <button className="btn sm" onClick={() => setModal(<ModalPagas todas={todasLideres} pagas={pagas} salvar={async (l: string[]) => { await salvarCfg("agendadoras_pagas", l); setPagas(l); }} />)}>⚙ Quem recebe</button>
+            <button className="btn primary sm" disabled={!g.length} onClick={() => arquivoAgendadoras("pagamento_agendadoras_" + de + "_a_" + ate + ".xlsx", br(de) + " a " + br(ate), gAg.map(x => ({ lider: x.nome, qtd: x.n, montagem: x.mont, assistencia: x.assist, valor: x.n * vU })), vU, lAg.filter(a => ehPaga(a.lider, pagas) && !fora(a)))}>⬇ Relatório para o financeiro</button>
+            <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!g.length} onClick={() => setModal(<ModalFecharAg de={de} ate={ate} qtd={tot} valor={vU} fechar={(p: any) => fecharAg(p, dados || [], pagas, vU)} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento do mês</button>
+          </> : <button className="btn sm" onClick={exportar} disabled={!g.length}>⬇ Excel</button>}
         </div>
         {!g.length ? <div className="empty" style={{ padding: 24 }}>{dados && dados.length ? "Nenhum agendamento neste período." : "Envie o relatório do Exact para começar."}</div> :
           <table className="ma-tab"><thead><tr><th>{aba === "agend" ? "Agendadora" : "Montador"}</th><th className="n">Agend.</th><th></th><th className="n">Montagem</th><th className="n">Assist.</th><th className="n">{aba === "agend" ? "A pagar" : "Total O.S."}</th></tr></thead>
@@ -178,6 +240,7 @@ export default function MontagemAgend() {
             <tfoot><tr><td>Total</td><td className="n">{tot}</td><td></td><td className="n">{g.reduce((s, x) => s + x.mont, 0)}</td><td className="n">{g.reduce((s, x) => s + x.assist, 0)}</td><td className="n">{aba === "agend" ? fmtMoeda(tot * vU) : fmtMoeda(g.reduce((s, x) => s + x.total, 0))}</td></tr></tfoot>
           </table>}
       </div>
+      {aba === "agend" && naoPagas.length > 0 && <p className="hint" style={{ marginTop: 10 }}>Não entram no pagamento (não estão em “Quem recebe”): {naoPagas.join(", ")}.</p>}
       <p className="hint" style={{ marginTop: 10 }}>Cada agendamento conta uma vez (a mesma O.S. com Linha Pronta e Planejada no mesmo dia e montador é um agendamento só). Cancelados e rejeitados não contam. Toque numa linha para ver por dia.</p>
     </section>
   );
@@ -194,5 +257,60 @@ function FragLinha({ x, mx, aba, vU, aberto, abrir }: { x: Grupo; mx: number; ab
       <td className="n">{aba === "agend" ? fmtMoeda(x.n * vU) : fmtMoeda(x.total)}</td>
     </tr>
     {aberto && <tr className="ma-dias"><td colSpan={6}>{dias.map(([d, n]) => <span key={d}><small>{br(d).slice(0, 5)}</small><b>{n}</b></span>)}</td></tr>}
+  </>;
+}
+
+function ModalPagas({ todas, pagas, salvar }: { todas: string[]; pagas: string[]; salvar: (l: string[]) => Promise<void> }) {
+  const { setModal, toast } = useApp() as any;
+  const [sel, setSel] = useState<string[]>(pagas);
+  const tem = (n: string) => ehPaga(n, sel);
+  return <Modal titulo="⚙ Quem recebe por agendamento" onFechar={() => setModal(null)}>
+    <p style={{ marginTop: 0 }}>Só as marcadas aparecem em Agendadoras, no relatório e no fechamento. As demais não contam.</p>
+    <div style={{ display: "grid", gap: 6 }}>{todas.map(n => <label key={n} style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" style={{ width: "auto" }} checked={tem(n)} onChange={() => setSel(tem(n) ? sel.filter(x => x.toLowerCase() !== n.toLowerCase()) : [...sel, n])} /> {n}</label>)}</div>
+    <div style={{ display: "flex", gap: 8, marginTop: 14 }}><button className="btn primary" onClick={() => salvar(sel).then(() => { toast("Salvo"); setModal(null); }, (e: any) => toast(e.message))}>Salvar</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
+  </Modal>;
+}
+
+function ModalFecharAg({ de, ate, qtd, valor, fechar, pronto }: any) {
+  const { setModal, toast } = useApp() as any;
+  const [ref, setRef] = useState(ate.slice(0, 7)); const [obs, setObs] = useState(""); const [ind, setInd] = useState(false);
+  const ir = async (substituir: boolean): Promise<void> => {
+    setInd(true);
+    try { await fechar({ referencia: ref, de, ate, obs, substituir }); toast("Pagamento das agendadoras de " + nomeMes(ref) + " guardado no histórico"); setModal(null); pronto(); }
+    catch (e: any) { if (/já existe/i.test(e.message) && !substituir) { if (confirm("Já existe um fechamento de " + nomeMes(ref) + ".\n\nSubstituir? O anterior NÃO é apagado: fica no histórico como “substituído”.")) { setInd(false); return ir(true); } } else toast(e.message); }
+    finally { setInd(false); }
+  };
+  return <Modal titulo="🔒 Fechar pagamento das agendadoras" onFechar={() => setModal(null)}>
+    <p style={{ marginTop: 0 }}>Guarda os valores e todas as O.S. de cada agendadora no histórico (backup), para consultar e baixar de novo quando precisar.</p>
+    <div className="field"><label>Mês de referência</label><input type="month" value={ref} onChange={e => setRef(e.target.value)} /></div>
+    <div className="resp-box" style={{ margin: "10px 0" }}>Agendados de {br(de)} a {br(ate)} · <b>{qtd} agendamentos · {fmtMoeda(qtd * valor)}</b> ({fmtMoeda(valor)} cada)</div>
+    <div className="field"><label>Observação (opcional)</label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: enviado ao financeiro em 05/11" /></div>
+    <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" disabled={ind || !ref} onClick={() => ir(false)}>{ind ? "Guardando…" : "Fechar e guardar"}</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
+  </Modal>;
+}
+
+function HistoricoAg() {
+  const { toast } = useApp() as any;
+  const [l, setL] = useState<any[] | null>(null); const [erro, setErro] = useState(""); const [ab, setAb] = useState<number | null>(null);
+  useEffect(() => { listaFechAg().then(setL).catch(e => setErro(e.message)); }, []);
+  if (erro) return <div className="empty">{erro}</div>;
+  if (!l) return <div className="empty">Carregando…</div>;
+  if (!l.length) return <div className="empty" style={{ padding: 24 }}>Nenhum pagamento fechado ainda. Em “Agendadoras”, filtre o mês e clique em “🔒 Fechar pagamento do mês”.</div>;
+  const f = l.find(x => x.id === ab);
+  const per = (x: any) => br(x.de) + " a " + br(x.ate);
+  const baixar = async (x: any) => { try { const it = await itensFechAg(x.id); await arquivoAgendadoras("pagamento_agendadoras_" + x.referencia + (x.ativo ? "" : "_substituido_" + x.id) + ".xlsx", per(x), x.resumo || [], Number(x.valor_unit), it); } catch (e: any) { toast(e.message); } };
+  return <>
+    <div className="card" style={{ padding: 0 }}>
+      <table className="ma-tab"><thead><tr><th>Mês</th><th>Agendados de</th><th className="n">Agendamentos</th><th className="n">R$ cada</th><th className="n">Total pago</th><th>Fechado por</th><th></th></tr></thead>
+        <tbody>{l.map(x => <tr key={x.id} className={"ma-lin" + (ab === x.id ? " on" : "")} style={x.ativo ? undefined : { opacity: .55 }} onClick={() => setAb(ab === x.id ? null : x.id)}>
+          <td><b>{nomeMes(x.referencia)}</b>{!x.ativo && <span className="pill" style={{ marginLeft: 6 }}>substituído</span>}</td><td>{per(x)}</td><td className="n">{x.qtd}</td><td className="n">{fmtMoeda(Number(x.valor_unit))}</td><td className="n"><b>{fmtMoeda(Number(x.total))}</b></td>
+          <td><small>{x.criado_por || ""} · {new Date(x.criado_em).toLocaleString("pt-BR").slice(0, 16)}{x.obs ? " · " + x.obs : ""}</small></td><td><button className="btn sm" onClick={e => { e.stopPropagation(); baixar(x); }}>⬇ Arquivo</button></td></tr>)}</tbody></table>
+    </div>
+    {f && <div className="card" style={{ padding: 0, marginTop: 14 }}>
+      <div className="ma-cab"><b>{nomeMes(f.referencia)}{f.ativo ? "" : " (substituído)"} · {per(f)}</b><button className="btn primary sm" onClick={() => baixar(f)}>⬇ Relatório (resumo + O.S. de cada uma)</button></div>
+      <table className="ma-tab"><thead><tr><th>Agendadora</th><th className="n">Agendamentos</th><th className="n">Montagem</th><th className="n">Assistência</th><th className="n">A pagar</th></tr></thead>
+        <tbody>{(f.resumo || []).map((r: any) => <tr key={r.lider}><td><b>{r.lider}</b></td><td className="n">{r.qtd}</td><td className="n">{r.montagem}</td><td className="n">{r.assistencia}</td><td className="n"><b>{fmtMoeda(Number(r.valor))}</b></td></tr>)}</tbody>
+        <tfoot><tr><td>Total</td><td className="n">{f.qtd}</td><td></td><td></td><td className="n">{fmtMoeda(Number(f.total))}</td></tr></tfoot></table>
+    </div>}
   </>;
 }
