@@ -1,0 +1,3 @@
+-- 0144 · (aplicado via SQL) Supervisão de Medidas (Luciene) passa a ver os clientes do marketing visitados por consultor
+-- (e os anexos deles), para cruzar com as medidas do Exact e com o checklist: pode_ver_chamado_ctx, ramo 'pre':
+--   or (x->'ms' ? 'medidas_supervisao' and c.consultor_id is not null)

@@ -2,6 +2,7 @@
 // Cliente comprador que foi visitado por um consultor do Minha Visita = medidas oficiais ok; sem visita = sem medidas.
 // O resultado fica gravado por nº de venda e aparece nos clientes do Checklist.
 import { Ticket } from "../comp/Ticket";
+import { Selo360, visitados360, Galeria360 } from "../comp/Visita360";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
@@ -97,7 +98,56 @@ export default function Medidas({ aba = "cruzar" }: { aba?: string }) {
   if (aba === "resultados") return <Resultados />;
   if (aba === "cruzar") return <Cruzar />;
   if (aba === "callcenter") return <FilaCallcenter />;
+  if (aba === "visitados") return <Visitados360 />;
   return <ListaMedidas aba={aba} />;
+}
+
+// ---------- clientes que o consultor visitou no ALIANÇA 360: tem medida no Exact? (cruza telefone, CPF e nome) ----------
+function Visitados360() {
+  const { R, st, abrirDetalhe, setModal } = useApp() as any;
+  const [q, setQ] = useState(""); const [f, setF] = useState<"todos" | "com" | "sem" | "fotos">("todos");
+  const nomeK = (s: string) => tira(String(s || "").replace(/\s*[-–(].*$/, ""));
+  const idx = useMemo(() => {
+    const tel: Record<string, any[]> = {}, nome: Record<string, any[]> = {}, doc: Record<string, any[]> = {};
+    st.chamados.filter((c: any) => c.tipo === "medidas" || c.tipo === "checklist").forEach((c: any) => {
+      String(c.telefone || "").split(/[\/,;]/).forEach((t: string) => { const k = chave(t); if (k) (tel[k] = tel[k] || []).push(c); });
+      const n = nomeK(c.cliente); if (n.length >= 8) (nome[n] = nome[n] || []).push(c);
+      const d = so(c.clienteDoc || ""); if (d.length >= 11) (doc[d] = doc[d] || []).push(c);
+    });
+    return { tel, nome, doc };
+  }, [st.chamados]);
+  const linhas = useMemo(() => visitados360(R, st).map((v: any) => {
+    const m = new Map<string, any>();
+    String(v.telefone || "").split(/[\/,;]/).forEach((t: string) => (idx.tel[chave(t)] || []).forEach((x: any) => m.set(x.id, x)));
+    (idx.nome[nomeK(v.cliente)] || []).forEach((x: any) => m.set(x.id, x));
+    const d = so(v.clienteDoc || ""); if (d.length >= 11) (idx.doc[d] || []).forEach((x: any) => m.set(x.id, x));
+    const achados = Array.from(m.values());
+    return { v, med: achados.filter((x: any) => x.tipo === "medidas"), ck: achados.filter((x: any) => x.tipo === "checklist"), nImg: (v.anexos || []).filter((a: any) => a.tipo === "img").length };
+  }).sort((a: any, b: any) => String(b.v.dataVisita || b.v.criadoEm).localeCompare(String(a.v.dataVisita || a.v.criadoEm))), [st.chamados, idx]);
+  const busca = tira(q), dig = so(q);
+  const vis = linhas.filter((l: any) => (f === "todos" || (f === "com" ? l.med.length > 0 : f === "sem" ? !l.med.length : l.nImg > 0))
+    && (!q || tira(l.v.cliente + " " + R.nomeUser(l.v.consultorId)).includes(busca) || (dig.length >= 3 && so(l.v.telefone).includes(dig))));
+  const nCom = linhas.filter((l: any) => l.med.length).length;
+  return (
+    <section className="view active">
+      <div className="view-head"><div><h2>📷 Visitados pelo consultor (360)</h2><p>Clientes que os consultores visitaram no ALIANÇA 360, cruzados pelo telefone, CPF e nome com as medidas importadas do Exact e com o checklist. Clique em “📷” para ver as fotos/planta que o consultor anexou.</p></div></div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
+        <div className="chips" style={{ margin: 0 }}>{([["todos", "Todos (" + linhas.length + ")"], ["com", "Com medida no Exact (" + nCom + ")"], ["sem", "Sem medida no Exact (" + (linhas.length - nCom) + ")"], ["fotos", "Com fotos"]] as any[]).map(([k, l]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}</button>)}</div>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, telefone ou consultor" style={{ marginLeft: "auto", maxWidth: 300 }} />
+      </div>
+      {!vis.length ? <div className="card" style={{ padding: 20, textAlign: "center", color: "var(--ink-faint)" }}>Nenhum cliente aqui.</div> :
+        <div className="card" style={{ padding: 0 }}>{vis.slice(0, 300).map((l: any) => (
+          <div key={l.v.id} className="acao" style={{ margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)", borderLeftColor: l.med.length ? "var(--st-concluida)" : "var(--line)" }} onClick={() => setModal(<Galeria360 lista={[l.v]} titulo={l.v.cliente} />)}>
+            <span><b>{l.v.cliente}</b> · {l.v.telefone || "sem telefone"} · consultor {R.nomeUser(l.v.consultorId)}{l.v.dataVisita ? " · visita " + fmtDateTime(l.v.dataVisita) : ""}
+              <span className="pill" style={{ marginLeft: 6 }}>📷 {l.nImg} foto(s)</span>
+              {l.med.map((m: any) => <span key={m.id} className="pill" style={{ marginLeft: 6, background: "var(--st-concluida)", color: "#fff", cursor: "pointer" }} onClick={e => { e.stopPropagation(); abrirDetalhe(m.id); }}>📐 medida venda {m.pedido} · {ETAPA_MEDIDA[R.etapaMedida(m)] || ""}</span>)}
+              {l.ck.map((k: any) => <span key={k.id} className="pill" style={{ marginLeft: 6, cursor: "pointer" }} onClick={e => { e.stopPropagation(); abrirDetalhe(k.id); }}>✓ checklist venda {k.pedido}</span>)}
+              {!l.med.length && <span className="pill" style={{ marginLeft: 6 }}>sem medida no Exact</span>}</span>
+            <span className="g">ver imagens ›</span>
+          </div>))}</div>}
+      {vis.length > 300 && <div className="hint">Mostrando 300 de {vis.length}. Use a busca.</div>}
+    </section>
+  );
 }
 
 // ---------- solicitações que o call center abriu para o setor de Medidas (não são ordens de medida) ----------
@@ -163,7 +213,7 @@ function ListaMedidas({ aba }: { aba: string }) {
           const m = (c.tratativa && c.tratativa.medida) || {}, dck = diaCk(c), alerta = aba !== "aprovados" && dck && em3(dck);
           return (
             <div key={c.id} className="acao" style={{ borderLeftColor: alerta ? "var(--critico)" : "var(--line)", margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)" }} onClick={() => abrirDetalhe(c.id)}>
-              <span><b>{c.cliente}</b> · venda {c.pedido || "—"}
+              <span><b>{c.cliente}</b> · venda {c.pedido || "—"} <Selo360 c={c} />
                 {c.medidorId ? <> · 📐 {R.nomeUser(c.medidorId)}</> : m.consultorNome ? <> · 📐 {m.consultorNome}</> : null}
                 {c.dataMedida && ["agendada"].includes(R.etapaMedida(c)) ? <> · {fmtDateTime(c.dataMedida)}</> : null}
                 {m.origem === "minha_visita" && <span className="pill" style={{ marginLeft: 6 }}>Minha Visita · sem pagamento</span>}

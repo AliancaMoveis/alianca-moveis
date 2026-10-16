@@ -1,5 +1,6 @@
 // Setor Checklist — fila de clientes a agendar (importada da planilha do sistema interno), WhatsApp com mensagem pronta e controle do resultado.
 // O agendamento oficial continua no sistema interno; aqui fica o controle de contato.
+import { Selo360 } from "../comp/Visita360";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
@@ -260,6 +261,7 @@ function CartaoCk({ c, aba }: any) {
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontWeight: 700, fontSize: 15, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{c.cliente}
             <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: "var(--surface-2)", border: "1px solid var(--line)" }}>Venda {c.pedido}</span>
+            <Selo360 c={c} />
             <span title="Cidade do cliente (base de clientes)" style={{ fontWeight: 800, fontSize: 13, padding: "1px 9px", borderRadius: 6, background: cidadeCk(c) ? "#0f5f8a" : "var(--surface-2)", color: cidadeCk(c) ? "#fff" : "var(--ink-faint)", border: cidadeCk(c) ? 0 : "1px dashed var(--line)" }}>📍 {cidadeCk(c) || "cidade não encontrada"}</span>
             {g !== "agendado" && k.projetista && <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: corProj(k.projetista), color: "#fff" }}>👤 {k.projetista}</span>}</div>
           <DadosCk c={c} />
