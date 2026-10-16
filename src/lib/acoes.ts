@@ -69,6 +69,7 @@ export const A = {
   cancelarTransferencia: (id: string) => rpc("cancelar_transferencia", { p_id: id }),
   registrarVenda: (id: string, numero: string, valor: number, data: string, vendedor: string, gerente: string, tipo = "", entrada: number | null = null) =>
     rpc("registrar_venda", { p_id: id, p_numero: numero, p_valor: valor, p_data: nz(data), p_vendedor: vendedor, p_gerente: nz(gerente), p_tipo: tipo, p_entrada: entrada }),
+  confirmarVinda: (id: string, obs: string, desfazer = false) => rpc("confirmar_vinda_loja", { p_id: id, p_obs: obs || "", p_desfazer: desfazer }),
   cancelouLoja: (id: string, obs: string, desfazer = false) => rpc("cancelou_loja", { p_id: id, p_obs: obs || "", p_desfazer: desfazer }),
   consultorSituacao: (id: string, status: string, obs: string) => rpc("consultor_situacao", { p_id: id, p_status: status, p_obs: obs || "" }),
   validarVenda: (id: string, status: string, entrada: number, promissorias: any[]) => rpc("validar_venda", { p_id: id, p_status: status, p_entrada: entrada || 0, p_promissorias: promissorias }),

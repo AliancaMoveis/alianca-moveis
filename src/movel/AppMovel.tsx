@@ -14,7 +14,7 @@ import { SinoAvisos } from "../comp/Avisos";
 import { ChatMovel } from "../comp/Chat";
 import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
-import { CancelouLoja, SituacaoConsultor } from "../comp/Situacao";
+import { CancelouLoja, ConfirmarVinda, SeloVinda, SituacaoConsultor } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
 import { RemarcarData } from "../comp/Remarcar";
 import Agenda from "../telas/Agenda";
@@ -65,7 +65,7 @@ function PvMovel({ aba }: { aba: string }) {
     <Nova key={a} escopo="pv" pvFixo={a as any} pronto={(id: string) => abrirDetalhe(id)} />
   </div>;
   return <div className="mv-pv">
-    <div className="mv-seg">{([["clientes", "Clientes"], ["montadores", "Montadores"], ["numeros", "Números"]] as [string, string][]).map(([k, l]) => <button key={k} className={a === k ? "on" : ""} onClick={() => setA(k)}>{l}</button>)}</div>
+    <div className="mv-seg">{([["clientes", "Clientes"], ["montadores", "Montadores"], ["encaminhadas", "Encaminhadas"], ["numeros", "Números"]] as [string, string][]).map(([k, l]) => <button key={k} className={a === k ? "on" : ""} onClick={() => setA(k)}>{l}</button>)}</div>
     <PosVenda key={a} aba={a} semNovo />
   </div>;
 }
@@ -161,7 +161,7 @@ function Cartao({ c, abrir, linha, destaque }: any) {
     <button className={"mv-card" + (destaque ? " dest" : "") + (ctt ? " ctt" : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{linha?.hora || ""}</b><small>{linha?.dia || ""}</small></div>
       <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""} <SeloLitoral c={c} /></div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
-      <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{ctt && <span className="mv-ctt">✅ Contato feito</span>}</div>
+      <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{ctt && <span className="mv-ctt">✅ Contato feito</span>}<SeloVinda c={c} /></div>
     </button>
   );
 }
@@ -430,6 +430,7 @@ function Folha({ id, fechar, perfil }: any) {
         {perfil !== "consultor" || c.dataLoja ? <RemarcarData c={c} tipo="loja" movel /> : null}
         <Contato c={c} rota={perfil === "consultor"} />
         {perfil === "consultor" && <SituacaoConsultor c={c} movel />}
+        <ConfirmarVinda c={c} movel />
         {(perfil === "consultor" || perfil === "vendedor") && <CancelouLoja c={c} movel />}
         {perfil === "consultor" && <PassosConsultor c={c} />}
         {perfil === "vendedor" && <AcoesVendedor c={c} />}

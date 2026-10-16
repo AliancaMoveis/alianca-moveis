@@ -1,0 +1,6 @@
+-- 0148: aviso automático "já agendado" nos pedidos do mesmo nº de venda (checklist / solicitação de medida)
+-- e push_status_equipe() (Gestão vê quem ativou notificações no computador e no celular).
+-- Aplicado via execute_sql: funções public._avisar_ja_resolvido(), public.push_status_equipe()
+-- create trigger trg_avisar_ja_resolvido after update on public.chamados for each row
+--   when (new.tipo in ('checklist','medidas')) execute function public._avisar_ja_resolvido();
+-- confirmar_vinda_loja(p_id, p_obs, p_desfazer): tratativa.confirmLoja {em, por, porId, para=data_loja, obs}; avisa o vendedor.

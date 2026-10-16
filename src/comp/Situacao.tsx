@@ -56,3 +56,40 @@ export function CancelouLoja({ c, movel }: { c: any; movel?: boolean }) {
     </>}
   </div>;
 }
+
+/** a confirmação vale para a data agendada: se remarcar, volta a "a confirmar" */
+export const vindaConfirmada = (c: any) => { const k = (c.tratativa || {}).confirmLoja; return !!(k && c.dataLoja && String(k.para || "").slice(0, 16) === String(c.dataLoja).replace(" ", "T").slice(0, 16)); };
+const FECHADOS = ["loja_cancelada", "atendido", "reprovado", "visita_cancelada", "em_obras"];
+export const precisaConfirmarVinda = (R: any, c: any) => R.domMarketing(c) && !!c.dataLoja && !c.venda && c.status !== "concluida" && !FECHADOS.includes(R.statusClienteDe(c));
+
+/** selo curto para listas e agenda */
+export function SeloVinda({ c }: { c: any }) {
+  const { R } = useApp() as any;
+  if (!precisaConfirmarVinda(R, c)) return null;
+  if (String(c.dataLoja).slice(0, 10) < new Date().toISOString().slice(0, 10)) return null;
+  return vindaConfirmada(c) ? <span className="vinda ok" title={"Confirmado por " + c.tratativa.confirmLoja.por}>✅ Vinda confirmada</span> : <span className="vinda pend">⏳ Confirmar vinda</span>;
+}
+
+/** ficha: marcar que o cliente confirmou a vinda na loja (marketing, consultor, vendedor, suporte, supervisão, gerente, gestão) */
+export function ConfirmarVinda({ c, movel }: { c: any; movel?: boolean }) {
+  const { R, executar: ex } = useApp() as any;
+  const [abre, setAbre] = useState(false); const [obs, setObs] = useState("");
+  if (!precisaConfirmarVinda(R, c)) return null;
+  const eu = R.currentUserId;
+  const pode = R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores", "gerente_loja"].includes(x)) || [c.consultorId, c.atendenteId, c.solicitanteId, c.cadastradoPorId, c.responsavelMkt].includes(eu);
+  const k = (c.tratativa || {}).confirmLoja; const ok = vindaConfirmada(c);
+  if (ok) return <div className={movel ? "mv-bloco" : "resp-box"} style={movel ? undefined : { padding: "10px 14px" }}>
+    <div className="vv-info"><span className="vinda ok">✅ Cliente confirmou a vinda na loja</span> <small>· {k.por} · {fmtDateTime(k.em)}{k.obs ? " · " + k.obs : ""}</small></div>
+    {pode && <button className={movel ? "mv-mais" : "btn ghost sm"} style={{ marginTop: 8 }} onClick={() => { if (confirm("Desfazer a confirmação da vinda?")) ex(() => A.confirmarVinda(c.id, "", true), "Confirmação desfeita"); }}>Desfazer confirmação</button>}
+  </div>;
+  if (!pode) return <div className={movel ? "mv-bloco" : "resp-box"} style={movel ? undefined : { padding: "10px 14px" }}><span className="vinda pend">⏳ Vinda na loja ainda não confirmada</span></div>;
+  return <div className={movel ? "mv-bloco" : "resp-box"} style={movel ? undefined : { padding: "10px 14px" }}>
+    {!abre ? <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}><span className="vinda pend">⏳ Vinda ainda não confirmada{k ? " (data mudou)" : ""}</span>
+      <button className={movel ? "mv-principal" : "btn primary sm"} onClick={() => setAbre(true)}>✅ Cliente confirmou a vinda na loja</button></div> : <>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>✅ Confirmar vinda — {fmtDateTime(c.dataLoja)}</div>
+      <input value={obs} onChange={e => setObs(e.target.value)} placeholder="Como confirmou? (opcional — ex.: WhatsApp, ligação, vem com o marido)" style={{ width: "100%" }} />
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}><button className={movel ? "mv-principal" : "btn primary sm"} onClick={() => ex(() => A.confirmarVinda(c.id, obs.trim()), "Vinda confirmada").then((r: boolean) => { if (r) { setAbre(false); setObs(""); } })}>Confirmar</button><button className="btn ghost sm" onClick={() => setAbre(false)}>Voltar</button></div>
+      <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>Aparece “✅ Vinda confirmada” para o vendedor e para todos que atendem o cliente. O vendedor é avisado.</div>
+    </>}
+  </div>;
+}

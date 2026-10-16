@@ -1,6 +1,7 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
+import { jaResolvido } from "../lib/resolvido";
 import { EditarCliente, RemarcarData } from "./Remarcar";
-import { CancelouLoja, SituacaoConsultor } from "./Situacao";
+import { CancelouLoja, ConfirmarVinda, SituacaoConsultor } from "./Situacao";
 import { RespMktFicha } from "./RespMkt";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
@@ -64,12 +65,14 @@ export default function Detalhe({ id }: { id: string }) {
         </div>
         <div className="mb">
           {presale ? <ClienteCard c={c} /> : <Row k="Motivo">{R.tipoNome(c.tipo)} <span className="pill setor" style={{ marginLeft: 6 }}>{R.setorNome(c.setorDestino)}</span></Row>}
+          {!presale && (() => { const r = jaResolvido(R, st, c); return r ? <div className="ja-resolvido" style={{ display: "block", marginBottom: 14, fontSize: 13.5 }}>{r.txt} — resolvido em outro atendimento. Confira e finalize este. <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(r.id); }}>Abrir {r.id}</a></div> : null; })()}
           {c.escalonadoAuto && semResp && <div className="ro-note" style={{ marginBottom: 14 }}>Escalonado automaticamente em {fmtDateTime(c.escaladoEm || c.slaResposta)} por falta de resposta dentro do prazo.</div>}
           {tratar && temTrat && <div className="acao-etapa"><div className="acao-etapa-tit">Ação desta etapa</div>{trat}</div>}
           {presale && <>
             <LitoralBloco c={c} />
             <TrocarConsultor c={c} />
             <StatusCliente c={c} />
+            <ConfirmarVinda c={c} />
             <CancelouLoja c={c} />
             <CienteExcluir c={c} />
             <RespMktFicha c={c} />

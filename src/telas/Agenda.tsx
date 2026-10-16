@@ -1,3 +1,4 @@
+import { SeloVinda } from "../comp/Situacao";
 import { useEffect, useState } from "react";
 import { A } from "../lib/acoes";
 import { useApp } from "../estado";
@@ -131,7 +132,7 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
                 <div className="ag-card" key={c.id} data-origem={og} onClick={alheio ? undefined : () => abrirDetalhe(c.id)} style={alheio ? { cursor: "default" } : meuAtend ? { boxShadow: "inset 3px 0 0 var(--st-concluida)" } : undefined}>
                   <div><div className="nm"><span className={"origem " + og}>{og === "marketing" ? "Marketing" : "Externo"}</span> {c.cliente}
                     {semAnexo(c) && <> <span className="badge b-semanexo">⚠️ Sem anexo</span></>}
-                    {!c._alheio && <> <SeloLitoral c={c} /></>}
+                    {!c._alheio && <> <SeloLitoral c={c} /> <SeloVinda c={c} /></>}
                     {t.querProjeto === "sim" && <> <span className="marca-loja sim">📐 Quer projeto</span></>}
                     {meu && <> <span className="marca-loja ok">seu cliente</span></>}</div>
                     <div className="dt">{alheio ? null : <>{c.telefone || "sem telefone"}</>}{cons ? <>{alheio ? "" : " · "}consultor <b>{cons}</b></> : null}

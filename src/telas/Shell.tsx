@@ -1,3 +1,4 @@
+import { NotifPC } from "../comp/NotifPC";
 import { SinoAvisos } from "../comp/Avisos";
 import { ChatFlutuante } from "../comp/Chat";
 import EncontrarVendas360 from "./EncontrarVendas360";
@@ -145,6 +146,7 @@ export default function Shell() {
             </div>
           </div>
           <main>
+            <NotifPC />
             {(atual === "nova" || atual === "novocli" || atual.startsWith("novopv")) && <Nova key={atual} escopo={atual === "novocli" ? "mkt" : atual.startsWith("novopv") ? "pv" : "cc"} pvFixo={atual === "novopv_mont" ? "montador" : atual.startsWith("novopv") ? "cliente" : undefined} />}
             {atual === "fila" && <Fila />}
             {atual === "acompmkt" && <AcompMkt />}

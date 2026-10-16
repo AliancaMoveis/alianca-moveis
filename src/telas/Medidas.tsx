@@ -103,9 +103,20 @@ export default function Medidas({ aba = "cruzar" }: { aba?: string }) {
 }
 
 // ---------- clientes que o consultor visitou no ALIANÇA 360: tem medida no Exact? (cruza telefone, CPF e nome) ----------
+/** mesmo cliente? primeiro nome igual e mais um nome em comum (ou um dos lados só tem um nome) */
+const SEMN = new Set(["da", "de", "do", "das", "dos", "e"]);
+const toksN = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s*[-–(].*$/, "").replace(/[^a-z ]/g, " ").split(/\s+/).filter(t => t.length > 1 && !SEMN.has(t));
+export function mesmoNome(a: string, b: string) {
+  const x = toksN(a), y = toksN(b); if (!x.length || !y.length) return false;
+  if (x[0] !== y[0]) return false;
+  if (x.length === 1 || y.length === 1) return true;
+  return x.slice(1).some(t => y.slice(1).includes(t));
+}
+const COMO_MD: Record<string, string> = { tel: "📞 telefone", doc: "🪪 CPF", nome: "👤 nome" };
+
 function Visitados360() {
   const { R, st, abrirDetalhe, setModal } = useApp() as any;
-  const [q, setQ] = useState(""); const [f, setF] = useState<"todos" | "com" | "sem" | "fotos">("todos");
+  const [q, setQ] = useState(""); const [f, setF] = useState<"todos" | "com" | "sem" | "validar" | "fotos">("todos");
   const nomeK = (s: string) => tira(String(s || "").replace(/\s*[-–(].*$/, ""));
   const idx = useMemo(() => {
     const tel: Record<string, any[]> = {}, nome: Record<string, any[]> = {}, doc: Record<string, any[]> = {};
@@ -117,34 +128,52 @@ function Visitados360() {
     return { tel, nome, doc };
   }, [st.chamados]);
   const linhas = useMemo(() => visitados360(R, st).map((v: any) => {
-    const m = new Map<string, any>();
-    String(v.telefone || "").split(/[\/,;]/).forEach((t: string) => (idx.tel[chave(t)] || []).forEach((x: any) => m.set(x.id, x)));
-    (idx.nome[nomeK(v.cliente)] || []).forEach((x: any) => m.set(x.id, x));
-    const d = so(v.clienteDoc || ""); if (d.length >= 11) (idx.doc[d] || []).forEach((x: any) => m.set(x.id, x));
-    const achados = Array.from(m.values());
-    return { v, med: achados.filter((x: any) => x.tipo === "medidas"), ck: achados.filter((x: any) => x.tipo === "checklist"), nImg: (v.anexos || []).filter((a: any) => a.tipo === "img").length };
+    const m = new Map<string, { c: any; como: string }>();
+    const add = (x: any, como: string) => { if (!m.has(x.id)) m.set(x.id, { c: x, como }); };
+    const d = so(v.clienteDoc || ""); if (d.length >= 11) (idx.doc[d] || []).forEach((x: any) => add(x, "doc"));
+    String(v.telefone || "").split(/[\/,;]/).forEach((t: string) => (idx.tel[chave(t)] || []).forEach((x: any) => add(x, "tel")));
+    (idx.nome[nomeK(v.cliente)] || []).forEach((x: any) => add(x, "nome"));
+    const achados = Array.from(m.values()).map(a => ({ ...a, igual: mesmoNome(v.cliente, a.c.cliente) }));
+    const med = achados.filter(a => a.c.tipo === "medidas"), ck = achados.filter(a => a.c.tipo === "checklist");
+    return { v, med, ck, achados, difere: achados.some(a => !a.igual), nImg: (v.anexos || []).filter((a: any) => a.tipo === "img").length };
   }).sort((a: any, b: any) => String(b.v.dataVisita || b.v.criadoEm).localeCompare(String(a.v.dataVisita || a.v.criadoEm))), [st.chamados, idx]);
   const busca = tira(q), dig = so(q);
-  const vis = linhas.filter((l: any) => (f === "todos" || (f === "com" ? l.med.length > 0 : f === "sem" ? !l.med.length : l.nImg > 0))
-    && (!q || tira(l.v.cliente + " " + R.nomeUser(l.v.consultorId)).includes(busca) || (dig.length >= 3 && so(l.v.telefone).includes(dig))));
-  const nCom = linhas.filter((l: any) => l.med.length).length;
+  const vis = linhas.filter((l: any) => (f === "todos" || (f === "com" ? l.med.length > 0 : f === "sem" ? !l.achados.length : f === "validar" ? l.difere : l.nImg > 0))
+    && (!q || tira(l.v.cliente + " " + l.achados.map((a: any) => a.c.cliente + " " + (a.c.pedido || "")).join(" ") + " " + R.nomeUser(l.v.consultorId)).includes(busca) || (dig.length >= 3 && (so(l.v.telefone).includes(dig) || l.achados.some((a: any) => so(a.c.pedido).includes(dig))))));
+  const nCom = linhas.filter((l: any) => l.med.length).length, nSem = linhas.filter((l: any) => !l.achados.length).length, nVal = linhas.filter((l: any) => l.difere).length;
+  const th: any = { textAlign: "left", padding: "8px 10px", fontSize: 12, color: "var(--ink-faint)", borderBottom: "1px solid var(--line)", position: "sticky", top: 0, background: "var(--card)" };
+  const td: any = { padding: "8px 10px", verticalAlign: "top", borderBottom: "1px solid var(--line-soft)", fontSize: 13 };
   return (
     <section className="view active">
-      <div className="view-head"><div><h2>📷 Visitados pelo consultor (360)</h2><p>Clientes que os consultores visitaram no ALIANÇA 360, cruzados pelo telefone, CPF e nome com as medidas importadas do Exact e com o checklist. Clique em “📷” para ver as fotos/planta que o consultor anexou.</p></div></div>
+      <div className="view-head"><div><h2>📷 Visitados pelo consultor (360)</h2><p>À esquerda, o cliente que o consultor visitou no ALIANÇA 360; à direita, quem comprou (cliente da medida/checklist importado do Exact), cruzado pelo CPF, telefone ou nome. Quando o nome é diferente (ex.: a visita foi para a Dona Maria e a compra saiu no nome do Seu João), aparece “⚠️ validar”.</p></div></div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
-        <div className="chips" style={{ margin: 0 }}>{([["todos", "Todos (" + linhas.length + ")"], ["com", "Com medida no Exact (" + nCom + ")"], ["sem", "Sem medida no Exact (" + (linhas.length - nCom) + ")"], ["fotos", "Com fotos"]] as any[]).map(([k, l]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}</button>)}</div>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, telefone ou consultor" style={{ marginLeft: "auto", maxWidth: 300 }} />
+        <div className="chips" style={{ margin: 0 }}>{([["todos", "Todos (" + linhas.length + ")"], ["com", "Com medida no Exact (" + nCom + ")"], ["validar", "⚠️ Nome diferente — validar (" + nVal + ")"], ["sem", "Sem compra encontrada (" + nSem + ")"], ["fotos", "Com fotos"]] as any[]).map(([k, l]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}</button>)}</div>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, telefone, venda ou consultor" style={{ marginLeft: "auto", maxWidth: 300 }} />
       </div>
       {!vis.length ? <div className="card" style={{ padding: 20, textAlign: "center", color: "var(--ink-faint)" }}>Nenhum cliente aqui.</div> :
-        <div className="card" style={{ padding: 0 }}>{vis.slice(0, 300).map((l: any) => (
-          <div key={l.v.id} className="acao" style={{ margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)", borderLeftColor: l.med.length ? "var(--st-concluida)" : "var(--line)" }} onClick={() => setModal(<Galeria360 lista={[l.v]} titulo={l.v.cliente} />)}>
-            <span><b>{l.v.cliente}</b> · {l.v.telefone || "sem telefone"} · consultor {R.nomeUser(l.v.consultorId)}{l.v.dataVisita ? " · visita " + fmtDateTime(l.v.dataVisita) : ""}
-              <span className="pill" style={{ marginLeft: 6 }}>📷 {l.nImg} foto(s)</span>
-              {l.med.map((m: any) => <span key={m.id} className="pill" style={{ marginLeft: 6, background: "var(--st-concluida)", color: "#fff", cursor: "pointer" }} onClick={e => { e.stopPropagation(); abrirDetalhe(m.id); }}>📐 medida venda {m.pedido} · {ETAPA_MEDIDA[R.etapaMedida(m)] || ""}</span>)}
-              {l.ck.map((k: any) => <span key={k.id} className="pill" style={{ marginLeft: 6, cursor: "pointer" }} onClick={e => { e.stopPropagation(); abrirDetalhe(k.id); }}>✓ checklist venda {k.pedido}</span>)}
-              {!l.med.length && <span className="pill" style={{ marginLeft: 6 }}>sem medida no Exact</span>}</span>
-            <span className="g">ver imagens ›</span>
-          </div>))}</div>}
+        <div className="card" style={{ padding: 0, overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+          <thead><tr><th style={th}>Visitado pelo consultor (360)</th><th style={th}>Quem comprou (Exact)</th><th style={th}>Validação</th></tr></thead>
+          <tbody>{vis.slice(0, 300).map((l: any) => (
+            <tr key={l.v.id} style={{ background: l.difere ? "rgba(214,150,40,.08)" : undefined }}>
+              <td style={{ ...td, width: "38%" }}>
+                <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(l.v.id); }}><b>{l.v.cliente}</b></a> <span className="hint">{l.v.id}</span>
+                <div className="hint">{l.v.telefone || "sem telefone"}{l.v.clienteDoc ? " · CPF " + l.v.clienteDoc : ""}</div>
+                <div className="hint">consultor {R.nomeUser(l.v.consultorId)}{l.v.dataVisita ? " · visita " + fmtDateTime(l.v.dataVisita) : ""}</div>
+                <span className="pill" style={{ marginTop: 4, cursor: "pointer" }} onClick={() => setModal(<Galeria360 lista={[l.v]} titulo={l.v.cliente} />)}>📷 {l.nImg} foto(s) · ver</span>
+              </td>
+              <td style={{ ...td, width: "40%" }}>
+                {!l.achados.length ? <span className="hint">nenhuma medida/checklist do Exact encontrada</span> :
+                  l.achados.map((a: any) => <div key={a.c.id} style={{ marginBottom: 6 }}>
+                    <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(a.c.id); }}><b>{a.c.cliente}</b></a>
+                    <div className="hint">{a.c.tipo === "medidas" ? "📐 medida" : "✓ checklist"} · venda {a.c.pedido || "—"}{a.c.tipo === "medidas" && ETAPA_MEDIDA[R.etapaMedida(a.c)] ? " · " + ETAPA_MEDIDA[R.etapaMedida(a.c)] : ""}{a.c.telefone ? " · " + a.c.telefone : ""}</div>
+                    <div className="hint">cruzou pelo {COMO_MD[a.como]}</div>
+                  </div>)}
+              </td>
+              <td style={{ ...td, whiteSpace: "nowrap" }}>
+                {!l.achados.length ? <span className="pill">sem compra</span> :
+                  l.achados.map((a: any) => <div key={a.c.id} style={{ marginBottom: 6 }}>{a.igual ? <span className="pill" style={{ background: "var(--st-concluida)", color: "#fff" }}>✔ mesmo cliente</span> : <span className="pill" style={{ background: "var(--warn)", color: "#fff" }} title="O nome de quem comprou é diferente do cliente visitado — confira se é a mesma família/compra">⚠️ nome diferente · validar</span>}</div>)}
+              </td>
+            </tr>))}</tbody></table></div>}
       {vis.length > 300 && <div className="hint">Mostrando 300 de {vis.length}. Use a busca.</div>}
     </section>
   );

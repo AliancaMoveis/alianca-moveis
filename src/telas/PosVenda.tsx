@@ -6,6 +6,7 @@ import { PV_DESC, PV_DESFECHO, PV_ORIGEM, PV_REEMB, PV_RESP, PV_SITUACAO, PV_TIP
 import { BarRow, Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
 import { BotaoWhats } from "../comp/Whats";
+import { Ticket } from "../comp/Ticket";
 
 const Nada = ({ t }: { t: string }) => <div style={{ color: "var(--ink-faint)", fontSize: 13 }}>{t}</div>;
 
@@ -13,6 +14,7 @@ const ABAS_PV: Record<string, [string, string]> = {
   clientes: ["👤 Solicitações de clientes", "Reclamações de clientes — abertas aqui no pós-venda ou pelo call center: prazos, reembolsos e descontos de montadores."],
   montadores: ["🔧 Solicitações de montadores", "Suporte aos montadores na obra (WhatsApp / telefone): montador parado, peça faltante, medida, dúvida de projeto."],
   numeros: ["Números do pós-venda", "Qualidade: responsabilidades, custos, montadores com mais pedidos de suporte, projetistas e medições com erro."],
+  encaminhadas: ["📤 Encaminhadas pelo pós-venda", "Assistência, vistoria, solicitação de montagem e demais pedidos que o pós-venda abriu para outros setores — acompanhe a resposta."],
   cadastro: ["Montadores", "Cadastro de montadores (WhatsApp e região preferencial) e contas para pagamento — só a Gestão."],
 };
 export default function PosVenda({ aba = "clientes", semNovo }: { aba?: string; semNovo?: boolean }) {
@@ -20,7 +22,7 @@ export default function PosVenda({ aba = "clientes", semNovo }: { aba?: string; 
   return (
     <section className="view active" id="view-posvenda">
       <div className="view-head"><div><h2>{t}</h2><p>{d}</p></div></div>
-      {aba === "montadores" ? <Abertos origem="montador" semNovo={semNovo} /> : aba === "numeros" ? <Numeros /> : aba === "cadastro" ? <CadastroMontadores /> : <Abertos origem="cliente" semNovo={semNovo} />}
+      {aba === "montadores" ? <Abertos origem="montador" semNovo={semNovo} /> : aba === "numeros" ? <Numeros /> : aba === "encaminhadas" ? <Encaminhadas /> : aba === "cadastro" ? <CadastroMontadores /> : <Abertos origem="cliente" semNovo={semNovo} />}
     </section>
   );
 }
@@ -141,9 +143,13 @@ function Numeros() {
 // Painel do dia do Pós-venda: montador parado primeiro, depois prazo vencido, prazo de hoje, sem prazo; e pendências de dinheiro
 function Abertos({ origem, semNovo }: { origem: "cliente" | "montador"; semNovo?: boolean }) {
   const { R, st, abrirDetalhe, irPara } = useApp() as any;
-  const todos = st.chamados.filter((c: any) => c.tipo === "posvenda" && R.podeVer(c) && ((c.posvenda || {}).origem || "cliente") === origem);
+  const [q, setQ] = useState("");
+  const sem = (x: string) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const qq = sem(q.trim()), qd = q.replace(/\D/g, "");
+  const bate = (c: any) => !qq || sem([c.id, c.cliente, c.pedido, c.produto, (c.posvenda || {}).pecaAfetada, (c.posvenda || {}).montadorId ? R.nomeMontador((c.posvenda || {}).montadorId) : ""].join(" ")).includes(qq) || (qd.length >= 4 && String(c.telefone || "").replace(/\D/g, "").includes(qd));
+  const todos = st.chamados.filter((c: any) => c.tipo === "posvenda" && R.podeVer(c) && ((c.posvenda || {}).origem || "cliente") === origem && bate(c));
   const pv = (c: any) => c.posvenda || {};
-  const [verConc, setVerConc] = useState(false);
+  const [verConc0, setVerConc] = useState(false); const verConc = verConc0 || !!qq;
   const abertos = todos.filter((c: any) => c.status !== "concluida");
   const concluidos = todos.filter((c: any) => c.status === "concluida").sort((a: any, b: any) => String(b.concluidoEm || b.criadoEm).localeCompare(String(a.concluidoEm || a.criadoEm)));
   const peso = (c: any) => (pv(c).paradoObra ? 0 : pvPrazo(c) === "vencido" ? 1 : pvPrazo(c) === "hoje" ? 2 : !pv(c).prazo ? 3 : 4);
@@ -168,7 +174,7 @@ function Abertos({ origem, semNovo }: { origem: "cliente" | "montador"; semNovo?
   };
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", margin: "14px 0 0" }}>{R.ehPosvenda() && !semNovo && <button className="btn primary sm" onClick={() => irPara(origem === "montador" ? "novopv_mont" : "novopv_cli")}>{origem === "montador" ? "+ Nova solicitação do montador" : "+ Nova solicitação do cliente"}</button>}</div>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "14px 0 0" }}><input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder={"🔎 Buscar por nome, ALM, venda, telefone" + (origem === "montador" ? " ou montador" : "")} style={{ flex: 1, minWidth: 220, maxWidth: 420, marginRight: "auto" }} />{R.ehPosvenda() && !semNovo && <button className="btn primary sm" onClick={() => irPara(origem === "montador" ? "novopv_mont" : "novopv_cli")}>{origem === "montador" ? "+ Nova solicitação do montador" : "+ Nova solicitação do cliente"}</button>}</div>
       <div className="kpis" style={{ marginTop: 12 }}>
         <Kpi n={abertos.length} l="Em aberto" />
         {origem === "montador" && <Kpi n={abertos.filter((c: any) => pv(c).paradoObra).length} l="Montador parado na obra" cls={abertos.some((c: any) => pv(c).paradoObra) ? "alert" : ""} />}
@@ -178,7 +184,7 @@ function Abertos({ origem, semNovo }: { origem: "cliente" | "montador"; semNovo?
         <Kpi n={fmtMoeda(aDescontar.reduce((t: number, c: any) => t + (pv(c).descontoMontador || 0), 0))} l={aDescontar.length + " desconto(s) de montador a fazer"} fs={20} />
       </div>
       <div className="panel" style={{ marginTop: 16 }}><h3>{origem === "montador" ? "Fila — solicitações de montadores" : "Fila — solicitações de clientes"}</h3>
-        {lista.length ? lista.map((c: any) => <Linha key={c.id} c={c} />) : <Nada t="Nada em aberto. 👏" />}
+        {lista.length ? lista.map((c: any) => <Linha key={c.id} c={c} />) : <Nada t={qq ? "Nenhuma solicitação em aberto com “" + q.trim() + "”." : "Nada em aberto. 👏"} />}
       </div>
       {concluidos.length > 0 && <div className="panel" style={{ marginTop: 16 }}><h3 style={{ display: "flex", alignItems: "center", gap: 10 }}>Concluídas <span className="pill">{concluidos.length}</span><button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={() => setVerConc(v => !v)}>{verConc ? "esconder" : "ver"}</button></h3>
         {verConc && concluidos.slice(0, 100).map((c: any) => <Linha key={c.id} c={c} extra={pv(c).desfecho ? <> · <b>{PV_DESFECHO[pv(c).desfecho]}</b></> : null} />)}
@@ -192,6 +198,27 @@ function Abertos({ origem, semNovo }: { origem: "cliente" | "montador"; semNovo?
       </div>}
     </>
   );
+}
+
+// pedidos que o pós-venda abriu para outros setores (assistência, vistoria, montagem...) ou vinculados a um atendimento de pós-venda
+function Encaminhadas() {
+  const { R, st } = useApp() as any;
+  const [q, setQ] = useState(""); const [f, setF] = useState<"abertas" | "finalizadas">("abertas");
+  const sem = (x: string) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const qq = sem(q.trim()), qd = q.replace(/\D/g, "");
+  const pvIds = new Set(st.chamados.filter((c: any) => c.tipo === "posvenda").map((c: any) => c.id));
+  const pvUsers = new Set(R.state.usuarios.filter((u: any) => (u.setores || [u.setor]).includes("posvenda")).map((u: any) => u.id));
+  const todas = st.chamados.filter((c: any) => c.tipo !== "posvenda" && R.podeVer(c) && ((c.vinculadoA && pvIds.has(c.vinculadoA)) || pvUsers.has(c.solicitanteId) || pvUsers.has(c.cadastradoPorId))
+    && (!qq || sem([c.id, c.cliente, c.pedido, c.produto, (R.TIPOS[c.tipo] || {}).nome].join(" ")).includes(qq) || (qd.length >= 4 && String(c.telefone || "").replace(/\D/g, "").includes(qd))));
+  const ab = todas.filter((c: any) => c.status !== "concluida"), fin = todas.filter((c: any) => c.status === "concluida");
+  const lista = (f === "abertas" ? ab : fin).slice().sort((a: any, b: any) => String(b.criadoEm).localeCompare(String(a.criadoEm)));
+  return <>
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", margin: "14px 0 12px" }}>
+      <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="🔎 Buscar por nome, ALM, venda ou telefone" style={{ flex: 1, minWidth: 220, maxWidth: 420 }} />
+      <div className="subnav" style={{ margin: 0 }}><button className={f === "abertas" ? "on" : ""} onClick={() => setF("abertas")}>Em aberto ({ab.length})</button><button className={f === "finalizadas" ? "on" : ""} onClick={() => setF("finalizadas")}>Finalizadas ({fin.length})</button></div>
+    </div>
+    {lista.length ? <div className="list">{lista.slice(0, 200).map((c: any) => <Ticket key={c.id} c={c} resposta />)}</div> : <Nada t={qq ? "Nada encontrado com “" + q.trim() + "”." : f === "abertas" ? "Nenhum pedido em aberto." : "Nenhum finalizado ainda."} />}
+  </>;
 }
 
 function CadastroMontadores() {

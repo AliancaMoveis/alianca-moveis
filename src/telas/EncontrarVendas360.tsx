@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
-import { col, lerArquivo, tira } from "./Medidas";
+import { col, lerArquivo, mesmoNome, tira } from "./Medidas";
 import { tipoPlanilha, type Linha } from "../lib/cruzarVendas";
 import { baixarXlsx } from "../lib/planilha";
 import { STATUS_CLIENTE, fmtDate, fmtMoeda, itensVenda } from "../lib/regras";
@@ -177,6 +177,7 @@ export default function EncontrarVendas360() {
                   <td style={td}><span className="pill" style={{ background: COMO[cm.como][1], color: "#fff", fontSize: 11 }}>{COMO[cm.como][0]}</span>
                     <div><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.id); }}><b>{c.cliente}</b></a> <span className="hint">{c.id}</span></div>
                     <div className="hint">{c.telefone || ""} · {STATUS_CLIENTE[R.statusClienteDe(c)] || ""}{c.dataLoja ? " · loja " + fmtDate(c.dataLoja) : c.dataVisita ? " · visita " + fmtDate(c.dataVisita) : ""}</div>
+                    {cm.como !== "nome" && !mesmoNome(col(r.ex, "Cliente"), c.cliente) && <div style={{ color: "var(--warn)", fontWeight: 700, fontSize: 12 }}>⚠️ nome diferente de quem comprou — validar</div>}
                     {r.data && String(c.criadoEm || "").slice(0, 10) > r.data && <div className="hint" style={{ color: "var(--warn)" }}>⚠️ cadastrado no 360 depois da venda ({fmtDate(c.criadoEm)})</div>}
                     {r.cands.length > 1 && <select style={{ fontSize: 12, marginTop: 4, maxWidth: 240 }} value={escolha[r.n] ?? 0} onChange={e => setEscolha({ ...escolha, [r.n]: Number(e.target.value) })}>{r.cands.map((x, i) => <option key={x.c.id} value={i}>{COMO[x.como][0]} · {x.c.cliente} ({x.c.id})</option>)}</select>}
                   </td>

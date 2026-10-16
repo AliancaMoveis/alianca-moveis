@@ -1,3 +1,4 @@
+import { sb } from "../lib/supabase";
 import { fmtTel } from "../lib/baseClientes";
 import { useEffect, useState } from "react";
 import { useApp } from "../estado";
@@ -80,7 +81,8 @@ export function Admin() {
   return (
     <section className="view active" id="view-admin">
       <div className="view-head"><div><h2>Administração</h2><p>Usuários, setores e roteamento. Acesso restrito a quem tem a liberação de Administração.</p></div></div>
-      <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"], ["agendaloja", "Agenda da loja (tela aberta)"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
+      <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"], ["agendaloja", "Agenda da loja (tela aberta)"], ["notif", "🔔 Notificações ativadas"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
+      {sub === "notif" && <StatusNotif />}
       {sub === "usuarios" && <div id="subUsuarios"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditUser id={null} />)}>Adicionar usuário</button></div>
         <div style={{ marginBottom: 14, maxWidth: 420 }}><input type="search" placeholder="🔍 Buscar por nome, e-mail ou setor" value={buscaU} onChange={e => setBuscaU(e.target.value)} /></div>
         <div id="listaUser">{ativosF.length ? ativosF.map(linhaUser) : <div className="empty">{buscaU.trim() ? "Nenhum usuário encontrado." : "Ninguém cadastrado."}</div>}{inativosF.length > 0 && <><div className="sec-label" style={{ marginTop: 18 }}>Desativados</div>{inativosF.map(linhaUser)}</>}</div></div>}
@@ -191,4 +193,26 @@ function LinkAgendaLoja() {
       </>}
     </div>
   );
+}
+
+// quem já ativou as notificações no computador e no celular (Gestão)
+function StatusNotif() {
+  const [l, setL] = useState<any[] | null>(null); const [erro, setErro] = useState(""); const [f, setF] = useState<"todos" | "sempc" | "nada">("sempc");
+  useEffect(() => { sb.rpc("push_status_equipe").then(({ data, error }: any) => { if (error) setErro(error.message); else setL(data || []); }); }, []);
+  if (erro) return <div className="empty">{erro}</div>;
+  if (!l) return <div className="empty">Carregando…</div>;
+  const vis = l.filter(u => f === "todos" || (f === "sempc" ? !u.computadores : !u.computadores && !u.celulares));
+  return <div className="card" style={{ padding: 16 }}>
+    <p className="hint" style={{ marginTop: 0 }}>Cada pessoa precisa clicar em <b>“Ativar agora”</b> na faixa amarela do 360, uma vez em cada computador e no celular. Assim recebe as mensagens do chat e os direcionamentos.</p>
+    <div className="kpis" style={{ marginBottom: 12 }}>
+      <div className="kpi"><div className="n">{l.filter(u => u.computadores).length}/{l.length}</div><div className="l">com computador ativado</div></div>
+      <div className="kpi"><div className="n">{l.filter(u => u.celulares).length}/{l.length}</div><div className="l">com celular ativado</div></div>
+    </div>
+    <div className="subnav" style={{ marginBottom: 10 }}>{([["sempc", "Falta no computador (" + l.filter(u => !u.computadores).length + ")"], ["nada", "Sem nenhum aparelho (" + l.filter(u => !u.computadores && !u.celulares).length + ")"], ["todos", "Todos"]] as [any, string][]).map(([k, t]) => <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{t}</button>)}</div>
+    {vis.map(u => <div key={u.usuario_id} style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line-soft)", fontSize: 13 }}>
+      <b style={{ flex: 1 }}>{u.nome}</b>
+      <span>{u.computadores ? "💻 " + u.computadores + " ✔" : <span style={{ color: "var(--warn)" }}>💻 falta</span>}</span>
+      <span style={{ width: 90 }}>{u.celulares ? "📱 " + u.celulares + " ✔" : <span style={{ color: "var(--ink-faint)" }}>📱 —</span>}</span>
+    </div>)}
+  </div>;
 }
