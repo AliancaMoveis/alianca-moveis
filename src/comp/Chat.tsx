@@ -18,6 +18,29 @@ const ICO_SETOR: Record<string, string> = { checklist: "✓", callcenter: "☎",
 let bip: AudioContext | null = null;
 function tocar() { try { bip = bip || new (window as any).AudioContext(); const o = bip!.createOscillator(), g = bip!.createGain(); o.frequency.value = 880; g.gain.value = 0.04; o.connect(g); g.connect(bip!.destination); o.start(); o.stop(bip!.currentTime + 0.12); } catch { /* sem som */ } }
 
+/** mensagem nova com o 360 aberto: som + balão na tela (e aviso do navegador se a aba estiver em segundo plano) */
+let balaoSet: ((x: { m: Msg; nome: string } | null) => void) | null = null;
+function avisar(m: Msg) {
+  tocar();
+  const nome = (window as any).__nomeUser ? (window as any).__nomeUser(m.autor_id) : "Nova mensagem";
+  const txt = m.texto || "📎 anexo";
+  if (balaoSet) { balaoSet({ m, nome }); setTimeout(() => balaoSet && balaoSet(null), 7000); }
+  try {
+    if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") {
+      const n = new Notification("💬 " + nome, { body: txt.slice(0, 140), tag: "chat-" + m.conversa_id, icon: "/logo.png" });
+      n.onclick = () => { window.focus(); abrirChat(m.conversa_id); n.close(); };
+    }
+  } catch { /* sem aviso do navegador */ }
+}
+function Balao() {
+  const { R } = useApp() as any;
+  const [b, setB] = useState<{ m: Msg; nome: string } | null>(null);
+  useEffect(() => { (window as any).__nomeUser = (u: string) => R.nomeUser(u); balaoSet = setB; return () => { balaoSet = null; }; }, []);
+  if (!b) return null;
+  return createPortal(<button className="chat-balao" onClick={() => { abrirChat(b.m.conversa_id); setB(null); }}>
+    <b>💬 {b.nome}</b><span>{(b.m.texto || "📎 anexo").slice(0, 120)}</span><small>toque para responder</small></button>, document.body);
+}
+
 /** estado do chat compartilhado entre o botão e a janela */
 function useChat() {
   const { R } = useApp() as any;
@@ -42,12 +65,13 @@ export function ChatFlutuante() {
     window.addEventListener(EVENTO_CHAT, ev);
     const fecha = () => FECHAR();
     window.addEventListener("a360-chat-fechar", fecha);
-    const off = chat.ouvir(m => { C.carregar(); if (m.autor_id !== C.eu && !m.editado_em && aberta.current !== m.conversa_id) tocar(); });
+    const off = chat.ouvir(m => { C.carregar(); if (m.autor_id !== C.eu && !m.editado_em && aberta.current !== m.conversa_id) avisar(m); });
     return () => { window.removeEventListener(EVENTO_CHAT, ev); window.removeEventListener("a360-chat-fechar", fecha); off(); };
   }, []);
   if (!R.currentUserId) return null;
   const total = C.convs.reduce((s, c) => s + (c.nao_lidas || 0), 0);
   return <>
+    <Balao />
     {modo && <div className={"chat-pnl " + modo}>
       <ChatApp C={C} conv={conv} setConv={setConv} cab={<>
         <button title={modo === "max" ? "Diminuir" : "Maximizar"} onClick={() => setModo(modo === "max" ? "mini" : "max")}>{modo === "max" ? "⤡" : "⤢"}</button>
@@ -69,11 +93,12 @@ export function ChatMovel() {
     window.addEventListener(EVENTO_CHAT, ev);
     const fecha = () => FECHAR();
     window.addEventListener("a360-chat-fechar", fecha);
-    const off = chat.ouvir(m => { C.carregar(); if (m.autor_id !== C.eu && !m.editado_em && aberta.current !== m.conversa_id) tocar(); });
+    const off = chat.ouvir(m => { C.carregar(); if (m.autor_id !== C.eu && !m.editado_em && aberta.current !== m.conversa_id) avisar(m); });
     return () => { window.removeEventListener(EVENTO_CHAT, ev); window.removeEventListener("a360-chat-fechar", fecha); off(); };
   }, []);
   const total = C.convs.reduce((s, c) => s + (c.nao_lidas || 0), 0);
   return <>
+    <Balao />
     <button className="chat-topo" title="Chat" onClick={() => { setAberto(true); C.carregar(); }}><span>💬</span>{total > 0 && <i>{total > 99 ? "99+" : total}</i>}</button>
     {aberto && createPortal(<div className="chat-pnl movel"><ChatApp C={C} conv={conv} setConv={setConv} cab={<button title="Fechar" onClick={() => { setAberto(false); setConv(""); }}>✕</button>} /></div>, document.body)}
   </>;
