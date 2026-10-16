@@ -9,7 +9,7 @@ export const STATUS: Record<string, { label: string; cls: string }> = {
 export const STATUS_CLIENTE: Record<string, string> = {
   aguardando_consultor: "Aguardando consultor", direcionado_consultor: "Direcionado ao consultor", visita_realizada: "Visita realizada",
   agendado_loja: "Agendado loja", com_vendedor: "Com vendedor", orcamento: "Orçamento", sem_resposta: "Sem resposta", reagendado: "Reagendado", reprovado: "Reprovado",
-  em_obras: "Em obras", standby: "Standby", em_analise: "Em análise", ausente_endereco: "Ausente no endereço", visita_cancelada: "Cancelou a visita", atendido: "Atendimento finalizado", vendido_revisao: "Vendido — a confirmar",
+  em_obras: "Em obras", standby: "Standby", em_analise: "Em análise", ausente_endereco: "Ausente no endereço", visita_cancelada: "Cancelou visita do consultor", loja_cancelada: "Cancelou visita na loja", atendido: "Atendimento finalizado", vendido_revisao: "Vendido — a confirmar",
   vendido_entrada: "Vendido — entrada + promissória", vendido_promissoria: "Vendido — 100% promissória", vendido: "Vendido — efetivado", venda_cancelada: "Venda cancelada", nao_compareceu: "Não compareceu",
 };
 // pareceres extras (menu "Mais opções")
@@ -248,11 +248,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
   function normalizarStatusCliente(c: Chamado) {
     if (c.venda && c.venda.status) return VENDA_TO_CLIENTE[c.venda.status] || c.statusCliente;
     if (c.statusCliente === "nao_compareceu") return "nao_compareceu";
-    if (c.setorDestino === "marketing_supervisao") return "aguardando_consultor";
+    if (c.setorDestino === "marketing_supervisao") return c.statusCliente === "visita_cancelada" ? "visita_cancelada" : "aguardando_consultor";
     if (c.setorDestino === "consultor_externo") return SITUACOES_CONSULTOR.includes(c.statusCliente) ? c.statusCliente : (c.tratativa && c.tratativa.realizada) ? "visita_realizada" : "direcionado_consultor";
     // agendado na loja: vale o status que a equipe escolheu (standby, em obras, orçamento…); sem escolha = agendado loja
-    if (c.setorDestino === "suporte_consultores") return ["orcamento", "sem_resposta", "reagendado", "reprovado", "atendido", "em_obras", "standby", "em_analise", "visita_cancelada"].includes(c.statusCliente) ? c.statusCliente : "agendado_loja";
-    if (c.setorDestino === "atendente_cliente") return ["orcamento", "sem_resposta", "reagendado", "reprovado", "atendido", ...SITUACOES_EXTRA].includes(c.statusCliente) ? c.statusCliente : "com_vendedor";
+    if (c.setorDestino === "suporte_consultores") return ["orcamento", "sem_resposta", "reagendado", "reprovado", "atendido", "em_obras", "standby", "em_analise", "visita_cancelada", "loja_cancelada"].includes(c.statusCliente) ? c.statusCliente : "agendado_loja";
+    if (c.setorDestino === "atendente_cliente") return ["orcamento", "sem_resposta", "reagendado", "reprovado", "atendido", "loja_cancelada", ...SITUACOES_EXTRA].includes(c.statusCliente) ? c.statusCliente : "com_vendedor";
     return c.statusCliente || "aguardando_consultor";
   }
   function statusClienteDe(c: Chamado) { if (domMarketing(c)) return normalizarStatusCliente(c); if (c.statusCliente) return c.statusCliente; return "aguardando_consultor"; }
@@ -659,7 +659,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
     // cliente cancelou a visita do consultor: a Supervisão do Marketing acompanha (reagenda, redireciona ou encerra)
-    if (mySetores().includes("marketing_supervisao") || (ehGestao() && !ehProprietario())) add("visitacanc", "Clientes que cancelaram a visita", "O consultor marcou que o cliente cancelou. Fale com o cliente: reagende, redirecione ou encerre.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "visita_cancelada"), "var(--danger)");
+    if (mySetores().includes("marketing_supervisao") || (ehGestao() && !ehProprietario())) add("visitacanc", "Cancelaram a visita do consultor", "Voltaram para você: fale com o cliente e direcione de novo (Direcionar consultor) ou encerre.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "visita_cancelada"), "var(--danger)");
+    if (mySetores().includes("suporte_consultores") || (ehGestao() && !ehProprietario())) add("lojacanc", "Cancelaram a visita na loja", "O cliente cancelou a vinda à loja. Fale com ele: reagende a loja ou encerre.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "loja_cancelada" && recente(c)), "var(--warn)");
+    add("minhalojacanc", "Seus clientes que cancelaram a loja", "Fale com o cliente e tente reagendar a vinda à loja.", ch.filter(c => domMarketing(c) && statusClienteDe(c) === "loja_cancelada" && (c.consultorId === eu || c.atendenteId === eu) && recente(c)), "var(--warn)");
     if ((temMarketing() && !ehGestao() && !ehGerenteLoja()) || mySetores().includes("suporte_consultores")) add("direcionar", "Clientes sem consultor", "Aguardando você designar um consultor externo.", ch.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c) && recente(c)), "var(--st-aberta)");
     if (mySetores().includes("suporte_consultores") || (temMarketing() && !ehGestao() && !ehGerenteLoja())) {
       add("pedidoatend", "Vendedor pediu para atender", "Um vendedor informou que está atendendo o cliente. Aprove ou recuse na tela Definir vendedor.", ch.filter(c => domMarketing(c) && c.setorDestino === "suporte_consultores" && !c.atendenteId && c.tratativa && c.tratativa.pedidoAtend && recenteLoja(c)), "var(--primary)");

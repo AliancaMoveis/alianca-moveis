@@ -13,7 +13,7 @@ import { fmtTel } from "../lib/baseClientes";
 import { SinoAvisos } from "../comp/Avisos";
 import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
-import { SituacaoConsultor } from "../comp/Situacao";
+import { CancelouLoja, SituacaoConsultor } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
 import { RemarcarData } from "../comp/Remarcar";
 import Agenda from "../telas/Agenda";
@@ -407,6 +407,7 @@ function Folha({ id, fechar, perfil }: any) {
         {perfil !== "consultor" || c.dataLoja ? <RemarcarData c={c} tipo="loja" movel /> : null}
         <Contato c={c} rota={perfil === "consultor"} />
         {perfil === "consultor" && <SituacaoConsultor c={c} movel />}
+        {(perfil === "consultor" || perfil === "vendedor") && <CancelouLoja c={c} movel />}
         {perfil === "consultor" && <PassosConsultor c={c} />}
         {perfil === "vendedor" && <AcoesVendedor c={c} />}
         <Anexar c={c} />
