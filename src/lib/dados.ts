@@ -20,7 +20,7 @@ export type Estado = {
   medidasCruz?: Record<string, MedidaCruz>;
   /** períodos com a agenda do checklist fechada (feriado, folga, consulta…); projetista "" = todos */
   ckBloqueios?: CkBloqueio[];
-  consBloqueios?: { id: number; usuarioId: string; de: string; ate: string; periodo: string; ini: string; fim: string; motivo: string; obs: string; criadoPor: string }[];
+  consBloqueios?: { id: number; tipo: string; usuarioId: string; de: string; ate: string; periodo: string; ini: string; fim: string; motivo: string; obs: string; criadoPor: string }[];
   vendedorDias?: Record<string, Record<string, string>>;
 };
 export type CkBloqueio = { id: number; projetista: string; inicio: string; fim: string; motivo: string; obs: string; criadoPor: string };
@@ -201,7 +201,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       return { id: m.id, nome: m.nome, telefone: m.telefone || "", regiao: m.regiao || "", ativo: m.ativo,
         conta: k ? { titular: k.titular, docTitular: k.doc_titular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipoConta: k.tipo_conta, pixTipo: k.pix_tipo, pixChave: k.pix_chave, obs: k.obs, atualizadoEm: k.atualizado_em, atualizadoPor: k.atualizado_por } : null }; }),
     vendedorDias: (vdias as any[]).reduce((m: any, r: any) => { (m[r.usuario_id] = m[r.usuario_id] || {})[r.dia] = r.tipo; return m; }, {}),
-    consBloqueios: (cbloq as any[]).filter((b: any) => b.ativo).map((b: any) => ({ id: b.id, usuarioId: b.usuario_id, de: String(b.de).slice(0, 10), ate: String(b.ate).slice(0, 10), periodo: b.periodo, ini: String(b.hora_ini || "").slice(0, 5), fim: String(b.hora_fim || "").slice(0, 5), motivo: b.motivo, obs: b.obs || "", criadoPor: b.criado_por || "" })),
+    consBloqueios: (cbloq as any[]).filter((b: any) => b.ativo).map((b: any) => ({ id: b.id, tipo: b.tipo || "bloqueio", usuarioId: b.usuario_id, de: String(b.de).slice(0, 10), ate: String(b.ate).slice(0, 10), periodo: b.periodo, ini: String(b.hora_ini || "").slice(0, 5), fim: String(b.hora_fim || "").slice(0, 5), motivo: b.motivo, obs: b.obs || "", criadoPor: b.criado_por || "" })),
     ckBloqueios: (bloqs as any[]).filter((b: any) => b.ativo).map((b: any) => ({ id: b.id, projetista: b.projetista || "", inicio: String(b.inicio).slice(0, 16).replace(" ", "T"), fim: String(b.fim).slice(0, 16).replace(" ", "T"), motivo: b.motivo, obs: b.obs || "", criadoPor: b.criado_por || "" })),
     medidasCruz: Object.fromEntries((mcruz as any[]).map((m: any) => [m.venda, { venda: m.venda, comprador: m.comprador, telefone: m.telefone, visitado: m.visitado, consultor: m.consultor,
       statusMv: m.status_mv, visitaEm: m.visita_em, medidor: m.medidor, situacao: m.situacao_exact, resultado: m.resultado, tratativa: m.tratativa, obs: m.obs,

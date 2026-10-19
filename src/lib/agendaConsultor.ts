@@ -9,7 +9,7 @@ const FECHADO = ["visita_cancelada", "loja_cancelada", "reprovado", "vendido", "
 export function bloqueioDe(R: any, uid: string, quando: any): any | null {
   const s = String(quando || "").replace(" ", "T"); if (!uid || s.length < 10) return null;
   const d = s.slice(0, 10), h = s.slice(11, 16) || "12:00";
-  return (R.state.consBloqueios || []).find((b: any) => b.usuarioId === uid && d >= b.de && d <= b.ate &&
+  return (R.state.consBloqueios || []).find((b: any) => b.tipo !== "evento" && b.usuarioId === uid && d >= b.de && d <= b.ate &&
     (b.periodo === "dia" || (b.periodo === "manha" && h < "12:00") || (b.periodo === "tarde" && h >= "12:00") || (b.periodo === "horario" && h >= b.ini && h < b.fim))) || null;
 }
 export const textoBloqueio = (b: any) => b ? "🔒 agenda fechada: " + b.motivo + (b.obs ? " (" + b.obs + ")" : "") + (b.periodo === "manha" ? " · manhã" : b.periodo === "tarde" ? " · tarde" : b.periodo === "horario" ? " · " + b.ini + "–" + b.fim : "") : "";

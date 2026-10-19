@@ -1,0 +1,3 @@
+-- 0154 (aplicado via execute_sql): consultor_bloqueios.tipo ('bloqueio'|'evento'; evento não bloqueia);
+-- reagendar_visita recusa horário com agenda fechada; visita cancelada NÃO limpa mais o consultor_id
+-- (o cliente fica na lista do consultor até ir para outro) e os 11 que tinham sido limpos voltaram ao consultor.
