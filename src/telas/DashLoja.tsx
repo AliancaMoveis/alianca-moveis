@@ -29,8 +29,19 @@ export function PainelLoja({ de, ate }: { de: string; ate: string }) {
   const mkt = st.chamados.filter((c: any) => R.domMarketing(c) && R.podeVer(c) && naArea(c));
   const noPer = (v: any) => { if (!v) return false; const d = parseData(v); return d >= new Date(de + "T00:00:00") && d <= new Date(ate + "T23:59:59"); };
 
-  const deHoje = mkt.filter((c: any) => c.dataLoja && dia(c) === hoje).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
+  // o período do dashboard vale para os agendamentos (hoje, 7 dias, mês...); pendências (sem parecer, cobrados) aparecem sempre
+  const soHoje = de === hoje && ate === hoje;
+  const perTxt = soHoje ? "hoje" : "no período";
+  const deHoje = mkt.filter((c: any) => c.dataLoja && noPer(c.dataLoja) && !(c.tratativa && (c.tratativa.importadoVisita || c.tratativa.visitaImportada))).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
   const semVendHoje = deHoje.filter((c: any) => !c.atendenteId).length;
+  // agendamentos por dia no período: quantos vieram, não vieram, cancelaram e compraram
+  const veio = (c: any) => !!(c.venda || (c.tratativa && (c.tratativa.parecerEm || c.tratativa.emAtendimento)));
+  const porDia: Record<string, any> = {};
+  deHoje.forEach((c: any) => { const d = dia(c); const r = porDia[d] = porDia[d] || { t: 0, mkt: 0, ext: 0, veio: 0, nao: 0, canc: 0, vend: 0, semVend: 0 };
+    const sc = R.statusClienteDe(c); r.t++; if (R.origemLoja(c) === "marketing") r.mkt++; else r.ext++;
+    if (veio(c)) r.veio++; if (sc === "nao_compareceu") r.nao++; if (sc === "loja_cancelada") r.canc++; if (c.venda && c.venda.status !== "cancelada") r.vend++; if (!c.atendenteId) r.semVend++; });
+  const dias = Object.keys(porDia).sort();
+  const tot = dias.reduce((a: any, d) => { Object.keys(porDia[d]).forEach(k => a[k] = (a[k] || 0) + porDia[d][k]); return a; }, {} as any);
   const semVendTodos = mkt.filter((c: any) => c.setorDestino === "suporte_consultores" && !c.atendenteId).length;
   const semParecer = mkt.filter((c: any) => R.semParecer(c));
   const cobrados = mkt.filter((c: any) => R.parecerCobrado(c));
@@ -41,7 +52,7 @@ export function PainelLoja({ de, ate }: { de: string; ate: string }) {
   const vendedores = R.vendedores().map((u: any) => {
     const meus = mkt.filter((c: any) => c.atendenteId === u.id);
     const pareceres = meus.filter((c: any) => c.tratativa && c.tratativa.parecerEm).map((c: any) => c.tratativa.parecerEm).sort();
-    return { u, hoje: meus.filter((c: any) => dia(c) === hoje).length, semParecer: meus.filter((c: any) => R.semParecer(c)).length,
+    return { u, hoje: meus.filter((c: any) => c.dataLoja && noPer(c.dataLoja)).length, semParecer: meus.filter((c: any) => R.semParecer(c)).length,
       cobrados: meus.filter((c: any) => R.parecerCobrado(c)).length, emAtendimento: meus.filter((c: any) => EM_ATENDIMENTO.includes(R.statusClienteDe(c)) && !c.venda).length,
       ultimo: pareceres.length ? pareceres[pareceres.length - 1] : null };
   }).sort((a: any, b: any) => (b.semParecer + b.cobrados) - (a.semParecer + a.cobrados) || b.hoje - a.hoje);
@@ -73,29 +84,30 @@ export function PainelLoja({ de, ate }: { de: string; ate: string }) {
           {([["todos", "Todos"], ["externo", "Externos (consultores)"], ["marketing", "Marketing"]] as [any, string][]).map(([k, l]) => <button key={k} className={area === k ? "on" : ""} onClick={() => setArea(k)}>{l}</button>)}
         </div></div>
       <div className="kpis">
-        <Kpi n={deHoje.length} l="Agendados hoje" />
-        <Kpi n={semVendHoje} l={`Sem vendedor hoje (${semVendTodos} no total)`} cls={semVendHoje ? "urg" : ""} />
+        <Kpi n={deHoje.length} l={"Agendados " + perTxt} />
+        <Kpi n={tot.veio || 0} l={"Vieram à loja " + perTxt} cor="var(--st-concluida)" />
+        <Kpi n={semVendHoje} l={`Sem vendedor ${perTxt} (${semVendTodos} no total)`} cls={semVendHoje ? "urg" : ""} />
         <Kpi n={semParecer.length} l="Já vieram — sem parecer" cls={semParecer.length ? "alert" : ""} cor={semParecer.length ? "var(--danger)" : undefined} />
         <Kpi n={cobrados.length} l="Parecer cobrado, sem resposta" cls={cobrados.length ? "alert" : ""} />
         <Kpi n={semAnexo.length} l="⚠️ Agendados sem anexo" cor={semAnexo.length ? "#b07a00" : undefined} />
-        <Kpi n={hojeComParecer + "/" + deHoje.length} l="Hoje com parecer" cor="var(--st-concluida)" />
+        <Kpi n={hojeComParecer + "/" + deHoje.length} l={(soHoje ? "Hoje" : "No período") + " com parecer"} cor="var(--st-concluida)" />
       </div>
 
       <div className="panel-grid">
-        <div className="panel"><h3>Agendamentos de hoje</h3>
-          {deHoje.length ? <div className="dl-lista">{deHoje.map((c: any) => (
+        <div className="panel"><h3>Agendamentos {soHoje ? "de hoje" : "do período"} <span className="pill" style={{ marginLeft: 6 }}>{deHoje.length}</span></h3>
+          {deHoje.length ? <div className="dl-lista" style={soHoje ? undefined : { maxHeight: 520, overflowY: "auto" }}>{deHoje.map((c: any) => (
             <div className="dl-l" key={c.id}>
-              <b className="dl-h">{hora(c)}</b><Origem c={c} />
+              <b className="dl-h" style={soHoje ? undefined : { fontSize: 12 }}>{soHoje ? hora(c) : fmtDateTime(c.dataLoja).slice(0, 5) + " " + hora(c)}</b><Origem c={c} />
               <span className="dl-nm" onClick={() => abrirDetalhe(c.id)}>{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""}<small>{c.consultorId ? R.nomeUser(c.consultorId) : "marketing"} → {c.atendenteId ? R.nomeUser(c.atendenteId) : "sem vendedor"}</small></span>
               <Situacao c={c} />
               {R.semParecer(c) && <button className="btn sm" onClick={() => cobrar(c)}>Cobrar</button>}
-            </div>))}</div> : <div className="empty" style={{ padding: "18px 8px" }}>Nenhum agendamento hoje.</div>}
+            </div>))}</div> : <div className="empty" style={{ padding: "18px 8px" }}>Nenhum agendamento {perTxt}.</div>}
         </div>
         <div className="panel"><h3>Vendedores — respostas</h3>
           {vendedores.length ? vendedores.map(({ u, hoje: h, semParecer: sp, cobrados: cb, emAtendimento: ea, ultimo }: any) => (
             <div className="dl-vend" key={u.id}>
               <div style={{ flex: 1 }}><b>{u.nome}</b><small>{ultimo ? "último parecer " + tempoRel(ultimo) : "nenhum parecer ainda"} · {ea} em atendimento</small></div>
-              <span className="dv-n cinza">{h} hoje</span>
+              <span className="dv-n cinza">{h} {perTxt}</span>
               {sp > 0 && <span className="dv-n" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{sp} sem parecer</span>}
               {cb > 0 && <span className="dv-n" style={{ background: "var(--critico-bg)", color: "var(--critico)" }}>{cb} cobrado{cb > 1 ? "s" : ""}</span>}
             </div>)) : <div className="empty">Nenhum vendedor cadastrado.</div>}
@@ -119,6 +131,13 @@ export function PainelLoja({ de, ate }: { de: string; ate: string }) {
             </div>); }) : <div className="empty" style={{ padding: "18px 8px" }}>Nenhum parecer registrado ainda.</div>}
         </div>
       </div>
+
+      {!soHoje && <div className="panel" style={{ marginBottom: 16 }}><h3>Agendamentos na loja por dia <span className="pill" style={{ marginLeft: 8 }}>{fmtDateTime(de + "T12:00").slice(0, 5)} a {fmtDateTime(ate + "T12:00").slice(0, 5)}</span></h3>
+        {dias.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Dia</th><th>Agendados</th><th>Marketing</th><th>Externos</th><th>Vieram</th><th>Não vieram</th><th>Cancelaram</th><th>Vendas</th><th>Sem vendedor</th></tr></thead>
+          <tbody>{dias.map(d => { const r = porDia[d]; return <tr key={d}><td><b>{fmtDateTime(d + "T12:00").slice(0, 5)}</b> <small>{["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][parseData(d + "T12:00").getDay()]}</small></td><td><b>{r.t}</b></td><td>{r.mkt}</td><td>{r.ext}</td><td style={{ color: "var(--st-concluida)", fontWeight: 700 }}>{r.veio}</td><td>{r.nao}</td><td>{r.canc}</td><td style={{ color: "var(--st-concluida)", fontWeight: 700 }}>{r.vend}</td><td style={r.semVend ? { color: "var(--warn)", fontWeight: 700 } : undefined}>{r.semVend}</td></tr>; })}
+            <tr style={{ borderTop: "2px solid var(--line)" }}><td><b>Total</b></td><td><b>{tot.t}</b></td><td>{tot.mkt}</td><td>{tot.ext}</td><td><b>{tot.veio}</b> <small>({tot.t ? Math.round(tot.veio / tot.t * 100) : 0}%)</small></td><td>{tot.nao}</td><td>{tot.canc}</td><td><b>{tot.vend}</b></td><td>{tot.semVend}</td></tr></tbody></table></div>
+          : <div className="empty" style={{ padding: "18px 8px" }}>Nenhum agendamento na loja no período.</div>}
+      </div>}
 
       <div className="panel" style={{ marginBottom: 16 }}><h3>Depois da vinda à loja — por consultor <span className="pill" style={{ marginLeft: 8 }}>vindas no período</span></h3>
         {linhasCons.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Consultor</th><th>Agendados</th><th>Com parecer</th><th>Orçamento</th><th>Vendas</th><th>Perdidos</th><th>Sem parecer</th><th>Sem anexo</th></tr></thead>

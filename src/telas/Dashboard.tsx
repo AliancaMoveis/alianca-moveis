@@ -8,6 +8,7 @@ import PainelDono from "./PainelDono";
 import PainelBruno from "./PainelBruno";
 import PainelSupervisao from "./PainelSupervisao";
 import PainelChecklist from "./PainelChecklist";
+import Anuncios from "./Anuncios";
 import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume, pagamentosVenda } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
@@ -26,13 +27,13 @@ export default function Dashboard() {
   const { R, st, irPara, abrirDetalhe, currentUserId } = useApp() as any;
   // período: padrão = mês atual. O que está em aberto (fila, atrasos, críticos) aparece sempre, de qualquer data;
   // o período vale para o que aconteceu nele: abertos, concluídos, agendamentos, vendas.
-  const [preset, setPreset] = useState<"hoje" | "7" | "mes" | "ant" | "periodo">(R.ehGestao() && !R.ehProprietario() ? "hoje" : "mes");
+  const [preset, setPreset] = useState<"hoje" | "7" | "semana" | "15" | "30" | "mes" | "ant" | "periodo">(R.ehGestao() && !R.ehProprietario() ? "hoje" : "mes");
   const [vDono, setVDono] = useState<"dono" | "tudo">("tudo");
   const hoje = hojeISO();
   const menos = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return isoLocal(d); };
   const [pDe, setPDe] = useState(hoje.slice(0, 8) + "01"); const [pAte, setPAte] = useState(hoje);
   const hj = new Date(); const antIni = isoLocal(new Date(hj.getFullYear(), hj.getMonth() - 1, 1)), antFim = isoLocal(new Date(hj.getFullYear(), hj.getMonth(), 0));
-  const de = preset === "hoje" ? hoje : preset === "mes" ? hoje.slice(0, 8) + "01" : preset === "7" ? menos(6) : preset === "ant" ? antIni : pDe;
+  const de = preset === "hoje" ? hoje : preset === "mes" ? hoje.slice(0, 8) + "01" : preset === "7" ? menos(6) : preset === "15" ? menos(14) : preset === "30" ? menos(29) : preset === "semana" ? menos((hj.getDay() + 6) % 7) : preset === "ant" ? antIni : pDe;
   const ate = preset === "periodo" ? pAte : preset === "ant" ? antFim : hoje;
   const noPeriodo = (v: any) => { if (!v) return false; const d = new Date(v); return (!de || d >= new Date(de + "T00:00:00")) && (!ate || d <= new Date(ate + "T23:59:59")); };
   // área: quem vê call center e marketing (Gestão) pode separar. Pós-venda Projetados conta como call center.
@@ -98,7 +99,7 @@ export default function Dashboard() {
       <div className="card" style={{ padding: "14px 18px", marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div className="chips" style={{ margin: 0 }}>
-            {([["hoje", "Hoje"], ["7", "7 dias"], ["mes", "Mês"], ["ant", "Mês anterior"], ["periodo", "📅 Livre"]] as [any, string][]).map(([k, l]) =>
+            {([["hoje", "Hoje"], ["7", "7 dias"], ["semana", "Semana atual"], ["15", "15 dias"], ["30", "30 dias"], ["mes", "Mês atual"], ["ant", "Mês anterior"], ["periodo", "📅 Personalizado"]] as [any, string][]).map(([k, l]) =>
               <button key={k} className={"chip" + (preset === k ? " on" : "")} onClick={() => setPreset(k)}>{l}</button>)}
           </div>
           {preset === "periodo" && <>
@@ -131,6 +132,7 @@ export default function Dashboard() {
     <section className="view active" id="view-dashboard">
       {cabecalho}
       {R.ehGestao() && area !== "cc" && <PainelGestao de={de} ate={ate} />}
+      {R.veAnuncios() && !R.ehGestao() && area !== "cc" && <div className="dl-wrap"><div className="dl-cab"><h3>📣 Anúncios (Meta e Google)</h3></div><Anuncios de={de} ate={ate} resumo /></div>}
       {!R.ehGestao() && R.podeEditarAgenda() && (area !== "cc") && <PainelLoja de={de} ate={ate} />}
       {R.mySetores().includes("atendente_cliente") && !R.ehGestao() && <PainelVendedor />}
       {verCC && veAmbos && area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Call center e pós-venda</div>}

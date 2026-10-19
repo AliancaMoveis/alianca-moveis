@@ -63,8 +63,8 @@ function somar(ls: Linha[]) {
   return { ...t, contatos: t.conversas + t.conversoes };
 }
 
-export default function Anuncios({ de: de0, ate: ate0, movel }: { de?: string; ate?: string; movel?: boolean }) {
-  const { st, R } = useApp() as any;
+export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: string; ate?: string; movel?: boolean; resumo?: boolean }) {
+  const { st, R, irPara } = useApp() as any;
   // no celular (ou fora do painel) o período é escolhido aqui
   const hoje = hojeISO();
   const [per, setPer] = useState<Per>("mes");
@@ -134,6 +134,10 @@ export default function Anuncios({ de: de0, ate: ate0, movel }: { de?: string; a
       <Grande v={F1.fat && gastoTotal1 ? (F1.fat / gastoTotal1).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "x" : "—"} l={`Retorno: ${din(F1.fat)} vendidos ÷ ${din(gastoTotal1)} investidos`} a={gastoTotal1 ? F1.fat / gastoTotal1 : null} b={gastoTotal0 ? F0.fat / gastoTotal0 : null} fmt={(v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "x"} />
     </div>
 
+    {resumo ? <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", margin: "-4px 0 16px" }}>
+      {porPlat.map(({ p, a }) => <span key={p} className="pill" style={{ borderColor: PLAT[p].cor, color: PLAT[p].cor }}>{PLAT[p].ic} {p === "meta" ? "Meta" : "Google"}: {din(a.gasto)} · {n0(p === "meta" ? a.conversas : a.conversoes)} {p === "meta" ? "conversas" : "conversões"}</span>)}
+      <button className="btn sm primary" onClick={() => irPara("anuncios")}>Ver anúncios completos →</button>
+      <span className="pb-per" style={{ margin: 0 }}>Reportei{dados.sync?.ate ? " · dados até " + fmtDate(dados.sync.ate) : ""}</span></div> : <>
     <div className="panel-grid">
       {porPlat.map(({ p, a, b }) => <div key={p} className="panel an-plat">
         <h3><span style={{ color: PLAT[p].cor }}>{PLAT[p].ic}</span> {PLAT[p].nome}</h3>
@@ -163,6 +167,7 @@ export default function Anuncios({ de: de0, ate: ate0, movel }: { de?: string; a
         <tbody>{camps.map(c => <tr key={c.plataforma + c.campanha}><td><b style={{ color: PLAT[c.plataforma].cor }}>{PLAT[c.plataforma].ic}</b> {c.campanha}</td><td>{din(c.gasto)}</td><td>{n0(c.impressoes)}</td><td>{n0(c.cliques)}</td><td>{pctTxt(div(c.cliques, c.impressoes))}</td><td>{resultado(c)}</td><td>{custoRes(c)}</td></tr>)}</tbody></table></div>
         : <div className="dn-vazio">Sem anúncios no período.</div>}
     </div>
-    <div className="pb-per">Fonte: Reportei (Meta Ads e Google Ads){dados.sync?.ate ? " · dados até " + fmtDate(dados.sync.ate) : ""}{dados.sync?.ultimo ? " · atualizado em " + new Date(dados.sync.ultimo).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}. Os números do dia de hoje entram na próxima atualização.</div>
+    </>}
+    {!resumo && <div className="pb-per">Fonte: Reportei (Meta Ads e Google Ads){dados.sync?.ate ? " · dados até " + fmtDate(dados.sync.ate) : ""}{dados.sync?.ultimo ? " · atualizado em " + new Date(dados.sync.ultimo).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}. Os números do dia de hoje entram na próxima atualização.</div>}
   </div>;
 }

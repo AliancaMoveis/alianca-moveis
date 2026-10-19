@@ -15,13 +15,16 @@ const addDias = (n: number) => { const d = parseData(hojeISO() + "T12:00"); d.se
 const pc = (a: number, b: number) => b ? Math.round(a / b * 100) + "%" : "—";
 const primeiro = (n: string) => (n || "").replace(/^(Consultora?|Vendedora?|Suporte)\s+—\s+/, "").split(" ")[0];
 
-export type Per = "hoje" | "7" | "mes" | "ant" | "livre";
+export type Per = "hoje" | "7" | "semana" | "15" | "30" | "mes" | "ant" | "livre";
 type Livre = { de: string; ate: string };
 export function periodo(p: Per, lv?: Livre) {
   const h = hojeISO(), d = parseData(h + "T12:00");
   if (p === "hoje") return { de: h, ate: h, nome: "hoje" };
   if (p === "7") return { de: addDias(-6), ate: h, nome: "últimos 7 dias" };
   if (p === "mes") return { de: h.slice(0, 8) + "01", ate: h, nome: MESES[d.getMonth()] + " (até hoje)" };
+  if (p === "15") return { de: addDias(-14), ate: h, nome: "últimos 15 dias" };
+  if (p === "30") return { de: addDias(-29), ate: h, nome: "últimos 30 dias" };
+  if (p === "semana") return { de: addDias(-((d.getDay() + 6) % 7)), ate: h, nome: "semana atual" };
   if (p === "livre") { const de = lv?.de || h.slice(0, 8) + "01", ate = lv?.ate || h; return { de, ate, nome: fmtDate(de).slice(0, 5) + " a " + fmtDate(ate).slice(0, 5) }; }
   const ini = new Date(d.getFullYear(), d.getMonth() - 1, 1), fim = new Date(d.getFullYear(), d.getMonth(), 0);
   return { de: isoLocal(ini), ate: isoLocal(fim), nome: MESES[ini.getMonth()] };
@@ -36,8 +39,8 @@ export function usePer() {
   return { per, setPer, livre, setLivre, P: periodo(per, livre) };
 }
 export function SelPer({ per, setPer, livre, setLivre }: { per: Per; setPer: (p: Per) => void; livre?: Livre; setLivre?: (l: Livre) => void }) {
-  const ops: [Per, string][] = [["hoje", "Hoje"], ["7", "7 dias"], ["mes", "Mês"], ["ant", "Mês anterior"]];
-  if (setLivre) ops.push(["livre", "📅 Livre"]);
+  const ops: [Per, string][] = [["hoje", "Hoje"], ["7", "7 dias"], ["semana", "Semana"], ["15", "15 dias"], ["30", "30 dias"], ["mes", "Mês atual"], ["ant", "Mês anterior"]];
+  if (setLivre) ops.push(["livre", "📅 Personalizado"]);
   return <>
     <div className="mv-seg">{ops.map(([k, l]) => <button key={k} className={per === k ? "on" : ""} onClick={() => setPer(k)}>{l}</button>)}</div>
     {per === "livre" && livre && setLivre && <div className="mv-datas">
