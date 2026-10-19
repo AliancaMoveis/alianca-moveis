@@ -138,6 +138,7 @@ export const A = {
     if (r && r.erro) throw new Error(r.erro);
     return r;
   },
+  agendaPublicaVeioHoje: (token: string, id: string) => rpc("agenda_publica_veio_hoje", { p_token: token, p_id: id }),
   agendaPublicaBuscar: async (token: string, q: string) => {
     if ((import.meta as any).env?.VITE_MOCK) return (((window as any).__agendaPublicaMock || []) as any[]).filter((x: any) => (x.cliente || "").toLowerCase().includes(q.toLowerCase())).map((x: any) => ({ ...x, dia: new Date().toISOString().slice(0, 10) }));
     return (await rpc<any[]>("agenda_publica_buscar", { p_token: token, p_q: q })) || [];

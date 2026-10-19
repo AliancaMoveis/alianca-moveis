@@ -67,6 +67,7 @@ export default function AgendaPublica() {
   const sem = (t: string) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const qb = sem(busca.trim()), qd = busca.replace(/\D/g, "");
   const casa = (x: any) => !qb || sem(x.cliente).includes(qb) || (qd.length >= 3 && String(x.telefone || "").replace(/\D/g, "").includes(qd)) || sem(x.consultor).includes(qb) || sem(x.vendedor).includes(qb);
+  const casa2 = (x: any, v: string) => { const b = sem(v.trim()), d = v.replace(/\D/g, ""); return sem(x.cliente).includes(b) || (d.length >= 3 && String(x.telefone || "").replace(/\D/g, "").includes(d)) || sem(x.consultor).includes(b) || sem(x.vendedor).includes(b); };
   const lv = (filtro === "todos" || qb ? l : l.filter(x => x.situacao === filtro)).filter(casa);
   // "Cliente chegou": avisa o vendedor no celular (sem vendedor, avisa a coordenação). Repetir só depois de 3 min.
   const ESPERA = 180;
@@ -114,12 +115,22 @@ export default function AgendaPublica() {
     } catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível abrir as imagens" }); }
     finally { setEnviando(""); }
   };
-  const buscar = async (e?: any) => {
-    if (e) e.preventDefault();
-    const q = busca.trim(); if (q.length < 3) { setAviso({ ok: false, t: "Digite pelo menos 3 letras ou números" }); return; }
+  const buscar = async (e?: any, txt?: string) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const q = (txt ?? busca).trim(); if (q.length < 3) { setAviso({ ok: false, t: "Digite pelo menos 3 letras ou números" }); return; }
     setBuscando(true);
     try { setAchados(await A.agendaPublicaBuscar(token, q)); } catch (er: any) { setAviso({ ok: false, t: er.message || "Não foi possível buscar" }); }
     finally { setBuscando(false); }
+  };
+  // cliente agendado para outro dia chegou hoje: traz para a agenda de hoje (fica no histórico) e já mostra só ele na tela
+  const veioHoje = async (a: any) => {
+    if (!confirm(a.cliente + " estava agendado(a) para " + fmtDia(a.dia) + " " + a.hora + ".\nTrazer para a agenda de HOJE (chegou agora)?")) return;
+    setEnviando(a.id);
+    try { await A.agendaPublicaVeioHoje(token, a.id); setAchados(null); setFiltro("todos"); setBusca(a.cliente); if (off !== 0) setOff(0);
+      else { const r = await A.agendaPublicaDia(token, diaIso); setDados(r); }
+      setAviso({ ok: true, t: "✓ " + a.cliente + " está na agenda de hoje" }); }
+    catch (e: any) { setAviso({ ok: false, t: e.message || "Não foi possível trazer para hoje" }); }
+    finally { setEnviando(""); }
   };
   const offDe = (d: string) => { const a = new Date(); a.setHours(12, 0, 0, 0); const b = new Date(d + "T12:00"); return Math.round((b.getTime() - a.getTime()) / 86400000); };
   // vendedor chamado 2x e não apareceu (3 min depois da 2ª chamada): outro vendedor pode assumir com a senha
@@ -134,7 +145,9 @@ export default function AgendaPublica() {
         <div className="ap-relogio"><b>{String(agora.getHours()).padStart(2, "0")}:{String(agora.getMinutes()).padStart(2, "0")}</b><span>{DIAS[agora.getDay()].replace(/^./, c => c.toUpperCase())}, {agora.getDate()} de {MESES[agora.getMonth()]}</span></div>
       </header>
       <form className="ap-busca" onSubmit={buscar}>
-        <input value={busca} onChange={e => { setBusca(e.target.value); setAchados(null); }} placeholder="🔎 Digite o nome ou telefone do cliente — aparece na hora aqui embaixo" autoComplete="off" />
+        <input value={busca} onChange={e => { const v = e.target.value; setBusca(v); setAchados(null); clearTimeout((window as any).__apT);
+          // digitou e ninguém do dia combina: procura sozinho nos outros dias
+          if (v.trim().length >= 3) (window as any).__apT = setTimeout(() => { if (!(dados || []).some(x => casa2(x, v))) buscar(null, v); }, 800); }} placeholder="🔎 Digite o nome ou telefone do cliente — aparece na hora aqui embaixo" autoComplete="off" />
         {busca && <button type="button" className="ap-limpar" onClick={() => { setBusca(""); setAchados(null); }}>✕ Limpar</button>}
         <button type="submit" disabled={buscando}>{buscando ? "Buscando…" : "Buscar em outros dias"}</button>
       </form>
@@ -149,7 +162,7 @@ export default function AgendaPublica() {
         <div className="mix"><span><i className="mk"></i>{mkt} marketing</span><span><i className="ex"></i>{l.length - mkt} consultor externo</span></div>
       </section>
       <div className="ap-lista">
-        {qb && dados !== null && <div className="ap-filtrando">🔎 <b>{lv.length}</b> cliente{lv.length === 1 ? "" : "s"} {ehHoje ? "de hoje" : "deste dia"} com “{busca.trim()}”{!lv.length ? <> — <button className="ap-link" onClick={() => buscar()}>procurar em outros dias</button></> : null}</div>}
+        {qb && dados !== null && <div className="ap-filtrando">🔎 <b>{lv.length}</b> cliente{lv.length === 1 ? "" : "s"} {ehHoje ? "de hoje" : "deste dia"} com “{busca.trim()}”{!lv.length ? <> — <button className="ap-link" onClick={() => buscar(null)}>procurar em outros dias</button></> : null}</div>}
         {dados === null ? <div className="ap-vazio">Carregando…</div> : !lv.length ? (qb ? null : <div className="ap-vazio">{l.length ? "Nenhum cliente nesta situação." : "Nenhum cliente agendado " + (ehHoje ? "para hoje" : "neste dia") + "."}</div>) :
           lv.map((x, i) => {
             const [sit, cls] = SIT[x.situacao] || ["Aguardando", "agu"];
@@ -233,7 +246,9 @@ export default function AgendaPublica() {
               <div key={a.id} className="ap-achado">
                 <div className="q"><b>{fmtDia(a.dia)}</b><span>{a.hora}</span></div>
                 <div className="c"><b>{a.cliente}</b><span>{a.telefone ? "📞 " + fmtTel(a.telefone) + " · " : ""}{a.consultor ? "Consultor: " + soNome(a.consultor) : "Marketing"} · {a.vendedor ? "Vendedor: " + soNome(a.vendedor) : "sem vendedor"} · {sit}</span>{a.obs ? <small>📝 {a.obs}</small> : null}</div>
-                {o >= -1 && o <= 7 ? <button onClick={() => { setOff(o); setFiltro("todos"); setBusca(a.cliente); setAchados(null); }}>{o === 0 ? "Abrir aqui" : "Abrir no dia"}</button> : <small className="fora">{o < 0 ? "dia já passou" : "agenda futura"}</small>}
+                <div className="ap-ach-bts">
+                  {o !== 0 && a.situacao !== "finalizado" && <button className="ap-veio" disabled={enviando === a.id} onClick={() => veioHoje(a)}>🏬 Veio hoje</button>}
+                  {o >= -1 && o <= 7 ? <button onClick={() => { setOff(o); setFiltro("todos"); setBusca(a.cliente); setAchados(null); }}>{o === 0 ? "Abrir aqui" : "Abrir no dia"}</button> : <small className="fora">{o < 0 ? "dia já passou" : "agenda futura"}</small>}</div>
               </div>); })}
           <button className="ap-cancelar" onClick={() => setAchados(null)}>Fechar</button>
         </div></div>}

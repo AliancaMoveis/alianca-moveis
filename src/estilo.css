@@ -1639,3 +1639,5 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .cv-novo{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}.cv-novo h4{margin:0 0 8px}
 .cv-inat{margin-top:14px}.cv-inat-l{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px}.cv-inat-l small{color:var(--ink-faint);margin-left:6px}
 .btn.danger{color:var(--danger);border-color:var(--danger)}
+.ap-ach-bts{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.ap-achado .ap-veio{background:#1f7a44;color:#fff;border-color:#1f7a44}

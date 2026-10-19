@@ -4,3 +4,4 @@
 -- vendedor_descadastrar(id): só quem tem apenas atendente_cliente; desativa + ban; clientes de hoje em diante sem venda voltam para a fila.
 -- vendedor_reativar(id), vendedor_freelancer(id, sim).
 -- Amanda e Luan desativados (ban); 1 cliente do Luan voltou para a fila sem vendedor.
+-- agenda_publica_veio_hoje(token, id): cliente de outro dia (−30..+60) que chegou hoje vai para a agenda de hoje (data_loja = agora), com histórico.
