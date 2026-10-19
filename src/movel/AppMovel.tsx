@@ -85,7 +85,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const { R, detalheId, modal } = useApp() as any;
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
     : perfil === "dono" ? [["resumo", "Ver tudo", "📈"], ["painel", "Resumo", "📊"], ["status", "Status", "🚦"], ["anuncios", "Anúncios", "📣"], ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
-    : perfil === "gerente" ? [...(R.mySetores().includes("presenca") ? [["presenca", "Presença", "✅"]] as [string, string, string][] : []), ["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
+    : perfil === "gerente" ? [...(R.mySetores().includes("presenca") ? [["presenca", "Presença", "✅"], ["porta", "Porta", "＋"]] as [string, string, string][] : []), ["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
@@ -95,6 +95,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : podeDistribuir(R) ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["eu", "Mais", "☰"]];
   const [aba, setAba] = useState(abas[0][0]);
+  const [nPorta, setNPorta] = useState(0); // tocar de novo em "＋ Porta" reabre o formulário
   const [aberto, setAberto] = useState<string | null>(null);
   const u = R.me();
   const gereMkt = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
@@ -120,6 +121,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "dono" && aba === "painel" && <PainelDono />}
         {aba === "status" && <StatusGeral abrir={setAberto} />}
         {aba === "presenca" && <div className="mv-anun"><div className="mv-sec">✅ Confirmação de presença</div><Presenca movel /></div>}
+        {aba === "porta" && <div className="mv-anun"><div className="mv-sec">🚪 Novo cliente porta</div><Presenca movel novoPorta key={"porta" + nPorta} /></div>}
         {aba === "anuncios" && <div className="mv-anun"><div className="mv-sec">📣 Anúncios</div><Anuncios movel /></div>}
         {perfil === "dono" && aba === "resumo" && <GestResumo ir={k => abas.some(x => x[0] === k) && setAba(k)} />}
         {perfil === "gerente" && aba === "hoje" && <GerHoje ir={setAba} />}
@@ -153,7 +155,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
       </main>
       {perfil === "gestor" && podeRegistrar && aba === "resumo" && <button className="mv-fab" onClick={() => setAba("novo")}>＋ Cliente</button>}
       <nav className="mv-tabs">
-        {abas.map(([k, l, ic]) => <button key={k} className={aba === k ? "on" : ""} onClick={() => setAba(k)}><span className={"ic" + (k === "novo" ? " mais" : "")}>{ic}</span>{l}{k === "clientes" && pend > 0 && <i className="mv-dot">{pend}</i>}{k === "urgente" && urg > 0 && <i className="mv-dot">{urg}</i>}{k === "acao" && apv > 0 && <i className="mv-dot">{apv}</i>}</button>)}
+        {abas.map(([k, l, ic]) => <button key={k} className={(aba === k ? "on" : "") + (k === "porta" ? " tab-porta" : "")} onClick={() => { setAba(k); if (k === "porta") setNPorta(n => n + 1); }}><span className={"ic" + (k === "novo" ? " mais" : "")}>{ic}</span>{l}{k === "clientes" && pend > 0 && <i className="mv-dot">{pend}</i>}{k === "urgente" && urg > 0 && <i className="mv-dot">{urg}</i>}{k === "acao" && apv > 0 && <i className="mv-dot">{apv}</i>}</button>)}
       </nav>
       {aberto && <Folha id={aberto} fechar={() => setAberto(null)} perfil={perfil} />}
       {detalheId && <Detalhe id={detalheId} />}
