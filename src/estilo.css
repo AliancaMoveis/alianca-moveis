@@ -1641,3 +1641,4 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .btn.danger{color:var(--danger);border-color:var(--danger)}
 .ap-ach-bts{display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .ap-achado .ap-veio{background:#1f7a44;color:#fff;border-color:#1f7a44}
+.an-aviso{background:#fff8e1;border:1px solid #f0d27a;border-radius:10px;padding:8px 12px;font-size:12.5px;margin:-4px 0 10px}

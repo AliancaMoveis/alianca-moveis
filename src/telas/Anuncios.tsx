@@ -21,6 +21,7 @@ export function periodoDe(per: Per, pDe: string, pAte: string) {
   if (per === "pers") return pDe <= pAte ? { de: pDe, ate: pAte } : { de: pAte, ate: pDe };
   return { de: hoje.slice(0, 8) + "01", ate: hoje };
 }
+export const INICIO_360 = "2026-10-15"; // primeiro dia com todos os cadastros do marketing feitos no 360
 type Linha = { plataforma: "meta" | "google"; dia: string; campanha: string; tipo: string; gasto: number; impressoes: number; alcance: number; cliques: number; conversas: number; conversoes: number };
 const PLAT: Record<string, { nome: string; cor: string; ic: string }> = { meta: { nome: "Meta (Instagram/Facebook)", cor: "#4a6cf7", ic: "Ⓜ" }, google: { nome: "Google Ads", cor: "#e3a008", ic: "Ⓖ" } };
 
@@ -80,8 +81,13 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
 
   // ---------- 360: clientes do marketing no mesmo período ----------
   const no = (v: any, a: string, b: string) => { if (!v) return false; const s = String(v).slice(0, 10); return s >= a && s <= b; };
-  const funil = (a: string, b: string) => {
-    const mk = st.chamados.filter((c: any) => R.domMarketing(c));
+  // todo cliente cadastrado pelas meninas no 360 vem de anúncio. Os cadastros pelo 360 começaram em 15/10/2026:
+  // antes disso os números do 360 não batem com o investimento. Planilhas importadas não contam.
+  const importado = (c: any) => /^Importa/i.test(c.solicitante || "") || !!(c.tratativa && (c.tratativa.agendLojaImportado || c.tratativa.importadoVisita || c.tratativa.visitaImportada));
+  const funil = (a0: string, b: string) => {
+    const a = a0 < INICIO_360 ? INICIO_360 : a0;
+    if (a > b) return { cad: 0, loja: 0, vend: 0, fat: 0 };
+    const mk = st.chamados.filter((c: any) => R.domMarketing(c) && !importado(c) && String(c.criadoEm).slice(0, 10) >= INICIO_360);
     const cad = mk.filter((c: any) => no(c.criadoEm, a, b));
     const loja = mk.filter((c: any) => no(c.dataLoja, a, b));
     const vend = mk.filter((c: any) => vendaContaVolume(c.venda) && pagamentosVenda(c.venda).some((p: any) => no(p.data, a, b)));
@@ -109,7 +115,9 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
   atual.forEach(l => { if (porDia[l.dia]) porDia[l.dia][l.plataforma] += l.gasto; });
   const diasArr = Object.entries(porDia); const mxDia = Math.max(1, ...diasArr.map(([, v]) => v.meta + v.google));
   const semDados = diasArr.filter(([d, v]) => !v.meta && !v.google && d <= (dados.sync?.ate || hoje)).length;
-  const gastoTotal1 = somar(dados.linhas.filter(l => l.dia >= de && l.dia <= ate)).gasto, gastoTotal0 = somar(dados.linhas.filter(l => l.dia >= dePrev && l.dia <= atePrev)).gasto;
+  const cl = (x: string) => (x < INICIO_360 ? INICIO_360 : x);
+  const gastoTotal1 = somar(dados.linhas.filter(l => l.dia >= cl(de) && l.dia <= ate)).gasto, gastoTotal0 = somar(dados.linhas.filter(l => l.dia >= cl(dePrev) && l.dia <= atePrev)).gasto;
+  const cortado = de < INICIO_360;
   const resultado = (c: any) => c.plataforma === "meta" ? (c.conversas ? n0(c.conversas) + " conversas" : "alcance") : n0(c.conversoes) + " conversões";
   const custoRes = (c: any) => { const r = c.plataforma === "meta" ? c.conversas : c.conversoes; return r ? din(c.gasto / r) : "—"; };
 
@@ -126,7 +134,8 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
       <Grande v={pctTxt(div(T1.cliques, T1.impressoes))} l={`CTR · ${n0(T1.cliques)} cliques em ${n0(T1.impressoes)} impressões`} a={div(T1.cliques, T1.impressoes)} b={div(T0.cliques, T0.impressoes)} fmt={(v: number) => pctTxt(v)} />
     </div>
 
-    <h3 className="an-h">No 360: o que os anúncios viraram <small>(clientes do marketing, todas as plataformas)</small></h3>
+    <h3 className="an-h">No 360: o que os anúncios viraram <small>(todo cliente cadastrado pelo marketing vem de anúncio · Meta e Google juntos)</small></h3>
+    {cortado && <div className="an-aviso">📌 Os cadastros pelo 360 começaram em <b>15/10</b>. Este bloco conta de {ate < INICIO_360 ? "15/10 (sem dados no período escolhido)" : <><b>{fmtDate(cl(de))}</b> a <b>{fmtDate(ate)}</b></>} — o investimento usado no custo por cliente é o desse mesmo intervalo.</div>}
     <div className="pb-bigs">
       <Grande v={n0(F1.cad)} l={`Clientes cadastrados · ${din(div(gastoTotal1, F1.cad))} por cliente`} a={F1.cad} b={F0.cad} fmt={n0} />
       <Grande v={n0(F1.loja)} l={`Agendados na loja · ${din(div(gastoTotal1, F1.loja))} por agendamento`} a={F1.loja} b={F0.loja} fmt={n0} />
