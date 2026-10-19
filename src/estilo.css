@@ -1642,3 +1642,8 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ap-ach-bts{display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .ap-achado .ap-veio{background:#1f7a44;color:#fff;border-color:#1f7a44}
 .an-aviso{background:#fff8e1;border:1px solid #f0d27a;border-radius:10px;padding:8px 12px;font-size:12.5px;margin:-4px 0 10px}
+.an-aviso{color:#5a4300}.an-aviso b{color:#3d2e00}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .an-aviso{background:#2e2610;border-color:#8a6a1a;color:#f0d27a}:root:not([data-theme="light"]) .an-aviso b{color:#ffe59a}
+  :root:not([data-theme="light"]) .cv-freela{background:#2c2346;color:#c9b4ff}}
+:root[data-theme="dark"] .an-aviso{background:#2e2610;border-color:#8a6a1a;color:#f0d27a}:root[data-theme="dark"] .an-aviso b{color:#ffe59a}
+:root[data-theme="dark"] .cv-freela{background:#2c2346;color:#c9b4ff}
