@@ -163,16 +163,19 @@ function Cartao({ c, abrir, linha, destaque }: any) {
   const ctt = contatoFeito(c, R.currentUserId);
   // cor do cartão (faixa da esquerda + selo): confirmado = verde · agendado na loja = azul · em contato = amarelo
   const futuraLoja = !!c.dataLoja && String(c.dataLoja).slice(0, 10) >= hojeISO() && !c.venda && !["loja_cancelada", "nao_compareceu", "reprovado", "visita_cancelada", "atendido"].includes(sc);
-  const cor = futuraLoja && vindaConfirmada(c) ? "conf" : futuraLoja ? "loja" : ctt ? "ctt" : "";
+  const resgatar = RESGATAR.includes(sc) && !c.venda;
+  const cor = resgatar ? "canc" : futuraLoja && vindaConfirmada(c) ? "conf" : futuraLoja ? "loja" : ctt ? "ctt" : "";
   return (
     <button className={"mv-card" + (destaque ? " dest" : "") + (cor ? " cor-" + cor : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{linha?.hora || ""}</b><small>{linha?.dia || ""}</small></div>
       <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""} <SeloLitoral c={c} /></div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
-      <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{cor === "conf" ? <span className="mv-cor conf">✅ Confirmado</span> : cor === "loja" ? <span className="mv-cor loja">🏬 Agendado loja</span> : cor === "ctt" ? <span className="mv-cor ctt">📞 Em contato</span> : null}{cor === "loja" && <SeloVinda c={c} />}</div>
+      <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{cor === "canc" ? <span className="mv-cor canc">🔄 Resgatar</span> : cor === "conf" ? <span className="mv-cor conf">✅ Confirmado</span> : cor === "loja" ? <span className="mv-cor loja">🏬 Agendado loja</span> : cor === "ctt" ? <span className="mv-cor ctt">📞 Em contato</span> : null}{cor === "loja" && <SeloVinda c={c} />}</div>
     </button>
   );
 }
 const Vazio = ({ t }: { t: string }) => <div className="mv-vazio">{t}</div>;
+/** clientes que o consultor pode tentar resgatar (continuam na lista dele até irem para outro consultor) */
+const RESGATAR = ["visita_cancelada", "loja_cancelada", "nao_compareceu", "sem_resposta", "reprovado", "ausente_endereco"];
 /** já falou com o cliente? consultor: "Contato realizado"; vendedor: "Já estou em contato" */
 const contatoFeito = (c: any, eu: string) => { const t = c.tratativa || {}; return c.consultorId === eu ? !!t.contatoIniciado : c.atendenteId === eu ? !!t.emContato : false; };
 
@@ -222,7 +225,7 @@ const Busca = ({ q, setQ }: any) => <input className="mv-busca" type="search" pl
 function ConsClientes({ abrir }: any) {
   const { R, st } = useApp() as any;
   const d = consDados(R, st);
-  const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas">("fazer");
+  const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas" | "resgatar" | "lojaag">("fazer");
   const md = medDados(R);
   const [q, setQ] = useState("");
   const [ctF, setCtF] = useState<"" | "com" | "sem">("");
@@ -232,20 +235,23 @@ function ConsClientes({ abrir }: any) {
   const tudo = d.meus.slice().sort((a: any, b: any) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
   const todas = tudo.filter(np);
   const vendidos = todas.filter((c: any) => vendaContaVolume(c.venda)), cancel = todas.filter(temCancelamento);
-  const comPeriodo = ["resultado", "vendidos", "cancel", "todas"].includes(f);
+  const resgatar = tudo.filter((c: any) => RESGATAR.includes(R.statusClienteDe(c)) && !c.venda);
+  const comPeriodo = ["resultado", "vendidos", "cancel"].includes(f);
   const eu = R.currentUserId;
   const nCom = d.aFazer.filter((c: any) => contatoFeito(c, eu)).length;
   const aFazerF = ctF === "com" ? d.aFazer.filter((c: any) => contatoFeito(c, eu)) : ctF === "sem" ? d.aFazer.filter((c: any) => !contatoFeito(c, eu)) : d.aFazer;
-  const lista = busca(q ? tudo : f === "fazer" ? aFazerF : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : todas, q);
+  const lista = busca(q ? tudo : f === "fazer" ? aFazerF : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : f === "resgatar" ? resgatar : f === "lojaag" ? d.naLoja : tudo, q);
   const sub = (c: any) => f === "resultado" && !q ? ((c.tratativa && c.tratativa.parecer) || (c.venda ? "venda " + c.venda.numero : "—"))
     : c.dataLoja ? "loja " + diaCurto(c.dataLoja) + " " + hora(c.dataLoja) + (c.atendenteId ? " · vendedor " + primeiro(R.nomeUser(c.atendenteId)) : " · sem vendedor") : (c.endereco || c.produto);
   return <>
     <Busca q={q} setQ={setQ} />
-    {!q && <div className="mv-seg">{([["fazer", "A fazer", d.aFazer.length], ["loja", "Agendar loja", d.faltaLoja.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Cancelamentos", cancel.length], ["todas", "Todos", d.meus.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
+    {!q && <div className="mv-seg">{([["fazer", "🧭 Visitas a fazer", d.aFazer.length], ["loja", "Agendar loja", d.faltaLoja.length], ["lojaag", "🏬 Na loja", d.naLoja.length], ["resgatar", "🔄 Resgatar", resgatar.length], ["todas", "📋 Todos os meus", d.meus.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Venda cancelada", cancel.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
       <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
     {!q && comPeriodo && <FiltroPeriodo p={per} setP={setPer} />}
     {!q && f === "fazer" && d.aFazer.length > 0 && <div className="mv-seg mv-seg-ctt">{([["", "Todos", d.aFazer.length], ["com", "✅ Contato feito", nCom], ["sem", "⏳ Sem contato", d.aFazer.length - nCom]] as [any, string, number][]).map(([k, l, n]) =>
       <button key={k} className={ctF === k ? "on" : ""} onClick={() => setCtF(k)}>{l}<i>{n}</i></button>)}</div>}
+    {!q && f === "resgatar" && <div className="mv-resg-dica">Clientes que cancelaram, não vieram ou não responderam. Eles continuam com você até a supervisão passar para outro consultor — tente resgatar e atualize o status.</div>}
+    {!q && f === "todas" && <div className="mv-resg-dica" style={{ background: "var(--surface-2)", borderColor: "var(--line)" }}>Todos os clientes que já foram direcionados para você, com o status atual.</div>}
     {f === "medidas" && !q ? <MedLista abrir={abrir} /> : lista.length ? lista.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: sub(c) }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
   </>;
 }
