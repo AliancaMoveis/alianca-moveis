@@ -6,7 +6,7 @@ import { DataCalendario } from "../comp/DataCalendario";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
-import { numsVenda, EM_ATENDIMENTO, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, temCancelamento } from "../lib/regras";
+import { numsVenda, EM_ATENDIMENTO, STATUS, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, temCancelamento } from "../lib/regras";
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import { AlterarSenha, MeusDados } from "../comp/Modal";
@@ -82,7 +82,7 @@ const diaCurto = (v: any) => { const d = dia(v); if (!d) return "sem data"; if (
 export default function AppMovel({ perfil, completa }: { perfil: Perfil; completa: () => void }) {
   const { R, detalheId, modal } = useApp() as any;
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
-    : perfil === "dono" ? [["painel", "Painel", "📊"], ["resumo", "Ver tudo", "📈"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
+    : perfil === "dono" ? [["painel", "Painel", "📊"], ["resumo", "Ver tudo", "📈"], ["status", "Status", "🚦"], ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
     : perfil === "gerente" ? [["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
@@ -116,6 +116,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "consultor" && aba === "hoje" && <ConsHoje abrir={setAberto} ir={setAba} />}
         {perfil === "consultor" && aba === "clientes" && <ConsClientes abrir={setAberto} />}
         {perfil === "dono" && aba === "painel" && <PainelDono />}
+        {aba === "status" && <StatusGeral abrir={setAberto} />}
         {perfil === "dono" && aba === "resumo" && <GestResumo ir={k => abas.some(x => x[0] === k) && setAba(k)} />}
         {perfil === "gerente" && aba === "hoje" && <GerHoje ir={setAba} />}
         {perfil === "gerente" && aba === "chamar" && <GerChamar />}
@@ -596,6 +597,44 @@ function AcoesVendedor({ c }: any) {
 }
 
 // ---------- eu / mais ----------
+// Status gerais (dono): quantos clientes em cada status e chamados do call center por situação — toca e vê a lista
+function StatusGeral({ abrir }: any) {
+  const { R, st, abrirDetalhe } = useApp() as any;
+  const [sel, setSel] = useState<{ t: string; l: any[]; cc?: boolean } | null>(null);
+  const [q, setQ] = useState("");
+  const mes = hojeISO().slice(0, 7);
+  const mkt = st.chamados.filter((c: any) => R.domMarketing(c));
+  const porSt: Record<string, any[]> = {};
+  mkt.forEach((c: any) => { const s = R.statusClienteDe(c); (porSt[s] = porSt[s] || []).push(c); });
+  const FINAIS = ["vendido", "vendido_promissoria", "vendido_entrada", "vendido_revisao", "venda_cancelada", "reprovado", "nao_compareceu", "atendido"];
+  const ordem = Object.keys(STATUS_CLIENTE).filter(k => porSt[k]?.length);
+  const doMes = (l: any[]) => l.filter((c: any) => String(c.dataLoja || c.dataVisita || c.criadoEm).slice(0, 7) === mes);
+  const abertos = ordem.filter(k => !FINAIS.includes(k)), finais = ordem.filter(k => FINAIS.includes(k));
+  const cc = st.chamados.filter((c: any) => R.doCC(c));
+  const ccSt = ["aberta", "tratativa", "respondida", "informar"].map(k => [k, cc.filter((c: any) => c.status === k)] as [string, any[]]);
+  const ccAtras = cc.filter((c: any) => ["atrasado", "critico"].includes(R.prioridade(c)));
+  const Bloco = ({ k, l, n, cor, on }: any) => <button className="mv-st" style={{ borderLeftColor: cor }} onClick={on}><b>{n}</b><span>{l}</span></button>;
+  if (sel) { const lista = busca(sel.l, q); return <>
+    <button className="mv-voltar" onClick={() => { setSel(null); setQ(""); }}>‹ Status</button>
+    <div className="mv-sec">{sel.t} <i>{sel.l.length}</i></div>
+    <Busca q={q} setQ={setQ} />
+    {lista.length ? lista.slice(0, 300).map((c: any) => sel.cc
+      ? <button key={c.id} className="mv-card" onClick={() => abrirDetalhe(c.id)}><div className="mv-card-h"><b>{c.id.replace("ALM-", "")}</b><small>{fmtDate(c.criadoEm).slice(0, 5)}</small></div><div className="mv-card-c"><div className="nm">{c.cliente}</div><div className="sb">{R.tipoNome(c.tipo)} · {R.setorNome(c.setorDestino)}</div></div><span className="sc">{(STATUS as any)[c.status]?.label || c.status}</span></button>
+      : <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataLoja || c.dataVisita), dia: diaCurto(c.dataLoja || c.dataVisita), sub: (c.atendenteId ? "vend. " + primeiro(R.nomeUser(c.atendenteId)) : c.consultorId ? "cons. " + primeiro(R.nomeUser(c.consultorId)) : "") + (c.produto ? " · " + c.produto : "") }} />) : <Vazio t="Nenhum cliente." />}
+  </>; }
+  return <>
+    <div className="mv-sec">🧭 Clientes em andamento (marketing e consultores)</div>
+    <div className="mv-stg">{abertos.map(k => { const cc0 = corCliente(R, porSt[k][0]); return <Bloco key={k} l={STATUS_CLIENTE[k]} n={porSt[k].length} cor={RESGATAR.includes(k) ? "#c0392b" : cc0.cor} on={() => setSel({ t: STATUS_CLIENTE[k], l: porSt[k] })} />; })}</div>
+    <div className="mv-sec">🏁 Resultado no mês</div>
+    <div className="mv-stg">{finais.map(k => { const l = doMes(porSt[k]); return l.length ? <Bloco key={k} l={STATUS_CLIENTE[k]} n={l.length} cor={/vendido/.test(k) ? "#0f8a5f" : "#c0392b"} on={() => setSel({ t: STATUS_CLIENTE[k] + " (mês)", l })} /> : null; })}</div>
+    <div className="mv-sec">☎ Call center e pós-venda</div>
+    <div className="mv-stg">
+      {ccSt.map(([k, l]) => <Bloco key={k} l={(STATUS as any)[k]?.label || k} n={l.length} cor="#1f5ad6" on={() => setSel({ t: (STATUS as any)[k]?.label || k, l, cc: true })} />)}
+      <Bloco l="Atrasados / críticos" n={ccAtras.length} cor="#c0392b" on={() => setSel({ t: "Atrasados / críticos", l: ccAtras, cc: true })} />
+    </div>
+  </>;
+}
+
 function Eu({ perfil, completa, irTime }: any) {
   const { R, st, setModal } = useApp() as any;
   const u = R.me();

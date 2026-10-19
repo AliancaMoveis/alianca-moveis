@@ -1572,3 +1572,6 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .mv-card.cor-real{border-left:6px solid #0e9488;background:linear-gradient(90deg,rgba(14,148,136,.10),var(--surface) 40%)}
 .ac-st{display:inline-block;font-size:10px;font-weight:800;border-radius:999px;padding:1px 7px;margin-bottom:3px}
 .ac.movel .ac-leg{font-size:10.5px;gap:8px}
+.mv-stg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.mv-st{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--primary);border-radius:12px;padding:10px 12px;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+.mv-st b{font-size:22px}.mv-st span{font-size:12.5px;color:var(--ink-soft)}
