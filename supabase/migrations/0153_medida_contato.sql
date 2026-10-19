@@ -1,0 +1,2 @@
+-- 0153 (aplicado via execute_sql): _checklist_da_venda(pedido) e medida_contato(p_id, p_data, p_obs):
+-- registra o contato da medida e a data combinada; recusa data depois de (checklist - 5 dias) ou no passado.

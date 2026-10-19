@@ -198,7 +198,7 @@ function ConsHoje({ abrir, ir }: any) {
       <Num n={d.deHoje.length} l="Visitas hoje" on={() => ir("clientes")} />
       <Num n={d.faltaLoja.length} l="Agendar loja" cor={d.faltaLoja.length ? "var(--warn)" : undefined} on={() => ir("clientes")} />
       <Num n={d.semAnexo.length} l="Sem anexo" cor={d.semAnexo.length ? "#b07a00" : undefined} on={() => ir("clientes")} />
-      <Num n={md.aFazer.length} l="Medidas" cor={md.atrasadas.length ? "var(--danger)" : undefined} on={() => ir("clientes")} />
+      <Num n={md.aFazer.length} l="📐 Medidas" cor={md.atrasadas.length ? "var(--danger)" : "#7c3aed"} on={() => ir("clientes")} />
     </div>
     {prox ? <div className="mv-hero" onClick={() => abrir(prox.id)}>
       <div className="mv-hero-l">{d.atrasadas.includes(prox) ? "Visita atrasada" : "Próxima visita"}</div>
@@ -207,12 +207,12 @@ function ConsHoje({ abrir, ir }: any) {
       <div className="mv-hero-s">{prox.endereco || "sem endereço"}</div>
       <Contato c={prox} />
     </div> : <Vazio t="Nenhuma visita a fazer. 👍" />}
-    {md.aFazer.length > 0 && <><div className="mv-sec">📐 Medidas a fazer (pós-venda · R$ {R.cfg().pagamentoVisita}, sem comissão)</div>
-      {md.aFazer.map((c: any) => <CartaoMedida key={c.id} c={c} abrir={abrir} />)}</>}
     {d.faltaLoja.length > 0 && <><div className="mv-sec">Visita feita — falta agendar a loja</div>
       {d.faltaLoja.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: "Toque para agendar a vinda à loja" }} destaque />)}</>}
     {d.deHoje.filter((c: any) => c !== prox).length > 0 && <><div className="mv-sec">Mais visitas hoje</div>
       {d.deHoje.filter((c: any) => c !== prox).map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: "hoje", sub: c.endereco }} />)}</>}
+    {md.aFazer.length > 0 && <div className="mv-med-sec"><div className="mv-med-t">📐 SOLICITAÇÕES DE MEDIDA <small>pós-venda · não é visita de venda · {R.cfg().pagamentoVisita ? "R$ " + R.cfg().pagamentoVisita + " cada, sem comissão" : ""}</small></div>
+      {md.aFazer.map((c: any) => <CartaoMedida key={c.id} c={c} abrir={abrir} />)}</div>}
   </>;
 }
 // busca por nome, telefone, produto, endereço ou nº do chamado

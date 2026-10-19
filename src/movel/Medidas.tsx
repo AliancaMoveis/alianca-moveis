@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import { A, comprimir } from "../lib/acoes";
+import { DataCalendario } from "../comp/DataCalendario";
 import { ETAPA_MEDIDA, TIPO_REEMBOLSO, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseMoeda } from "../lib/regras";
 
 const hora = (v: any) => { const s = String(v || ""); return s.length > 10 ? s.slice(11, 16) : ""; };
@@ -17,14 +18,31 @@ export function medDados(R: any) {
   return { todas, aFazer, hoje, atrasadas, feitas };
 }
 
+/** data do checklist da mesma venda e o limite da medida (5 dias antes) */
+export function prazoMedida(st: any, c: any): { ck: string; limite: string } | null {
+  const p = String(c.pedido || "").trim(); if (!p) return null;
+  const ds = st.chamados.filter((k: any) => k.tipo === "checklist" && String(k.pedido || "").trim() === p && ["agendado", "realizado"].includes(((k.tratativa || {}).checklist || {}).etapa))
+    .map((k: any) => String(k.tratativa.checklist.agendadoPara || "")).filter(Boolean).sort();
+  if (!ds.length) return null;
+  const d = new Date(ds[0].slice(0, 10) + "T12:00:00"); d.setDate(d.getDate() - 5);
+  return { ck: ds[0], limite: isoLocal(d).slice(0, 10) };
+}
+
 export function CartaoMedida({ c, abrir }: any) {
-  const { R } = useApp() as any;
+  const { R, st } = useApp() as any;
   const etapa = R.etapaMedida(c);
+  const m = (c.tratativa && c.tratativa.medida) || {};
+  const pz = prazoMedida(st, c);
+  const aFazer = etapa === "agendada";
+  const estourou = aFazer && pz && ((c.dataMedida && dia(c.dataMedida) > pz.limite) || hojeISO() > pz.limite);
   return (
-    <button className="mv-card" onClick={() => abrir(c.id)}>
+    <button className={"mv-card med" + (estourou ? " atras" : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{hora(c.dataMedida)}</b><small>{diaCurto(c.dataMedida)}</small></div>
-      <div className="mv-card-c"><div className="nm">📐 {c.cliente}{!(c.anexos || []).length && etapa === "agendada" ? " ⚠️" : ""}</div><div className="sb">{c.endereco || c.produto || "—"}</div></div>
-      <span className={"sc sc-med-" + etapa}>{etapa === "agendada" ? "A medir" : etapa === "realizada" ? "Feita" : etapa === "liberada" ? "Liberada" : "Validar"}</span>
+      <div className="mv-card-c"><div className="nm"><span className="tag-med">📐 MEDIDA</span> {c.cliente}{!(c.anexos || []).length && aFazer ? " ⚠️" : ""}</div>
+        <div className="sb">{pz ? "Checklist " + fmtDate(pz.ck).slice(0, 5) + " · medir até " + fmtDate(pz.limite).slice(0, 5) : (c.endereco || c.produto || "—")}</div>
+        {estourou && <div className="sb" style={{ color: "var(--danger)", fontWeight: 700 }}>⚠️ Fora do prazo (5 dias antes do checklist)</div>}</div>
+      <div className="mv-card-d"><span className={"sc sc-med-" + etapa}>{etapa === "agendada" ? "A medir" : etapa === "realizada" ? "Feita" : etapa === "liberada" ? "Liberada" : "Validar"}</span>
+        {aFazer && <span className={"mv-cor " + (m.contatoEm ? "ctt" : "semctt")}>{m.contatoEm ? (m.dataCombinadaEm ? "📅 Data combinada" : "📞 Em contato") : "⏳ Sem contato"}</span>}</div>
     </button>
   );
 }
@@ -81,7 +99,11 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
       {m.refazer && etapa === "agendada" && <div><span>Refazer</span><b style={{ color: "var(--danger)" }}>{m.refazer}</b></div>}
       {m.realizadaEm && <div><span>Feita em</span><b>{fmtDateTime(m.realizadaEm)}</b></div>}
     </div>
+    {(() => { const pz = prazoMedida(R.state, c); return pz ? <div className={"mv-prazo-med" + (hojeISO() > pz.limite && etapa === "agendada" ? " atras" : "")}>
+      <div><span>Checklist</span><b>{fmtDateTime(pz.ck)}</b></div><div><span>Medir até</span><b>{fmtDate(pz.limite)}</b></div>
+      <small>As medidas precisam estar prontas 5 dias antes do checklist.</small></div> : null; })()}
     <Contato c={c} rota />
+    {(souEu || R.ehSupMedidas()) && etapa === "agendada" && <ContatoMedida c={c} />}
     <Anexar c={c} />
     {souEu && etapa === "agendada" && <div className="mv-bloco">
       <div className="mv-bloco-t">Registrar a medida</div>
@@ -152,4 +174,24 @@ export function Reembolsos({ de, ate }: { de?: string; ate?: string }) {
       <span className="sc" style={{ background: cor(r.status), color: "#fff" }}>{r.status === "pendente" ? "Aguardando" : r.status === "aprovado" ? "Aprovado" : "Recusado"}</span>
     </div>)}
   </>;
+}
+
+// medida chega sem contato: o consultor/medidor liga para o cliente e combina o dia (dentro do prazo do checklist)
+function ContatoMedida({ c }: any) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const m = (c.tratativa && c.tratativa.medida) || {};
+  const pz = prazoMedida(R.state, c);
+  const [dt, setDt] = useState(c.dataMedida ? String(c.dataMedida).slice(0, 16).replace(" ", "T") : "");
+  const salvarData = () => {
+    if (!dt || dt.length < 16) { toast("Escolha o dia e o horário combinados"); return; }
+    if (pz && dt.slice(0, 10) > pz.limite) { toast("A medida precisa ser até " + fmtDate(pz.limite) + " (5 dias antes do checklist)"); return; }
+    ex(() => A.medidaContato(c.id, dt), "Data da medida combinada ✓");
+  };
+  return <div className="mv-bloco">
+    <div className="mv-passo"><span className={m.contatoEm ? "ok" : ""}>1</span><div>Contato com o cliente{m.contatoEm ? <small style={{ display: "block", color: "var(--ink-faint)" }}>{fmtDateTime(m.contatoEm)}</small> : null}</div>
+      <button className={"mv-tg" + (m.contatoEm ? " on" : "")} disabled={!!m.contatoEm} onClick={() => ex(() => A.medidaContato(c.id, null), "Contato registrado")}>{m.contatoEm ? "Feito ✓" : "Marcar"}</button></div>
+    <div className="mv-passo col"><div className="mv-passo-l"><span className={m.dataCombinadaEm ? "ok" : ""}>2</span><div>Dia combinado com o cliente{pz ? <small style={{ display: "block", color: "var(--ink-faint)" }}>até {fmtDate(pz.limite)}</small> : null}</div></div>
+      <DataCalendario value={dt} onChange={setDt} min={hojeISO() + "T00:00"} />
+      <button className="btn sm" onClick={salvarData}>{m.dataCombinadaEm ? "Alterar a data combinada" : "Salvar a data combinada"}</button></div>
+  </div>;
 }

@@ -590,10 +590,17 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const u = me(); const L: string[] = [];
     L.push(`Olá, ${primeiroNome(c.cliente)}! Sou o(a) ${nomeNatural(u ? u.nome : "")}, consultor(a) externo(a) da Aliança Móveis.`); L.push("");
     const dv = c.dataVisita ? dh(c.dataVisita) : null;
-    if (dv && c.endereco) L.push(`Estou confirmando que no dia ${dv}, estarei no endereço ${c.endereco}, conforme combinado${c.produto ? ", para tratarmos do projeto de " + c.produto : ""}.`);
-    else if (dv) L.push(`Estou confirmando nossa visita no dia ${dv}${c.produto ? " para tratarmos do projeto de " + c.produto : ""}.`);
-    else L.push(`Estou entrando em contato sobre a visita${c.produto ? " para o projeto de " + c.produto : ""}.`);
-    L.push(""); L.push("Da minha parte está tudo certo — estarei aí no dia e horário marcado!");
+    const proj = c.produto ? ", para tratarmos do projeto de " + c.produto : "";
+    L.push(dv ? `Estou confirmando nossa visita no dia ${dv}${proj}.` : `Estou entrando em contato sobre a visita${proj}.`); L.push("");
+    // confirmar o endereço: a mesma rua existe em Curitiba, Araucária, Colombo… e o consultor já foi a lugar errado
+    if (c.endereco) {
+      L.push("📍 O endereço que tenho aqui é:"); L.push(`*${c.endereco}*`); L.push("");
+      L.push("Pode me confirmar se está certo, com o *bairro* e a *cidade*? Algumas ruas têm o mesmo nome em Curitiba, Araucária, Colombo e outras cidades.");
+    } else {
+      L.push("📍 Pode me passar o endereço completo da visita, com *rua, número, bairro e cidade*?");
+    }
+    L.push("Se tiver complemento (apto, bloco, casa dos fundos) ou um ponto de referência, me avise também."); L.push("");
+    L.push("Da minha parte está tudo certo — estarei aí no dia e horário marcado!");
     return L.join("\n");
   }
   function msgWhatsProjetista(c: Chamado) {

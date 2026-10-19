@@ -52,6 +52,7 @@ export function CancelouLoja({ c, movel }: { c: any; movel?: boolean }) {
   const consultorDoCliente = c.consultorId === eu && ["suporte_consultores", "atendente_cliente"].includes(c.setorDestino);
   const escolher = (k: string) => {
     if (k === "loja_cancelada") { setAbre(true); return; }
+    if (k === "registrar_visita") { if (confirm("Confirmar: a visita ao cliente " + c.cliente + " foi realizada?")) ex(() => A.visitaRealizada(c.id, ""), "Visita realizada registrada ✓"); return; }
     if (!k) return;
     const txt = k === "visita_realizada" ? "Mudar para “Visita realizada”? O agendamento na loja de " + fmtDateTime(c.dataLoja) + " é desfeito e o cliente volta para você." : "Voltar o cliente para a etapa da visita? O agendamento na loja é desfeito.";
     if (confirm(txt)) ex(() => A.alterarStatusCliente(c.id, k), "Status atualizado");
@@ -59,7 +60,8 @@ export function CancelouLoja({ c, movel }: { c: any; movel?: boolean }) {
   return <div className={movel ? "mv-bloco" : "resp-box"} style={abre ? undefined : { padding: movel ? undefined : "10px 14px" }}>
     {!abre ? <select className={movel ? "mv-mais" : ""} value="" onChange={e => escolher(e.target.value)}>
       <option value="">Mudar status do cliente ▾</option>
-      {consultorDoCliente && <option value="visita_realizada">✓ Visita realizada (desfazer agendamento da loja)</option>}
+      {c.consultorId === eu && !(c.tratativa || {}).realizada && <option value="registrar_visita">✅ Registrar visita realizada</option>}
+      {consultorDoCliente && <option value="visita_realizada">↩ Voltar para “Visita realizada” (desfazer agendamento da loja)</option>}
       {consultorDoCliente && <option value="direcionado_consultor">↩ Voltar para a visita (direcionado ao consultor)</option>}
       <option value="loja_cancelada">❌ Cancelou visita na loja</option>
     </select> : <>
@@ -116,18 +118,11 @@ export function VisitaRealizada({ c, movel }: { c: any; movel?: boolean }) {
   if (!R.domMarketing(c) || !c.consultorId) return null;
   const t = c.tratativa || {}; const eu = R.currentUserId;
   const gere = R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
-  if (t.realizada) return <div className={"vr-card ok" + (movel ? " movel" : "")}>
+  if (t.realizada) return <div className={"vr-card ok mini" + (movel ? " movel" : "")}>
     <div className="vr-ic">✅</div>
     <div className="vr-tx"><b>VISITA REALIZADA</b><small>{t.visitaRealizadaEm ? fmtDateTime(t.visitaRealizadaEm) + (t.visitaRealizadaPor ? " · registrada por " + t.visitaRealizadaPor : "") : "registrada"}{t.visitaRealizadaObs ? " · " + t.visitaRealizadaObs : ""}</small></div>
     {gere && <button type="button" className="vr-desf" onClick={() => { const m = prompt("Motivo para desfazer a visita realizada de " + c.cliente + ":"); if (m && m.trim().length >= 3 && confirm("Desfazer a visita realizada? Ela deixa de contar para o pagamento do consultor.")) ex(() => A.visitaRealizadaDesfazer(c.id, m.trim()), "Visita realizada desfeita"); else if (m !== null) toast("Escreva o motivo"); }}>Desfazer</button>}
   </div>;
-  if (!(c.consultorId === eu || gere)) return <div className={"vr-card pend" + (movel ? " movel" : "")}><div className="vr-ic">⏳</div><div className="vr-tx"><b>Visita ainda não realizada</b><small>consultor {R.nomeUser(c.consultorId)}</small></div></div>;
-  return <div className={"vr-card pend" + (movel ? " movel" : "")}>
-    {!abre ? <button type="button" className="vr-bt" onClick={() => setAbre(true)}>✅ Registrar VISITA REALIZADA</button> : <div className="vr-form">
-      <b>Confirmar: a visita ao cliente {c.cliente} foi realizada?</b>
-      <input value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação (opcional)" />
-      <div style={{ display: "flex", gap: 8 }}><button type="button" className="vr-bt" onClick={() => ex(() => A.visitaRealizada(c.id, obs.trim()), "Visita realizada registrada ✓").then((ok: boolean) => ok && setAbre(false))}>Sim, visita realizada</button><button type="button" className="vr-cancel" onClick={() => setAbre(false)}>Cancelar</button></div>
-      <small>Fica no histórico com data, hora e quem registrou. É o que conta para o pagamento da visita.</small>
-    </div>}
-  </div>;
+  // não realizada: sem botão grande — o consultor marca no passo "2 · Visita realizada" ou no menu "Mudar status do cliente"
+  return null;
 }

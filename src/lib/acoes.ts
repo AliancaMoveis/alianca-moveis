@@ -36,6 +36,7 @@ export const A = {
   iniciarAtendimento: (id: string) => rpc("iniciar_atendimento", { p_id: id }),
   medidaDirecionar: (id: string, medidor: string, data: string, endereco: string) => rpc("medida_direcionar", { p_id: id, p_medidor: medidor, p_data: nz(data), p_endereco: endereco || "" }),
   medidaRealizada: (id: string, medidas: string, obs: string) => rpc("medida_realizada", { p_id: id, p_medidas: medidas || "", p_obs: obs || "" }),
+  medidaContato: (id: string, data: string | null, obs = "") => rpc("medida_contato", { p_id: id, p_data: data ? (data.length === 10 ? data + "T09:00" : data) : null, p_obs: obs }),
   medidaRefazer: (id: string, motivo: string) => rpc("medida_refazer", { p_id: id, p_motivo: motivo }),
   medidaEmObra: (id: string, previsao: string, obs: string) => rpc("medida_em_obra", { p_id: id, p_previsao: previsao || null, p_obs: obs || "" }),
   medidaPendente: (id: string, obs: string) => rpc("medida_pendente", { p_id: id, p_obs: obs || "" }),
