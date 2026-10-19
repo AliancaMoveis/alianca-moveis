@@ -30,6 +30,7 @@ import { PreviaEnvio, juntarPendentes, separarPendentes, type Pendente } from ".
 import Nova from "../telas/Nova";
 import PosVenda from "../telas/PosVenda";
 import AgendaConsultores from "../telas/AgendaConsultores";
+import { RESGATAR, corCliente } from "../lib/corCliente";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
@@ -161,21 +162,19 @@ function Cartao({ c, abrir, linha, destaque }: any) {
   const { R } = useApp() as any;
   const sc = R.statusClienteDe(c);
   const ctt = contatoFeito(c, R.currentUserId);
-  // cor do cartão (faixa da esquerda + selo): confirmado = verde · agendado na loja = azul · em contato = amarelo
-  const futuraLoja = !!c.dataLoja && String(c.dataLoja).slice(0, 10) >= hojeISO() && !c.venda && !["loja_cancelada", "nao_compareceu", "reprovado", "visita_cancelada", "atendido"].includes(sc);
-  const resgatar = RESGATAR.includes(sc) && !c.venda;
-  const cor = resgatar ? "canc" : futuraLoja && vindaConfirmada(c) ? "conf" : futuraLoja ? "loja" : ctt ? "ctt" : "";
+  // cor do cartão = mesma da agenda (status real do cliente)
+  const cc = corCliente(R, c, R.currentUserId); const cor = cc.k === "dir" ? "" : cc.k;
   return (
     <button className={"mv-card" + (destaque ? " dest" : "") + (cor ? " cor-" + cor : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{linha?.hora || ""}</b><small>{linha?.dia || ""}</small></div>
       <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""} <SeloLitoral c={c} /></div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
-      <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{cor === "canc" ? <span className="mv-cor canc">🔄 Resgatar</span> : cor === "conf" ? <span className="mv-cor conf">✅ Confirmado</span> : cor === "loja" ? <span className="mv-cor loja">🏬 Agendado loja</span> : cor === "ctt" ? <span className="mv-cor ctt">📞 Em contato</span> : null}{cor === "loja" && <SeloVinda c={c} />}</div>
+      <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{cor ? <span className="mv-cor" style={{ background: cc.cor, color: cor === "ctt" ? "#3a2a00" : "#fff" }}>{cc.txt}</span> : null}{cor === "loja" && <SeloVinda c={c} />}</div>
     </button>
   );
 }
 const Vazio = ({ t }: { t: string }) => <div className="mv-vazio">{t}</div>;
 /** clientes que o consultor pode tentar resgatar (continuam na lista dele até irem para outro consultor) */
-const RESGATAR = ["visita_cancelada", "loja_cancelada", "nao_compareceu", "sem_resposta", "reprovado", "ausente_endereco"];
+
 /** já falou com o cliente? consultor: "Contato realizado"; vendedor: "Já estou em contato" */
 const contatoFeito = (c: any, eu: string) => { const t = c.tratativa || {}; return c.consultorId === eu ? !!t.contatoIniciado : c.atendenteId === eu ? !!t.emContato : false; };
 

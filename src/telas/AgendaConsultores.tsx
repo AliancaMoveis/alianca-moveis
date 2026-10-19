@@ -7,6 +7,7 @@ import { A } from "../lib/acoes";
 import { STATUS_CLIENTE } from "../lib/regras";
 import { DataCalendario } from "../comp/DataCalendario";
 import { textoConflito } from "../lib/agendaConsultor";
+import { CORES_CLI, corCliente } from "../lib/corCliente";
 
 const DS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -74,8 +75,8 @@ export default function AgendaConsultores({ movel }: { movel?: boolean }) {
     <h4>{DS[(dSel.getDay() + 6) % 7]}, {fmt(sel)}{alvo ? " · " + primeiro(R.nomeUser(alvo)) : ""} — {listaSel.length} visita{listaSel.length === 1 ? "" : "s"}</h4>
     {blqSel.map((b: any) => <div key={b.id} className="ac-blq-i"><b>{icone(b.motivo)} {b.motivo}{quem === "todos" ? " · " + primeiro(R.nomeUser(b.usuarioId)) : ""}</b><small>{perTxt(b)}{b.de !== b.ate ? " · " + fmt(b.de) + " a " + fmt(b.ate) : ""}{b.obs ? " · " + b.obs : ""}</small>
       {podeFechar(b.usuarioId) && <button type="button" onClick={() => remover(b)}>Reabrir</button>}</div>)}
-    {listaSel.map((c: any) => <button type="button" key={c.id} className="ac-vis-i" style={{ borderLeftColor: cor(c.consultorId) }} onClick={() => abrirDetalhe(c.id)}>
-      <b>{String(c.dataVisita).slice(11, 16)} · {c.cliente}</b><small>{quem === "todos" ? primeiro(R.nomeUser(c.consultorId)) + " · " : ""}{c.endereco || "sem endereço"} · {STATUS_CLIENTE[R.statusClienteDe(c)] || ""}</small></button>)}
+    {listaSel.map((c: any) => { const k = corCliente(R, c); return <button type="button" key={c.id} className="ac-vis-i" style={{ borderLeftColor: k.cor, background: k.fundo }} onClick={() => abrirDetalhe(c.id)}>
+      <span className="ac-st" style={{ background: k.cor, color: k.k === "ctt" ? "#3a2a00" : "#fff" }}>{k.txt}</span><b>{String(c.dataVisita).slice(11, 16)} · {c.cliente}</b><small>{quem === "todos" ? primeiro(R.nomeUser(c.consultorId)) + " · " : ""}{c.endereco || "sem endereço"} · {STATUS_CLIENTE[R.statusClienteDe(c)] || ""}</small></button>; })}
     {evSel.map((b: any) => <div key={b.id} className="ac-ev-i"><b>📌 {b.motivo}{quem === "todos" ? " · " + primeiro(R.nomeUser(b.usuarioId)) : ""}</b><small>{perTxt(b)}{b.obs ? " · " + b.obs : ""}</small>
       {podeFechar(b.usuarioId) && <button type="button" onClick={() => { if (confirm("Apagar o evento “" + b.motivo + "”?")) ex(() => A.consBloqueioRemover(b.id), "Evento apagado"); }}>Apagar</button>}</div>)}
     {!listaSel.length && !blqSel.length && !evSel.length && <div className="hint">Nenhuma visita neste dia.</div>}
@@ -115,7 +116,7 @@ export default function AgendaConsultores({ movel }: { movel?: boolean }) {
         <button type="button" className="ac-nav hoje" onClick={() => { const d = new Date(); setMes(new Date(d.getFullYear(), d.getMonth(), 1)); setSel(hoje); }}>Hoje</button>
         {geral && <select className="ac-quem" value={quem} onChange={e => setQuem(e.target.value)}><option value="todos">👥 Todos os consultores</option>{consultores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}
       </div>
-      {quem === "todos" && !movel && <div className="ac-leg">{consultores.map((u: any) => <span key={u.id}><i style={{ background: cor(u.id) }} />{primeiro(u.nome)}</span>)}</div>}
+      <div className="ac-leg">{Object.values(CORES_CLI).map(x => <span key={x.txt}><i style={{ background: x.cor }} />{x.txt}</span>)}<span><i style={{ background: "#5b6475" }} />🔒 Data fechada</span><span><i style={{ background: "#0e7490" }} />📌 Evento</span></div>
       <div className="ac-wrap">
         <div className="ac-cal">
           <div className="ac-g">{DS.map(d => <div key={d} className="ac-ds">{movel ? d[0].toUpperCase() : d}</div>)}
@@ -123,10 +124,10 @@ export default function AgendaConsultores({ movel }: { movel?: boolean }) {
               const vs = visDia(d), bs = blqDia(d); const diaTodo = bs.some((b: any) => b.periodo === "dia") && (!!alvo || bs.length >= consultores.length);
               return <button type="button" key={i} className={"ac-c" + (d < hoje ? " passado" : "") + (d === hoje ? " hoje" : "") + (d === sel ? " sel" : "") + (bs.length ? (diaTodo ? " bloq" : " meio") : "")} onClick={() => setSel(d)}>
                 <span className="n">{Number(d.slice(8))}</span>
-                {movel ? <span className="ac-dots">{bs.length ? <em>{icone(bs[0].motivo)}</em> : null}{evDia(d).length ? <em>📌</em> : null}{vs.slice(0, 4).map((c: any) => <i key={c.id} style={{ background: cor(c.consultorId) }} />)}{vs.length > 4 ? <small>+{vs.length - 4}</small> : null}</span> : <>
+                {movel ? <span className="ac-dots">{bs.length ? <em>{icone(bs[0].motivo)}</em> : null}{evDia(d).length ? <em>📌</em> : null}{vs.slice(0, 4).map((c: any) => <i key={c.id} style={{ background: corCliente(R, c).cor }} />)}{vs.length > 4 ? <small>+{vs.length - 4}</small> : null}</span> : <>
                   {bs.slice(0, 2).map((b: any) => <span key={b.id} className="ac-blq">{icone(b.motivo)} {quem === "todos" ? primeiro(R.nomeUser(b.usuarioId)) : b.motivo}<small>{perTxt(b)}</small></span>)}
                   {evDia(d).slice(0, 2).map((b: any) => <span key={"e" + b.id} className="ac-ev">📌 {b.periodo === "horario" ? b.ini + " " : ""}{b.motivo}</span>)}
-                  {vs.slice(0, 3).map((c: any) => <span key={c.id} className="ac-vis" style={quem === "todos" ? { background: cor(c.consultorId) + "22", color: cor(c.consultorId), borderLeft: "3px solid " + cor(c.consultorId) } : undefined}>{String(c.dataVisita).slice(11, 16)} {quem === "todos" ? primeiro(R.nomeUser(c.consultorId)) : primeiro(c.cliente)}</span>)}
+                  {vs.slice(0, 3).map((c: any) => { const k = corCliente(R, c); return <span key={c.id} className="ac-vis" title={k.txt} style={{ background: k.fundo, color: k.cor, borderLeft: "3px solid " + k.cor }}>{String(c.dataVisita).slice(11, 16)} {quem === "todos" ? primeiro(R.nomeUser(c.consultorId)) + "·" + primeiro(c.cliente) : primeiro(c.cliente)}</span>; })}
                   {vs.length > 3 && <span className="ac-mais">+{vs.length - 3} visita(s)</span>}</>}
               </button>; })}
           </div>

@@ -1569,3 +1569,6 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ac-ev{font-size:11px;background:#cffafe;color:#0e7490;border-radius:5px;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 .ac-ev-i{border-radius:9px;padding:7px 10px;background:#0e7490;color:#fff;margin-bottom:6px;display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center}
 .ac-ev-i small{grid-column:1;opacity:.85;font-size:11.5px}.ac-ev-i button{grid-row:1/3;grid-column:2;border:0;border-radius:7px;padding:5px 9px;background:rgba(255,255,255,.2);color:#fff;cursor:pointer;font:600 12px inherit}
+.mv-card.cor-real{border-left:6px solid #0e9488;background:linear-gradient(90deg,rgba(14,148,136,.10),var(--surface) 40%)}
+.ac-st{display:inline-block;font-size:10px;font-weight:800;border-radius:999px;padding:1px 7px;margin-bottom:3px}
+.ac.movel .ac-leg{font-size:10.5px;gap:8px}
