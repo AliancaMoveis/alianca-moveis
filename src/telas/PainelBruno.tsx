@@ -7,6 +7,7 @@ import { useApp } from "../estado";
 import { fmtDate, fmtMoeda, isoLocal, parseData, vendaContaVolume } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
 import PainelGestao from "./PainelGestao";
+import Anuncios from "./Anuncios";
 import { fmtTempo, mediaHoras } from "../lib/atendimento";
 import { ck, etapaCk, grupoCk, reservaVencida, querEnc, aConfirmar, cfgAgenda } from "./Checklist";
 import { pagamentosVenda, parseMoeda } from "../lib/regras";
@@ -16,18 +17,19 @@ const FIM_TXT = (t: string) => t.startsWith("Status → Concluída") || t.starts
 const concluidoEm = (c: any) => { const h = (c.historico || []).filter((x: any) => FIM_TXT(String(x.texto))); return h.length ? h[h.length - 1].quando : null; };
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : null);
 
-function Comp({ a, b, inverso, suf = "" }: { a: number | null; b: number | null; inverso?: boolean; suf?: string }) {
+export function Comp({ a, b, inverso, suf = "" }: { a: number | null; b: number | null; inverso?: boolean; suf?: string }) {
   if (a == null || b == null || !b) return <span className="pb-comp neutro">sem base anterior</span>;
   const d = Math.round(((a - b) / b) * 100);
   const bom = inverso ? d <= 0 : d >= 0;
   return <span className={"pb-comp " + (d === 0 ? "neutro" : bom ? "bom" : "ruim")}>{d > 0 ? "▲" : d < 0 ? "▼" : "="} {Math.abs(d)}% <small>(antes {b}{suf})</small></span>;
 }
-const Big = ({ n, l, a, b, inverso, suf, cor }: any) => <div className="pb-big"><b style={cor ? { color: cor } : undefined}>{n}</b><span>{l}</span>{a !== undefined && <Comp a={a} b={b} inverso={inverso} suf={suf} />}</div>;
+export const Big = ({ n, l, a, b, inverso, suf, cor }: any) => <div className="pb-big"><b style={cor ? { color: cor } : undefined}>{n}</b><span>{l}</span>{a !== undefined && <Comp a={a} b={b} inverso={inverso} suf={suf} />}</div>;
 
 export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const { R, st, irPara, abrirDetalhe } = useApp() as any;
-  const [aba, setAba] = useState<"cc" | "ag" | "cons" | "ck" | "vendas" | "mont">("cc");
+  const [aba, setAba] = useState<"cc" | "ag" | "cons" | "ck" | "vendas" | "mont" | "anun">("cc");
   const veMont = R.mySetores().includes("gestao");
+  const veAnun = R.mySetores().some((x: string) => x === "gestao" || x === "proprietario");
   // período anterior com o mesmo número de dias
   const d0 = new Date(de + "T00:00:00"), d1 = new Date(ate + "T23:59:59");
   const dias = Math.max(1, Math.round((+d1 - +d0) / 86400000));
@@ -135,7 +137,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
       <div className="pg-grid">
         {G.cartoes.map(x => <Geral key={x.k} {...x} />)}
       </div>
-      <div className="subnav pb-abas"><Tab k="cc" l="☎ Call center" n={atrasados.length} /><Tab k="ag" l="◎ Agendamentos" /><Tab k="cons" l="🧭 Externos" n={cons.filter((x: any) => x.alerta).length} /><Tab k="ck" l="✓ Checklist" n={ckVenc.length + ckEnc.length} /><Tab k="vendas" l="💰 Vendas" n={vendasAConf.length} />{veMont && <Tab k="mont" l="🔧 Montagem" />}</div>
+      <div className="subnav pb-abas"><Tab k="cc" l="☎ Call center" n={atrasados.length} /><Tab k="ag" l="◎ Agendamentos" /><Tab k="cons" l="🧭 Externos" n={cons.filter((x: any) => x.alerta).length} /><Tab k="ck" l="✓ Checklist" n={ckVenc.length + ckEnc.length} /><Tab k="vendas" l="💰 Vendas" n={vendasAConf.length} />{veMont && <Tab k="mont" l="🔧 Montagem" />}{veAnun && <Tab k="anun" l="📣 Anúncios" />}</div>
       <div className="pb-per">Comparando {fmtDate(de)}–{fmtDate(ate)} com {fmtDate(dePrev)}–{fmtDate(atePrev)}</div>
 
       {aba === "cc" && <>
@@ -232,6 +234,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
       </>}
 
       {aba === "vendas" && <PainelGestao de={de} ate={ate} />}
+      {aba === "anun" && veAnun && <Anuncios de={de.slice(0, 10)} ate={ate.slice(0, 10)} />}
       {aba === "mont" && veMont && <PainelMontagem de={de.slice(0, 10)} ate={ate.slice(0, 10)} dePrev={String(dePrev).slice(0, 10)} atePrev={String(atePrev).slice(0, 10)} />}
     </div>
   );

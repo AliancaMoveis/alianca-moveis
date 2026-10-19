@@ -1,0 +1,4 @@
+-- 0155 Anúncios (Reportei → 360). Aplicada via execute_sql.
+-- anuncios_dia(plataforma meta|google, dia, campanha, tipo, gasto, impressoes, alcance, cliques, conversas, conversoes, atualizado_em) PK(plataforma,dia,campanha)
+-- anuncios_sync(id=1, ultimo, ate, obs)
+-- _ve_anuncios(): setor gestao ou proprietario. RLS só leitura; gravação só pela tarefa agendada (postgres via MCP).
