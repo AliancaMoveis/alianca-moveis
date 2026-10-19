@@ -52,13 +52,44 @@ export const fmtValor = (n: number) => n.toLocaleString("pt-BR", { minimumFracti
 
 // cache de URLs assinadas das fotos (evita baixar de novo a cada atualização)
 const cacheUrl = new Map<string, { url: string; exp: number }>();
+// Assina em lotes pequenos: um pedido com mais de mil fotos estourava o tempo do banco (permissão conferida foto a foto)
+// e voltava sem nenhuma URL — as imagens apareciam quebradas e o .zip saía vazio.
+async function assinarLote(lote: string[], agora: number) {
+  for (let t = 0; t < 2; t++) {
+    const { data, error } = await sb.storage.from("anexos").createSignedUrls(lote, 3600);
+    if (!error) { (data || []).forEach(d => { if (d.signedUrl && d.path) cacheUrl.set(d.path, { url: d.signedUrl, exp: agora + 50 * 60 * 1000 }); }); return; }
+    await new Promise(r => setTimeout(r, 600));
+  }
+}
 async function assinar(paths: string[]) {
   const agora = Date.now();
-  const faltam = paths.filter(p => { const c = cacheUrl.get(p); return !c || c.exp < agora; });
-  if (faltam.length) {
-    const { data } = await sb.storage.from("anexos").createSignedUrls(faltam, 3600);
-    (data || []).forEach(d => { if (d.signedUrl && d.path) cacheUrl.set(d.path, { url: d.signedUrl, exp: agora + 50 * 60 * 1000 }); });
-  }
+  const faltam = Array.from(new Set(paths.filter(p => { const c = cacheUrl.get(p); return !c || c.exp < agora; })));
+  const lotes: string[][] = []; for (let i = 0; i < faltam.length; i += 100) lotes.push(faltam.slice(i, i + 100));
+  for (let i = 0; i < lotes.length; i += 4) await Promise.all(lotes.slice(i, i + 4).map(l => assinarLote(l, agora).catch(() => null)));
+  // o que ainda ficou sem URL: uma a uma
+  const resto = faltam.filter(p => !cacheUrl.has(p)).slice(0, 200);
+  for (let i = 0; i < resto.length; i += 6) await Promise.all(resto.slice(i, i + 6).map(p => urlAnexo(p).catch(() => "")));
+}
+/** foto quebrada na tela (URL vencida depois de horas com o 360 aberto): pede uma URL nova e recarrega a imagem */
+export function consertarFotosQuebradas() {
+  const tentou = new WeakSet<HTMLImageElement>();
+  document.addEventListener("error", (ev) => {
+    const el = ev.target as HTMLImageElement;
+    if (!el || el.tagName !== "IMG" || tentou.has(el)) return;
+    const m = (el.currentSrc || el.src || "").match(/\/object\/sign\/anexos\/([^?]+)/);
+    if (!m) return;
+    tentou.add(el);
+    const path = decodeURIComponent(m[1]); cacheUrl.delete(path);
+    urlAnexo(path).then(u => { if (u) el.src = u; }).catch(() => null);
+  }, true);
+}
+/** URL de um anexo na hora (quando a lista veio sem URL ou ela venceu) */
+export async function urlAnexo(path: string): Promise<string> {
+  if (!path) return "";
+  const c = cacheUrl.get(path); if (c && c.exp > Date.now()) return c.url;
+  const { data } = await sb.storage.from("anexos").createSignedUrl(path, 3600);
+  if (data?.signedUrl) cacheUrl.set(path, { url: data.signedUrl, exp: Date.now() + 50 * 60 * 1000 });
+  return data?.signedUrl || "";
 }
 
 // logo após o login o token pode chegar alguns segundos "no futuro" para o banco (relógios); tenta de novo

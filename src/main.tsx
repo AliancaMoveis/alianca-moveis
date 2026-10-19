@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import "./estilo.css";
 import App from "./App";
 
+import { consertarFotosQuebradas } from "./lib/dados";
+consertarFotosQuebradas();
 ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
 
 // aplicativo instalável (PWA)

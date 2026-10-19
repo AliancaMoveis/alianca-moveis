@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
+import { urlAnexo } from "../lib/dados";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 
-async function blobDe(url: string) { const r = await fetch(url); return await r.blob(); }
+/** baixa o arquivo do anexo; se a URL estiver vazia ou vencida, pede uma nova (antes saía um arquivo vazio no .zip) */
+async function blobDe(a: any): Promise<Blob> {
+  const tentar = async (u: string) => { if (!u) return null; const r = await fetch(u); if (!r.ok) return null; const b = await r.blob(); return b.size && !/text\/html/i.test(b.type) ? b : null; };
+  let b = await tentar(a.url).catch(() => null);
+  if (!b && a.path) b = await tentar(await urlAnexo(a.path)).catch(() => null);
+  if (!b) throw new Error("falhou " + (a.nome || ""));
+  return b;
+}
 function salvarBlob(blob: Blob, nome: string) {
   const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nome; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -27,7 +35,7 @@ export function Overlays({ lb, setLb, gal, setGal }: any) {
   useEffect(() => { if (gal && !imgs.length) setGal(null); }, [gal, imgs.length]);
 
   async function baixarUm(a: any) {
-    try { salvarBlob(await blobDe(a.url), a.nome || "anexo.jpg"); } catch { toast("Não foi possível baixar este anexo"); }
+    try { salvarBlob(await blobDe(a), a.nome || "anexo.jpg"); } catch { toast("Não foi possível baixar este anexo"); }
   }
   async function baixarZip() {
     try {
@@ -35,15 +43,15 @@ export function Overlays({ lb, setLb, gal, setGal }: any) {
       const zip = new JSZip();
       const nomePasta = (c.cliente || "cliente").replace(/[^\w\- ]+/g, "").trim() || "cliente";
       const pasta = zip.folder(nomePasta)!;
-      const usados = new Set<string>();
+      const usados = new Set<string>(); const falhas: string[] = [];
       for (const a of imgs) {
         let nome = a.nome || ("anexo-" + Math.random().toString(36).slice(2) + ".jpg");
         while (usados.has(nome)) nome = "1-" + nome; usados.add(nome);
-        pasta.file(nome, await blobDe(a.url));
+        try { pasta.file(nome, await blobDe(a)); } catch { falhas.push(nome); }
       }
       const conteudo = await zip.generateAsync({ type: "blob" });
       salvarBlob(conteudo, (c.cliente || "cliente").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".zip");
-      toast("Download preparado");
+      toast(falhas.length ? "Download preparado — " + falhas.length + " arquivo(s) não baixaram: " + falhas.join(", ") : "Download preparado");
     } catch { toast("Não foi possível gerar o .zip"); } finally { setZipando(false); }
   }
 
