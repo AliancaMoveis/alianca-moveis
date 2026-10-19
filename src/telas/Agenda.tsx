@@ -64,7 +64,7 @@ export default function Agenda() {
               </div>
             </div>); })}
       </div>}
-      <div className="ag-legenda"><span><span className="origem marketing">Marketing</span> agendado pelo marketing</span><span><span className="origem externo">Externo</span> veio do consultor externo</span><span><span className="badge b-semanexo">⚠️ Sem anexo</span> sem planta/fotos</span><span><b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b> aguardando definir</span></div>
+      <div className="ag-legenda"><span><span className="origem marketing">Marketing</span> agendado pelo marketing</span><span><span className="origem externo">Externo</span> veio do consultor externo</span><span><span className="origem porta">🚪 Porta</span> entrou direto na loja</span><span><span className="badge b-semanexo">⚠️ Sem anexo</span> sem planta/fotos</span><span><b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b> aguardando definir</span></div>
       <Dia iso={dia} resumida={resumida} escopo={escopo} orig={orig} principal />
       <Dia iso={amanha} resumida={resumida} escopo={escopo} orig={orig} />
     </section>
@@ -91,18 +91,19 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
       if (meu) return { ...meu, _pedidoVendedor: x.pedido_vendedor || (meu.tratativa && meu.tratativa.pedidoAtend) || "" };
       return { id: x.id, cliente: x.cliente, telefone: x.telefone, produto: x.produto, dataLoja: String(x.data_loja || "").slice(0, 16),
         atendenteId: x.atendente_id || "", consultorId: x.consultor_id || "", solicitanteId: x.solicitante_id || "", statusCliente: x.status_cliente || "",
-        tipo: x.direto ? "__direto" : "", _semAnexo: !!x.sem_anexo, _pedidoVendedor: x.pedido_vendedor || "",
+        tipo: x.porta ? "porta" : x.direto ? "__direto" : "", _semAnexo: !!x.sem_anexo, _pedidoVendedor: x.pedido_vendedor || "",
+        tratativa: x.em_atendimento ? { emAtendimento: x.em_atendimento } : {},
         transferencia: x.transf_pendente ? { status: "pendente" } : null, venda: x.venda_numero ? { numero: x.venda_numero } : null, _alheio: true };
     });
   } else {
-    doDia = st.chamados.filter((c: any) => R.domMarketing(c) && c.dataLoja && R.podeVer(c) && String(c.dataLoja).slice(0, 10) === iso)
+    doDia = st.chamados.filter((c: any) => (R.domMarketing(c) || R.ehPorta(c)) && c.dataLoja && R.podeVer(c) && String(c.dataLoja).slice(0, 10) === iso)
       .map((c: any) => ({ ...c, _pedidoVendedor: (c.tratativa && c.tratativa.pedidoAtend) || "" }));
   }
   const origem = (c: any) => (c.tipo === "porta" || (c.tratativa && c.tratativa.porta)) ? "porta" : (c.tipo === "__direto" || R.ehDireto(c)) ? "marketing" : "externo";
   const arr = doDia.filter((c: any) => (escopo === "loja" || meuCliente(c)) && (!orig || origem(c) === orig)).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
   if (!principal && !arr.length) return null;
-  const semAnexo = (c: any) => c._alheio ? c._semAnexo && !c.venda : R.semAnexo(c);
-  const nMkt = arr.filter((c: any) => origem(c) === "marketing").length, nExt = arr.filter((c: any) => origem(c) === "externo").length;
+  const semAnexo = (c: any) => c._alheio ? c._semAnexo && !c.venda && c.tipo !== "porta" : R.semAnexo(c);
+  const nMkt = arr.filter((c: any) => origem(c) === "marketing").length, nExt = arr.filter((c: any) => origem(c) === "externo").length, nPorta = arr.filter((c: any) => origem(c) === "porta").length;
   const nFila = arr.filter((c: any) => !c.atendenteId).length, nSemAnexo = arr.filter(semAnexo).length;
   const porHora: Record<string, any[]> = {};
   arr.forEach((c: any) => { const dt = String(c.dataLoja); const h = dt.length > 10 ? dt.slice(11, 16) : "sem hora"; (porHora[h] = porHora[h] || []).push(c); });
@@ -116,7 +117,7 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
     <div className="ag-dia">
       <div className="ag-dia-cab">
         <div><div className="ag-dia-tit">{titulo}</div>
-          <div className="ag-dia-sub">{nMkt} marketing · {nExt} externos{nFila ? <> · <b style={{ color: "var(--warn)" }}>{nFila} sem vendedor (fila)</b></> : null}{nSemAnexo ? <> · <b style={{ color: "#b07a00" }}>{nSemAnexo} sem anexo</b></> : null}</div></div>
+          <div className="ag-dia-sub">{nMkt} marketing · {nExt} externos{nPorta ? " · " + nPorta + " porta" : ""}{nFila ? <> · <b style={{ color: "var(--warn)" }}>{nFila} sem vendedor (fila)</b></> : null}{nSemAnexo ? <> · <b style={{ color: "#b07a00" }}>{nSemAnexo} sem anexo</b></> : null}</div></div>
         <div className="ag-dia-total"><b>{arr.length}</b><span>agendado{arr.length === 1 ? "" : "s"}</span></div>
       </div>
       {!arr.length ? <div className="empty" style={{ padding: "20px 10px" }}>{resumida && loja === null ? "Carregando…" : <>Nenhum cliente {escopo === "meus" ? "seu " : ""}marcado neste dia.</>}</div> :
@@ -130,7 +131,7 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
               const t = c.tratativa || {};
               return (
                 <div className="ag-card" key={c.id} data-origem={og} onClick={alheio ? undefined : () => abrirDetalhe(c.id)} style={alheio ? { cursor: "default" } : meuAtend ? { boxShadow: "inset 3px 0 0 var(--st-concluida)" } : undefined}>
-                  <div><div className="nm"><span className={"origem " + og}>{og === "marketing" ? "Marketing" : "Externo"}</span> {c.cliente}
+                  <div><div className="nm"><span className={"origem " + og}>{og === "marketing" ? "Marketing" : og === "porta" ? "🚪 Porta" : "Externo"}</span> {c.cliente}
                     {semAnexo(c) && <> <span className="badge b-semanexo">⚠️ Sem anexo</span></>}
                     {!c._alheio && <> <SeloLitoral c={c} /> <SeloVinda c={c} /></>}
                     {t.querProjeto === "sim" && <> <span className="marca-loja sim">📐 Quer projeto</span></>}
@@ -141,6 +142,8 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
                         : t.atendenteExterno ? <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "#8a4b00" }}>freelancer {t.atendenteExterno} (assumiu na fila)</b></>
                         : <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b></>}
                       {vend && t.assumidoFila ? <> <span className="marca-loja assumido">assumido na fila</span></> : null}</div>
+                    {t.emAtendimento ? <div className="dt"><b className="ag-ematd">🟢 Em atendimento</b> desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+                      : !alheio && iso === hoje && R.podeIniciarAtend(c) ? <div style={{ marginTop: 6 }}><button className="btn sm ag-iniciar" onClick={e => { e.stopPropagation(); if (confirm("Iniciar o atendimento de " + c.cliente + " com " + (vend || "o vendedor") + "?")) ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado"); }}>▶️ Iniciar atendimento</button></div> : null}
                     {c.produto && <div className="dt">{c.produto}</div>}
                     {!alheio && obsAg(c) ? <div className="dt">📝 {obsAg(c)}</div> : null}
                     {/* vendedor pede para assumir um cliente da fila */}

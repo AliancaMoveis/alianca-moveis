@@ -1,0 +1,13 @@
+-- 0156 Confirmação de presença + Cliente porta. Aplicada via execute_sql.
+-- setor 'presenca' (Confirmação de presença) — Camila.
+-- tipo 'porta' (Cliente porta, setor_destino atendente_cliente, presale=false): não é marketing nem externo.
+-- pode_editar_agenda, _ctx_ver(mkt), confirmar_vinda_loja, pode_tratar_chamado(presale): + presenca.
+-- pode_ver_chamado_ctx: porta só Gestão, presenca, gerente_loja, vendedor que atendeu, quem registrou, transferência pendente.
+-- pode_tratar_chamado(porta): presenca, gerente_loja, quem registrou (vendedor via somente_atribuidos). _pode_acompanhar: call center fora do porta.
+-- pode_anexar_chamado: porta segue a regra do marketing (vendedor não anexa). pode_criar_tipo('porta') = false.
+-- agenda_loja_v2(p_dia): igual agenda_loja + coluna porta; porta só para quem vê o chamado; presenca acessa.
+-- registrar_cliente_porta(p jsonb {cliente, telefone, vendedorId, quando, interesse, obs}): só Gestão e presenca; avisa o vendedor.
+-- registrar_cliente_porta: + ambientes (jsonb array, obrigatório) gravados em produto e tratativa.ambientes; já entra em atendimento (tratativa.emAtendimento).
+-- iniciar_atendimento: + cliente porta; quem inicia: vendedor do cliente, presenca, gerente_loja, Gestão (exige vendedor definido).
+-- agenda_loja_v3(p_dia): v2 + em_atendimento (o app usa a v3).
+-- setor 'anuncios' (permissão Anúncios/Reportei) → Lucas Santana; _ve_anuncios: gestao, proprietario, anuncios.

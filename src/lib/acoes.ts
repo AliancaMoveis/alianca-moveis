@@ -223,7 +223,8 @@ export const A = {
   salvarRoteiro: (id: string | null, p: any) => rpc<string>("salvar_roteiro", { p_id: id, p }),
   aprovarRoteiro: (id: string) => rpc("aprovar_roteiro", { p_id: id }),
   removerRoteiro: (id: string) => rpc("remover_roteiro", { p_id: id }),
-  agendaLoja: (dia: string) => rpc<any[]>("agenda_loja", { p_dia: dia }),
+  agendaLoja: (dia: string) => rpc<any[]>("agenda_loja_v3", { p_dia: dia }),
+  registrarPorta: (p: any) => rpc<string>("registrar_cliente_porta", { p }),
   adminUsuarios: async (corpo: any) => {
     // falhas passageiras do servidor de funções (502/503, queda de rede) são tentadas de novo — só no modo de teste, que não grava nada
     let data: any, error: any;

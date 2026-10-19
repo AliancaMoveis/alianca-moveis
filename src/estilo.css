@@ -1595,3 +1595,35 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .an-movel .panel-grid{display:flex;flex-direction:column;gap:10px}.an-movel .panel{margin-bottom:10px}
 .mv-anun{padding:0 12px 20px}
 .an .pb-big>b{font-size:26px;white-space:nowrap}.an-movel .pb-big>b{font-size:19px}.an-movel .chip{padding:5px 10px;font-size:12px}
+/* ---------- ✅ Confirmação de presença / 🚪 cliente porta ---------- */
+.origem.porta{background:#2f7d6b}
+.pres-tit{margin-left:8px;font-size:14px}
+.pres-abas button b{margin-left:4px;font-weight:700;opacity:.7}.pres-abas button i{margin-left:6px;background:var(--warn);color:#fff;border-radius:9px;padding:0 6px;font-style:normal;font-size:11px}
+.pres-resumo{font-size:13px;color:var(--ink-soft);margin:6px 0 10px}
+.pres-porta-top{display:flex;flex-direction:column;gap:8px;margin:4px 0 8px}.pres-porta-top>.btn{align-self:flex-start}
+.pres-dica{font-size:12.5px;color:var(--ink-faint)}
+.pres-novo{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}.pres-novo h4{margin:0 0 10px}
+.pres-novo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pres-lista{display:flex;flex-direction:column;gap:10px}
+.pres-card{display:grid;grid-template-columns:62px 1fr auto;gap:12px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:12px;padding:12px}
+.pres-card.ok{border-left-color:var(--st-concluida)}.pres-card.porta{border-left-color:#2f7d6b}
+.pres-hora{font-size:18px;font-weight:800;color:var(--ink)}
+.pres-nome{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.pres-nome b{font-size:15px}
+.pres-info{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--ink-soft);margin-top:4px}
+.pres-fotos{display:flex;gap:6px;margin-top:8px;cursor:pointer;align-items:center}.pres-fotos img{width:58px;height:58px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}.pres-fotos span{font-size:12px;color:var(--ink-faint)}
+.pres-semfoto{font-size:12px;color:#b07a00;margin-top:6px}
+.pres-vend{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}.pres-vend select{max-width:320px}
+.pres-acoes{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+@media (max-width:760px){.pres-novo-grid{grid-template-columns:1fr}.pres-card{grid-template-columns:1fr}.pres-acoes{flex-direction:row;align-items:center}.pres-hora{font-size:15px}}
+.pres-movel .ag-nav{flex-wrap:wrap}.pres-movel{padding:0}
+.an-pers{display:inline-flex;align-items:center;gap:6px;font-size:13px}.an-pers input{width:auto;padding:5px 8px}
+.pres-mais{font-size:15px;padding:10px 18px;align-self:flex-start}
+.view-head:has(.pres-mais){display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.pres-fab{position:fixed;right:16px;bottom:84px;z-index:30;background:#2f7d6b;color:#fff;border:0;border-radius:28px;padding:13px 18px;font-weight:800;font-size:15px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.pres-novo h4 small{font-weight:500;color:var(--ink-faint);font-size:12.5px}
+.pres-novo .field{margin-top:8px}
+.pres-amb{display:flex;flex-wrap:wrap;gap:6px}.pres-amb .chip.on{background:#2f7d6b;color:#fff;border-color:#2f7d6b}
+.pres-novo-grid{grid-template-columns:1fr 1fr}
+.pres-ematd,.ag-ematd{color:#1f7a44;font-weight:700;font-size:12.5px;margin-top:6px}
+.pres-iniciar,.ag-iniciar{background:#1f7a44;color:#fff;border-color:#1f7a44;margin-top:8px;font-weight:700}
+@media (max-width:760px){.pres-novo-grid{grid-template-columns:1fr}}

@@ -3,6 +3,8 @@ import { SinoAvisos } from "../comp/Avisos";
 import { ChatFlutuante } from "../comp/Chat";
 import EncontrarVendas360 from "./EncontrarVendas360";
 import MontagemAgend from "./MontagemAgend";
+import Presenca from "./Presenca";
+import Anuncios from "./Anuncios";
 import AgendaConsultores from "./AgendaConsultores";
 import VisitasRealizadas from "./VisitasRealizadas";
 import MontagemPagamento from "./MontagemPagamento";
@@ -181,6 +183,8 @@ export default function Shell() {
             {atual === "encontrar_vendas" && R.podeEncontrarVendas() && <EncontrarVendas />}
             {atual === "montagem_agend" && <MontagemAgend />}
             {atual === "ce_agenda" && <AgendaConsultores />}
+            {(atual === "presenca" || atual === "presenca_porta") && R.temPresenca() && <Presenca key={atual} novoPorta={atual === "presenca_porta"} />}
+            {atual === "anuncios" && R.veAnuncios() && <section className="view active"><div className="view-head"><div><h2>📣 Anúncios</h2><p>Investimento e resultado das campanhas do Meta (Instagram/Facebook) e do Google, e o que viraram no 360. Dados do Reportei.</p></div></div><Anuncios /></section>}
             {atual === "ce_realizadas" && <VisitasRealizadas />}
             {atual === "montagem_pag" && <MontagemPagamento />}
             {atual === "encontrar_vendas360" && R.podeEncontrarVendas() && <EncontrarVendas360 />}

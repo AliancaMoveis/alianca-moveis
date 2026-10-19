@@ -38,6 +38,8 @@ export default function Detalhe({ id }: { id: string }) {
     </div>
   );
 
+  if (c.tipo === "porta") return <FichaPorta c={c} />;
+
   // dados da fábrica e contato do representante só em Solicitação Fábrica (prazo de fábrica)
   const ehFab = R.ehFabrica(c);
   const st_ = STATUS[c.status], late = estaAtrasado(c), rep = R.getRep(c), fab = R.getFab(c), link = ehFab ? R.waLink(c) : null, tratar = R.podeTratar(c), anexar = R.podeAnexar(c);
@@ -1128,5 +1130,42 @@ function TratPosvenda({ c }: any) {
         <div style={{ marginTop: 12 }}><button className="btn sm" onClick={encaminhar}>Abrir {R.tipoNome(encTipo).toLowerCase()}</button></div>
       </div>
     </>
+  );
+}
+
+// ---------- ficha do cliente porta (entrou direto na loja): simples — quem é, quando chegou, vendedor, fotos e anotações ----------
+function FichaPorta({ c }: { c: any }) {
+  const { R, fecharDetalhe, executar: ex, toast } = useApp() as any;
+  const [novo, setNovo] = useState(""); const [nota, setNota] = useState("");
+  const trocar = R.podeEditarAgenda() && !c.venda;
+  return (
+    <div className="overlay on" id="overlay" onMouseDown={e => { if (e.target === e.currentTarget) fecharDetalhe(); }}>
+      <div className="modal" id="modal">
+        <div className="mh"><div><span className="tid">{c.id}</span> <span className="origem porta" style={{ marginLeft: 8 }}>🚪 Cliente porta</span>
+          <div className="tsub" style={{ marginTop: 4 }}>{c.cliente}</div></div>
+          <button className="x" id="fechar" onClick={fecharDetalhe}><span className="x-txt">Fechar </span>&times;</button></div>
+        <div className="mb">
+          <div className="ro-note" style={{ marginBottom: 12 }}>Entrou direto na loja — não é do marketing nem de consultor externo. Aparece na agenda da loja, para o vendedor que atendeu e para a Gestão.</div>
+          <Row k="Cliente">{c.cliente}</Row>
+          <Row k="Telefone">{c.telefone ? <>{c.telefone} <BotaoWhats tel={c.telefone} /></> : "—"}</Row>
+          <Row k="Chegou na loja">{fmtDateTime(c.dataLoja)}</Row>
+          <Row k="Vendedor que atendeu"><b>{c.atendenteId ? R.nomeUser(c.atendenteId) : "—"}</b></Row>
+          {c.produto && <Row k="Ambientes">{c.produto}</Row>}
+          <Row k="Atendimento">{c.tratativa && c.tratativa.emAtendimento ? "🟢 Em atendimento desde " + fmtDateTime(c.tratativa.emAtendimento) : R.podeIniciarAtend(c) ? <button className="btn sm" onClick={() => ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado")}>▶️ Iniciar atendimento</button> : "—"}</Row>
+          {c.motivo && <Row k="Observação">{c.motivo}</Row>}
+          <Row k="Registrado por">{c.solicitante} · {fmtDateTime(c.criadoEm)}</Row>
+          {c.venda && <Row k="Venda">{c.venda.numero} <SeloVenda c={c} /></Row>}
+          {trocar && <div className="resp-box"><h4>Trocar o vendedor</h4><div className="inline-2">
+            <div className="field"><SelVendedor value={novo} onChange={setNovo} quando={c.dataLoja} c={c} placeholder="Novo vendedor…" /></div>
+            <button className="btn sm" onClick={async () => { if (!novo) { toast("Selecione o vendedor"); return; } if (novo === c.atendenteId) { toast("Esse já é o vendedor"); return; }
+              if (!confirm("Trocar o vendedor para " + R.nomeUser(novo) + "?")) return; if (await ex(() => A.trocarVendedor(c.id, novo), "Vendedor alterado")) setNovo(""); }}>Trocar</button></div></div>}
+          <Anexos c={c} editavel={R.podeAnexar(c)} />
+          {R.podeTratar(c) && <div className="resp-box"><h4>Anotação</h4><div className="inline-2">
+            <div className="field"><input value={nota} onChange={e => setNota(e.target.value)} placeholder="Ex.: cliente volta sábado com a planta" /></div>
+            <button className="btn sm" onClick={async () => { if (!nota.trim()) { toast("Escreva a anotação"); return; } if (await ex(() => A.adicionarNota(c.id, nota.trim()), "Anotação registrada")) setNota(""); }}>Salvar</button></div></div>}
+          <div className="hist"><h4>Histórico</h4>{c.historico.slice().reverse().map((x: any, i: number) => <div className="h" key={i}><b>{fmtDateTime(x.quando)}</b> · {x.quem} — {x.texto}</div>)}</div>
+        </div>
+      </div>
+    </div>
   );
 }

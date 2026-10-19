@@ -92,7 +92,7 @@ export function ConfirmarVinda({ c, movel }: { c: any; movel?: boolean }) {
   const [abre, setAbre] = useState(false); const [obs, setObs] = useState("");
   if (!precisaConfirmarVinda(R, c)) return null;
   const eu = R.currentUserId;
-  const pode = R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores", "gerente_loja"].includes(x)) || [c.consultorId, c.atendenteId, c.solicitanteId, c.cadastradoPorId, c.responsavelMkt].includes(eu);
+  const pode = R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores", "gerente_loja", "presenca"].includes(x)) || [c.consultorId, c.atendenteId, c.solicitanteId, c.cadastradoPorId, c.responsavelMkt].includes(eu);
   const k = (c.tratativa || {}).confirmLoja; const ok = vindaConfirmada(c);
   if (ok) return <div className={movel ? "mv-bloco" : "resp-box"} style={movel ? undefined : { padding: "10px 14px" }}>
     <div className="vv-info"><span className="vinda ok">✅ Cliente confirmou a vinda na loja</span> <small>· {k.por} · {fmtDateTime(k.em)}{k.obs ? " · " + k.obs : ""}</small></div>

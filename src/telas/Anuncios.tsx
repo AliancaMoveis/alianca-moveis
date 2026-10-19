@@ -7,6 +7,20 @@ import { MOCK } from "../lib/chat";
 import { useApp } from "../estado";
 import { fmtDate, fmtMoeda, hojeISO, isoLocal, pagamentosVenda, vendaContaVolume } from "../lib/regras";
 
+// períodos: hoje, 7 dias, semana atual (segunda até hoje), 15 dias, 30 dias, mês atual, mês anterior e personalizado
+export type Per = "hoje" | "7" | "semana" | "15" | "30" | "mes" | "ant" | "pers";
+export const PERIODOS: [Per, string][] = [["hoje", "Hoje"], ["7", "7 dias"], ["semana", "Semana atual"], ["15", "15 dias"], ["30", "30 dias"], ["mes", "Mês atual"], ["ant", "Mês anterior"], ["pers", "📅 Personalizado"]];
+export function periodoDe(per: Per, pDe: string, pAte: string) {
+  const hj = new Date(); const hoje = isoLocal(hj); const menos = (n: number) => isoLocal(new Date(hj.getFullYear(), hj.getMonth(), hj.getDate() - n));
+  if (per === "hoje") return { de: hoje, ate: hoje };
+  if (per === "7") return { de: menos(6), ate: hoje };
+  if (per === "15") return { de: menos(14), ate: hoje };
+  if (per === "30") return { de: menos(29), ate: hoje };
+  if (per === "semana") return { de: menos((hj.getDay() + 6) % 7), ate: hoje };
+  if (per === "ant") return { de: isoLocal(new Date(hj.getFullYear(), hj.getMonth() - 1, 1)), ate: isoLocal(new Date(hj.getFullYear(), hj.getMonth(), 0)) };
+  if (per === "pers") return pDe <= pAte ? { de: pDe, ate: pAte } : { de: pAte, ate: pDe };
+  return { de: hoje.slice(0, 8) + "01", ate: hoje };
+}
 type Linha = { plataforma: "meta" | "google"; dia: string; campanha: string; tipo: string; gasto: number; impressoes: number; alcance: number; cliques: number; conversas: number; conversoes: number };
 const PLAT: Record<string, { nome: string; cor: string; ic: string }> = { meta: { nome: "Meta (Instagram/Facebook)", cor: "#4a6cf7", ic: "Ⓜ" }, google: { nome: "Google Ads", cor: "#e3a008", ic: "Ⓖ" } };
 
@@ -52,13 +66,13 @@ function somar(ls: Linha[]) {
 export default function Anuncios({ de: de0, ate: ate0, movel }: { de?: string; ate?: string; movel?: boolean }) {
   const { st, R } = useApp() as any;
   // no celular (ou fora do painel) o período é escolhido aqui
-  const hoje = hojeISO(); const hj = new Date();
-  const [per, setPer] = useState<"mes" | "ant" | "7" | "30">("mes");
-  const perDe = per === "mes" ? hoje.slice(0, 8) + "01" : per === "ant" ? isoLocal(new Date(hj.getFullYear(), hj.getMonth() - 1, 1)) : isoLocal(new Date(+hj - (per === "7" ? 6 : 29) * 86400000));
-  const perAte = per === "ant" ? isoLocal(new Date(hj.getFullYear(), hj.getMonth(), 0)) : hoje;
+  const hoje = hojeISO();
+  const [per, setPer] = useState<Per>("mes");
+  const [pDe, setPDe] = useState(hoje.slice(0, 8) + "01"); const [pAte, setPAte] = useState(hoje);
+  const { de: perDe, ate: perAte } = periodoDe(per, pDe, pAte);
   const de = de0 || perDe, ate = ate0 || perAte;
   const d0 = new Date(de + "T00:00:00"), d1 = new Date(ate + "T23:59:59");
-  const dias = Math.max(1, Math.round((+d1 - +d0) / 86400000));
+  const dias = Math.max(1, Math.round((+d1 - +d0) / 86400000)); // nº de dias do período (inclusivo)
   const dePrev = isoLocal(new Date(+d0 - dias * 86400000)), atePrev = isoLocal(new Date(+d0 - 86400000));
   const [dados, setDados] = useState<{ linhas: Linha[]; sync: any } | null | undefined>(undefined); const [erro, setErro] = useState("");
   const [plat, setPlat] = useState<"todas" | "meta" | "google">("todas");
@@ -100,7 +114,8 @@ export default function Anuncios({ de: de0, ate: ate0, movel }: { de?: string; a
   const custoRes = (c: any) => { const r = c.plataforma === "meta" ? c.conversas : c.conversoes; return r ? din(c.gasto / r) : "—"; };
 
   return <div className={"an" + (movel ? " an-movel" : "")}>
-    {!de0 && <div className="an-per">{([["mes", "Mês atual"], ["ant", "Mês anterior"], ["7", "7 dias"], ["30", "30 dias"]] as const).map(([k, l]) => <button key={k} className={"chip" + (per === k ? " on" : "")} onClick={() => setPer(k)}>{l}</button>)}</div>}
+    {!de0 && <div className="an-per">{PERIODOS.map(([k, l]) => <button key={k} className={"chip" + (per === k ? " on" : "")} onClick={() => setPer(k)}>{l}</button>)}
+      {per === "pers" && <span className="an-pers"><input type="date" value={pDe} max={pAte} onChange={e => setPDe(e.target.value || pDe)} /> até <input type="date" value={pAte} min={pDe} max={hoje} onChange={e => setPAte(e.target.value || pAte)} /></span>}</div>}
     <div className="an-per">{([["todas", "Todas as plataformas"], ["meta", "Ⓜ Meta"], ["google", "Ⓖ Google"]] as const).map(([k, l]) => <button key={k} className={"chip" + (plat === k ? " on" : "")} onClick={() => setPlat(k)}>{l}</button>)}</div>
     <div className="pb-per">Comparando {fmtDate(de)}–{fmtDate(ate)} com {fmtDate(dePrev)}–{fmtDate(atePrev)}</div>
 

@@ -9,14 +9,14 @@ const usuarios = [
   [3, "Diego Alves", ["prazo_fabrica"], false], [4, "Bruno Sá", ["montagem"], false], [5, "Paula Reis", ["assistencia", "montagem"], false],
   [8, "Fernanda Melo", ["checklist"], false], [9, "Igor Tavares", ["medidas"], true], [19, "Luciene", ["medidas_supervisao", "medidas"], false], [20, "Washington", ["proprietario"], false], [10, "Ana Ribeiro", ["marketing_operadora"], false],
   [13, "Marcelo Duarte", ["marketing_supervisao"], false], [11, "Consultor — Anderson", ["consultor_externo"], true], [12, "Consultor — Priscila", ["consultor_externo"], true],
-  [14, "Suporte — Carla", ["suporte_consultores"], false], [22, "Adriel", ["gerente_loja"], false], [15, "Vendedor — Roy", ["atendente_cliente"], true], [16, "Vendedora — Giovanna", ["atendente_cliente"], true], [21, "Vendedor — Marcelo", ["atendente_cliente"], true], [6, "Supervisão", ["supervisao"], false], [17, "Vânia", ["posvenda"], false], [18, "Camila (Jurídico)", ["juridico"], false],
+  [14, "Suporte — Carla", ["suporte_consultores"], false], [22, "Adriel", ["gerente_loja"], false], [23, "Camila (Presença)", ["presenca", "gerente_loja"], false], [15, "Vendedor — Roy", ["atendente_cliente"], true], [16, "Vendedora — Giovanna", ["atendente_cliente"], true], [21, "Vendedor — Marcelo", ["atendente_cliente"], true], [6, "Supervisão", ["supervisao"], false], [17, "Vânia", ["posvenda"], false], [18, "Camila (Jurídico)", ["juridico"], false],
 ].map(([n, nome, setores, s]: any) => ({ id: U(n), nome, email: "", setores, somenteAtribuidos: s, ativo: true, fazProjeto: n !== 21, folga: n === 15 ? 3 : n === 16 ? 5 : n === 21 ? 2 : null, turno: n === 15 || n === 21 ? "manha" : n === 16 ? "tarde" : null }));
 const L = (criar = false, verTudo = false, cadastros = false, admin = false, verMarketing = false) => ({ criar, verTudo, cadastros, admin, verMarketing });
 const setores = [
   ["callcenter", "Call center", L(true)], ["prazo_fabrica", "Prazo de fábrica", { ...L(), viaCallcenter: true }], ["montagem", "Montagem", L()], ["assistencia", "Assistência", L()],
   ["checklist", "Checklist", L()], ["medidas", "Medidas", L()], ["medidas_supervisao", "Supervisão de Medidas", L(true)], ["marketing_operadora", "Operadora Marketing", L(true)],
   ["marketing_supervisao", "Supervisão Marketing", L(true, false, false, false, true)], ["consultor_externo", "Consultor externo", L()],
-  ["suporte_consultores", "Suporte Consultores Externos", L()], ["atendente_cliente", "Vendedores (loja)", L()], ["gerente_loja", "Gerente de Loja", L(true, false, false, false, true)], ["posvenda", "Pós-venda Projetados", L(true)], ["juridico", "Jurídico", L(false, true)],
+  ["suporte_consultores", "Suporte Consultores Externos", L()], ["atendente_cliente", "Vendedores (loja)", L()], ["gerente_loja", "Gerente de Loja", L(true, false, false, false, true)], ["presenca", "Confirmação de presença", L()], ["posvenda", "Pós-venda Projetados", L(true)], ["juridico", "Jurídico", L(false, true)],
   ["supervisao", "Supervisão (Call center)", L(true, true, true)], ["gestao", "Gestão", L(true, true, true, true)], ["proprietario", "Proprietário", L(true, true, true, true, true)],
 ].map(([id, nome, liberacoes]: any) => ({ id, nome, liberacoes }));
 const tipos: any = {
@@ -27,6 +27,7 @@ const tipos: any = {
   vistoria: { nome: "Solicitação de vistoria", destino: "assistencia", anexos: true }, checklist: { nome: "Agendamento de checklist", destino: "checklist" },
   medidas: { nome: "Ordem de medida (setor de Medidas)", destino: "medidas" },
   visita_consultor: { nome: "Visita técnica — consultor externo", destino: "marketing_supervisao", anexos: true, presale: true },
+  porta: { nome: "Cliente porta (entrou direto na loja)", destino: "atendente_cliente", anexos: true },
   agendamento_loja: { nome: "Agendamento direto na loja", destino: "suporte_consultores", anexos: true, presale: true, direto: true }, posvenda: { nome: "Pós-venda projetados (reclamação / ocorrência)", destino: "posvenda", anexos: true }, outros: { nome: "Outros", destino: "callcenter" },
 };
 const H = (h: number) => new Date(Date.now() + h * 3600000);
@@ -40,6 +41,10 @@ const POSVENDA = [
   { id: "ALM-0091", tipo: "posvenda", sd: "posvenda", st: "aberta", cr: -5, sla: 40, sol: U(17), soln: "Vânia", sols: "Pós-venda Projetados", cli: "Marcos Lima", doc: "222.333.444-55", tel: "41977776666", em: "", ped: "VP-101", pf: "", pr: "Dormitório", fab: "00000000-0000-4000-c000-000000000002", mo: "Montador ligou: vão menor que o projeto", urg: false, tr: { acomp: { status: "pendente", porId: U(1), porNome: "Rafaela Lima", motivo: "Cliente muito irritado, ameaçando Procon", em: new Date().toISOString(), lembretes: 0 } },
     h: [[-5, "Vânia", "Solicitação aberta (Pós-venda projetados) → Pós-venda Projetados"]],
     pv: { origem: "montador", categoria: "", responsabilidade: "analise", pecaAfetada: "Dormitório — nicho da cama", paradoObra: true, prazo: new Date(Date.now() - 36e5).toISOString(), montadorId: "m1", medidorResp: "", checklistResp: "", ocorrido: "", solucao: "", custo: 0, custoDesc: "", descontoMontador: 0 } },
+];
+const PORTA = [
+  { id: "ALM-0130", tipo: "porta", sd: "atendente_cliente", st: "tratativa", cr: -1, sla: 40, sol: U(23), soln: "Camila (Presença)", sols: "Confirmação de presença", cli: "Charles Pereira", doc: "", tel: "41988881234", em: "", ped: "", pf: "", pr: "Cozinha planejada", mo: "Veio pela vitrine", urg: false, ate: U(15), loja: -1, sc: "com_vendedor",
+    tr: { porta: true }, h: [[-1, "Camila (Presença)", "🚪 Cliente porta: entrou direto na loja · atendido por Vendedor — Roy"]] },
 ];
 const CHECKLIST = [
   { id: "ALM-0120", tipo: "checklist", sd: "checklist", st: "aberta", cr: -48, sla: 40, sol: U(8), soln: "Fernanda Melo", sols: "Importação checklist", cli: "Vanessa De Souza Borges", doc: "", tel: "41997563175", em: "", ped: "1101903", dv: "2026-09-12", pf: "", pr: "Projetados", mo: "Venda encaminhada para o checklist", urg: false,
@@ -68,7 +73,7 @@ export function estadoMock(): Estado {
     ckBloqueios: [{ id: 1, projetista: "", inicio: new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10) + "T00:00", fim: new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10) + "T00:00", motivo: "Feriado", obs: "teste", criadoPor: "Bruno" },
       { id: 2, projetista: "Angela", inicio: new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10) + "T15:00", fim: new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10) + "T19:00", motivo: "Consulta", obs: "", criadoPor: "Bruno" }],
     montadores: [{ id: "m1", nome: "João Montador", telefone: "41999990011", regiao: "Curitiba Sul", ativo: true, conta: { titular: "João Montador", docTitular: "000.000.000-00", banco: "Banco Teste", agencia: "0001", conta: "12345-6", tipoConta: "corrente", pixTipo: "telefone", pixChave: "41999990011", obs: "" } }, { id: "m2", nome: "Carlos Montador", telefone: "", regiao: "", ativo: true, conta: null }],
-    chamados: (seed as any[]).concat(POSVENDA).concat(MEDIDAS).concat(CHECKLIST).map(c => ({
+    chamados: (seed as any[]).concat(POSVENDA).concat(PORTA).concat(MEDIDAS).concat(CHECKLIST).map(c => ({
       id: c.id, tipo: c.tipo, setorDestino: c.sd, status: c.st, criadoEm: H(c.cr).toISOString(), slaResposta: H(c.sla).toISOString(),
       solicitanteId: c.sol, solicitante: c.soln, setor: c.sols, cliente: c.cli, clienteDoc: c.doc, telefone: c.tel, email: c.em, pedido: c.ped,
       dataVenda: c.dv || "", pedidoFabrica: c.pf, produto: c.pr, fabrica: c.fab || "", prazoTatico: c.pt || "", motivo: c.mo, urgente: c.urg,

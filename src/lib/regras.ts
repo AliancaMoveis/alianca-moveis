@@ -257,7 +257,16 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const ehSetorMarketing = (id: string) => MARKETING_SETORES.includes(id);
   const domMarketing = (c: Chamado) => !!(TIPOS[c.tipo] && TIPOS[c.tipo].presale);
   // é do call center: não é marketing e não é de setor com módulo próprio (Checklist, Medidas, Pós-venda) — esses não viram pendência do call center
-  const TIPOS_FORA_CC = ["checklist", "medidas", "posvenda", "juridico"];
+  const TIPOS_FORA_CC = ["checklist", "medidas", "posvenda", "juridico", "porta"];
+  // cliente porta: entrou direto na loja (sem marketing e sem consultor externo) — registrado pela Confirmação de presença
+  const ehPorta = (c: any) => !!c && c.tipo === "porta";
+  const temPresenca = () => ehGestao() || mySetores().includes("presenca");
+  // ▶️ iniciar atendimento na loja: o vendedor do cliente, a Confirmação de presença, o gerente ou a Gestão (com vendedor definido)
+  const podeIniciarAtend = (c: any) => !!c && !!c.atendenteId && !c.venda && !(c.tratativa && c.tratativa.emAtendimento) && (domMarketing(c) || c.tipo === "porta")
+    && !["vendido", "vendido_promissoria", "vendido_entrada", "vendido_revisao", "atendido", "venda_cancelada", "reprovado", "nao_compareceu", "loja_cancelada"].includes(String(c.statusCliente || ""))
+    && (c.atendenteId === currentUserId || ehGestao() || mySetores().some((x: string) => x === "presenca" || x === "gerente_loja"));
+  // 📣 Anúncios (Reportei): Gestão, proprietário e quem tem a permissão "anuncios" (ex.: Lucas Santana)
+  const veAnuncios = () => mySetores().some((x: string) => ["gestao", "proprietario", "anuncios"].includes(x));
   const doCC = (c: Chamado) => !domMarketing(c) && !TIPOS_FORA_CC.includes(c.tipo);
 
   function normalizarStatusCliente(c: Chamado) {
@@ -291,7 +300,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || trPendPara(c) || (c.tipo === "erro_venda" && (c as any).tratativa?.erroVenda?.vendedorId === currentUserId);
     if (ehGestao()) return true;
     if (c.tipo === "juridico") return mySetores().includes("juridico"); // caso jurídico: só o Jurídico e a Gestão
-    if (domMarketing(c)) return temMarketing() || !!(me() as any)?.editaAgenda || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId || (mySetores().includes("medidas_supervisao") && !!c.consultorId);
+    if (c.tipo === "porta") return mySetores().some((x: string) => x === "presenca" || x === "gerente_loja") || c.solicitanteId === currentUserId;
+    if (domMarketing(c)) return temMarketing() || mySetores().includes("presenca") || !!(me() as any)?.editaAgenda || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId || (mySetores().includes("medidas_supervisao") && !!c.consultorId);
     if (verTudo()) return true;
     if (mySetores().includes("callcenter")) return true;
     // gerente de loja acompanha todo o call center (menos os setores com módulo próprio)
@@ -317,13 +327,14 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const u = me();
     if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || (!!c.medidorId && c.medidorId === currentUserId) || trPendPara(c);
     if (ehGestao()) return true;
-    if (domMarketing(c)) return temMarketing() || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino);
+    if (c.tipo === "porta") return mySetores().some((x: string) => x === "presenca" || x === "gerente_loja") || c.solicitanteId === currentUserId;
+    if (domMarketing(c)) return temMarketing() || mySetores().some((x: string) => x === "suporte_consultores" || x === "presenca") || mySetores().includes(c.setorDestino);
     if (verTudo()) return true;
     return mySetores().includes(c.setorDestino) || (!!c.medidorId && c.medidorId === currentUserId);
   }
   function podeAnexar(c: Chamado) {
     if (ehGestao()) return true;
-    if (domMarketing(c)) {
+    if (domMarketing(c) || c.tipo === "porta") {
       if (mySetores().includes("atendente_cliente") && !mySetores().some((s: string) => ["marketing_supervisao", "suporte_consultores"].includes(s))) return false;
       // operadora do marketing anexa a qualquer momento nos clientes que cadastrou; a supervisão do marketing em todos
       if (c.solicitanteId === currentUserId || mySetores().includes("marketing_supervisao")) return true;
@@ -337,6 +348,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // ordem de medida: só o setor de Medidas (o call center abre "Solicitação de medidas")
     if (k === "medidas") return ehGestao() || mySetores().includes("medidas_supervisao");
     if (k === "juridico") return false; // caso jurídico abre pelo menu Jurídico
+    if (k === "porta") return false; // cliente porta: só pela Confirmação de presença
     if (!temLib("criar")) return false;
     if (ehGestao()) return true;
     const ms = mySetores();
@@ -346,7 +358,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeCriarCC = () => Object.keys(TIPOS).some(k => !TIPOS[k].presale && podeCriarTipo(k));
   const podeCriarMkt = () => Object.keys(TIPOS).some(k => TIPOS[k].presale && podeCriarTipo(k));
   const operacionais = () => (state.setores || []).filter(s => !(s.liberacoes && s.liberacoes.verTudo));
-  const setoresVisiveis = () => operacionais().filter(s => !ehSetorMarketing(s.id) || temMarketing() || ehGestao());
+  // "presenca" e "anuncios" são permissões de acesso, não setores que recebem solicitações
+  const SETORES_SO_ACESSO = ["presenca", "anuncios"];
+  const setoresVisiveis = () => operacionais().filter(s => !SETORES_SO_ACESSO.includes(s.id) && (!ehSetorMarketing(s.id) || temMarketing() || ehGestao()));
   // gerente de loja não vê valores de venda (o banco também não devolve)
   /** remover anexo/foto: só quem anexou, a Gestão e as supervisões (o banco confere de novo) */
   // só quem enviou o anexo ou a Gestão; vendedor nunca apaga anexo (o banco confere igual)
@@ -363,7 +377,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const medidores = () => state.usuarios.filter(u => (u.setores || []).includes("medidas"));
   const nomeMontador = (id: string) => ((state.montadores || []).find(m => m.id === id) || ({} as any)).nome || "—";
   // edita a agenda da loja: Gestão, marketing, Suporte e quem tem a permissão avulsa (ex.: Camila no fim de semana)
-  const podeEditarAgenda = () => ehGestao() || temMarketing() || mySetores().includes("suporte_consultores") || !!(me() as any)?.editaAgenda;
+  const podeEditarAgenda = () => ehGestao() || temMarketing() || mySetores().some((x: string) => x === "suporte_consultores" || x === "presenca") || !!(me() as any)?.editaAgenda;
   const podeMudarDataLoja = (c: Chamado) => !(c.venda && c.venda.status !== "cancelada") && (podeEditarAgenda() || (c.consultorId && c.consultorId === currentUserId) || (c.setorDestino === "atendente_cliente" && c.atendenteId === currentUserId));
   const podeMudarDataVisita = (c: Chamado) => ["marketing_supervisao", "consultor_externo"].includes(c.setorDestino) && (ehGestao() || temMarketing() || (!!c.consultorId && c.consultorId === currentUserId));
   const podeEditarCliente = () => ehGestao() || mySetores().some((s: string) => ["supervisao", "marketing_supervisao"].includes(s));
@@ -803,6 +817,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
       if (mySetores().includes("marketing_operadora")) mk.push(["produtividade", "Minha produtividade"]);
     }
     if (mk.length) { if (!cc.length && !soMeusClientes) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
+    // Confirmação de presença: quem vem à loja (marketing, externo) e o cliente porta (entrou direto) — Camila e Gestão
+    if (temPresenca()) G.push({ g: "Presença na loja", ic: "✅", itens: [["presenca", "✅ Confirmação de presença"], ["presenca_porta", "＋ Novo cliente porta"]] });
+    if (veAnuncios()) G.push({ g: "Anúncios", ic: "📣", itens: [["anuncios", "Meta e Google (Reportei)"]] });
     // Consultores externos: setor próprio (o marketing gera a demanda, o consultor atende). Fica logo abaixo do Marketing.
     const coordCE = ehGestao() || mySetores().includes("marketing_supervisao") || mySetores().includes("suporte_consultores");
     if (coordCE) G.push({ g: "Consultores externos", ic: "🧭", itens: [["ce_painel", "Painel dos consultores"], ["direcionamento", "Direcionar consultor"], ["ce_agenda", "📅 Agenda dos consultores"], ["ce_visitas", "Visitas"], ["ce_realizadas", "✅ Visitas realizadas"], ["ce_loja", "Agendados na loja"]] });
@@ -851,7 +868,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    ehDireto, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
+    ehDireto, ehPorta, temPresenca, veAnuncios, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };
