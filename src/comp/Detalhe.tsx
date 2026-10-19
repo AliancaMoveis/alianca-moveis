@@ -1,7 +1,9 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
 import { jaResolvido } from "../lib/resolvido";
+import { confirmarConsultor, conflitosConsultor, sugestaoConsultor, textoConflito } from "../lib/agendaConsultor";
 import { EditarCliente, RemarcarData } from "./Remarcar";
 import { CancelouLoja, ConfirmarVinda, SituacaoConsultor } from "./Situacao";
+import { PreviaEnvio, juntarPendentes, separarPendentes, type Pendente } from "./PreviaEnvio";
 import { RespMktFicha } from "./RespMkt";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
@@ -212,9 +214,11 @@ function Tratativa({ c }: any) {
           <div><span style={{ color: "var(--ink-soft)" }}>Visita:</span> <b>{c.dataVisita ? fmtDT(c.dataVisita) : "não informada"}</b></div>
         </div>
         <div className="grid"><div className="field full"><label>Consultor externo <span className="req-star">*</span></label>
-          <select value={cons} onChange={e => setCons(e.target.value)}><option value="">Selecione…</option>{R.consultores().map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div></div>
+          <select value={cons} onChange={e => setCons(e.target.value)}><option value="">Selecione…</option>{R.consultores().map(u => <option key={u.id} value={u.id}>{u.nome}{(editAg ? dv : c.dataVisita) && conflitosConsultor(R, u.id, editAg && dv ? dv : c.dataVisita, c.id).length ? " · ⚠️ já tem cliente neste horário" : ""}</option>)}</select>
+          {cons && (() => { const q = editAg && dv ? dv : c.dataVisita; const t = textoConflito(R, cons, q, c.id); if (!t) return null; const s = sugestaoConsultor(R, q, cons, c.id);
+            return <div className="alerta" style={{ marginTop: 8 }}>⚠️ {t}{s ? <> Sugestão: <a href="#" onClick={e => { e.preventDefault(); setCons(s.id); }}><b>{s.nome}</b></a> está livre.</> : " Nenhum outro consultor livre nesse horário."}</div>; })()}</div></div>
         <div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}>
-          <button className="btn primary sm" onClick={() => { if (!cons) { toast("Selecione o consultor"); return; } ex(() => A.direcionarConsultor(c.id, cons, editAg ? dv : "", editAg ? end : ""), "Direcionado ao consultor"); }}>Direcionar ao consultor</button>
+          <button className="btn primary sm" onClick={() => { if (!cons) { toast("Selecione o consultor"); return; } if (!confirmarConsultor(R, cons, editAg && dv ? dv : c.dataVisita, c.id)) return; ex(() => A.direcionarConsultor(c.id, cons, editAg ? dv : "", editAg ? end : ""), "Direcionado ao consultor"); }}>Direcionar ao consultor</button>
           <button className="btn ghost sm" onClick={() => setEditAg(x => !x)}>Corrigir endereço/data</button>
         </div>
         {editAg && <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" }}><div className="grid">
@@ -239,11 +243,11 @@ function Tratativa({ c }: any) {
           <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Agendamento na loja</div>
           <div className="grid">
             <div className="field"><label>Data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={dataLoja} onChange={e => setDataLoja(e.target.value)} /></div>
-            <div className="field"><label>Cliente quer projeto pronto? <span className="req-star">*</span></label><select value={querProjeto} onChange={e => setQuerProjeto(e.target.value)}><option value="">Selecione…</option><option value="sim">Sim — quer ver o projeto pronto</option><option value="nao">Não</option></select></div>
+            <div className="field"><label>Cliente quer projeto pronto? <small style={{ color: "var(--ink-faint)", fontWeight: 400 }}>(opcional)</small></label><select value={querProjeto} onChange={e => setQuerProjeto(e.target.value)}><option value="">Não informado</option><option value="sim">Sim — quer ver o projeto pronto</option><option value="nao">Não</option></select></div>
           </div>
           {!(c.anexos || []).length && <div className="aviso-anexo" style={{ marginTop: 10 }}>⚠️ <b>Sem anexo.</b> Anexe a planta baixa e as fotos antes de agendar — sem elas o vendedor atende no escuro.</div>}
           <div style={{ fontSize: 12, color: "var(--ink-soft)", margin: "8px 0 10px" }}>Ao agendar, o cliente vai para a fila do Suporte Consultores, que define o vendedor.</div>
-          <button className="btn primary sm" onClick={() => { if (!dataLoja || dataLoja.length < 16) { toast("Informe a data e o horário da vinda à loja"); return; } if (!querProjeto) { toast("Informe se o cliente quer projeto pronto"); return; } ex(() => A.agendarLoja(c.id, dataLoja, v.medidas, v.obs, querProjeto), "Agendado — enviado para definir o vendedor"); }}>Agendar na loja e encaminhar</button>
+          <button className="btn primary sm" onClick={() => { if (!dataLoja || dataLoja.length < 16) { toast("Informe a data e o horário da vinda à loja"); return; } ex(() => A.agendarLoja(c.id, dataLoja, v.medidas, v.obs, querProjeto), "Agendado — enviado para definir o vendedor"); }}>Agendar na loja e encaminhar</button>
         </div>
       </div>
     );
@@ -338,6 +342,8 @@ function StatusCliente({ c }: any) {
   const [dl, setDl] = useState(c.dataLoja ? String(c.dataLoja).slice(0, 16) : "");
   useEffect(() => { setNovo(atual); setDl(c.dataLoja ? String(c.dataLoja).slice(0, 16) : ""); }, [atual, c.id, c.dataLoja]);
   const pedeData = novo === "agendado_loja";
+  const pedeMotivo = novo === "loja_cancelada" && atual !== "loja_cancelada";
+  const [motivo, setMotivo] = useState("");
   if (!(R.podeTratar(c) || R.ehGestao()) || R.me()?.somenteAtribuidos) return <Row k="Status do cliente"><ScBadge c={c} /></Row>;
   const g = R.ehGestao();
   const opcoes = Object.keys(STATUS_CLIENTE).filter(k => g || !VENDA_SC.includes(k) || k === atual);
@@ -349,6 +355,8 @@ function StatusCliente({ c }: any) {
       ex(() => A.alterarStatusCliente(c.id, novo, dl), "Agendado — vai para designar o vendedor"); return;
     }
     if (novo === atual) { toast("O status já é esse"); return; }
+    if (pedeMotivo) { if (motivo.trim().length < 3) { toast("Escreva o motivo: o que o cliente disse"); return; } if (!confirm("Confirmar: o cliente CANCELOU a visita na loja?")) return; ex(() => A.cancelouLoja(c.id, motivo.trim()), "Marcado: cancelou visita na loja").then((ok: boolean) => ok && setMotivo("")); return; }
+    if (["visita_realizada", "direcionado_consultor"].includes(novo) && c.dataLoja && !confirm("O agendamento na loja de " + fmtDateTime(c.dataLoja) + " será desfeito e o cliente volta para o consultor. Continuar?")) return;
     if (novo === "vendido" && !g) { toast("Só a Gestão pode confirmar a venda como efetivada"); setNovo(atual); return; }
     if (novo === "vendido" && !c.venda) {
       toast("Registre os dados da venda abaixo — número e valor são obrigatórios");
@@ -361,6 +369,7 @@ function StatusCliente({ c }: any) {
   return (
     <div className="resp-box"><h4>Status do cliente</h4>
       <div className="inline-2"><div className="field"><select id="selStatusCliente" value={novo} onChange={e => setNovo(e.target.value)}>{opcoes.map(k => <option key={k} value={k} disabled={!g && VENDA_SC.includes(k)}>{STATUS_CLIENTE[k]}</option>)}</select></div><button className="btn sm" onClick={aplicar}>{pedeData ? "Salvar agendamento" : "Alterar status"}</button></div>
+      {pedeMotivo && <textarea rows={2} style={{ width: "100%", marginTop: 10 }} placeholder="Motivo do cancelamento: o que o cliente disse (obrigatório)" value={motivo} onChange={e => setMotivo(e.target.value)} />}
       {pedeData && <div className="grid" style={{ marginTop: 10 }}><div className="field"><label>Data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={dl} onChange={e => setDl(e.target.value)} /></div></div>}
       <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>{g ? "Toda alteração fica registrada no histórico, abaixo." : "A confirmação final da venda (“Vendido”) só a Gestão pode dar — registre a venda abaixo e aguarde."}</div>
     </div>
@@ -509,7 +518,8 @@ function DataLoja({ c }: any) {
 }
 
 function Destaque({ c, anexar }: any) {
-  const { R, openImg, abrirGaleria } = useApp();
+  const { R, openImg, abrirGaleria, executar: exD } = useApp() as any;
+  const apagarFoto = (a: any) => { if (confirm("Apagar esta foto do cliente?")) exD(() => A.removerAnexo(a.id), "Foto apagada"); };
   const sc = R.statusClienteDe(c);
   let titulo = "", valor = "", extra = "", cor = "var(--primary)";
   if (["aguardando_consultor", "direcionado_consultor"].includes(sc)) { titulo = "Data solicitada para a visita"; valor = fmtDT(c.dataVisita); extra = c.endereco || ""; cor = "var(--st-aberta)"; }
@@ -532,7 +542,7 @@ function Destaque({ c, anexar }: any) {
             <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)" }}>Planta, fotos e vídeos do consultor ({imgs.length + links.length})</div>
             {imgs.length > 0 && <button className="btn sm" onClick={() => abrirGaleria(c.id, anexar)}>Ver e baixar</button>}
           </div>
-          <div className="thumbs">{imgs.map((a: any, i: number) => <img key={a.id || i} className="thumb" src={a.url} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />)}
+          <div className="thumbs">{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><img className="thumb" src={a.url} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />{anexar && R.podeRemoverAnexo(a) && <button className="rm2" title="Apagar foto" onClick={() => apagarFoto(a)}>✕</button>}</span>)}
             {links.map((a: any, i: number) => <a key={"l" + i} className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{a.tipo === "pdf" ? "📄 " + (a.nome.length > 22 ? "PDF" : a.nome) : a.tipo === "video" ? "🎬 vídeo" : "🔗 link"}</a>)}</div>
         </div>
       ) : R.semAnexo(c) ? <div className="aviso-anexo" style={{ marginTop: 12 }}>⚠️ <b>Sem anexo.</b> Nenhuma planta ou foto do cliente — {c.consultorId ? "o consultor precisa anexar" : "anexe a planta ou fotos"} antes do atendimento na loja.</div>
@@ -553,7 +563,7 @@ function TrocarConsultor({ c }: any) {
       {aberto && <div className="lt-acoes">
         <select value={novo} onChange={e => setNovo(e.target.value)}><option value="">Novo consultor…</option>{R.consultores().filter((u: any) => u.id !== c.consultorId).map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>
         <input placeholder="Motivo (opcional)" value={mot} onChange={e => setMot(e.target.value)} />
-        <button className="btn primary sm" onClick={() => { if (!novo) { toast("Escolha o novo consultor"); return; } ex(() => A.trocarConsultor(c.id, novo, mot), "Consultor trocado — os dois foram avisados").then((ok: boolean) => { if (ok) { setAberto(false); setNovo(""); setMot(""); } }); }}>Trocar</button>
+        <button className="btn primary sm" onClick={() => { if (!novo) { toast("Escolha o novo consultor"); return; } if (!confirmarConsultor(R, novo, c.dataVisita, c.id)) return; ex(() => A.trocarConsultor(c.id, novo, mot), "Consultor trocado — os dois foram avisados").then((ok: boolean) => { if (ok) { setAberto(false); setNovo(""); setMot(""); } }); }}>Trocar</button>
         <button className="btn ghost sm" onClick={() => setAberto(false)}>Cancelar</button>
       </div>}
     </div>
@@ -603,7 +613,7 @@ export function MarcasLoja({ c }: any) {
 
 function Anexos({ c, editavel }: any) {
   const { R, executar: ex, toast, openImg, abrirGaleria } = useApp();
-  const [link, setLink] = useState(""); const [enviando, setEnviando] = useState(""); 
+  const [link, setLink] = useState(""); const [enviando, setEnviando] = useState(""); const [pend, setPend] = useState<Pendente[]>([]);
   const presale = R.domMarketing(c);
   const anexos = c.anexos || [];
   const imgs = anexos.filter((a: any) => a.tipo === "img");
@@ -616,23 +626,29 @@ function Anexos({ c, editavel }: any) {
     if (!files || !files.length) return;
     setEnviando("Preparando…");
     try {
-      const { fotos, outros, recusados } = await prepararArquivos(Array.from(files), t => setEnviando(t || "Enviando…"));
+      const { fotos, outros, recusados } = await prepararArquivos(Array.from(files), t => setEnviando(t || "Preparando…"));
       if (recusados.length) toast("Não anexado: " + recusados.join(", "));
-      if (!fotos.length && !outros.length) return;
-      setEnviando("Enviando…");
-      await ex(async () => { const itens = [...await enviarFotos(c.id, fotos), ...await enviarArquivos(c.id, outros)]; await A.adicionarAnexos(c.id, itens, true); }, "Anexo(s) enviado(s)");
+      setPend(p => juntarPendentes(p, fotos, outros));
     } finally { setEnviando(""); }
   }
+  async function enviarPend() {
+    const { fotos, outros } = separarPendentes(pend); if (!fotos.length && !outros.length) return;
+    setEnviando("Enviando " + pend.length + " arquivo(s)…");
+    try { const ok = await ex(async () => { const itens = [...await enviarFotos(c.id, fotos), ...await enviarArquivos(c.id, outros)]; await A.adicionarAnexos(c.id, itens, true); }, "Anexo(s) enviado(s)"); if (ok !== false) setPend([]); }
+    finally { setEnviando(""); }
+  }
+  const apagar = (a: any) => { if (confirm("Apagar " + (a.tipo === "img" ? "esta foto" : "este anexo") + "?")) ex(() => A.removerAnexo(a.id), "Anexo apagado"); };
   const icone = (a: any) => a.tipo === "pdf" ? "📄" : a.tipo === "video" ? "🎬" : "🔗";
   const lista = [...arquivos, ...links];
   return (
     <div className="resp-box"><h4>Anexos{lista.length ? " — planta, vídeos e links (" + lista.length + ")" : ""}</h4>
       {mostrarFotos && imgs.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-        <div className="thumbs" style={{ flex: 1 }}>{imgs.map((a: any, i: number) => <img key={a.id || i} className="thumb" src={a.url} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />)}</div>
+        <div className="thumbs" style={{ flex: 1 }}>{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><img className="thumb" src={a.url} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />{editavel && R.podeRemoverAnexo(a) && <button className="rm2" title="Apagar foto" onClick={() => apagar(a)}>✕</button>}</span>)}</div>
         <button className="btn sm" onClick={() => abrirGaleria(c.id, editavel)}>Ver e baixar</button></div>}
       {lista.length ? <div className="thumbs" id="dThumbs">{lista.map((a: any) => (
-        <div className="thumb-wrap" key={a.id}><a className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{icone(a)} {a.tipo === "link" ? (a.nome.length > 22 ? "link" : a.nome) : (a.nome.length > 26 ? a.nome.slice(0, 24) + "…" : a.nome)}</a>{editavel && R.podeRemoverAnexo(a) && <button className="rm" onClick={() => ex(() => A.removerAnexo(a.id))}>×</button>}</div>
+        <div className="thumb-wrap" key={a.id}><a className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{icone(a)} {a.tipo === "link" ? (a.nome.length > 22 ? "link" : a.nome) : (a.nome.length > 26 ? a.nome.slice(0, 24) + "…" : a.nome)}</a>{editavel && R.podeRemoverAnexo(a) && <button className="rm" title="Apagar" onClick={() => apagar(a)}>×</button>}</div>
       ))}</div> : (presale ? <span style={{ color: "var(--ink-faint)", fontSize: 12.5 }}>As fotos aparecem no quadro acima. Aqui ficam plantas em PDF, vídeos e links.</span> : (!imgs.length ? <span style={{ color: "var(--ink-faint)", fontSize: 12.5 }}>Nenhum anexo ainda.</span> : null))}
+      {editavel && pend.length > 0 && !enviando && <PreviaEnvio itens={pend} aceita={ACEITA_ANEXO} remover={i => setPend(p => p.filter((_, j) => j !== i))} enviar={enviarPend} cancelar={() => setPend([])} mais={addArquivos} />}
       {editavel && <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <label className="btn sm" style={{ cursor: enviando ? "wait" : "pointer" }}>{enviando || "Anexar foto, vídeo ou PDF"}<input type="file" accept={ACEITA_ANEXO} multiple style={{ display: "none" }} disabled={!!enviando} onChange={e => { addArquivos(e.target.files); e.target.value = ""; }} /></label>
         <input placeholder="Colar link (Drive, YouTube…)" style={{ flex: 1, minWidth: 180 }} value={link} onChange={e => setLink(e.target.value)} />

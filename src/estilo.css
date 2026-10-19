@@ -1455,3 +1455,34 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 
 .ma-av { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; background: var(--card); border: 1px dashed var(--primary); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
 .ma-av .field { margin: 0; min-width: 120px; }
+
+/* confirmação antes de enviar anexos */
+.pv-envio { border: 2px solid var(--primary); border-radius: 12px; padding: 12px; background: var(--primary-soft); margin: 8px 0; }
+.pv-envio-t { font-weight: 700; font-size: 14px; margin-bottom: 8px; } .pv-envio-t small { display: block; font-weight: 400; color: var(--ink-soft); font-size: 12px; }
+.pv-envio-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.pv-envio-i { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--card); border: 1px solid var(--line); }
+.pv-envio-i img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pv-envio-arq { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 28px; padding: 4px; text-align: center; }
+.pv-envio-arq span { font-size: 10.5px; word-break: break-all; color: var(--ink-soft); }
+.pv-envio-x { position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(200,30,30,.92); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; line-height: 30px; padding: 0; }
+.pv-envio-mais { aspect-ratio: 1; border: 2px dashed var(--primary); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 26px; color: var(--primary); cursor: pointer; }
+.pv-envio-mais span { font-size: 11px; }
+.pv-envio-b { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; } .pv-envio.movel .pv-envio-b > * { flex: 1; }
+.mv-anx-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.mv-anx-i { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--card); }
+.mv-anx-i img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mv-anx-i .arq { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px; text-decoration: none; }
+.mv-anx-del { position: absolute; top: 3px; right: 3px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 14px; cursor: pointer; padding: 0; }
+.thumb-del { position: relative; display: inline-block; } .thumb-del .rm2 { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--danger); color: #fff; font-size: 12px; font-weight: 800; cursor: pointer; padding: 0; line-height: 22px; }
+
+/* cores dos cartões de cliente (celular): faixa à esquerda + selo */
+.mv-card.cor-ctt{border-left:6px solid #e0a800;background:linear-gradient(90deg,rgba(224,168,0,.10),var(--surface) 40%)}
+.mv-card.cor-loja{border-left:6px solid #1f6fd6;background:linear-gradient(90deg,rgba(31,111,214,.10),var(--surface) 40%)}
+.mv-card.cor-conf{border-left:6px solid #0f8a5f;background:linear-gradient(90deg,rgba(15,138,95,.12),var(--surface) 40%)}
+.mv-cor{font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:999px;white-space:nowrap;color:#fff}
+.mv-cor.ctt{background:#e0a800;color:#3a2a00}.mv-cor.loja{background:#1f6fd6}.mv-cor.conf{background:#0f8a5f}
+
+.mv-tels{display:flex;flex-direction:column;gap:6px;margin:6px 0 8px}
+.mv-tel{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.mv-tel a{flex:1;color:var(--ink);text-decoration:none;font-size:15.5px}
+.mv-tel button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;font:600 12.5px inherit;color:var(--primary);cursor:pointer}

@@ -14,7 +14,7 @@ import { SinoAvisos } from "../comp/Avisos";
 import { ChatMovel } from "../comp/Chat";
 import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
-import { CancelouLoja, ConfirmarVinda, SeloVinda, SituacaoConsultor } from "../comp/Situacao";
+import { CancelouLoja, ConfirmarVinda, SeloVinda, SituacaoConsultor, vindaConfirmada } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
 import { RemarcarData } from "../comp/Remarcar";
 import Agenda from "../telas/Agenda";
@@ -25,6 +25,7 @@ import { Distribuir, podeDistribuir } from "./Distribuir";
 import { Juridico } from "../telas/Setores";
 import ControleVendedores, { podeGerirVendedores } from "../telas/ControleVendedores";
 import { BuscaAssumir } from "../comp/BuscaAssumir";
+import { PreviaEnvio, juntarPendentes, separarPendentes, type Pendente } from "../comp/PreviaEnvio";
 import Nova from "../telas/Nova";
 import PosVenda from "../telas/PosVenda";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
@@ -157,11 +158,14 @@ function Cartao({ c, abrir, linha, destaque }: any) {
   const { R } = useApp() as any;
   const sc = R.statusClienteDe(c);
   const ctt = contatoFeito(c, R.currentUserId);
+  // cor do cartão (faixa da esquerda + selo): confirmado = verde · agendado na loja = azul · em contato = amarelo
+  const futuraLoja = !!c.dataLoja && String(c.dataLoja).slice(0, 10) >= hojeISO() && !c.venda && !["loja_cancelada", "nao_compareceu", "reprovado", "visita_cancelada", "atendido"].includes(sc);
+  const cor = futuraLoja && vindaConfirmada(c) ? "conf" : futuraLoja ? "loja" : ctt ? "ctt" : "";
   return (
-    <button className={"mv-card" + (destaque ? " dest" : "") + (ctt ? " ctt" : "")} onClick={() => abrir(c.id)}>
+    <button className={"mv-card" + (destaque ? " dest" : "") + (cor ? " cor-" + cor : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{linha?.hora || ""}</b><small>{linha?.dia || ""}</small></div>
       <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""} <SeloLitoral c={c} /></div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
-      <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{ctt && <span className="mv-ctt">✅ Contato feito</span>}<SeloVinda c={c} /></div>
+      <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{cor === "conf" ? <span className="mv-cor conf">✅ Confirmado</span> : cor === "loja" ? <span className="mv-cor loja">🏬 Agendado loja</span> : cor === "ctt" ? <span className="mv-cor ctt">📞 Em contato</span> : null}{cor === "loja" && <SeloVinda c={c} />}</div>
     </button>
   );
 }
@@ -441,39 +445,54 @@ function Folha({ id, fechar, perfil }: any) {
   );
 }
 function Contato({ c, rota = true }: any) {
-  const { R } = useApp() as any;
+  const { R, toast } = useApp() as any;
   const tel = String(c.telefone || "").replace(/\D/g, ""), wa = R.waLinkCliente(c), maps = R.mapsLink(c), waze = R.wazeLink(c);
-  return (
+  const nums: string[] = Array.from(new Set((String(c.telefone || "").match(/(\+?55\s?)?\(?\d{2}\)?\s?9?\s?\d{4}[\s.-]?\d{4}|\d{8,13}/g) || []).map(x => x.trim())));
+  const copiar = async (t: string) => { const d = t.replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, ""); try { await navigator.clipboard.writeText(d); toast("Telefone copiado: " + fmtTel(d)); } catch { window.prompt("Copie o telefone:", d); } };
+  return (<>
+    {nums.length > 0 && <div className="mv-tels" onClick={e => e.stopPropagation()}>{nums.map((n, i) => <div key={i} className="mv-tel"><a href={"tel:" + n.replace(/\D/g, "")}>📞 <b>{fmtTel(n)}</b></a><button type="button" onClick={() => copiar(n)}>📋 Copiar</button></div>)}</div>}
     <div className="mv-contato" onClick={e => e.stopPropagation()}>
       {tel ? <a href={"tel:" + tel} className="mv-bt">📞<span>Ligar</span></a> : <span className="mv-bt off">📞<span>Sem tel.</span></span>}
       {wa ? <a href={wa} target="_blank" rel="noopener" className="mv-bt wa">💬<span>WhatsApp</span></a> : null}
       {rota && maps ? <a href={maps} target="_blank" rel="noopener" className="mv-bt">🗺<span>Maps</span></a> : null}
       {rota && waze ? <a href={waze} target="_blank" rel="noopener" className="mv-bt">🚗<span>Waze</span></a> : null}
     </div>
-  );
+  </>);
 }
 function Anexar({ c }: any) {
-  const { R, executar: ex, toast } = useApp() as any;
+  const { R, executar: ex, toast, openImg } = useApp() as any;
   const [status, setStatus] = useState("");
-  const qtd = (c.anexos || []).length;
+  const [pend, setPend] = useState<Pendente[]>([]);
+  const anexos = c.anexos || [];
+  const qtd = anexos.length;
   if (!R.podeAnexar(c)) return null;
-  const enviar = async (files: FileList | null) => {
+  // escolher NÃO envia: vai para a conferência; só sobe ao tocar em "Enviar"
+  const escolher = async (files: FileList | null) => {
     if (!files || !files.length) return;
     setStatus("Preparando…");
     try {
-      const { fotos, outros, recusados } = await prepararArquivos(Array.from(files), s => setStatus(s || "Enviando…"));
+      const { fotos, outros, recusados } = await prepararArquivos(Array.from(files), s => setStatus(s || "Preparando…"));
       if (recusados.length) toast("Não anexado: " + recusados.join(", "));
-      if (!fotos.length && !outros.length) return;
-      setStatus("Enviando…");
-      await ex(async () => { const itens = [...await enviarFotos(c.id, fotos), ...await enviarArquivos(c.id, outros)]; await A.adicionarAnexos(c.id, itens, true); }, "Anexo enviado");
+      setPend(p => juntarPendentes(p, fotos, outros));
     } finally { setStatus(""); }
   };
+  const enviar = async () => {
+    const { fotos, outros } = separarPendentes(pend); if (!fotos.length && !outros.length) return;
+    setStatus("Enviando " + pend.length + " arquivo(s)…");
+    try { const ok = await ex(async () => { const itens = [...await enviarFotos(c.id, fotos), ...await enviarArquivos(c.id, outros)]; await A.adicionarAnexos(c.id, itens, true); }, "Anexo(s) enviado(s)"); if (ok !== false) setPend([]); }
+    finally { setStatus(""); }
+  };
+  const apagar = (a: any) => { if (confirm("Apagar " + (a.tipo === "img" ? "esta foto" : "este arquivo") + " do cliente " + c.cliente + "?")) ex(() => A.removerAnexo(a.id), "Anexo apagado"); };
+  const imgs = anexos.filter((a: any) => a.tipo === "img");
   return (
     <div className="mv-bloco">
       <div className="mv-bloco-t">Planta, fotos e vídeos {qtd ? <small>({qtd} anexado{qtd > 1 ? "s" : ""})</small> : <small style={{ color: "#b07a00" }}>⚠️ sem anexo</small>}</div>
-      {status ? <div className="mv-status">{status}</div> : <div className="mv-2">
-        <label className="mv-grande">📷 Tirar foto<input type="file" accept="image/*" capture="environment" hidden onChange={e => { enviar(e.target.files); e.target.value = ""; }} /></label>
-        <label className="mv-grande">📎 Foto, vídeo ou PDF<input type="file" accept={ACEITA_ANEXO} multiple hidden onChange={e => { enviar(e.target.files); e.target.value = ""; }} /></label>
+      {qtd > 0 && <div className="mv-anx-g">{anexos.map((a: any) => <div key={a.id} className="mv-anx-i">
+        {a.tipo === "img" ? <img src={a.url} alt="" onClick={() => openImg(imgs.map((x: any) => x.url), imgs.indexOf(a))} /> : <a className="arq" href={a.url} target="_blank" rel="noopener">{a.tipo === "pdf" ? "📄" : a.tipo === "video" ? "🎬" : "🔗"}</a>}
+        {R.podeRemoverAnexo(a) && <button className="mv-anx-del" title="Apagar" onClick={() => apagar(a)}>🗑</button>}</div>)}</div>}
+      {status ? <div className="mv-status">{status}</div> : pend.length ? <PreviaEnvio movel itens={pend} aceita={ACEITA_ANEXO} remover={i => setPend(p => p.filter((_, j) => j !== i))} enviar={enviar} cancelar={() => setPend([])} mais={escolher} /> : <div className="mv-2">
+        <label className="mv-grande">📷 Tirar foto<input type="file" accept="image/*" capture="environment" hidden onChange={e => { escolher(e.target.files); e.target.value = ""; }} /></label>
+        <label className="mv-grande">📎 Foto, vídeo ou PDF<input type="file" accept={ACEITA_ANEXO} multiple hidden onChange={e => { escolher(e.target.files); e.target.value = ""; }} /></label>
       </div>}
     </div>
   );
@@ -497,10 +516,10 @@ function PassosConsultor({ c }: any) {
         <button className="btn sm" onClick={() => ex(() => A.salvarTratativa(c.id, { obs, medidas: med }), "Salvo")}>Salvar observação</button></div>
       <div className="mv-passo col"><div className="mv-passo-l"><span>4</span><div>Agendar a vinda à loja</div></div>
         <input type="datetime-local" value={dl} onChange={e => setDl(e.target.value)} />
-        <div className="mv-2"><button className={"mv-op" + (qp === "sim" ? " on" : "")} onClick={() => setQp("sim")}>📐 Quer projeto pronto</button><button className={"mv-op" + (qp === "nao" ? " on" : "")} onClick={() => setQp("nao")}>Não quer projeto</button></div>
+        <div className="mv-dica" style={{ margin: "2px 0 0" }}>Projeto pronto (opcional):</div>
+        <div className="mv-2"><button className={"mv-op" + (qp === "sim" ? " on" : "")} onClick={() => setQp(qp === "sim" ? "" : "sim")}>📐 Quer projeto pronto</button><button className={"mv-op" + (qp === "nao" ? " on" : "")} onClick={() => setQp(qp === "nao" ? "" : "nao")}>Não quer projeto</button></div>
         <button className="mv-principal" onClick={() => {
           if (!dl || dl.length < 16) { toast("Escolha o dia e o horário na loja"); return; }
-          if (!qp) { toast("Diga se o cliente quer projeto pronto"); return; }
           if (!(c.anexos || []).length && !confirm("Este cliente está SEM ANEXO (planta/fotos). Agendar mesmo assim?")) return;
           ex(() => A.agendarLoja(c.id, dl, med, obs, qp), "Agendado na loja ✓");
         }}>Agendar na loja</button></div>

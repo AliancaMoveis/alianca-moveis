@@ -626,6 +626,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const u = me();
     const souProjetista = u && c.atendenteId === u.id, souConsultor = u && c.consultorId === u.id;
     const souSuporte = u && (u.setores || []).includes("suporte_consultores");
+    // depois que o contato já foi feito (consultor: "Contato realizado" · vendedor: "Já estou em contato"), abre a conversa sem texto pronto
+    const t: any = (c as any).tratativa || {};
+    if ((souConsultor && t.contatoIniciado) || (souProjetista && t.emContato)) return `https://wa.me/${n}`;
     let msg;
     if (souSuporte) msg = msgWhatsSuporte(c);
     else if (souProjetista || (!souConsultor && c.dataLoja && ["agendado_loja", "com_vendedor"].includes(statusClienteDe(c)))) msg = msgWhatsProjetista(c);

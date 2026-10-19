@@ -1,5 +1,6 @@
 // App do celular — distribuição: direcionar consultor externo e definir vendedor (Gestão, Supervisão Marketing e Suporte).
 import { useState } from "react";
+import { confirmarConsultor, conflitosConsultor, sugestaoConsultor, textoConflito } from "../lib/agendaConsultor";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { SelVendedor, confirmarDisp, registrarIndisp } from "../comp/SelVendedor";
@@ -51,6 +52,7 @@ function CartaoCons({ c }: any) {
   const ir = () => {
     if (!cons) { toast("Escolha o consultor"); return; }
     const mudouData = dv && dv !== String(c.dataVisita || "").slice(0, 16);
+    if (!confirmarConsultor(R, cons, dv || c.dataVisita, c.id)) return;
     ex(() => A.direcionarConsultor(c.id, cons, mudouData ? dv : "", ""), "Direcionado — o consultor recebe no app");
   };
   return <div className="ds-card">
@@ -61,8 +63,10 @@ function CartaoCons({ c }: any) {
     <div className="ds-acao">
       <select value={cons} onChange={e => setCons(e.target.value)}>
         <option value="">Escolher consultor…</option>
-        {consultores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}{dv ? ` · ${doDia(u.id)} no dia` : ""} · {pend(u.id)} a fazer</option>)}
+        {consultores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}{dv ? ` · ${doDia(u.id)} no dia` : ""} · {pend(u.id)} a fazer{dv && conflitosConsultor(R, u.id, dv, c.id).length ? " · ⚠️ ocupado no horário" : ""}</option>)}
       </select>
+      {cons && dv && (() => { const t = textoConflito(R, cons, dv, c.id); if (!t) return null; const s = sugestaoConsultor(R, dv, cons, c.id);
+        return <div className="mv-dica" style={{ borderColor: "var(--warn)", color: "#8a5a00" }}>⚠️ {t}{s ? <> Sugestão: <a href="#" onClick={e => { e.preventDefault(); setCons(s.id); }}><b>{s.nome}</b></a> (livre).</> : " Nenhum outro livre nesse horário."}</div>; })()}
       <label className="ds-data">Visita<input type="datetime-local" value={dv} min={hoje + "T07:00"} onChange={e => setDv(e.target.value)} /></label>
       <button className="mv-principal" onClick={ir}>Direcionar</button>
     </div>

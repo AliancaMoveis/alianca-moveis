@@ -1,0 +1,2 @@
+-- 0151 (aplicado via execute_sql): alterar_status_cliente — o consultor do cliente pode corrigir o status em qualquer etapa
+-- (exceto status de venda); "visita_realizada"/"direcionado_consultor" num cliente já na loja desfaz o agendamento e volta para o consultor.

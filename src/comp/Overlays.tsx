@@ -83,7 +83,7 @@ export function Overlays({ lb, setLb, gal, setGal }: any) {
                 <div className="gal-item" key={a.id || i}>
                   <img src={a.url} alt={a.nome || ""} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />
                   <button className="dl" title="Baixar esta foto" onClick={e => { e.stopPropagation(); baixarUm(a); }}>⬇</button>
-                  {gal.editavel && a.id && R.podeRemoverAnexo(a) && <button className="rm" title="Remover" onClick={e => { e.stopPropagation(); executar(() => A.removerAnexo(a.id)); }}>×</button>}
+                  {gal.editavel && a.id && R.podeRemoverAnexo(a) && <button className="rm" title="Remover" onClick={e => { e.stopPropagation(); if (confirm("Apagar esta foto?")) executar(() => A.removerAnexo(a.id), "Foto apagada"); }}>×</button>}
                   <div className="nm">{a.nome || "foto"}</div>
                 </div>
               ))}

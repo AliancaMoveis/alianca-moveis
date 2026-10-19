@@ -47,8 +47,22 @@ export function CancelouLoja({ c, movel }: { c: any; movel?: boolean }) {
     <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>Para nova data, use “Remarcar loja” / status Reagendado.</div>
   </div>;
   const salvar = () => { if (obs.trim().length < 3) { toast("Escreva o motivo: o que o cliente disse"); return; } ex(() => A.cancelouLoja(c.id, obs.trim()), "Marcado: cancelou visita na loja").then((ok: boolean) => { if (ok) { setAbre(false); setObs(""); } }); };
+  // no computador quem tem o "Status do cliente" completo muda por lá; aqui fica um menu (não um botão solto, para não cancelar sem querer)
+  if (!movel && !R.me()?.somenteAtribuidos) return null;
+  const consultorDoCliente = c.consultorId === eu && ["suporte_consultores", "atendente_cliente"].includes(c.setorDestino);
+  const escolher = (k: string) => {
+    if (k === "loja_cancelada") { setAbre(true); return; }
+    if (!k) return;
+    const txt = k === "visita_realizada" ? "Mudar para “Visita realizada”? O agendamento na loja de " + fmtDateTime(c.dataLoja) + " é desfeito e o cliente volta para você." : "Voltar o cliente para a etapa da visita? O agendamento na loja é desfeito.";
+    if (confirm(txt)) ex(() => A.alterarStatusCliente(c.id, k), "Status atualizado");
+  };
   return <div className={movel ? "mv-bloco" : "resp-box"} style={abre ? undefined : { padding: movel ? undefined : "10px 14px" }}>
-    {!abre ? <button className={movel ? "mv-mais" : "btn ghost sm"} onClick={() => setAbre(true)}>❌ Cliente cancelou a visita na loja</button> : <>
+    {!abre ? <select className={movel ? "mv-mais" : ""} value="" onChange={e => escolher(e.target.value)}>
+      <option value="">Mudar status do cliente ▾</option>
+      {consultorDoCliente && <option value="visita_realizada">✓ Visita realizada (desfazer agendamento da loja)</option>}
+      {consultorDoCliente && <option value="direcionado_consultor">↩ Voltar para a visita (direcionado ao consultor)</option>}
+      <option value="loja_cancelada">❌ Cancelou visita na loja</option>
+    </select> : <>
       <div className={movel ? "mv-bloco-t" : ""} style={movel ? undefined : { fontWeight: 700, marginBottom: 8 }}>❌ Cancelou visita na loja</div>
       <textarea rows={2} style={{ width: "100%" }} placeholder="Motivo: o que o cliente disse (desistiu, comprou em outro lugar, quer outra data…)" value={obs} onChange={e => setObs(e.target.value)} />
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}><button className={movel ? "mv-principal" : "btn primary sm"} onClick={salvar}>Salvar</button><button className="btn ghost sm" onClick={() => { setAbre(false); setObs(""); }}>Voltar</button></div>
