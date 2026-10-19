@@ -107,3 +107,27 @@ export function ConfirmarVinda({ c, movel }: { c: any; movel?: boolean }) {
     </>}
   </div>;
 }
+
+/** “Visita realizada”: registro próprio (data, hora e quem registrou) — é o que conta para o pagamento da visita.
+ *  Vale em qualquer etapa (mesmo depois de agendar a loja). Só a Supervisão/Suporte/Gestão desfazem, com motivo. */
+export function VisitaRealizada({ c, movel }: { c: any; movel?: boolean }) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const [obs, setObs] = useState(""); const [abre, setAbre] = useState(false);
+  if (!R.domMarketing(c) || !c.consultorId) return null;
+  const t = c.tratativa || {}; const eu = R.currentUserId;
+  const gere = R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
+  if (t.realizada) return <div className={"vr-card ok" + (movel ? " movel" : "")}>
+    <div className="vr-ic">✅</div>
+    <div className="vr-tx"><b>VISITA REALIZADA</b><small>{t.visitaRealizadaEm ? fmtDateTime(t.visitaRealizadaEm) + (t.visitaRealizadaPor ? " · registrada por " + t.visitaRealizadaPor : "") : "registrada"}{t.visitaRealizadaObs ? " · " + t.visitaRealizadaObs : ""}</small></div>
+    {gere && <button type="button" className="vr-desf" onClick={() => { const m = prompt("Motivo para desfazer a visita realizada de " + c.cliente + ":"); if (m && m.trim().length >= 3 && confirm("Desfazer a visita realizada? Ela deixa de contar para o pagamento do consultor.")) ex(() => A.visitaRealizadaDesfazer(c.id, m.trim()), "Visita realizada desfeita"); else if (m !== null) toast("Escreva o motivo"); }}>Desfazer</button>}
+  </div>;
+  if (!(c.consultorId === eu || gere)) return <div className={"vr-card pend" + (movel ? " movel" : "")}><div className="vr-ic">⏳</div><div className="vr-tx"><b>Visita ainda não realizada</b><small>consultor {R.nomeUser(c.consultorId)}</small></div></div>;
+  return <div className={"vr-card pend" + (movel ? " movel" : "")}>
+    {!abre ? <button type="button" className="vr-bt" onClick={() => setAbre(true)}>✅ Registrar VISITA REALIZADA</button> : <div className="vr-form">
+      <b>Confirmar: a visita ao cliente {c.cliente} foi realizada?</b>
+      <input value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação (opcional)" />
+      <div style={{ display: "flex", gap: 8 }}><button type="button" className="vr-bt" onClick={() => ex(() => A.visitaRealizada(c.id, obs.trim()), "Visita realizada registrada ✓").then((ok: boolean) => ok && setAbre(false))}>Sim, visita realizada</button><button type="button" className="vr-cancel" onClick={() => setAbre(false)}>Cancelar</button></div>
+      <small>Fica no histórico com data, hora e quem registrou. É o que conta para o pagamento da visita.</small>
+    </div>}
+  </div>;
+}

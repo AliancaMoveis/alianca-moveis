@@ -70,6 +70,10 @@ export const A = {
   registrarVenda: (id: string, numero: string, valor: number, data: string, vendedor: string, gerente: string, tipo = "", entrada: number | null = null) =>
     rpc("registrar_venda", { p_id: id, p_numero: numero, p_valor: valor, p_data: nz(data), p_vendedor: vendedor, p_gerente: nz(gerente), p_tipo: tipo, p_entrada: entrada }),
   confirmarVinda: (id: string, obs: string, desfazer = false) => rpc("confirmar_vinda_loja", { p_id: id, p_obs: obs || "", p_desfazer: desfazer }),
+  consBloqueioSalvar: (p: any) => rpc<number>("consultor_bloqueio_salvar", { p }),
+  consBloqueioRemover: (id: number) => rpc("consultor_bloqueio_remover", { p_id: id }),
+  visitaRealizada: (id: string, obs = "") => rpc("visita_realizada", { p_id: id, p_obs: obs }),
+  visitaRealizadaDesfazer: (id: string, motivo: string) => rpc("visita_realizada_desfazer", { p_id: id, p_motivo: motivo }),
   cancelouLoja: (id: string, obs: string, desfazer = false) => rpc("cancelou_loja", { p_id: id, p_obs: obs || "", p_desfazer: desfazer }),
   consultorSituacao: (id: string, status: string, obs: string) => rpc("consultor_situacao", { p_id: id, p_status: status, p_obs: obs || "" }),
   validarVenda: (id: string, status: string, entrada: number, promissorias: any[]) => rpc("validar_venda", { p_id: id, p_status: status, p_entrada: entrada || 0, p_promissorias: promissorias }),

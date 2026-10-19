@@ -1,0 +1,4 @@
+-- 0152 (aplicado via execute_sql): consultor_bloqueios + _consultor_bloqueio(uid, ts) + consultor_bloqueio_salvar/remover;
+-- direcionar_consultor e trocar_consultor recusam consultor com agenda fechada no horário;
+-- visita_realizada(p_id, p_obs) (registro com data/quem) e visita_realizada_desfazer(p_id, p_motivo) só supervisão/gestão;
+-- alternar_marcacao('realizada') passa a usar visita_realizada e não desmarca.

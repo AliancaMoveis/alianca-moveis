@@ -15,7 +15,7 @@ import { SinoAvisos } from "../comp/Avisos";
 import { ChatMovel } from "../comp/Chat";
 import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
-import { CancelouLoja, ConfirmarVinda, SeloVinda, SituacaoConsultor, vindaConfirmada } from "../comp/Situacao";
+import { CancelouLoja, ConfirmarVinda, SeloVinda, SituacaoConsultor, VisitaRealizada, vindaConfirmada } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
 import { RemarcarData } from "../comp/Remarcar";
 import Agenda from "../telas/Agenda";
@@ -29,6 +29,7 @@ import { BuscaAssumir } from "../comp/BuscaAssumir";
 import { PreviaEnvio, juntarPendentes, separarPendentes, type Pendente } from "../comp/PreviaEnvio";
 import Nova from "../telas/Nova";
 import PosVenda from "../telas/PosVenda";
+import AgendaConsultores from "../telas/AgendaConsultores";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
@@ -85,7 +86,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
-    : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
+    : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["cagenda", "Agenda", "📅"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["urgente", "Urgente", "🚨"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["time", "Time", "🎯"], ["equipe", "Equipe", "👥"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : podeDistribuir(R) ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
@@ -137,6 +138,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "juridico" && aba === "distribuir" && <Distribuir soVend />}
         {aba === "vendedores" && <><button className="mv-voltar" onClick={() => setAba(abas[0][0])}>‹ Voltar</button><ControleVendedores movel /></>}
         {perfil === "juridico" && aba === "jur" && <JurMovel />}
+        {aba === "cagenda" && <AgendaConsultores movel />}
         {perfil === "posvenda" && aba === "pv" && <PvMovel aba="lista" />}
         {perfil === "posvenda" && aba === "pvnova" && <PvMovel aba="nova" />}
         {aba === "loja" && <div className="mv-agenda">{perfil === "marketing" && <button className="mv-voltar" onClick={() => setAba("hoje")}>‹ Voltar</button>}<Agenda /></div>}
@@ -431,6 +433,7 @@ function Folha({ id, fechar, perfil }: any) {
           {t.obs && <div><span>Obs. do consultor</span><b>{t.obs}</b></div>}
           {t.parecer && <div><span>Parecer do vendedor</span><b>{t.parecer}</b></div>}
         </div>
+        {(perfil === "consultor" || R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x))) && <VisitaRealizada c={c} movel />}
         {perfil === "consultor" && <RemarcarData c={c} tipo="visita" movel />}
         {perfil !== "consultor" || c.dataLoja ? <RemarcarData c={c} tipo="loja" movel /> : null}
         <Contato c={c} rota={perfil === "consultor"} />
@@ -510,7 +513,7 @@ function PassosConsultor({ c }: any) {
       <div className="mv-passo"><span className={t.contatoIniciado ? "ok" : ""}>1</span><div>Contato com o cliente</div>
         <button className={"mv-tg" + (t.contatoIniciado ? " on" : "")} onClick={() => marcar("contatoIniciado", "Atualizado")}>{t.contatoIniciado ? "Feito ✓" : "Marcar"}</button></div>
       <div className="mv-passo"><span className={t.realizada ? "ok" : ""}>2</span><div>Visita realizada</div>
-        <button className={"mv-tg" + (t.realizada ? " on" : "")} onClick={() => marcar("realizada", "Atualizado")}>{t.realizada ? "Feita ✓" : "Marcar"}</button></div>
+        <button className={"mv-tg" + (t.realizada ? " on" : "")} disabled={!!t.realizada} onClick={() => { if (confirm("Confirmar: a visita ao cliente " + c.cliente + " foi realizada?")) ex(() => A.visitaRealizada(c.id, ""), "Visita realizada registrada ✓"); }}>{t.realizada ? "Feita ✓" : "Marcar"}</button></div>
       <div className="mv-passo col"><div className="mv-passo-l"><span>3</span><div>Observações da visita</div></div>
         <textarea value={obs} onChange={e => setObs(e.target.value)} placeholder="Condições do local, o que o cliente quer…" rows={2} />
         <input value={med} onChange={e => setMed(e.target.value)} placeholder="Complemento de medidas (opcional)" />

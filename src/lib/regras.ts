@@ -797,8 +797,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (mk.length) { if (!cc.length && !soMeusClientes) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
     // Consultores externos: setor próprio (o marketing gera a demanda, o consultor atende). Fica logo abaixo do Marketing.
     const coordCE = ehGestao() || mySetores().includes("marketing_supervisao") || mySetores().includes("suporte_consultores");
-    if (coordCE) G.push({ g: "Consultores externos", ic: "🧭", itens: [["ce_painel", "Painel dos consultores"], ["direcionamento", "Direcionar consultor"], ["ce_visitas", "Visitas"], ["ce_loja", "Agendados na loja"]] });
-    else if (ehConsultorExterno()) G.push({ g: "Minhas operações", ic: "🧭", itens: [["carteira", "Meus clientes"], ["agenda", "Agendamento loja"]] });
+    if (coordCE) G.push({ g: "Consultores externos", ic: "🧭", itens: [["ce_painel", "Painel dos consultores"], ["direcionamento", "Direcionar consultor"], ["ce_agenda", "📅 Agenda dos consultores"], ["ce_visitas", "Visitas"], ["ce_realizadas", "✅ Visitas realizadas"], ["ce_loja", "Agendados na loja"]] });
+    else if (ehConsultorExterno()) G.push({ g: "Minhas operações", ic: "🧭", itens: [["carteira", "Meus clientes"], ["ce_agenda", "📅 Minha agenda"], ["ce_realizadas", "✅ Minhas visitas realizadas"], ["agenda", "Agendamento loja"]] });
     // quem mede (consultor externo ou medidor): "Setor de medidas" (pós-venda) separado da operação de venda, e o financeiro
     if ((ehConsultorExterno() || ehMedidor()) && !coordCE && !ehSupMedidas()) {
       G.push({ g: "Setor de medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"], ["md_minhasfeitas", "Medidas finalizadas"]] });

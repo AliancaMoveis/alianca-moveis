@@ -1,9 +1,9 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
 import { jaResolvido } from "../lib/resolvido";
 import { DataCalendario } from "./DataCalendario";
-import { confirmarConsultor, conflitosConsultor, sugestaoConsultor, textoConflito } from "../lib/agendaConsultor";
+import { confirmarConsultor, marcaConsultor, sugestaoConsultor, textoConflito } from "../lib/agendaConsultor";
 import { EditarCliente, RemarcarData } from "./Remarcar";
-import { CancelouLoja, ConfirmarVinda, SituacaoConsultor } from "./Situacao";
+import { CancelouLoja, ConfirmarVinda, SituacaoConsultor, VisitaRealizada } from "./Situacao";
 import { PreviaEnvio, juntarPendentes, separarPendentes, type Pendente } from "./PreviaEnvio";
 import { RespMktFicha } from "./RespMkt";
 import { useEffect, useRef, useState } from "react";
@@ -73,6 +73,7 @@ export default function Detalhe({ id }: { id: string }) {
           {tratar && temTrat && <div className="acao-etapa"><div className="acao-etapa-tit">Ação desta etapa</div>{trat}</div>}
           {presale && <>
             <LitoralBloco c={c} />
+            <VisitaRealizada c={c} />
             <TrocarConsultor c={c} />
             <StatusCliente c={c} />
             <ConfirmarVinda c={c} />
@@ -215,7 +216,7 @@ function Tratativa({ c }: any) {
           <div><span style={{ color: "var(--ink-soft)" }}>Visita:</span> <b>{c.dataVisita ? fmtDT(c.dataVisita) : "não informada"}</b></div>
         </div>
         <div className="grid"><div className="field full"><label>Consultor externo <span className="req-star">*</span></label>
-          <select value={cons} onChange={e => setCons(e.target.value)}><option value="">Selecione…</option>{R.consultores().map(u => <option key={u.id} value={u.id}>{u.nome}{(editAg ? dv : c.dataVisita) && conflitosConsultor(R, u.id, editAg && dv ? dv : c.dataVisita, c.id).length ? " · ⚠️ já tem cliente neste horário" : ""}</option>)}</select>
+          <select value={cons} onChange={e => setCons(e.target.value)}><option value="">Selecione…</option>{R.consultores().map(u => <option key={u.id} value={u.id}>{u.nome}{marcaConsultor(R, u.id, editAg && dv ? dv : c.dataVisita, c.id)}</option>)}</select>
           {cons && (() => { const q = editAg && dv ? dv : c.dataVisita; const t = textoConflito(R, cons, q, c.id); if (!t) return null; const s = sugestaoConsultor(R, q, cons, c.id);
             return <div className="alerta" style={{ marginTop: 8 }}>⚠️ {t}{s ? <> Sugestão: <a href="#" onClick={e => { e.preventDefault(); setCons(s.id); }}><b>{s.nome}</b></a> está livre.</> : " Nenhum outro consultor livre nesse horário."}</div>; })()}</div></div>
         <div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}>

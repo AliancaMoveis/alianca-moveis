@@ -3,6 +3,8 @@ import { SinoAvisos } from "../comp/Avisos";
 import { ChatFlutuante } from "../comp/Chat";
 import EncontrarVendas360 from "./EncontrarVendas360";
 import MontagemAgend from "./MontagemAgend";
+import AgendaConsultores from "./AgendaConsultores";
+import VisitasRealizadas from "./VisitasRealizadas";
 import MontagemPagamento from "./MontagemPagamento";
 import ControleVendedores from "./ControleVendedores";
 import { useEffect, useMemo, useState } from "react";
@@ -178,12 +180,14 @@ export default function Shell() {
             {atual.startsWith("md_") && <Medidas key={atual} aba={atual.slice(3)} />}
             {atual === "encontrar_vendas" && R.podeEncontrarVendas() && <EncontrarVendas />}
             {atual === "montagem_agend" && <MontagemAgend />}
+            {atual === "ce_agenda" && <AgendaConsultores />}
+            {atual === "ce_realizadas" && <VisitasRealizadas />}
             {atual === "montagem_pag" && <MontagemPagamento />}
             {atual === "encontrar_vendas360" && R.podeEncontrarVendas() && <EncontrarVendas360 />}
             {atual === "treino" && <Treino />}
             {atual.startsWith("st_") && (() => { const m = atual.match(/^st_(.+)_([a-z]+)$/); return m ? <SetorFila key={atual} setor={m[1]} aba={m[2]} /> : null; })()}
             {atual.startsWith("jur_") && <Juridico key={atual} aba={atual.slice(4)} />}
-            {atual.startsWith("ce_") && <Consultores key={atual} aba={atual.slice(3)} />}
+            {atual.startsWith("ce_") && !["ce_agenda", "ce_realizadas"].includes(atual) && <Consultores key={atual} aba={atual.slice(3)} />}
           </main>
         </div>
       </div>
