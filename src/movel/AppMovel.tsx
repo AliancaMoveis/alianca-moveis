@@ -82,7 +82,7 @@ const diaCurto = (v: any) => { const d = dia(v); if (!d) return "sem data"; if (
 export default function AppMovel({ perfil, completa }: { perfil: Perfil; completa: () => void }) {
   const { R, detalheId, modal } = useApp() as any;
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
-    : perfil === "dono" ? [["painel", "Painel", "📊"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
+    : perfil === "dono" ? [["painel", "Painel", "📊"], ["resumo", "Ver tudo", "📈"], ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : perfil === "gerente" ? [["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
@@ -116,6 +116,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "consultor" && aba === "hoje" && <ConsHoje abrir={setAberto} ir={setAba} />}
         {perfil === "consultor" && aba === "clientes" && <ConsClientes abrir={setAberto} />}
         {perfil === "dono" && aba === "painel" && <PainelDono />}
+        {perfil === "dono" && aba === "resumo" && <GestResumo ir={k => abas.some(x => x[0] === k) && setAba(k)} />}
         {perfil === "gerente" && aba === "hoje" && <GerHoje ir={setAba} />}
         {perfil === "gerente" && aba === "chamar" && <GerChamar />}
         {perfil === "gerente" && aba === "clientes" && <GerClientes />}
