@@ -1,0 +1,4 @@
+-- 0157 Notificações do Lucas (modo "resumo"). Aplicada via execute_sql.
+-- usuarios.notif_modo ('resumo'): só recebe chat (chave chat:%), resumos (resumo:%) e o teste de notificação — trigger notificacoes_filtro.
+-- resumo_agendamentos(p_tipo dia|semana|mes): agendamentos do marketing criados no período (sem importações): total, marketing (direto), externo; top 5 de quem agendou.
+-- pg_cron (UTC): resumo-agend-dia 57 21 * * * (≈19h), resumo-agend-semana 57 17 * * 6 (sáb ≈15h), resumo-agend-mes 57 22 * * * (≈20h, só no último dia do mês).

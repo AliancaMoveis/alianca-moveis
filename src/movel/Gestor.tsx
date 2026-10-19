@@ -200,7 +200,9 @@ export function ResMkt({ todos, noPer, P, L }: any) {
   const vDir = vendas.filter((c: any) => R.ehDireto(c)), vExt = vendas.filter((c: any) => !R.ehDireto(c));
   const soma = (l: any[]) => l.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0);
   // entrada
-  const novos = mk.filter((c: any) => noPer(c.criadoEm));
+  // agendamentos feitos pelo time (planilhas importadas não contam como agendamento do dia)
+  const importado = (c: any) => /^Importa/i.test(c.solicitante || "") || !!(c.tratativa && (c.tratativa.agendLojaImportado || c.tratativa.importadoVisita || c.tratativa.visitaImportada));
+  const novos = mk.filter((c: any) => noPer(c.criadoEm) && !importado(c));
   const novosDir = novos.filter((c: any) => R.ehDireto(c)), novosExt = novos.filter((c: any) => !R.ehDireto(c));
   // funil de visitas (consultor externo)
   const vis = mk.filter((c: any) => !R.ehDireto(c) && c.consultorId && noPer(R.ancoraVisita(c)));
