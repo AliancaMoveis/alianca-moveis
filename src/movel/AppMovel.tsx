@@ -83,6 +83,8 @@ const diaCurto = (v: any) => { const d = dia(v); if (!d) return "sem data"; if (
 
 export default function AppMovel({ perfil, completa }: { perfil: Perfil; completa: () => void }) {
   const { R, detalheId, modal } = useApp() as any;
+  // gerente de anúncios e distribuição (permissão "anuncios", ex.: Lucas Santana): não agenda cliente nem aprova o time
+  const gerAnuncios = R.mySetores().includes("anuncios") && !R.ehGestao() && !R.ehProprietario();
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
     : perfil === "dono" ? [["resumo", "Ver tudo", "📈"], ["painel", "Resumo", "📊"], ["status", "Status", "🚦"], ["anuncios", "Anúncios", "📣"], ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
     : perfil === "gerente" ? [...(R.mySetores().includes("presenca") ? [["presenca", "Presença", "✅"], ["porta", "Porta", "＋"]] as [string, string, string][] : []), ["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
@@ -91,7 +93,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["cagenda", "Agenda", "📅"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["urgente", "Urgente", "🚨"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
-    : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["time", "Time", "🎯"], ["equipe", "Equipe", "👥"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
+    : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ...(gerAnuncios ? [] : [["time", "Time", "🎯"]] as [string, string, string][]), ["equipe", "Equipe", "👥"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : podeDistribuir(R) ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["eu", "Mais", "☰"]];
   const [aba, setAba] = useState(abas[0][0]);
@@ -100,7 +102,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const u = R.me();
   const gereMkt = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
   const { abrirDetalhe } = useApp() as any;
-  const podeRegistrar = perfil === "marketing" || perfil === "consultor" || (perfil === "gestor" && (R.ehGestao() || R.temMarketing()));
+  const podeRegistrar = !gerAnuncios && (perfil === "marketing" || perfil === "consultor" || (perfil === "gestor" && (R.ehGestao() || R.temMarketing())));
   const papel = perfil === "juridico" ? "Jurídico" : perfil === "posvenda" ? "Pós-venda" : perfil === "dono" ? "Proprietário" : perfil === "gerente" ? "Gerente" : perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
   const urg = perfil === "vendedor" ? pendUrgentes(R) : 0;
   const apv = perfil === "gestor" && R.ehGestao() ? R.pendenciasGestao().total - R.pendenciasGestao().promissorias.length + (R.state.reembolsos || []).filter((r: any) => r.status === "pendente").length : 0;
