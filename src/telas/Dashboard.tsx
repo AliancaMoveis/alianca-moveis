@@ -27,7 +27,7 @@ export default function Dashboard() {
   // período: padrão = mês atual. O que está em aberto (fila, atrasos, críticos) aparece sempre, de qualquer data;
   // o período vale para o que aconteceu nele: abertos, concluídos, agendamentos, vendas.
   const [preset, setPreset] = useState<"hoje" | "7" | "mes" | "ant" | "periodo">(R.ehGestao() && !R.ehProprietario() ? "hoje" : "mes");
-  const [vDono, setVDono] = useState<"dono" | "tudo">("dono");
+  const [vDono, setVDono] = useState<"dono" | "tudo">("tudo");
   const hoje = hojeISO();
   const menos = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return isoLocal(d); };
   const [pDe, setPDe] = useState(hoje.slice(0, 8) + "01"); const [pAte, setPAte] = useState(hoje);
@@ -118,7 +118,7 @@ export default function Dashboard() {
   const souConsultor = R.ehConsultorExterno() && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
   if (R.ehProprietario()) return <section className="view active" id="view-dashboard">
     <div className="view-head"><div><h2>Painel do dono</h2><p>{vDono === "dono" ? "Resultado do dia (ou do período escolhido), loja ao vivo, quem vende e quanto custa vender." : "Tudo o que a Gestão vê: call center, agendamentos, consultores externos, checklist e vendas — no período escolhido."} Só visualização — as tarefas ficam com a Gestão.</p></div></div>
-    <div className="subnav" style={{ marginBottom: 14 }}><button className={vDono === "dono" ? "on" : ""} onClick={() => setVDono("dono")}>🏬 Resumo do dono</button><button className={vDono === "tudo" ? "on" : ""} onClick={() => setVDono("tudo")}>📊 Ver tudo</button></div>
+    <div className="subnav" style={{ marginBottom: 14 }}><button className={vDono === "tudo" ? "on" : ""} onClick={() => setVDono("tudo")}>📊 Ver tudo</button><button className={vDono === "dono" ? "on" : ""} onClick={() => setVDono("dono")}>🏬 Resumo do dono</button></div>
     {vDono === "dono" ? <PainelDono /> : <>{cabecalho}<PainelBruno de={de} ate={ate} /></>}
   </section>;
   if (R.ehGestao()) return <section className="view active" id="view-dashboard">{cabecalho}<PainelBruno de={de} ate={ate} /></section>;

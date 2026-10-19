@@ -82,7 +82,7 @@ const diaCurto = (v: any) => { const d = dia(v); if (!d) return "sem data"; if (
 export default function AppMovel({ perfil, completa }: { perfil: Perfil; completa: () => void }) {
   const { R, detalheId, modal } = useApp() as any;
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
-    : perfil === "dono" ? [["painel", "Painel", "📊"], ["resumo", "Ver tudo", "📈"], ["status", "Status", "🚦"], ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
+    : perfil === "dono" ? [["resumo", "Ver tudo", "📈"], ["painel", "Resumo", "📊"], ["status", "Status", "🚦"], ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
     : perfil === "gerente" ? [["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
