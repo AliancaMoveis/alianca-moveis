@@ -186,7 +186,7 @@ export function GestResumo({ ir }: { ir?: (aba: string) => void }) {
   </>;
 }
 
-function ResMkt({ todos, noPer, P, L }: any) {
+export function ResMkt({ todos, noPer, P, L }: any) {
   const { R } = useApp() as any;
   const hoje = hojeISO(), amanha = addDias(1);
   const mk = todos.filter((c: any) => R.domMarketing(c));

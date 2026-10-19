@@ -9,6 +9,7 @@ import PainelBruno from "./PainelBruno";
 import PainelSupervisao from "./PainelSupervisao";
 import PainelChecklist from "./PainelChecklist";
 import Anuncios from "./Anuncios";
+import { ListaClientes, ResMkt, useLista } from "../movel/Gestor";
 import { LIMITE_INATIVIDADE_H, ORDEM, STATUS, fmtDate, fmtMoeda, hojeISO, isoLocal, tempoRel, vendaContaVolume, pagamentosVenda } from "../lib/regras";
 
 export const BarRow = ({ nm, pct, v, cor, extra }: { nm: string; pct: number; v: any; cor?: string; extra?: React.ReactNode }) => (
@@ -116,6 +117,7 @@ export default function Dashboard() {
   </>;
   // operadora do marketing: dashboard só visual (números e gráficos), sem lista de ações
   const souOperadora = R.mySetores().includes("marketing_operadora") && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
+  const supMkt = R.mySetores().includes("marketing_supervisao") && !R.ehGestao();
   const souConsultor = R.ehConsultorExterno() && !R.ehGestao() && !R.temMarketing() && !R.verTudo();
   if (R.ehProprietario()) return <section className="view active" id="view-dashboard">
     <div className="view-head"><div><h2>Painel do dono</h2><p>{vDono === "dono" ? "Resultado do dia (ou do período escolhido), loja ao vivo, quem vende e quanto custa vender." : "Tudo o que a Gestão vê: call center, agendamentos, consultores externos, checklist e vendas — no período escolhido."} Só visualização — as tarefas ficam com a Gestão.</p></div></div>
@@ -133,7 +135,10 @@ export default function Dashboard() {
       {cabecalho}
       {R.ehGestao() && area !== "cc" && <PainelGestao de={de} ate={ate} />}
       {R.veAnuncios() && !R.ehGestao() && area !== "cc" && <div className="dl-wrap"><div className="dl-cab"><h3>📣 Anúncios (Meta e Google)</h3></div><Anuncios de={de} ate={ate} resumo /></div>}
-      {!R.ehGestao() && R.podeEditarAgenda() && (area !== "cc") && <PainelLoja de={de} ate={ate} />}
+      {/* Supervisão do marketing (ex.: Lucas): o mesmo painel do celular — agendamentos feitos pelas meninas do marketing no período.
+          A agenda da loja (quem vem à loja) fica em Marketing → Agendamento loja. */}
+      {supMkt && area !== "cc" && <PainelMktSup de={de} ate={ate} nome={fmtDate(de) + (de !== ate ? " a " + fmtDate(ate) : "")} />}
+      {!supMkt && !R.ehGestao() && R.podeEditarAgenda() && (area !== "cc") && <PainelLoja de={de} ate={ate} />}
       {R.mySetores().includes("atendente_cliente") && !R.ehGestao() && <PainelVendedor />}
       {verCC && veAmbos && area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Call center e pós-venda</div>}
       {verCC && <div className="kpis" id="kpis">
@@ -146,7 +151,7 @@ export default function Dashboard() {
         <Kpi n={inf} l="Informar o cliente" cor={inf ? "var(--st-informar)" : undefined} />
         <Kpi n={conc} l="Concluídos no período" />
       </div>}
-      {vejaMkt && veAmbos && !R.ehGestao() && <>
+      {vejaMkt && veAmbos && !R.ehGestao() && !supMkt && <>
         {area === "tudo" && <div className="sec-label" style={{ margin: "0 0 8px" }}>Marketing</div>}
         <div className="kpis" id="kpisMkt">
           <Kpi n={mktNovos} l="Clientes novos no período" />
@@ -228,4 +233,16 @@ export default function Dashboard() {
       </div>
     </section>
   );
+}
+
+// painel do marketing igual ao do celular (agendamentos das operadoras, vindas, vendas, time, pendências)
+function PainelMktSup({ de, ate, nome }: { de: string; ate: string; nome: string }) {
+  const { R, st } = useApp() as any;
+  const L = useLista();
+  const todos = st.chamados.filter((c: any) => R.podeVer(c));
+  const noPer = (v: any) => !!v && R.dentroPeriodo(v, de, ate);
+  return <div className="dl-wrap"><div className="dl-cab"><h3>📣 Marketing — agendamentos feitos pelo time</h3></div>
+    <div className="mv-pc"><ResMkt todos={todos} noPer={noPer} P={{ de, ate, nome }} L={L} /><ListaClientes sel={L.sel} fechar={L.fechar} /></div>
+    {!L.sel && <div style={{ fontSize: 12, color: "var(--ink-faint)", margin: "8px 0 16px" }}>Clique nos quadros com “ver lista” para ver os clientes. Quem vem à loja em cada dia: menu Marketing → Agendamento loja.</div>}
+  </div>;
 }
