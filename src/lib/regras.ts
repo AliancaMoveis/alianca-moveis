@@ -349,7 +349,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const setoresVisiveis = () => operacionais().filter(s => !ehSetorMarketing(s.id) || temMarketing() || ehGestao());
   // gerente de loja não vê valores de venda (o banco também não devolve)
   /** remover anexo/foto: só quem anexou, a Gestão e as supervisões (o banco confere de novo) */
-  const podeRemoverAnexo = (a: any) => !!a && (ehGestao() || (!!a.criadoPor && a.criadoPor === currentUserId) || mySetores().some((x: string) => ["supervisao", "marketing_supervisao", "medidas_supervisao", "proprietario"].includes(x)));
+  // só quem enviou o anexo ou a Gestão; vendedor nunca apaga anexo (o banco confere igual)
+  const podeRemoverAnexo = (a: any) => !!a && (ehGestao() || (!!a.criadoPor && a.criadoPor === currentUserId && !mySetores().includes("atendente_cliente")));
   const podeVerValor = (c: Chamado) => ehGestao() || (c.atendenteId && c.atendenteId === currentUserId) || (c.consultorId && c.consultorId === currentUserId);
   const ehConsultorExterno = () => mySetores().includes("consultor_externo");
   const ehPosvenda = () => mySetores().includes("posvenda");
