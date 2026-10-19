@@ -1,0 +1,6 @@
+-- 0158 Vendedores: cadastro pelos gerentes, freelancer, descadastro. Aplicada via execute_sql.
+-- usuarios.freelancer boolean. _cadastra_vendedores(): Gestão ou gerente_loja.
+-- vendedor_cadastrar(nome, email, senha='Alianca@2026', freelancer, faz_projeto): cria login só com atendente_cliente (somente_atribuidos).
+-- vendedor_descadastrar(id): só quem tem apenas atendente_cliente; desativa + ban; clientes de hoje em diante sem venda voltam para a fila.
+-- vendedor_reativar(id), vendedor_freelancer(id, sim).
+-- Amanda e Luan desativados (ban); 1 cliente do Luan voltou para a fila sem vendedor.

@@ -63,7 +63,11 @@ export default function AgendaPublica() {
   const ehHoje = off === 0;
   const cont = (k: string) => k === "todos" ? l.length : l.filter(x => x.situacao === k).length;
   const mkt = l.filter(x => x.origem === "marketing").length;
-  const lv = filtro === "todos" ? l : l.filter(x => x.situacao === filtro);
+  // busca na hora: ao digitar, a lista do dia mostra só quem combina (nome, telefone, consultor, vendedor)
+  const sem = (t: string) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const qb = sem(busca.trim()), qd = busca.replace(/\D/g, "");
+  const casa = (x: any) => !qb || sem(x.cliente).includes(qb) || (qd.length >= 3 && String(x.telefone || "").replace(/\D/g, "").includes(qd)) || sem(x.consultor).includes(qb) || sem(x.vendedor).includes(qb);
+  const lv = (filtro === "todos" || qb ? l : l.filter(x => x.situacao === filtro)).filter(casa);
   // "Cliente chegou": avisa o vendedor no celular (sem vendedor, avisa a coordenação). Repetir só depois de 3 min.
   const ESPERA = 180;
   const falta = (x: any) => x.avisado_em ? Math.max(0, ESPERA - Math.floor((agora.getTime() - new Date(x.avisado_em).getTime()) / 1000)) : 0;
@@ -130,8 +134,9 @@ export default function AgendaPublica() {
         <div className="ap-relogio"><b>{String(agora.getHours()).padStart(2, "0")}:{String(agora.getMinutes()).padStart(2, "0")}</b><span>{DIAS[agora.getDay()].replace(/^./, c => c.toUpperCase())}, {agora.getDate()} de {MESES[agora.getMonth()]}</span></div>
       </header>
       <form className="ap-busca" onSubmit={buscar}>
-        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔎 Cliente de outro dia? Busque por nome, telefone ou endereço" />
-        <button type="submit" disabled={buscando}>{buscando ? "Buscando…" : "Buscar"}</button>
+        <input value={busca} onChange={e => { setBusca(e.target.value); setAchados(null); }} placeholder="🔎 Digite o nome ou telefone do cliente — aparece na hora aqui embaixo" autoComplete="off" />
+        {busca && <button type="button" className="ap-limpar" onClick={() => { setBusca(""); setAchados(null); }}>✕ Limpar</button>}
+        <button type="submit" disabled={buscando}>{buscando ? "Buscando…" : "Buscar em outros dias"}</button>
       </form>
       <nav className="ap-dias">
         <button disabled={off <= -1} onClick={() => setOff(off - 1)}>‹</button>
@@ -144,13 +149,14 @@ export default function AgendaPublica() {
         <div className="mix"><span><i className="mk"></i>{mkt} marketing</span><span><i className="ex"></i>{l.length - mkt} consultor externo</span></div>
       </section>
       <div className="ap-lista">
-        {dados === null ? <div className="ap-vazio">Carregando…</div> : !lv.length ? <div className="ap-vazio">{l.length ? "Nenhum cliente nesta situação." : "Nenhum cliente agendado " + (ehHoje ? "para hoje" : "neste dia") + "."}</div> :
+        {qb && dados !== null && <div className="ap-filtrando">🔎 <b>{lv.length}</b> cliente{lv.length === 1 ? "" : "s"} {ehHoje ? "de hoje" : "deste dia"} com “{busca.trim()}”{!lv.length ? <> — <button className="ap-link" onClick={() => buscar()}>procurar em outros dias</button></> : null}</div>}
+        {dados === null ? <div className="ap-vazio">Carregando…</div> : !lv.length ? (qb ? null : <div className="ap-vazio">{l.length ? "Nenhum cliente nesta situação." : "Nenhum cliente agendado " + (ehHoje ? "para hoje" : "neste dia") + "."}</div>) :
           lv.map((x, i) => {
             const [sit, cls] = SIT[x.situacao] || ["Aguardando", "agu"];
             const passou = ehHoje && min(x.hora) < hhmm - 30 && cls === "agu" && !x.vendedor;
             return (
-              <div key={i} className={"ap-item " + cls + (i === proximoIdx ? " agora" : "") + (passou ? " atrasado" : "")}>
-                <div className="ap-hora">{x.hora}{i === proximoIdx && <small>próximo</small>}</div>
+              <div key={i} className={"ap-item " + cls + (i === proximoIdx && !qb ? " agora" : "") + (passou ? " atrasado" : "") + (qb && lv.length === 1 ? " achado" : "")}>
+                <div className="ap-hora">{x.hora}{i === proximoIdx && !qb && <small>próximo</small>}</div>
                 <div className={"ap-origem " + x.origem}>{x.origem === "marketing" ? "Marketing" : "Externo"}</div>
                 <div className="ap-cli"><b>{x.cliente}</b>
                   <span>{x.consultor ? "Consultor: " + soNome(x.consultor) : "Agendado pelo marketing"}{x.telefone ? " · 📞 " + fmtTel(x.telefone) : ""}{x.quer_projeto ? " · 📐 quer projeto" : ""}</span>
@@ -227,7 +233,7 @@ export default function AgendaPublica() {
               <div key={a.id} className="ap-achado">
                 <div className="q"><b>{fmtDia(a.dia)}</b><span>{a.hora}</span></div>
                 <div className="c"><b>{a.cliente}</b><span>{a.telefone ? "📞 " + fmtTel(a.telefone) + " · " : ""}{a.consultor ? "Consultor: " + soNome(a.consultor) : "Marketing"} · {a.vendedor ? "Vendedor: " + soNome(a.vendedor) : "sem vendedor"} · {sit}</span>{a.obs ? <small>📝 {a.obs}</small> : null}</div>
-                {o >= -1 && o <= 7 ? <button onClick={() => { setOff(o); setFiltro("todos"); setAchados(null); }}>{o === 0 ? "Ver hoje" : "Ir para o dia"}</button> : <small className="fora">{o < 0 ? "dia já passou" : "agenda futura"}</small>}
+                {o >= -1 && o <= 7 ? <button onClick={() => { setOff(o); setFiltro("todos"); setBusca(a.cliente); setAchados(null); }}>{o === 0 ? "Abrir aqui" : "Abrir no dia"}</button> : <small className="fora">{o < 0 ? "dia já passou" : "agenda futura"}</small>}
               </div>); })}
           <button className="ap-cancelar" onClick={() => setAchados(null)}>Fechar</button>
         </div></div>}

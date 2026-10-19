@@ -3,7 +3,7 @@ import { useState } from "react";
 import { confirmarConsultor, marcaConsultor, sugestaoConsultor, textoConflito } from "../lib/agendaConsultor";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { SelVendedor, confirmarDisp, registrarIndisp } from "../comp/SelVendedor";
+import { SelVendedor, confirmarDisp, registrarIndisp, sugestaoVendedor } from "../comp/SelVendedor";
 import { SeloLitoral } from "../comp/Ticket";
 import { fmtTel } from "../lib/baseClientes";
 import { hojeISO, isoLocal, parseData } from "../lib/regras";
@@ -79,7 +79,7 @@ function CartaoVend({ c, comVend }: any) {
   const t = c.tratativa || {};
   const vendedores = R.vendAgenda();
   const noDia = (uid: string) => comVend.filter((x: any) => x.atendenteId === uid && x.id !== c.id && dia(x.dataLoja) === dia(c.dataLoja)).length;
-  const sug = c.dataLoja ? vendedores.filter((a: any) => !R.dispVendedor(a.id, c.dataLoja, c).length).sort((a: any, b: any) => noDia(a.id) - noDia(b.id))[0] || null : null;
+  const sug = sugestaoVendedor(R, R.state.chamados, c, vendedores);
   const definir = async () => {
     if (!v) { toast("Escolha o vendedor"); return; }
     const d = confirmarDisp(R, v, c.dataLoja, c); if (!d.ok) return;

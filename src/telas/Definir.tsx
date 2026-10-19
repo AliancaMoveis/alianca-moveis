@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { SelVendedor, confirmarDisp, registrarIndisp } from "../comp/SelVendedor";
+import { SelVendedor, confirmarDisp, registrarIndisp, sugestaoVendedor } from "../comp/SelVendedor";
 import { SeloLitoral } from "../comp/Ticket";
 import { DIAS_SEMANA, TURNOS, hojeISO, isoLocal, parseData } from "../lib/regras";
 
@@ -137,7 +137,8 @@ function Cartao({ c, vendedores, comVend, abrir, troca }: any) {
   const hoje = hojeISO();
   const noDia = (uid: string) => comVend.filter((x: any) => x.atendenteId === uid && x.id !== c.id && dia(x) === dia(c));
   // sugestão: quem tem menos clientes no dia
-  const sug = !troca && c.dataLoja ? vendedores.filter((a: any) => !R.dispVendedor(a.id, c.dataLoja, c).length).sort((a: any, b: any) => noDia(a.id).length - noDia(b.id).length)[0] || null : null;
+  const { st } = useApp() as any;
+  const sug = !troca ? sugestaoVendedor(R, st.chamados, c, vendedores) : null;
   const imgs = (c.anexos || []).filter((a: any) => a.tipo === "img").length;
   const t = c.tratativa || {};
   const cor = !c.dataLoja ? "var(--ink-faint)" : dia(c) < hoje ? "var(--danger)" : dia(c) === hoje ? "var(--warn)" : "var(--primary)";
