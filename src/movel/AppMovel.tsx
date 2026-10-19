@@ -86,7 +86,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   // gerente de anúncios e distribuição (permissão "anuncios", ex.: Lucas Santana): não agenda cliente nem aprova o time
   const gerAnuncios = R.mySetores().includes("anuncios") && !R.ehGestao() && !R.ehProprietario();
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
-    : perfil === "dono" ? [["resumo", "Ver tudo", "📈"], ["painel", "Resumo", "📊"], ["status", "Status", "🚦"], ["anuncios", "Anúncios", "📣"], ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
+    : perfil === "dono" ? [["resumo", "Ver tudo", "📈"], ["painel", "Resumo", "📊"], ["status", "Status", "🚦"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
     : perfil === "gerente" ? [...(R.mySetores().includes("presenca") ? [["presenca", "Presença", "✅"], ["porta", "Porta", "＋"]] as [string, string, string][] : []), ["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]

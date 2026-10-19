@@ -260,13 +260,15 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const TIPOS_FORA_CC = ["checklist", "medidas", "posvenda", "juridico", "porta"];
   // cliente porta: entrou direto na loja (sem marketing e sem consultor externo) — registrado pela Confirmação de presença
   const ehPorta = (c: any) => !!c && c.tipo === "porta";
-  const temPresenca = () => ehGestao() || mySetores().includes("presenca");
+  // menus que a Gestão escondeu para a pessoa (ex.: Weverton: anuncios, presenca, consultores, clientes)
+  const oculto = (k: string) => (((me() as any) || {}).menusOcultos || []).includes(k);
+  const temPresenca = () => (ehGestao() || mySetores().includes("presenca")) && !oculto("presenca");
   // ▶️ iniciar atendimento na loja: o vendedor do cliente, a Confirmação de presença, o gerente ou a Gestão (com vendedor definido)
   const podeIniciarAtend = (c: any) => !!c && !!c.atendenteId && !c.venda && !(c.tratativa && c.tratativa.emAtendimento) && (domMarketing(c) || c.tipo === "porta")
     && !["vendido", "vendido_promissoria", "vendido_entrada", "vendido_revisao", "atendido", "venda_cancelada", "reprovado", "nao_compareceu", "loja_cancelada"].includes(String(c.statusCliente || ""))
     && (c.atendenteId === currentUserId || ehGestao() || mySetores().some((x: string) => x === "presenca" || x === "gerente_loja"));
   // 📣 Anúncios (Reportei): Gestão, proprietário e quem tem a permissão "anuncios" (ex.: Lucas Santana)
-  const veAnuncios = () => mySetores().some((x: string) => ["gestao", "proprietario", "anuncios"].includes(x));
+  const veAnuncios = () => mySetores().some((x: string) => ["gestao", "proprietario", "anuncios"].includes(x)) && !oculto("anuncios");
   const doCC = (c: Chamado) => !domMarketing(c) && !TIPOS_FORA_CC.includes(c.tipo);
 
   function normalizarStatusCliente(c: Chamado) {
@@ -822,7 +824,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (veAnuncios()) G.push({ g: "Anúncios", ic: "📣", itens: [["anuncios", "Meta e Google (Reportei)"]] });
     // Consultores externos: setor próprio (o marketing gera a demanda, o consultor atende). Fica logo abaixo do Marketing.
     const coordCE = ehGestao() || mySetores().includes("marketing_supervisao") || mySetores().includes("suporte_consultores");
-    if (coordCE) G.push({ g: "Consultores externos", ic: "🧭", itens: [["ce_painel", "Painel dos consultores"], ["direcionamento", "Direcionar consultor"], ["ce_agenda", "📅 Agenda dos consultores"], ["ce_visitas", "Visitas"], ["ce_realizadas", "✅ Visitas realizadas"], ["ce_loja", "Agendados na loja"]] });
+    if (coordCE && !oculto("consultores")) G.push({ g: "Consultores externos", ic: "🧭", itens: [["ce_painel", "Painel dos consultores"], ["direcionamento", "Direcionar consultor"], ["ce_agenda", "📅 Agenda dos consultores"], ["ce_visitas", "Visitas"], ["ce_realizadas", "✅ Visitas realizadas"], ["ce_loja", "Agendados na loja"]] });
     else if (ehConsultorExterno()) G.push({ g: "Minhas operações", ic: "🧭", itens: [["carteira", "Meus clientes"], ["ce_agenda", "📅 Minha agenda"], ["ce_realizadas", "✅ Minhas visitas realizadas"], ["agenda", "Agendamento loja"]] });
     // quem mede (consultor externo ou medidor): "Setor de medidas" (pós-venda) separado da operação de venda, e o financeiro
     if ((ehConsultorExterno() || ehMedidor()) && !coordCE && !ehSupMedidas()) {
@@ -854,7 +856,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     // permissão avulsa de agenda da loja (ex.: Camila no fim de semana), para quem não é do marketing
     if ((me() as any)?.editaAgenda && !temMarketing() && !ehGestao()) G.push({ g: "Loja", ic: "🏬", itens: [["agenda", "Agendamento loja"], ["definir", "Definir vendedor"]] });
-    if (podeBaseClientes()) G.push({ g: "Clientes", ic: "📇", itens: [["cli_base", "Base de clientes"]] });
+    if (podeBaseClientes() && !oculto("clientes")) G.push({ g: "Clientes", ic: "📇", itens: [["cli_base", "Base de clientes"]] });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
     if (podeMontadores()) cd.push(["pv_cadastro", "Montadores"]);
@@ -868,7 +870,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    ehDireto, ehPorta, temPresenca, veAnuncios, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
+    ehDireto, ehPorta, temPresenca, veAnuncios, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };

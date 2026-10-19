@@ -191,7 +191,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       id: s.id, nome: s.nome,
       liberacoes: { criar: s.lib_criar, verTudo: s.lib_ver_tudo, cadastros: s.lib_cadastros, admin: s.lib_admin, verMarketing: s.lib_ver_marketing, viaCallcenter: !!s.via_callcenter },
     })),
-    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo, fazProjeto: u.faz_projeto !== false, folga: u.folga ?? null, turno: u.turno || null, nomeCompleto: u.nome_completo || null, telefone: u.telefone || null, feriasDe: u.ferias_de || null, feriasAte: u.ferias_ate || null, editaAgenda: !!u.edita_agenda, domingoRef: u.domingo_ref || null, naAgenda: u.na_agenda !== false })),
+    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo, fazProjeto: u.faz_projeto !== false, folga: u.folga ?? null, turno: u.turno || null, nomeCompleto: u.nome_completo || null, telefone: u.telefone || null, feriasDe: u.ferias_de || null, feriasAte: u.ferias_ate || null, editaAgenda: !!u.edita_agenda, domingoRef: u.domingo_ref || null, naAgenda: u.na_agenda !== false, menusOcultos: u.menus_ocultos || [] })),
     representantes: reps.map((r: any) => ({ id: r.id, nome: r.nome, whats: r.whats, email: r.email })),
     fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })).sort((a: any, b: any) => { const na = /n[aã]o informad/i.test(a.nome) ? 1 : 0, nb = /n[aã]o informad/i.test(b.nome) ? 1 : 0; return na - nb || a.nome.localeCompare(b.nome, "pt-BR"); }),
     tipos: tiposMap,

@@ -58,7 +58,7 @@ export function areas(R: any, st: any) {
   const todos = st.chamados.filter(R.podeVer);
   const mkt = R.ehGestao() || R.temMarketing() || R.mySetores().includes("suporte_consultores");
   const cc = todos.some((c: any) => doPainelCC(R, c));
-  const cons = mkt && (R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x)));
+  const cons = !R.oculto("consultores") && mkt && (R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x)));
   const ckA = R.podeChecklist() && todos.some((c: any) => c.tipo === "checklist");
   return { mkt, cc, cons, ck: ckA, todos };
 }
@@ -155,7 +155,7 @@ function VisaoGeral({ P, area, setArea, ir }: any) {
       {G.alertas.length > 0 && <div className="pb-alertas">{G.alertas.map(x => <button key={x.l} className={"pb-al " + x.cls} onClick={() => ir && ir(alvo(x.ir))}><span>{x.ic}</span><b>{x.n}</b>{x.l}</button>)}</div>}
     </div>
     <div className="pg-grid mv-geral">
-      {G.cartoes.map(x => <button key={x.k} className={"pg-card" + (ARE[x.k] === area ? " on" : "") + (x.alerta ? " alerta" : "")} onClick={() => setArea(ARE[x.k])}>
+      {G.cartoes.filter(x => !(x.k === "cons" && R.oculto("consultores"))).map(x => <button key={x.k} className={"pg-card" + (ARE[x.k] === area ? " on" : "") + (x.alerta ? " alerta" : "")} onClick={() => setArea(ARE[x.k])}>
         <div className="pg-t">{x.ic} {x.t}</div><div className="pg-n"><b>{x.n}</b><span>{x.l}</span></div>
         {x.linhas.length > 0 && <div className="pg-l">{x.linhas.map(([l, n]) => <span key={l}>{l} <b>{n}</b></span>)}</div>}
         <div className="pg-p">⏳ {x.pend}</div></button>)}

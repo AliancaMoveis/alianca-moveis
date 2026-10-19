@@ -133,9 +133,9 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
         <div className="pb-alertas">{G.alertas.map(x => <button key={x.l} className={"pb-al " + x.cls} onClick={() => irPara(x.ir)}><span>{x.ic}</span><b>{x.n}</b>{x.l}</button>)}</div>
       </div>
       <div className="pg-grid">
-        {G.cartoes.map(x => <Geral key={x.k} {...x} />)}
+        {G.cartoes.filter(x => !(x.k === "cons" && R.oculto("consultores"))).map(x => <Geral key={x.k} {...x} />)}
       </div>
-      <div className="subnav pb-abas"><Tab k="cc" l="☎ Call center" n={atrasados.length} /><Tab k="ag" l="◎ Agendamentos" /><Tab k="cons" l="🧭 Externos" n={cons.filter((x: any) => x.alerta).length} /><Tab k="ck" l="✓ Checklist" n={ckVenc.length + ckEnc.length} /><Tab k="vendas" l="💰 Vendas" n={vendasAConf.length} />{veMont && <Tab k="mont" l="🔧 Montagem" />}</div>
+      <div className="subnav pb-abas"><Tab k="cc" l="☎ Call center" n={atrasados.length} /><Tab k="ag" l="◎ Agendamentos" />{!R.oculto("consultores") && <Tab k="cons" l="🧭 Externos" n={cons.filter((x: any) => x.alerta).length} />}<Tab k="ck" l="✓ Checklist" n={ckVenc.length + ckEnc.length} /><Tab k="vendas" l="💰 Vendas" n={vendasAConf.length} />{veMont && <Tab k="mont" l="🔧 Montagem" />}</div>
       <div className="pb-per">Comparando {fmtDate(de)}–{fmtDate(ate)} com {fmtDate(dePrev)}–{fmtDate(atePrev)}</div>
 
       {aba === "cc" && <>
