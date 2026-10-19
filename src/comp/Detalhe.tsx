@@ -1,5 +1,6 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
 import { jaResolvido } from "../lib/resolvido";
+import { DataCalendario } from "./DataCalendario";
 import { confirmarConsultor, conflitosConsultor, sugestaoConsultor, textoConflito } from "../lib/agendaConsultor";
 import { EditarCliente, RemarcarData } from "./Remarcar";
 import { CancelouLoja, ConfirmarVinda, SituacaoConsultor } from "./Situacao";
@@ -242,7 +243,7 @@ function Tratativa({ c }: any) {
         <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Agendamento na loja</div>
           <div className="grid">
-            <div className="field"><label>Data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={dataLoja} onChange={e => setDataLoja(e.target.value)} /></div>
+            <div className="field"><label>Data e horário na loja <span className="req-star">*</span></label><DataCalendario value={dataLoja} onChange={setDataLoja} /></div>
             <div className="field"><label>Cliente quer projeto pronto? <small style={{ color: "var(--ink-faint)", fontWeight: 400 }}>(opcional)</small></label><select value={querProjeto} onChange={e => setQuerProjeto(e.target.value)}><option value="">Não informado</option><option value="sim">Sim — quer ver o projeto pronto</option><option value="nao">Não</option></select></div>
           </div>
           {!(c.anexos || []).length && <div className="aviso-anexo" style={{ marginTop: 10 }}>⚠️ <b>Sem anexo.</b> Anexe a planta baixa e as fotos antes de agendar — sem elas o vendedor atende no escuro.</div>}

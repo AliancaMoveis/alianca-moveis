@@ -1486,3 +1486,21 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .mv-tel{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
 .mv-tel a{flex:1;color:var(--ink);text-decoration:none;font-size:15.5px}
 .mv-tel button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;font:600 12.5px inherit;color:var(--primary);cursor:pointer}
+
+/* calendário em quadradinhos ao lado do campo de data */
+.dcal-campo{display:flex;gap:6px;align-items:stretch}.dcal-campo input{flex:1;min-width:0}
+.dcal-bt{border:1px solid var(--line);background:var(--surface);border-radius:10px;font-size:20px;padding:0 12px;cursor:pointer}
+.dcal-fundo{position:fixed;inset:0;background:rgba(10,20,40,.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:12px}
+.dcal{background:var(--surface);color:var(--ink);border-radius:16px;padding:14px;width:100%;max-width:380px;max-height:94vh;overflow:auto;box-shadow:0 16px 40px rgba(0,0,0,.3)}
+.dcal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.dcal-h b{text-transform:capitalize;font-size:16px}
+.dcal-h button{border:0;background:var(--surface-2);border-radius:10px;width:40px;height:36px;font-size:20px;cursor:pointer;color:var(--ink)}
+.dcal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.dcal-ds{font-size:11px;text-align:center;color:var(--ink-faint);font-weight:700;text-transform:uppercase}
+.dcal-d{aspect-ratio:1;border:1px solid var(--line);background:var(--surface);border-radius:9px;font:600 15px inherit;color:var(--ink);cursor:pointer}
+.dcal-d.fds{background:var(--surface-2)}.dcal-d.hoje{border-color:var(--primary);color:var(--primary)}
+.dcal-d.on{background:var(--primary);color:#fff;border-color:var(--primary)}.dcal-d:disabled{opacity:.3;cursor:default}
+.dcal-sub{font-size:12.5px;font-weight:700;margin:12px 0 6px;color:var(--ink-soft)}
+.dcal-hs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.dcal-hs button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 0;font:600 13px inherit;color:var(--ink);cursor:pointer}
+.dcal-hs button.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.dcal-b{display:flex;gap:8px;margin-top:12px}.dcal-b .btn.primary{flex:1}

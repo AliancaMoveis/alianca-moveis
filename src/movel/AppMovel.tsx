@@ -2,6 +2,7 @@
 // Consultor externo e vendedor: telas simples, com as ações do dia a um toque. Gestão/Supervisões: resumo visual.
 // Os demais setores usam a versão completa (responsiva).
 import { VendUrgentes, pendUrgentes } from "./Urgentes";
+import { DataCalendario } from "../comp/DataCalendario";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
@@ -515,7 +516,7 @@ function PassosConsultor({ c }: any) {
         <input value={med} onChange={e => setMed(e.target.value)} placeholder="Complemento de medidas (opcional)" />
         <button className="btn sm" onClick={() => ex(() => A.salvarTratativa(c.id, { obs, medidas: med }), "Salvo")}>Salvar observação</button></div>
       <div className="mv-passo col"><div className="mv-passo-l"><span>4</span><div>Agendar a vinda à loja</div></div>
-        <input type="datetime-local" value={dl} onChange={e => setDl(e.target.value)} />
+        <DataCalendario value={dl} onChange={setDl} min={hojeISO() + "T00:00"} />
         <div className="mv-dica" style={{ margin: "2px 0 0" }}>Projeto pronto (opcional):</div>
         <div className="mv-2"><button className={"mv-op" + (qp === "sim" ? " on" : "")} onClick={() => setQp(qp === "sim" ? "" : "sim")}>📐 Quer projeto pronto</button><button className={"mv-op" + (qp === "nao" ? " on" : "")} onClick={() => setQp(qp === "nao" ? "" : "nao")}>Não quer projeto</button></div>
         <button className="mv-principal" onClick={() => {
