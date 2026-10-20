@@ -10,6 +10,7 @@ import AgendaConsultores from "./AgendaConsultores";
 import VisitasRealizadas from "./VisitasRealizadas";
 import MontagemPagamento from "./MontagemPagamento";
 import MontagemMeus from "./MontagemMeus";
+import AgendaVendedores from "./AgendaVendedores";
 import ControleVendedores from "./ControleVendedores";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
@@ -191,6 +192,7 @@ export default function Shell() {
             {atual === "ce_realizadas" && <VisitasRealizadas />}
             {atual === "montagem_pag" && <MontagemPagamento />}
             {atual === "montagem_meus" && <MontagemMeus />}
+            {atual === "agenda_vendedores" && <AgendaVendedores />}
             {atual === "encontrar_vendas360" && R.podeEncontrarVendas() && <EncontrarVendas360 />}
             {atual === "treino" && <Treino />}
             {atual.startsWith("st_") && (() => { const m = atual.match(/^st_(.+)_([a-z]+)$/); return m ? <SetorFila key={atual} setor={m[1]} aba={m[2]} /> : null; })()}
