@@ -11,7 +11,7 @@ const N_DIAS = 7;
 
 const ROT: Record<string, string> = { marketing: "Marketing", externo: "Externo", porta: "🚪 Porta" };
 
-export default function AgendaVendedores() {
+export default function AgendaVendedores({ movel = false }: { movel?: boolean }) {
   const { R, st, abrirDetalhe } = useApp() as any;
   const hoje = hojeISO();
   const dias = useMemo(() => Array.from({ length: N_DIAS }, (_, i) => maisDias(hoje, i)), [hoje]);
@@ -30,10 +30,10 @@ export default function AgendaVendedores() {
   const tit = (d: string) => (d === hoje ? "Hoje · " : d === maisDias(hoje, 1) ? "Amanhã · " : "") + DIAS[parseData(d + "T12:00").getDay()] + ", " + fmtDate(d).slice(0, 5);
   const escolhido = sel === "__fila" ? { id: "__fila", nome: "Sem vendedor (fila)" } : vendedores.find(v => v.id === sel);
   const clientes = sel === "__fila" ? sem : sel ? doVend(sel) : [];
-  return <section className="view active">
-    <div className="view-head"><div><h2>👔 Vendedores</h2><p>Todos os vendedores e os clientes marcados na loja para cada um — hoje e nos próximos {N_DIAS - 1} dias. Clique no vendedor para ver os atendimentos.</p></div></div>
+  return <section className={movel ? "vd-movel" : "view active"}>
+    {movel ? <div className="mv-sec">👔 Vendedores · hoje e próximos {N_DIAS - 1} dias</div> : <div className="view-head"><div><h2>👔 Vendedores</h2><p>Todos os vendedores e os clientes marcados na loja para cada um — hoje e nos próximos {N_DIAS - 1} dias. Clique no vendedor para ver os atendimentos.</p></div></div>}
         <div className="vd-wrap">
-      <div className="vd-lista">
+      {!(movel && sel) && <div className="vd-lista">
         <input type="search" placeholder="🔎 Buscar vendedor" value={q} onChange={e => setQ(e.target.value)} />
         <div className="vd-cab"><span>Vendedor</span><span>Hoje</span><span>Próx. dias</span></div>
         <>
@@ -42,8 +42,9 @@ export default function AgendaVendedores() {
           {sem.length > 0 && <button type="button" className={"vd-it fila" + (sel === "__fila" ? " on" : "")} onClick={() => setSel("__fila")}>
             <span><b>Sem vendedor (fila)</b></span><b className="n">{sem.filter(x => x._dia === hoje).length}</b><b className="n">{sem.filter(x => x._dia !== hoje).length}</b></button>}
         </>
-      </div>
-      <div className="vd-det">
+      </div>}
+      {!(movel && !sel) && <div className="vd-det">
+        {movel && <button type="button" className="btn ghost sm" style={{ marginBottom: 8 }} onClick={() => setSel("")}>‹ Todos os vendedores</button>}
         {!escolhido ? <div className="empty" style={{ padding: 30 }}>Escolha um vendedor na lista para ver os atendimentos.</div> : <>
           <h3 style={{ margin: "0 0 4px" }}>{escolhido.nome}</h3>
           <p className="hint" style={{ margin: "0 0 12px" }}>{clientes.length ? clientes.length + " atendimento(s) marcado(s) de hoje a " + fmtDate(dias[N_DIAS - 1]).slice(0, 5) : "Nenhum atendimento marcado de hoje a " + fmtDate(dias[N_DIAS - 1]).slice(0, 5) + "."}</p>
@@ -59,7 +60,7 @@ export default function AgendaVendedores() {
                 </div>; })}
             </div>; })}
         </>}
-      </div>
+      </div>}
     </div>
   </section>;
 }

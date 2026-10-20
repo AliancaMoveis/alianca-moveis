@@ -1736,3 +1736,5 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .vd-cli{display:grid;grid-template-columns:52px 1fr;gap:10px;padding:8px;border-radius:10px;font-size:13.5px}
 .vd-cli.clic{cursor:pointer}.vd-cli.clic:hover{background:var(--surface-2)}.vd-cli .hr{font-size:14px}.vd-cli small{color:var(--ink-soft)}
 @media(max-width:800px){.vd-wrap{grid-template-columns:1fr}.vd-lista{position:static;max-height:none}}
+.vd-movel{padding:0 12px 12px}.vd-movel .vd-wrap{grid-template-columns:1fr}.vd-movel .vd-lista{position:static;max-height:none}
+.vd-movel .vd-det{padding:12px}

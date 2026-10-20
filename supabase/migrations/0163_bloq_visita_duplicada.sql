@@ -1,0 +1,3 @@
+-- Visita duplicada (am-226): trigger bloq_visita_duplicada (before insert em chamados) recusa nova visita_consultor quando já existe
+-- visita em aberto do mesmo telefone (últimos 10 dígitos) com a mesma data de visita OU o mesmo nome (sem acento/maiúsculas).
+-- Importações (alianca.sistema = '1') passam. Caso André Soares: ALM-3561 e ALM-3562 excluídos (duplicados de ALM-3520).

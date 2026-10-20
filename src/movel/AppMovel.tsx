@@ -36,6 +36,7 @@ import { RESGATAR, corCliente } from "../lib/corCliente";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
+import AgendaVendedores from "../telas/AgendaVendedores";
 import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados } from "./Medidas";
 
 export type Perfil = "consultor" | "vendedor" | "gestor" | "gerente" | "marketing" | "medidor" | "dono" | "juridico" | "posvenda";
@@ -86,7 +87,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   // gerente de anúncios e distribuição (permissão "anuncios", ex.: Lucas Santana): não agenda cliente nem aprova o time
   const gerAnuncios = R.mySetores().includes("anuncios") && !R.ehGestao() && !R.ehProprietario();
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
-    : perfil === "dono" ? [["resumo", "Ver tudo", "📈"], ["painel", "Resumo", "📊"], ["status", "Status", "🚦"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
+    : perfil === "dono" ? [["resumo", "Ver tudo", "📈"], ["painel", "Resumo", "📊"], ["status", "Status", "🚦"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["atend_vend", "Vendedores", "👔"], ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
     : perfil === "gerente" ? [...(R.mySetores().includes("presenca") ? [["presenca", "Presença", "✅"], ["porta", "Porta", "＋"]] as [string, string, string][] : []), ["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
@@ -121,6 +122,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "consultor" && aba === "hoje" && <ConsHoje abrir={setAberto} ir={setAba} />}
         {perfil === "consultor" && aba === "clientes" && <ConsClientes abrir={setAberto} />}
         {perfil === "dono" && aba === "painel" && <PainelDono />}
+        {aba === "atend_vend" && <AgendaVendedores movel />}
         {aba === "status" && <StatusGeral abrir={setAberto} />}
         {aba === "presenca" && <div className="mv-anun"><div className="mv-sec">✅ Confirmação de presença</div><Presenca movel /></div>}
         {aba === "porta" && <div className="mv-anun"><div className="mv-sec">🚪 Novo cliente porta</div><Presenca movel novoPorta key={"porta" + nPorta} /></div>}
