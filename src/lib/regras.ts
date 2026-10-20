@@ -230,6 +230,10 @@ export function mesmaPessoa(c: Chamado, dados: any) {
 }
 
 // ---------- regras dependentes do usuário logado ----------
+export const enderecoSemTelefone = (e: string) => String(e || "")
+  .replace(/(?:tel(?:efone)?|fone|cel(?:ular)?|whats(?:app)?)\s*[:.]?\s*/gi, " ")
+  .replace(/(?:\+?55\s*)?\(?\b\d{2}\)?[\s.-]*9?\s?\d{4}[\s.-]?\d{4}\b/g, " ")
+  .replace(/\s*[-–,;|/]\s*(?=[-–,;|/])/g, "").replace(/^[\s,;|/–-]+|[\s,;|/–-]+$/g, "").replace(/\s{2,}/g, " ").trim();
 export function criarRegras(state: Estado, currentUserId: string) {
   const TIPOS = state.tipos;
   const getSetor = (id: string) => (state.setores || []).find(x => x.id === id) || null;
@@ -660,8 +664,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     else msg = msgWhatsGenerica(c);
     return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
   }
-  const mapsLink = (c: Chamado) => c.endereco ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.endereco)}` : "";
-  const wazeLink = (c: Chamado) => c.endereco ? `https://waze.com/ul?q=${encodeURIComponent(c.endereco)}&navigate=yes` : "";
+  // endereço para o Maps sem telefone no meio (às vezes o telefone foi digitado junto com o endereço)
+  const mapsLink = (c: Chamado) => { const e = enderecoSemTelefone(c.endereco || ""); return e ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e)}` : ""; };
+  const wazeLink = (c: Chamado) => c.endereco ? `https://waze.com/ul?q=${encodeURIComponent(enderecoSemTelefone(c.endereco))}&navigate=yes` : "";
 
   // pendências
   function pendenciasGestao() {
