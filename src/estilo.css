@@ -1698,3 +1698,11 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ql-com{background:var(--bg);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}.ql-com>div{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-faint)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ql-alerta{background:#3a2018;border-color:#7a3a2a}}
 :root[data-theme="dark"] .ql-alerta{background:#3a2018;border-color:#7a3a2a}
+.ql-temas{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.ql-tema{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;min-height:44px}
+.ql-tema span{font-size:12px;color:var(--ink-faint)}.ql-tema.on{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}.ql-tema.on b{color:var(--primary)}
+.ql-pergs{display:flex;flex-direction:column;gap:0}.ql-pergs>.ql-perg{margin-top:12px}
+.ql-mod.off{opacity:.65}.ql-mod-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.ql-mod-h b{font-size:16px}.ql-mod-h small{color:var(--ink-faint);margin-left:auto}
+.ql-ativa{display:flex;align-items:center;gap:6px;font-size:13px}
+.ql-pq{align-items:center;margin-bottom:6px}.ql-pn{width:24px;height:24px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
+.ql-pq{display:flex;gap:8px}.ql-pq input{flex:1;min-width:0}

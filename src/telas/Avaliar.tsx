@@ -11,17 +11,19 @@ const corNota = (v: number) => v <= 6 ? "#c0392b" : v <= 8 ? "#c98a12" : "#1f7a4
 export default function Avaliar() {
   const token = new URLSearchParams(location.search).get("t") || "";
   const [info, setInfo] = useState<any>(undefined); const [erro, setErro] = useState("");
-  const [nps, setNps] = useState<number | null>(null); const [est, setEst] = useState<number[]>([0, 0, 0]);
+  const [nps, setNps] = useState<number | null>(null); const [est, setEst] = useState<number[]>([]);
   const [coment, setComent] = useState(""); const [ligar, setLigar] = useState(true);
   const [enviando, setEnviando] = useState(false); const [fim, setFim] = useState<{ nps: number; google: string | null } | null>(null); const [aviso, setAviso] = useState("");
   useEffect(() => { document.title = "Pesquisa · Aliança Móveis"; if (!token) { setErro("Link incompleto"); setInfo(null); return; }
     A.avaliacaoPublica(token).then(setInfo).catch((e: any) => { setErro(e.message || "Link inválido"); setInfo(null); }); }, []);
   const et = ETAPAS[(info?.etapa || "montagem") as Etapa] || ETAPAS.montagem;
+  const perguntas: string[] = (info && Array.isArray(info.perguntas) && info.perguntas.length) ? info.perguntas : et.perguntas;
+  const titulo: string = (info && info.titulo) || et.titulo;
   const enviar = async () => {
     if (nps === null) { setAviso("Escolha uma nota de 0 a 10"); return; }
-    if (est.some(x => !x)) { setAviso("Toque nas estrelas das 3 perguntas"); return; }
+    if (perguntas.some((_, i) => !est[i])) { setAviso("Toque nas estrelas de todas as perguntas"); return; }
     setEnviando(true); setAviso("");
-    try { const r = await A.avaliacaoResponder(token, nps, est[0], est[1], est[2], coment, ligar); setFim({ nps, google: r?.google || null }); window.scrollTo(0, 0); }
+    try { const r = await A.avaliacaoResponder(token, nps, perguntas.map((_, i) => est[i]), coment, ligar); setFim({ nps, google: r?.google || null }); window.scrollTo(0, 0); }
     catch (e: any) { setAviso(e.message || "Não foi possível enviar. Tente de novo."); }
     finally { setEnviando(false); }
   };
@@ -40,7 +42,7 @@ export default function Avaliar() {
   }
   const quando = info.servicoEm ? String(info.servicoEm).slice(8, 10) + "/" + String(info.servicoEm).slice(5, 7) : "";
   return <div className="av">
-    <Topo><h1>Olá{info.cliente ? ", " + cap(info.cliente) : ""}! {et.titulo}</h1>
+    <Topo><h1>Olá{info.cliente ? ", " + cap(info.cliente) : ""}! {titulo}</h1>
       <p>{info.etapa === "montagem" ? "Montagem feita" + (quando ? " em " + quando : "") + (info.responsavel ? " por " + cap(info.responsavel) : "") + ". " : ""}Leva menos de 1 minuto e ajuda a gente a melhorar.</p></Topo>
     <main className="av-main">
       <section className="av-card"><h2>De 0 a 10, quanto você indicaria a Aliança para um amigo?</h2>
@@ -48,8 +50,8 @@ export default function Avaliar() {
           style={nps === v ? { background: corNota(v), borderColor: corNota(v), color: "#fff" } : undefined}>{v}</button>)}</div>
         <div className="av-escala"><span>0 · nada provável</span><span>10 · com certeza</span></div></section>
       <section className="av-card"><h2>Sobre {info.etapa === "montagem" ? "a montagem" : info.etapa === "loja" ? "o atendimento" : info.etapa === "medicao" ? "a medição" : info.etapa === "checklist" ? "o checklist" : "o pós-venda"}</h2>
-        {et.perguntas.map((q, i) => <div key={i} className="av-q"><div>{q}</div>
-          <div className="av-est">{[1, 2, 3, 4, 5].map(k => <button key={k} type="button" aria-label={k + (k === 1 ? " estrela" : " estrelas")} onClick={() => setEst(est.map((x, j) => j === i ? k : x))}><Estrela on={k <= est[i]} /></button>)}</div></div>)}</section>
+        {perguntas.map((q, i) => <div key={i} className="av-q"><div>{q}</div>
+          <div className="av-est">{[1, 2, 3, 4, 5].map(k => <button key={k} type="button" aria-label={k + (k === 1 ? " estrela" : " estrelas")} onClick={() => { const n = perguntas.map((_, j) => est[j] || 0); n[i] = k; setEst(n); }}><Estrela on={k <= est[i]} /></button>)}</div></div>)}</section>
       <section className="av-card"><label htmlFor="av-com" className="av-lbl">Quer contar algo para a gente? <small>(opcional)</small></label>
         <textarea id="av-com" rows={4} value={coment} onChange={e => setComent(e.target.value)} maxLength={2000} placeholder="Ex.: o montador foi muito cuidadoso, mas faltou um puxador" />
         <label className="av-chk"><input type="checkbox" checked={ligar} onChange={e => setLigar(e.target.checked)} /> Pode me ligar se precisar resolver algo</label></section>

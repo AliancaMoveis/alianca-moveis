@@ -5,3 +5,6 @@
 -- avaliacao_criar(p) (reaproveita pesquisa aberta do mesmo telefone/etapa em 30 dias), avaliacao_enviada(id), avaliacao_tratar(id, obs).
 -- Públicas (anon): avaliacao_publica(token), avaliacao_responder(token, nps, p1, p2, p3, comentario, pode_ligar) — 1 resposta por link;
 --   nota ≤ 6 notifica pós-venda + Gestão; nota ≥ 9 devolve config.google_review_url. avaliacao_google_salvar(url) (Gestão).
+-- avaliacao_modelos(etapa, nome, titulo, resp, perguntas text[1..5], ativa, ordem): perguntas editáveis por tema (Gestão: avaliacao_modelo_salvar).
+-- avaliacoes + titulo, perguntas, estrelas int[] (cópia das perguntas no envio). avaliacao_criar exige tema ativo.
+-- avaliacao_responder2(token, nps, estrelas int[], comentario, pode_ligar) — o app usa esta. config.google_review_url = link de escrever avaliação.
