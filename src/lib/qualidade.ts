@@ -35,7 +35,7 @@ export const QUESTIONARIO_PADRAO: { titulo: string; secoes: Secao[] } = {
     { nome: "Venda", quem: "Vendedor", perguntas: ["Atenção e cordialidade do vendedor", "Clareza do projeto e do orçamento"] },
     { nome: "Medição", quem: "Medidor", perguntas: ["Como foi a visita de medição", "Pontualidade", "Cordialidade de quem fez a medição"] },
     { nome: "Checklist", quem: "Projetista", perguntas: ["Como foi a sua experiência no checklist", "As explicações foram claras?"] },
-    { nome: "Entrega", quem: "Entregador", perguntas: ["Como foi a entrega", "Atendimento do entregador"] },
+    { nome: "Entrega", quem: "Entregador", perguntas: ["O prazo de entrega foi dentro do combinado?", "Atendimento do entregador"] },
     { nome: "Montagem", quem: "Montador", perguntas: ["Atendimento do montador", "Qualidade da montagem", "O resultado ficou como você esperava?"] },
   ],
 };
