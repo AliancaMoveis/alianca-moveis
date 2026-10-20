@@ -1,0 +1,7 @@
+-- 0159 Pesquisa de satisfação. Aplicada via execute_sql.
+-- avaliacoes(id, token, etapa montagem|loja|medicao|checklist|posvenda, chamado_id, cliente, telefone, responsavel, montador_id, servico_em,
+--   criado_em/por, enviado_em, respondido_em, nps 0–10, p1..p3 1–5, comentario, pode_ligar, tratado_em/por/obs). RLS leitura: _ve_qualidade().
+-- _ve_qualidade(): gestao, proprietario, callcenter, supervisao, posvenda.
+-- avaliacao_criar(p) (reaproveita pesquisa aberta do mesmo telefone/etapa em 30 dias), avaliacao_enviada(id), avaliacao_tratar(id, obs).
+-- Públicas (anon): avaliacao_publica(token), avaliacao_responder(token, nps, p1, p2, p3, comentario, pode_ligar) — 1 resposta por link;
+--   nota ≤ 6 notifica pós-venda + Gestão; nota ≥ 9 devolve config.google_review_url. avaliacao_google_salvar(url) (Gestão).

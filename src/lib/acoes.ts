@@ -139,6 +139,14 @@ export const A = {
     return r;
   },
   agendaPublicaVeioHoje: (token: string, id: string) => rpc("agenda_publica_veio_hoje", { p_token: token, p_id: id }),
+  avaliacaoCriar: (p: any) => rpc<{ id: string; token: string; reaproveitada: boolean }>("avaliacao_criar", { p }),
+  avaliacaoEnviada: (id: string) => rpc("avaliacao_enviada", { p_id: id }),
+  avaliacaoTratar: (id: string, obs: string) => rpc("avaliacao_tratar", { p_id: id, p_obs: obs }),
+  avaliacaoGoogle: (url: string) => rpc("avaliacao_google_salvar", { p_url: url }),
+  avaliacaoPublica: (token: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ cliente: "Mariana", etapa: "montagem", responsavel: "João", servicoEm: "2026-10-18", respondida: false }) : rpc<any>("avaliacao_publica", { p_token: token }),
+  avaliacaoResponder: (token: string, nps: number, p1: number, p2: number, p3: number, comentario: string, podeLigar: boolean) =>
+    (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ ok: true, google: nps >= 9 ? "https://g.page/r/exemplo/review" : null }) : rpc<{ ok: boolean; google: string | null }>("avaliacao_responder", { p_token: token, p_nps: nps, p_p1: p1, p_p2: p2, p_p3: p3, p_comentario: comentario, p_pode_ligar: podeLigar }),
+  avaliacoesListar: async (desde: string) => { const { data, error } = await sb.from("avaliacoes").select("*").gte("criado_em", desde).order("criado_em", { ascending: false }).limit(2000); if (error) throw new Error(error.message); return data || []; },
   agendaPublicaBuscar: async (token: string, q: string) => {
     if ((import.meta as any).env?.VITE_MOCK) return (((window as any).__agendaPublicaMock || []) as any[]).filter((x: any) => (x.cliente || "").toLowerCase().includes(q.toLowerCase())).map((x: any) => ({ ...x, dia: new Date().toISOString().slice(0, 10) }));
     return (await rpc<any[]>("agenda_publica_buscar", { p_token: token, p_q: q })) || [];

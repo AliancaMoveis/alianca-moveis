@@ -5,6 +5,7 @@ import Raiz from "../src/movel/Raiz";
 import { Overlays } from "../src/comp/Overlays";
 import { estadoMock } from "./mock";
 import AgendaPublica from "../src/telas/AgendaPublica";
+import Avaliar from "../src/telas/Avaliar";
 
 { const d = (n: number) => { const x = new Date(); x.setDate(x.getDate() - n); return x.toISOString().slice(0, 10); };
   (window as any).__metasMock = [{ dia: d(0), meta: 3, valor: 100, obs: "Meta do dia" }, { dia: d(2), meta: 2, valor: 100, obs: "" }, { dia: d(4), meta: 1, valor: 50, obs: "" }]; }
@@ -23,7 +24,8 @@ import AgendaPublica from "../src/telas/AgendaPublica";
   { id: "M7", hora: "18:30", assumido: true, avisos: 2, avisado_em: new Date(Date.now() - 300000).toISOString(), cliente: "Rodrigo Mattos", vendedor: "Vendedor — Roy", consultor: "Consultor — Anderson", origem: "externo", situacao: "com_vendedor", quer_projeto: false, pedido_vendedor: "" },
 ];
 const uid = new URLSearchParams(location.search).get("uid")!;
-if (new URLSearchParams(location.search).get("loja") !== null) ReactDOM.createRoot(document.getElementById("root")!).render(<AgendaPublica />);
+if (new URLSearchParams(location.search).get("t") !== null) ReactDOM.createRoot(document.getElementById("root")!).render(<Avaliar />);
+else if (new URLSearchParams(location.search).get("loja") !== null) ReactDOM.createRoot(document.getElementById("root")!).render(<AgendaPublica />);
 else ReactDOM.createRoot(document.getElementById("root")!).render(
   <AppProvider uid={uid} inicial={estadoMock()} overlays={(o) => <Overlays {...o} />}><Raiz /></AppProvider>
 );

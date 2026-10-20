@@ -1647,3 +1647,54 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
   :root:not([data-theme="light"]) .cv-freela{background:#2c2346;color:#c9b4ff}}
 :root[data-theme="dark"] .an-aviso{background:#2e2610;border-color:#8a6a1a;color:#f0d27a}:root[data-theme="dark"] .an-aviso b{color:#ffe59a}
 :root[data-theme="dark"] .cv-freela{background:#2c2346;color:#c9b4ff}
+/* ---------- ⭐ Pesquisa de satisfação (página do cliente, sempre clara) ---------- */
+.av{min-height:100vh;background:#f6f3ea;color:#1c2620;color-scheme:light;display:flex;flex-direction:column}
+.av-top{background:#0e4d33;padding:22px 20px 26px;display:flex;flex-direction:column;gap:12px}
+.av-top>.av-marca{display:flex;align-items:center;gap:10px}.av-marca b{color:#f3dfa6;font-size:15px;letter-spacing:.3px}
+.av-logo{width:46px;height:30px;border-radius:50%;border:2px solid #c9a04a;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:8px;color:#f3dfa6}
+.av-top h1{margin:0;font-size:24px;line-height:1.2;color:#fff;max-width:640px}.av-top p{margin:0;font-size:14.5px;line-height:1.45;color:#cfe3d7;max-width:640px}
+.av-main{padding:18px 16px 28px;display:flex;flex-direction:column;gap:14px;max-width:640px;width:100%;box-sizing:border-box;margin:0 auto}
+.av-card{background:#fff;border-radius:16px;padding:18px 16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 1px 2px rgba(20,40,30,.06)}
+.av-card h2{margin:0;font-size:16.5px;line-height:1.35;color:#1c2620}.av-card p{margin:0;font-size:14.5px;line-height:1.5;color:#43524a}
+.av-notas{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.av-notas button{height:46px;border-radius:10px;font-size:16px;font-weight:700;border:1.5px solid #d6dccf;background:#fff;color:#26332b;cursor:pointer}
+.av-escala{display:flex;justify-content:space-between;font-size:12px;color:#5b6b62}
+.av-q{display:flex;flex-direction:column;gap:4px}.av-q>div:first-child{font-size:14.5px;font-weight:600;color:#26332b}
+.av-est{display:flex;gap:4px}.av-est button{width:46px;height:46px;border:0;background:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.av-lbl{font-size:16px;font-weight:700}.av-lbl small{font-weight:500;color:#5b6b62;font-size:13px}
+.av-card textarea{font:inherit;font-size:15px;padding:12px;border:1.5px solid #d6dccf;border-radius:12px;resize:vertical;color:#1c2620;background:#fbfaf6}
+.av-chk{display:flex;align-items:center;gap:10px;font-size:14px;color:#26332b;min-height:44px}.av-chk input{width:20px;height:20px;accent-color:#0e4d33}
+.av-bt{height:56px;border:0;border-radius:14px;background:#0e4d33;color:#fff;font-size:17px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none;font-family:inherit}
+.av-bt:disabled{opacity:.6}
+.av-rod{margin:0;text-align:center;font-size:12px;color:#5b6b62}
+.av-aviso{background:#fdecea;color:#8a2a1c;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600}
+.av-ok{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:10px 0}.av-ok h1{margin:0;font-size:24px}.av-ok p{margin:0;color:#43524a}
+.av-check{width:72px;height:72px;border-radius:50%;background:#dff0e5;display:flex;align-items:center;justify-content:center}
+.av-tag{font-size:12px;font-weight:700;letter-spacing:.6px}.av-tag.ok{color:#1f7a44}.av-tag.ruim{color:#b3412f}
+/* ---------- ⭐ Qualidade (tela interna) ---------- */
+.ql .subnav button i{margin-left:6px;background:var(--danger);color:#fff;border-radius:9px;padding:0 6px;font-style:normal;font-size:11px}
+.ql-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.ql-card h3{margin:0}
+.ql-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.ql-achados{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;margin-top:6px;overflow:hidden}
+.ql-achados button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:9px 12px;border:0;border-bottom:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.ql-achados button span{font-size:12px;color:var(--ink-faint)}.ql-achados button:hover{background:var(--bg)}
+.ql-perg{font-size:13px;color:var(--ink-soft);background:var(--bg);border-radius:10px;padding:10px 12px}
+.ql-bts{display:flex;gap:8px;flex-wrap:wrap}.ql-bts.col{flex-direction:column;align-items:stretch}
+.ql-msg{white-space:pre-wrap;font:inherit;font-size:14px;background:var(--bg);border-radius:10px;padding:12px;margin:0;line-height:1.5}
+.ql-tab-wrap{overflow-x:auto}.ql-tab{width:100%;border-collapse:collapse;font-size:13.5px}
+.ql-tab th{text-align:left;font-size:11.5px;color:var(--ink-faint);padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ql-tab td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}.ql-tab td small{display:block;color:var(--ink-faint)}.ql-tab td .btn{margin:0 4px 4px 0}
+.ql-nota{border-radius:10px;padding:2px 8px;font-size:12px;font-weight:700;white-space:nowrap}.ql-nota.boa{background:#dff0e5;color:#1f7a44}.ql-nota.media{background:#fdf1d6;color:#8a5a00}.ql-nota.ruim{background:#fbe3dc;color:#b3412f}
+.ql-pend{font-size:12px;color:var(--ink-faint)}
+.ql-baixa{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
+.ql-n{min-width:40px;height:40px;border-radius:10px;background:#fbe3dc;color:#b3412f;display:flex;align-items:center;justify-content:center;font-size:18px}
+.ql-bx{flex:1;display:flex;flex-direction:column;gap:4px;font-size:13.5px}.ql-bx>span{color:var(--ink-soft)}.ql-bx q{font-style:italic}
+.ql-est{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px}.ql-est i{font-style:normal}
+.ql-trat{color:#1f7a44!important;font-weight:600}
+.ql-med{gap:6px!important}.ql-med>div{display:flex;justify-content:space-between;font-size:13px}.ql-med>div b{font-size:15px}
+.ql-alerta{border-color:#f0c3b5;background:#fff3ee}
+.ql-coms{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.ql-com{background:var(--bg);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}.ql-com>div{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-faint)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ql-alerta{background:#3a2018;border-color:#7a3a2a}}
+:root[data-theme="dark"] .ql-alerta{background:#3a2018;border-color:#7a3a2a}

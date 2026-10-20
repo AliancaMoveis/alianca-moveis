@@ -271,6 +271,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeIniciarAtend = (c: any) => !!c && !!c.atendenteId && !c.venda && !(c.tratativa && c.tratativa.emAtendimento) && (domMarketing(c) || c.tipo === "porta")
     && !["vendido", "vendido_promissoria", "vendido_entrada", "vendido_revisao", "atendido", "venda_cancelada", "reprovado", "nao_compareceu", "loja_cancelada"].includes(String(c.statusCliente || ""))
     && (c.atendenteId === currentUserId || ehGestao() || mySetores().some((x: string) => x === "presenca" || x === "gerente_loja"));
+  // ⭐ Pesquisa de satisfação: Gestão, donos, call center, supervisão e pós-venda (o banco confere: _ve_qualidade)
+  const veQualidade = () => mySetores().some((x: string) => ["gestao", "proprietario", "callcenter", "supervisao", "posvenda"].includes(x));
   // 📣 Anúncios (Reportei): Gestão, proprietário e quem tem a permissão "anuncios" (ex.: Lucas Santana)
   const veAnuncios = () => mySetores().some((x: string) => ["gestao", "proprietario", "anuncios"].includes(x)) && !oculto("anuncios");
   const doCC = (c: Chamado) => !domMarketing(c) && !TIPOS_FORA_CC.includes(c.tipo);
@@ -826,6 +828,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (mk.length) { if (!cc.length && !soMeusClientes) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
     // Confirmação de presença: quem vem à loja (marketing, externo) e o cliente porta (entrou direto) — Camila e Gestão
     if (temPresenca()) G.push({ g: "Presença na loja", ic: "✅", itens: [["presenca", "✅ Confirmação de presença"], ["presenca_porta", "＋ Novo cliente porta"]] });
+    if (veQualidade()) G.push({ g: "Qualidade", ic: "⭐", itens: [["qualidade", "Pesquisa de satisfação"]] });
     if (veAnuncios()) G.push({ g: "Anúncios", ic: "📣", itens: [["anuncios", "Meta e Google (Reportei)"]] });
     // Consultores externos: setor próprio (o marketing gera a demanda, o consultor atende). Fica logo abaixo do Marketing.
     const coordCE = ehGestao() || mySetores().includes("marketing_supervisao") || mySetores().includes("suporte_consultores");
@@ -875,7 +878,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    ehDireto, ehPorta, temPresenca, veAnuncios, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
+    ehDireto, ehPorta, temPresenca, veAnuncios, veQualidade, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };

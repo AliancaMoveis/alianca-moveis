@@ -7,10 +7,13 @@ import Login, { NovaSenha } from "./telas/Login";
 import Raiz from "./movel/Raiz";
 import { Overlays } from "./comp/Overlays";
 import AgendaPublica from "./telas/AgendaPublica";
+import Avaliar from "./telas/Avaliar";
 
 // /loja = agenda da loja em tela aberta (sem login, só com o link secreto); nada do sistema é carregado
 export default function App() {
   if (location.pathname.replace(/\/+$/, "") === "/loja") return <AgendaPublica />;
+  // /avaliar?t=… = pesquisa de satisfação do cliente (sem login, só com o link dele)
+  if (location.pathname.replace(/\/+$/, "") === "/avaliar") return <Avaliar />;
   return <AppLogado />;
 }
 

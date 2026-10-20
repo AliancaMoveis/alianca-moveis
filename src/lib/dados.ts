@@ -13,7 +13,7 @@ export type Estado = {
   fabricas: any[];
   chamados: Chamado[];
   tipos: Record<string, any>;
-  config: { comissaoPct: number; pagamentoVisita: number; valorVendaMkt?: number; modoTeste?: boolean; auxilioFixo?: number; diaAuxilio?: number; checklistAgenda?: any };
+  config: { comissaoPct: number; pagamentoVisita: number; valorVendaMkt?: number; modoTeste?: boolean; auxilioFixo?: number; diaAuxilio?: number; checklistAgenda?: any; googleReview?: string };
   montadores: Montador[];
   reembolsos: Reembolso[];
   /** cruzamento Minha Visita × Exact, por nº de venda (setor de Medidas) */
@@ -206,7 +206,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     medidasCruz: Object.fromEntries((mcruz as any[]).map((m: any) => [m.venda, { venda: m.venda, comprador: m.comprador, telefone: m.telefone, visitado: m.visitado, consultor: m.consultor,
       statusMv: m.status_mv, visitaEm: m.visita_em, medidor: m.medidor, situacao: m.situacao_exact, resultado: m.resultado, tratativa: m.tratativa, obs: m.obs,
       cruzadoEm: m.cruzado_em, atualizadoEm: m.atualizado_em, atualizadoPor: m.atualizado_por }])),
-    config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), valorVendaMkt: cfg.data.valor_venda_mkt != null ? Number(cfg.data.valor_venda_mkt) : 10, modoTeste: !!cfg.data.modo_teste, auxilioFixo: cfg.data.auxilio_fixo != null ? Number(cfg.data.auxilio_fixo) : 1500, diaAuxilio: Number(cfg.data.dia_auxilio) || 15, checklistAgenda: cfg.data.checklist_agenda || null } : { comissaoPct: 1.5, pagamentoVisita: 40 },
+    config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), valorVendaMkt: cfg.data.valor_venda_mkt != null ? Number(cfg.data.valor_venda_mkt) : 10, modoTeste: !!cfg.data.modo_teste, auxilioFixo: cfg.data.auxilio_fixo != null ? Number(cfg.data.auxilio_fixo) : 1500, diaAuxilio: Number(cfg.data.dia_auxilio) || 15, checklistAgenda: cfg.data.checklist_agenda || null, googleReview: cfg.data.google_review_url || "" } : { comissaoPct: 1.5, pagamentoVisita: 40 },
     chamados: chamados.filter((c: any) => !(c.tratativa && c.tratativa.excluido)).map((c: any) => {
       const v = vendaDe[c.id];
       const t = trDe[c.id];
