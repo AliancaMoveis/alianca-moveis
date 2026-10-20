@@ -242,8 +242,10 @@ function ListaMedidas({ aba }: { aba: string }) {
       {!lista.length ? <div className="card" style={{ padding: 20, textAlign: "center", color: "var(--ink-faint)" }}>Nenhum cliente aqui.</div> :
         <div className="card" style={{ padding: 0 }}>{lista.map((c: any) => {
           const m = (c.tratativa && c.tratativa.medida) || {}, dck = diaCk(c), alerta = aba !== "aprovados" && dck && em3(dck);
+          // aguardando análise: linha em roxo claro quando tem foto (da medida ou da visita do consultor no 360)
+          const temFoto = aba === "analise" && ((c.anexos || []).some((x: any) => x.tipo === "img") || achar360(R, st, c).some((v: any) => (v.anexos || []).some((x: any) => x.tipo === "img")));
           return (
-            <div key={c.id} className="acao" style={{ borderLeftColor: alerta ? "var(--critico)" : "var(--line)", margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)" }} onClick={() => abrirDetalhe(c.id)}>
+            <div key={c.id} className={"acao" + (temFoto ? " md-comfoto" : "")} title={temFoto ? "Tem foto" : undefined} style={{ borderLeftColor: alerta ? "var(--critico)" : temFoto ? "#7a3fb0" : "var(--line)", margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)" }} onClick={() => abrirDetalhe(c.id)}>
               <span><b>{c.cliente}</b> · venda {c.pedido || "—"} <Selo360 c={c} />
                 {/* dois tipos de medida, bem separados: do CONSULTOR (antes da venda) e do MEDIDOR (pedida depois da venda — mesmo que quem foi seja um consultor) */}
                 {c.medidorId ? <> <span className="md-tipo med">📐 MEDIDOR · depois da venda</span> {R.nomeUser(c.medidorId)}</>

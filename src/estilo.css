@@ -1768,3 +1768,6 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .g360-fotos img{cursor:zoom-in}
 .md-tipo{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.3px;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:1px}
 .md-tipo.cons{background:#7a3fb0;color:#fff}.md-tipo.med{background:#1f7a44;color:#fff}
+.acao.md-comfoto{background:#f1e8fb}.acao.md-comfoto:hover{background:#e7d9f7}
+:root[data-theme="dark"] .acao.md-comfoto{background:#2d2340}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .acao.md-comfoto{background:#2d2340}}
