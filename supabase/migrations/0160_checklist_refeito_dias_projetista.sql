@@ -1,0 +1,7 @@
+-- Checklist (am-222)
+-- 1) Importação: checklist já feito (_ck_feito: concluído/realizado/desistiu ou agendado com todos os dias no passado) nunca é substituído.
+--    Se a venda volta na planilha com data nova (de hoje em diante) e sem outro checklist ativo, checklist_importar cria um NOVO chamado
+--    e mantém o anterior. checklist_agendados_planilha ignora agendados cujos dias já passaram.
+--    Helpers: _ck_ultima_data(jsonb), _ck_feito(text, jsonb).
+-- 2) Dias fixos por projetista: config.checklist_agenda.diasProjetista = { nome: [0..6] }; _ck_proj recusa outro dia da semana;
+--    salvar_checklist_agenda preserva/valida. Giovanni = [2,5] (terça e sexta) e saiu de "só emergência".
