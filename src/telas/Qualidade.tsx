@@ -1,7 +1,7 @@
 // ⭐ Pesquisa de satisfação — questionário ÚNICO da jornada do cliente (Venda, Medição, Checklist, Entrega, Montagem),
 // enviado depois da montagem. Gerar e mandar o link pelo WhatsApp, acompanhar respostas, tratar notas baixas,
 // painel de qualidade e (Gestão) editar as perguntas. Acesso: Gestão, donos, call center, supervisão e pós-venda (o banco confere).
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { fmtDate, fmtDateTime, hojeISO, isoLocal, linkWhats } from "../lib/regras";
@@ -31,7 +31,7 @@ const exemplo = (): any[] => {
 
 export default function Qualidade() {
   const { R, st } = useApp() as any;
-  const [aba, setAba] = useState<"enviar" | "enviadas" | "baixas" | "painel" | "perguntas">("enviar");
+  const [aba, setAba] = useState<"enviar" | "enviadas" | "baixas" | "painel" | "pessoas" | "perguntas">("enviar");
   const [lista, setLista] = useState<any[] | null>(null); const [erro, setErro] = useState("");
   const [Q, setQ] = useState<{ titulo: string; secoes: Secao[]; atualizado_por?: string; atualizado_em?: string }>(QUESTIONARIO_PADRAO);
   const carregar = () => { if (MOCK) { setLista(exemplo()); return; } const d = new Date(); d.setDate(d.getDate() - 180);
@@ -42,12 +42,13 @@ export default function Qualidade() {
   const Tab = ({ k, l, n }: any) => <button className={aba === k ? "on" : ""} onClick={() => setAba(k)}>{l}{n ? <i>{n}</i> : null}</button>;
   return <section className="view active ql">
     <div className="view-head"><div><h2>⭐ Pesquisa de satisfação</h2><p>Um questionário só, com toda a jornada do cliente: venda, medição, checklist, entrega e montagem. Mande o link pelo WhatsApp depois da montagem. Nota de 0 a 6 avisa o pós-venda e a Gestão para ligar.</p></div></div>
-    <div className="subnav"><Tab k="enviar" l="📩 Enviar pesquisa" /><Tab k="enviadas" l="Enviadas" /><Tab k="baixas" l="⚠️ Notas baixas" n={baixas.length} /><Tab k="painel" l="📊 Painel" /><Tab k="perguntas" l="📝 Perguntas" /></div>
+    <div className="subnav"><Tab k="enviar" l="📩 Enviar pesquisa" /><Tab k="enviadas" l="Enviadas" /><Tab k="baixas" l="⚠️ Notas baixas" n={baixas.length} /><Tab k="painel" l="📊 Painel" /><Tab k="pessoas" l="👥 Notas por pessoa" /><Tab k="perguntas" l="📝 Perguntas" /></div>
     {erro && <div className="ro-note">Não consegui carregar as pesquisas: {erro}</div>}
     {aba === "enviar" && <Enviar recarregar={carregar} Q={Q} />}
     {aba === "enviadas" && <Enviadas lista={lista} recarregar={carregar} />}
     {aba === "baixas" && <Baixas lista={lista} recarregar={carregar} />}
     {aba === "painel" && <Painel lista={lista} Q={Q} />}
+    {aba === "pessoas" && <PorPessoa lista={lista} Q={Q} />}
     {aba === "perguntas" && <Perguntas Q={Q} recarregar={carregarQ} />}
     {R.ehGestao() && aba === "painel" && <LinkGoogle atual={(st.config || {}).googleReview || ""} />}
   </section>;
@@ -63,13 +64,29 @@ function Enviar({ recarregar, Q }: { recarregar: () => void; Q: { titulo: string
     return (st.chamados || []).filter((c: any) => c.telefone && String(c.telefone).replace(/\D/g, "").length >= 10 && (sem(c.cliente).includes(b) || (d.length >= 4 && (String(c.telefone).replace(/\D/g, "").includes(d) || String(c.pedido || "").includes(d)))))
       .slice(0, 8); }, [q, st.chamados]);
   const quem = Array.from(new Set(Q.secoes.map(s => s.quem).filter(Boolean)));
+  // medidor = quem foi na casa do cliente: consultor externo (visita) ou medidor (medida) — para o cliente são todos medidores
+  const medidores = (): string[] => ((st.usuarios || []) as any[]).filter(u => u.ativo && ((u.setores || []).includes("consultor_externo") || ((u.setores || []).includes("medidas") && u.somenteAtribuidos))).map(u => u.nome).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const projs = (): string[] => Array.from(new Set([...(((st.config || {}).checklistAgenda || {}).projetistas || ["Angela", "Silvane", "Cleberson", "Gislaine", "Juliana", "Rafael", "Eduardo", "Giovanni"])])) as string[];
   const opcoes = (k: string): string[] => /montador/i.test(k) ? (st.montadores || []).filter((m: any) => m.ativo).map((m: any) => m.nome)
-    : /vendedor|projetista/i.test(k) ? R.projetistas().map((u: any) => u.nome) : [];
+    : /vendedor/i.test(k) ? R.projetistas().map((u: any) => u.nome) : /projetista|checklist/i.test(k) ? projs() : /medid/i.test(k) ? medidores() : [];
   const escolher = (c: any) => {
     setF({ ...f, cliente: c.cliente, telefone: c.telefone, chamadoId: c.id }); setQ("");
-    // vendedor que atendeu: já vem do cliente do 360
+    // preenche quem já sabemos pelo 360: vendedor, quem foi na casa (consultor ou medidor) e o projetista do checklist da venda
+    const dig = (x: any) => String(x || "").replace(/\D/g, "");
+    const venda = dig((c.venda && c.venda.numero) || c.pedido), tel = dig(c.telefone).slice(-10);
+    const mesmo = (x: any) => x.id !== c.id && ((venda && dig(x.pedido) === venda) || (venda && x.venda && dig(x.venda.numero) === venda) || (tel.length === 10 && dig(x.telefone).slice(-10) === tel));
+    const outros = (st.chamados || []).filter(mesmo);
+    const nv: Record<string, string> = {};
     const vk = quem.find(k => /vendedor/i.test(k));
-    if (vk && c.atendenteId) setPessoas(p => ({ ...p, [vk]: R.nomeUser(c.atendenteId) }));
+    const vend = c.atendenteId || (outros.find((x: any) => x.atendenteId) || {}).atendenteId;
+    if (vk && vend) nv[vk] = R.nomeUser(vend);
+    const mk = quem.find(k => /medid/i.test(k));
+    const med = c.medidorId || (outros.find((x: any) => x.medidorId) || {}).medidorId || c.consultorId || (outros.find((x: any) => x.consultorId) || {}).consultorId;
+    if (mk && med) nv[mk] = R.nomeUser(med);
+    const pk = quem.find(k => /projetista|checklist/i.test(k));
+    const ckc = [c, ...outros].find((x: any) => x.tipo === "checklist" && x.tratativa && x.tratativa.checklist && x.tratativa.checklist.projetista);
+    if (pk && ckc) nv[pk] = ckc.tratativa.checklist.projetista;
+    setPessoas(p => ({ ...p, ...nv }));
   };
   const gerar = async () => {
     if (!f.cliente.trim()) { toast("Informe o nome do cliente"); return; }
@@ -203,6 +220,49 @@ function Painel({ lista, Q }: any) {
     <div className="panel"><h3>Comentários</h3>
       {coment.length ? <div className="ql-coms">{coment.map((a: any) => <div key={a.id} className="ql-com"><div><b className={"ql-nota " + (a.nps >= 9 ? "boa" : a.nps <= 6 ? "ruim" : "media")}>nota {a.nps}</b><span>{a.cliente.split(" ")[0]} · {fmtDate(a.respondido_em)}</span></div><q>{a.comentario}</q></div>)}</div>
         : <div className="dn-vazio">Nenhum comentário no período.</div>}</div>
+  </div>;
+}
+
+// 👥 nota de cada pessoa por função (vendedor, medidor, projetista do checklist, entregador, montador): a etapa que ela atendeu
+function PorPessoa({ lista, Q }: any) {
+  const [per, setPer] = useState<Per>("mes"); const hoje = hojeISO();
+  const [pDe, setPDe] = useState(hoje.slice(0, 8) + "01"); const [pAte, setPAte] = useState(hoje);
+  const papeis: string[] = Array.from(new Set((Q.secoes as Secao[]).map(s => s.quem).filter(Boolean)));
+  const [papel, setPapel] = useState<string>(papeis[0] || "Vendedor"); const [abre, setAbre] = useState("");
+  if (!lista) return <div className="dn-vazio">Carregando…</div>;
+  const { de, ate } = periodoDe(per, pDe, pAte);
+  const resp = lista.filter((a: any) => { const d = String(a.respondido_em || "").slice(0, 10); return a.respondido_em && d >= de && d <= ate; });
+  // por pessoa: a etapa em que ela aparece como "quem" + a nota geral (NPS) do cliente
+  type X = { nome: string; av: any[]; notas: number[]; perg: Record<string, number[]>; nps: number[]; baixas: number };
+  const g: Record<string, X> = {}; const pergs: string[] = [];
+  resp.forEach((a: any) => { const pe = a.pessoas || (a.responsavel ? { Montador: a.responsavel } : {});
+    porSecao(secoesDe(a), estDe(a)).forEach(s => { if (s.quem !== papel || !pe[s.quem]) return; const nome = pe[s.quem];
+      const x = g[nome] = g[nome] || { nome, av: [], notas: [], perg: {}, nps: [], baixas: 0 };
+      s.perguntas.forEach((p, i) => { if (!pergs.includes(p)) pergs.push(p); const n = s.notas[i]; if (n != null) { x.notas.push(n); (x.perg[p] = x.perg[p] || []).push(n); } });
+      if (s.notas.every(n => n == null)) return;
+      x.av.push({ a, notas: s.notas, perguntas: s.perguntas }); x.nps.push(a.nps); if (a.nps <= 6) x.baixas++; }); });
+  const linhas = Object.values(g).filter(x => x.av.length).sort((a, b) => (media(b.notas) || 0) - (media(a.notas) || 0) || b.av.length - a.av.length);
+  const semNome = resp.filter((a: any) => porSecao(secoesDe(a), estDe(a)).some(s => s.quem === papel && s.notas.some(n => n != null)) && !(a.pessoas || {})[papel]).length;
+  return <div className="ql-painel">
+    <div className="an-per">{PERIODOS.map(([k, l]) => <button key={k} className={"chip" + (per === k ? " on" : "")} onClick={() => setPer(k)}>{l}</button>)}
+      {per === "pers" && <span className="an-pers"><input type="date" value={pDe} max={pAte} onChange={e => setPDe(e.target.value || pDe)} /> até <input type="date" value={pAte} min={pDe} max={hoje} onChange={e => setPAte(e.target.value || pAte)} /></span>}</div>
+    <div className="pb-per">{fmtDate(de)} a {fmtDate(ate)}</div>
+    <div className="subnav" style={{ margin: "4px 0 12px" }}>{papeis.map(p => <button key={p} className={papel === p ? "on" : ""} onClick={() => { setPapel(p); setAbre(""); }}>{p}</button>)}</div>
+    <div className="panel"><h3>{papel} · nota da etapa {(Q.secoes as Secao[]).find(s => s.quem === papel)?.nome || ""}</h3>
+      {!linhas.length ? <div className="dn-vazio">Nenhuma avaliação com {papel.toLowerCase()} informado no período.</div> :
+      <div className="ql-tab-wrap"><table className="ql-tab"><thead><tr><th>{papel}</th><th>Avaliações</th><th>Média da etapa</th>{pergs.map(p => <th key={p}>{p}</th>)}<th>NPS dos clientes</th><th>Notas 0–6</th></tr></thead>
+        <tbody>{linhas.map(x => { const m = media(x.notas), np = calcNps(x.nps); return <Fragment key={x.nome}>
+          <tr key={x.nome} className="ql-pp" onClick={() => setAbre(abre === x.nome ? "" : x.nome)}><td><b>{abre === x.nome ? "▾ " : "▸ "}{x.nome}</b></td><td>{x.av.length}</td>
+            <td style={{ color: corE(m), fontWeight: 800 }}>{f1(m)}★</td>{pergs.map(p => { const v = media(x.perg[p] || []); return <td key={p} style={{ color: corE(v) }}>{f1(v)}</td>; })}
+            <td style={{ color: corN(np), fontWeight: 700 }}>{np}</td><td style={{ color: x.baixas ? "#b3412f" : undefined, fontWeight: x.baixas ? 700 : 400 }}>{x.baixas}</td></tr>
+          {abre === x.nome && <tr key={x.nome + "_d"}><td colSpan={5 + pergs.length} style={{ background: "var(--surface-2)" }}>
+            {x.av.slice().sort((a, b) => String(b.a.respondido_em).localeCompare(String(a.a.respondido_em))).map((v, i) => <div key={i} className="ql-ppd">
+              <span>{fmtDate(v.a.respondido_em)} · <b>{v.a.cliente}</b></span>
+              <span>{v.perguntas.map((p: string, k: number) => <i key={k} title={p}>{p}: <b style={{ color: corE(v.notas[k]) }}>{v.notas[k] == null ? "—" : v.notas[k] + "★"}</b></i>)}</span>
+              <span className={"ql-nota " + (v.a.nps >= 9 ? "boa" : v.a.nps <= 6 ? "ruim" : "media")}>nota {v.a.nps}</span>
+              {v.a.comentario && <q>{v.a.comentario}</q>}</div>)}</td></tr>}</Fragment>; })}</tbody></table></div>}
+      {semNome > 0 && <p className="hint" style={{ marginTop: 8 }}>{semNome} resposta(s) do período avaliaram esta etapa sem o nome do {papel.toLowerCase()} — preencha “quem atendeu” ao enviar a pesquisa.</p>}
+    </div>
   </div>;
 }
 

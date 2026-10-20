@@ -1738,3 +1738,6 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 @media(max-width:800px){.vd-wrap{grid-template-columns:1fr}.vd-lista{position:static;max-height:none}}
 .vd-movel{padding:0 12px 12px}.vd-movel .vd-wrap{grid-template-columns:1fr}.vd-movel .vd-lista{position:static;max-height:none}
 .vd-movel .vd-det{padding:12px}
+.ql-pp{cursor:pointer}.ql-pp:hover td{background:var(--surface-2)}
+.ql-ppd{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;padding:8px 4px;border-bottom:1px solid var(--line-soft);font-size:13px}
+.ql-ppd i{font-style:normal;margin-right:10px}.ql-ppd q{flex-basis:100%;color:var(--ink-soft)}
