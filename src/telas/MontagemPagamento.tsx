@@ -14,7 +14,10 @@ import { Kpi } from "./Dashboard";
 import { podeMontagemAgend } from "./MontagemAgend";
 import { Modal } from "../comp/Modal";
 
-type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number; origem?: string; descricao?: string | null; criado_por?: string | null };
+type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number; origem?: string; descricao?: string | null; criado_por?: string | null; tipo?: string | null };
+// ordem avulsa: serviço dentro da loja, frete ou outro pagamento manual — entra no total do montador
+export const TIPOS_AV: Record<string, string> = { servico_loja: "🏬 Serviço na loja", frete: "🚚 Frete", outro: "📝 Outro" };
+const rotAv = (e: Ef) => (TIPOS_AV[e.tipo || "outro"] || "Avulsa").replace(/^\S+ /, "") + (e.descricao ? ": " + e.descricao : "");
 
 const iso = (s: string) => { const m = String(s || "").match(/(\d{2})[-\/](\d{2})[-\/](\d{4})/); return m ? m[3] + "-" + m[2] + "-" + m[1] : ""; };
 const num = (s: string) => { const t = String(s || "0").trim(); const n = Number(/,\d{1,2}$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "")); return isFinite(n) ? n : 0; };
@@ -47,7 +50,7 @@ async function carregar(): Promise<{ ef: Ef[]; vinc: Record<string, string | nul
   if (MOCK) return { ef: mockEf, vinc: { ...mockVinc } };
   const ef: Ef[] = [];
   for (let i = 0; ; i += 1000) {
-    const { data, error } = await sb.from("montagem_efet").select("chave,os,montador,status,data_montagem,data_finalizacao,produtos,adicionais,total,origem,descricao,criado_por").is("excluido_em", null).order("chave").range(i, i + 999);
+    const { data, error } = await sb.from("montagem_efet").select("chave,os,montador,status,data_montagem,data_finalizacao,produtos,adicionais,total,origem,descricao,criado_por,tipo").is("excluido_em", null).order("chave").range(i, i + 999);
     if (error) throw new Error(error.message);
     ef.push(...((data || []) as any[]).map(a => ({ ...a, produtos: Number(a.produtos) || 0, adicionais: Number(a.adicionais) || 0, total: Number(a.total) || 0 })));
     if (!data || data.length < 1000) break;
@@ -68,7 +71,7 @@ async function enviar(ef: Ef[]) {
 }
 async function salvarAvulsa(p: any): Promise<string> {
   if (MOCK) { const ch = p.chave || "AVULSA¦" + Math.random().toString(36).slice(2); const prod = Number(p.prod) || 0, adic = Number(p.adic) || 0;
-    mockEf = [...mockEf.filter(a => a.chave !== ch), { chave: ch, os: "Ordem avulsa", montador: p.montador, status: p.status === "aprovado" ? "PAGAMENTO EFETUADO" : "AGUARDANDO APROVAÇÃO DE PAGAMENTO", data_montagem: p.data, data_finalizacao: p.data, produtos: prod, adicionais: adic, total: prod + adic, origem: "avulsa", descricao: p.descricao, criado_por: "você" }]; return ch; }
+    mockEf = [...mockEf.filter(a => a.chave !== ch), { chave: ch, os: "Ordem avulsa", montador: p.montador, status: p.status === "aprovado" ? "PAGAMENTO EFETUADO" : "AGUARDANDO APROVAÇÃO DE PAGAMENTO", data_montagem: p.de, data_finalizacao: p.ate, produtos: prod, adicionais: adic, total: prod + adic, origem: "avulsa", descricao: p.descricao, tipo: p.tipo, criado_por: "você" }]; return ch; }
   const { data, error } = await sb.rpc("montagem_avulsa_salvar", { p }); if (error) throw new Error(error.message); return data as string;
 }
 async function excluirAvulsa(ch: string) {
@@ -145,8 +148,11 @@ export default function MontagemPagamento() {
   const dataDe = (e: Ef) => (pelo === "fin" ? e.data_finalizacao || e.data_montagem : e.data_montagem) || "";
   const lista = (dados?.ef || []).filter(e => conta(e) && (fs === "todos" || (fs === "aprov" ? aprovado(e) : aguardando(e)))).filter(e => { const d = dataDe(e); return d >= de && d <= ate; });
   const outros = (dados?.ef || []).filter(e => !conta(e)).filter(e => { const d = dataDe(e); return d >= de && d <= ate; }).length;
+  // agrupa pelo cadastro do montador: a ordem avulsa (lançada com o nome do cadastro) cai na mesma linha das O.S. do Exact
   const grupos: G[] = Object.values(lista.reduce((m: Record<string, G>, e) => {
-    const g = (m[e.montador] = m[e.montador] || { nome: e.montador, cad: cadDe(e.montador), n: 0, prod: 0, adic: 0, total: 0, aprov: 0, aprovN: 0, agu: 0, aguN: 0, itens: [] });
+    const cad = cadDe(e.montador), k = cad ? "id:" + cad.id : e.montador;
+    const g = (m[k] = m[k] || { nome: e.montador, cad, n: 0, prod: 0, adic: 0, total: 0, aprov: 0, aprovN: 0, agu: 0, aguN: 0, itens: [] });
+    if (e.origem !== "avulsa" && g.itens.every(x => x.origem === "avulsa")) g.nome = e.montador; // nome do Exact (para o vínculo)
     g.n++; g.prod += e.produtos; g.adic += e.adicionais; g.total += e.total; g.itens.push(e);
     if (aprovado(e)) { g.aprov += e.total; g.aprovN++; } else { g.agu += e.total; g.aguN++; }
     return m;
@@ -168,7 +174,7 @@ export default function MontagemPagamento() {
   };
   const relDetalhado = () => {
     const cab = ["Montador", "O.S.", "Status", "Data montagem", "Data finalização", "Total produtos", "Adicionais", "Total O.S."];
-    const linhas = grupos.flatMap(g => g.itens.slice().sort((a, b) => dataDe(a).localeCompare(dataDe(b))).map(e => [g.cad?.nome || g.nome, e.origem === "avulsa" ? "Avulsa: " + (e.descricao || "") : e.os, aprovado(e) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(e.data_montagem), br(e.data_finalizacao), e.produtos, e.adicionais, e.total]));
+    const linhas = grupos.flatMap(g => g.itens.slice().sort((a, b) => dataDe(a).localeCompare(dataDe(b))).map(e => [g.cad?.nome || g.nome, e.origem === "avulsa" ? "Avulsa · " + rotAv(e) : e.os, aprovado(e) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(e.data_montagem), br(e.data_finalizacao), e.produtos, e.adicionais, e.total]));
     baixarXlsx("montagens_detalhadas_" + de + "_a_" + ate + ".xlsx", cab, linhas, "Montagens");
   };
 
@@ -205,6 +211,7 @@ export default function MontagemPagamento() {
         <Kpi n={fmtMoeda(soma(g => g.prod))} l="Total dos produtos (serviço)" fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.adic))} l="Adicionais" fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.total))} l={"Total a pagar · " + grupos.length + " montadores"} fs={20} />
+        <Kpi n={fmtMoeda(r2(lista.filter(e => e.origem === "avulsa").reduce((s, e) => s + e.total, 0)))} l={"Ordens avulsas (" + lista.filter(e => e.origem === "avulsa").length + ") · já no total"} fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.aprov))} l={"✅ Aprovado p/ pagamento (" + soma(g => g.aprovN) + ")"} fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.agu))} l={"⏳ Aguardando aprovação (" + soma(g => g.aguN) + ")"} fs={20} cls={soma(g => g.agu) ? "alert" : ""} />
       </div>
@@ -217,8 +224,8 @@ export default function MontagemPagamento() {
           <input type="search" placeholder="🔎 Buscar montador" value={q} onChange={e => setQ(e.target.value)} style={{ maxWidth: 220 }} />
           <button className="btn primary sm" onClick={relFinanceiro} disabled={!grupos.length}>⬇ Relatório para o financeiro</button>
           <button className="btn sm" onClick={relDetalhado} disabled={!grupos.length}>⬇ Detalhado por O.S.</button>
-          <button className="btn sm" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} />)}>＋ Ordem avulsa</button>
-          <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} mapa={Object.fromEntries(grupos.map(g => [g.nome, g.cad?.id || ""]))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento do mês</button>
+          <button className="btn sm" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={de} ate={ate} />)}>＋ Ordem avulsa</button>
+          <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} mapa={Object.fromEntries(grupos.flatMap(g => Array.from(new Set([g.nome, ...g.itens.map(e => e.montador)])).map(n => [n, g.cad?.id || ""])))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento do mês</button>
         </div>
         {!vis.length ? <div className="empty" style={{ padding: 24 }}>{dados && dados.ef.length ? "Nenhuma montagem efetivada neste período." : "Envie o relatório do Exact para começar."}</div> :
           <table className="ma-tab"><thead><tr><th>Montador</th><th className="n">Montagens</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total a pagar</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Conta para pagamento</th></tr></thead>
@@ -235,11 +242,10 @@ export default function MontagemPagamento() {
 function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarregar }: any) {
   const k = g.cad?.conta;
   const [trocar, setTrocar] = useState(false);
-  const [av, setAv] = useState<any>(null);
-  const { toast } = useApp() as any;
-  const novaAv = () => setAv({ chave: "", montador: g.nome, descricao: "", data: hoje(), prod: "", adic: "", status: "aprovado" });
-  const salvarAv = async () => { try { await salvarAvulsa({ ...av, prod: num(av.prod), adic: num(av.adic) }); toast("Ordem avulsa salva"); setAv(null); await recarregar(); } catch (e: any) { toast(e.message); } };
-  const excluirAv = async (e: Ef) => { if (!confirm("Excluir a ordem avulsa “" + (e.descricao || "") + "” de " + fmtMoeda(e.total) + "? Ela sai do pagamento (fica registrada no histórico do banco).")) return; try { await excluirAvulsa(e.chave); toast("Ordem avulsa excluída"); await recarregar(); } catch (x: any) { toast(x.message); } };
+  const { toast, setModal } = useApp() as any;
+  const nomeAv = g.cad?.nome || g.nome;
+  const excluirAv = async (e: Ef) => { if (!confirm("Excluir a ordem avulsa “" + rotAv(e) + "” de " + fmtMoeda(e.total) + "? Ela sai do pagamento (fica registrada no histórico do banco).")) return; try { await excluirAvulsa(e.chave); toast("Ordem avulsa excluída"); await recarregar(); } catch (x: any) { toast(x.message); } };
+  const editar = (e: Ef) => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} inicial={{ chave: e.chave, montador: e.montador, tipo: e.tipo || "outro", descricao: e.descricao || "", de: e.data_montagem, ate: e.data_finalizacao || e.data_montagem, prod: String(e.produtos).replace(".", ","), adic: e.adicionais ? String(e.adicionais).replace(".", ",") : "", status: aprovado(e) ? "aprovado" : "aguardando" }} />);
   return <>
     <tr className={"ma-lin" + (aberto ? " on" : "")} onClick={abrir}>
       <td><b>{g.cad?.nome || g.nome}</b>{g.cad && g.cad.nome !== g.nome ? <small className="hint"> · Exact: {g.nome}</small> : null}</td>
@@ -257,19 +263,11 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
     </tr>
     {aberto && <tr className="ma-dias"><td colSpan={8}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "2px 0 8px" }}>
-        {!av && <button className="btn sm primary" onClick={novaAv}>＋ Incluir ordem avulsa</button>}
-        <span className="hint">Serviço feito dentro da loja ou pagamento manual — entra no total deste montador.</span>
+        <button className="btn sm primary" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={dataDe(g.itens[0]) || hoje()} ate={hoje()} inicial={{ montador: nomeAv }} />)}>＋ Incluir ordem avulsa</button>
+        <span className="hint">Serviço dentro da loja, frete ou outro pagamento manual — entra no total deste montador.</span>
       </div>
-      {av && <div className="ma-av">
-        <div className="field" style={{ flex: 2, minWidth: 220 }}><label>Serviço / descrição *</label><input value={av.descricao} onChange={e => setAv({ ...av, descricao: e.target.value })} placeholder="Ex.: montagem do mostruário da loja, ajuste de porta no showroom" /></div>
-        <div className="field"><label>Data *</label><input type="date" value={av.data} onChange={e => setAv({ ...av, data: e.target.value })} /></div>
-        <div className="field" style={{ maxWidth: 130 }}><label>Valor (R$) *</label><input inputMode="decimal" value={av.prod} onChange={e => setAv({ ...av, prod: e.target.value })} placeholder="0,00" /></div>
-        <div className="field" style={{ maxWidth: 130 }}><label>Adicional (R$)</label><input inputMode="decimal" value={av.adic} onChange={e => setAv({ ...av, adic: e.target.value })} placeholder="0,00" /></div>
-        <div className="field"><label>Status</label><select value={av.status} onChange={e => setAv({ ...av, status: e.target.value })}><option value="aprovado">✅ Aprovado p/ pagamento</option><option value="aguardando">⏳ Aguardando aprovação</option></select></div>
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}><button className="btn primary sm" onClick={salvarAv}>Salvar</button><button className="btn ghost sm" onClick={() => setAv(null)}>Cancelar</button></div>
-      </div>}
       <table className="ma-os"><thead><tr><th>O.S.</th><th>Montagem</th><th>Finalização</th><th>Status</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th></tr></thead>
-        <tbody>{g.itens.slice().sort((a: any, b: any) => dataDe(a).localeCompare(dataDe(b))).map((e: any) => <tr key={e.chave}><td>{e.origem === "avulsa" ? <><span className="pill" style={{ background: "var(--primary)", color: "#fff", fontSize: 10.5 }}>AVULSA</span> {e.descricao} <a href="#" onClick={x => { x.preventDefault(); setAv({ chave: e.chave, montador: e.montador, descricao: e.descricao || "", data: e.data_montagem, prod: String(e.produtos), adic: e.adicionais ? String(e.adicionais) : "", status: aprovado(e) ? "aprovado" : "aguardando" }); }}>editar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); excluirAv(e); }}>excluir</a></> : e.os}</td><td>{br(e.data_montagem)}</td><td>{br(e.data_finalizacao)}</td>
+        <tbody>{g.itens.slice().sort((a: any, b: any) => dataDe(a).localeCompare(dataDe(b))).map((e: any) => <tr key={e.chave}><td>{e.origem === "avulsa" ? <><span className="pill" style={{ background: "var(--primary)", color: "#fff", fontSize: 10.5 }}>AVULSA</span> {rotAv(e)}{e.data_finalizacao && e.data_finalizacao !== e.data_montagem ? <small className="hint"> · período {br(e.data_montagem)} a {br(e.data_finalizacao)}</small> : null} <a href="#" onClick={x => { x.preventDefault(); editar(e); }}>editar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); excluirAv(e); }}>excluir</a></> : e.os}</td><td>{br(e.data_montagem)}</td><td>{br(e.data_finalizacao)}</td>
           <td>{aprovado(e) ? <span className="vinda ok">✅ Aprovado</span> : <span className="vinda pend">⏳ Aguardando</span>}</td><td className="n">{fmtMoeda(e.produtos)}</td><td className="n">{e.adicionais ? fmtMoeda(e.adicionais) : "—"}</td><td className="n"><b>{fmtMoeda(e.total)}</b></td></tr>)}</tbody></table>
     </td></tr>}
   </>;
@@ -280,7 +278,7 @@ function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto }: any) {
   const { setModal, toast } = useApp() as any;
   const [ref, setRef] = useState(ate.slice(0, 7)); const [obs, setObs] = useState(""); const [ind, setInd] = useState(false);
   const tot = grupos.reduce((s: number, g: any) => s + g.total, 0), n = grupos.reduce((s: number, g: any) => s + g.n, 0);
-  const _itens = grupos.map((g: any) => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, nome_exact: g.nome, montador_id: g.cad?.id || null, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipo_conta: k.tipoConta, pix_tipo: k.pixTipo, pix_chave: k.pixChave, montagens: g.n, produtos: r2(g.prod), adicionais: r2(g.adic), total: r2(g.total), aprovado: r2(g.aprov), aguardando: r2(g.agu), ordens: g.itens.map((e: any) => ({ os: e.os, desc: e.descricao, origem: e.origem, status: e.status, mont: e.data_montagem, fin: e.data_finalizacao, prod: e.produtos, adic: e.adicionais, total: e.total })) }; });
+  const _itens = grupos.map((g: any) => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, nome_exact: g.nome, montador_id: g.cad?.id || null, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipo_conta: k.tipoConta, pix_tipo: k.pixTipo, pix_chave: k.pixChave, montagens: g.n, produtos: r2(g.prod), adicionais: r2(g.adic), total: r2(g.total), aprovado: r2(g.aprov), aguardando: r2(g.agu), ordens: g.itens.map((e: any) => ({ os: e.os, desc: e.descricao, origem: e.origem, tipo: e.tipo, status: e.status, mont: e.data_montagem, fin: e.data_finalizacao, prod: e.produtos, adic: e.adicionais, total: e.total })) }; });
   const ir = async (substituir: boolean) => {
     setInd(true);
     try { await fechar({ referencia: ref, de, ate, pelo, filtro: fs, obs, mapa, substituir, _itens }); toast("Pagamento de " + nomeMes(ref) + " fechado e guardado no histórico"); setModal(null); pronto(); }
@@ -308,7 +306,7 @@ function Historico() {
   const baixarFin = () => { if (!f) return; const linhas = itens.map(x => [x.montador, x.nome_exact, x.titular || "", x.doc || "", x.banco || "", x.agencia || "", x.conta || "", x.tipo_conta || "", x.pix_tipo || "", x.pix_chave || "", x.montagens, Number(x.produtos), Number(x.adicionais), Number(x.total), Number(x.aprovado), Number(x.aguardando), per(f), (x.conta || x.pix_chave) ? "" : "SEM CONTA CADASTRADA"]);
     linhas.push(["TOTAL", "", "", "", "", "", "", "", "", "", f.n_os, "", "", Number(f.total), Number(f.aprovado), Number(f.aguardando), per(f), f.ativo ? "" : "FECHAMENTO SUBSTITUÍDO"]);
     baixarXlsx("pagamento_montadores_" + f.referencia + (f.ativo ? "" : "_substituido_" + f.id) + ".xlsx", CAB_FIN, linhas, "Pagamento " + f.referencia); };
-  const baixarDet = () => { if (!f) return; const linhas = itens.flatMap(x => (x.ordens || []).map((o: any) => [x.montador, o.origem === "avulsa" ? "Avulsa: " + (o.desc || "") : o.os, /efetuado/i.test(o.status) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(o.mont), br(o.fin), Number(o.prod), Number(o.adic), Number(o.total)]));
+  const baixarDet = () => { if (!f) return; const linhas = itens.flatMap(x => (x.ordens || []).map((o: any) => [x.montador, o.origem === "avulsa" ? "Avulsa · " + (TIPOS_AV[o.tipo || "outro"] || "").replace(/^\S+ /, "") + (o.desc ? ": " + o.desc : "") : o.os, /efetuado/i.test(o.status) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(o.mont), br(o.fin), Number(o.prod), Number(o.adic), Number(o.total)]));
     baixarXlsx("montagens_" + f.referencia + ".xlsx", ["Montador", "O.S.", "Status", "Data montagem", "Data finalização", "Total produtos", "Adicionais", "Total O.S."], linhas, "Montagens " + f.referencia); };
   return <>
     <div className="card" style={{ padding: 0 }}>
@@ -325,20 +323,31 @@ function Historico() {
   </>;
 }
 
-// ordem avulsa para qualquer montador do cadastro (mesmo sem O.S. do Exact no período)
-function ModalAvulsa({ cadastro, pronto }: any) {
+// ordem avulsa para qualquer montador do cadastro (mesmo sem O.S. do Exact no período): tipo, período, valor
+function ModalAvulsa({ cadastro, pronto, de, ate, inicial }: any) {
   const { setModal, toast } = useApp() as any;
-  const [f, setF] = useState<any>({ montador: "", descricao: "", data: hoje(), prod: "", adic: "", status: "aprovado" });
-  const ir = async () => { try { await salvarAvulsa({ ...f, prod: num(f.prod), adic: num(f.adic) }); toast("Ordem avulsa salva"); setModal(null); await pronto(); } catch (e: any) { toast(e.message); } };
-  return <Modal titulo="＋ Ordem avulsa (serviço na loja / pagamento manual)" onFechar={() => setModal(null)}>
-    <div className="field"><label>Montador *</label><select value={f.montador} onChange={e => setF({ ...f, montador: e.target.value })}><option value="">Selecione…</option>{cadastro.map((m: any) => <option key={m.id} value={m.nome}>{m.nome}</option>)}</select></div>
-    <div className="field"><label>Serviço / descrição *</label><input value={f.descricao} onChange={e => setF({ ...f, descricao: e.target.value })} placeholder="Ex.: montagem do mostruário da loja" /></div>
+  const [f, setF] = useState<any>({ chave: "", montador: "", tipo: "servico_loja", descricao: "", de: de || hoje(), ate: ate || hoje(), prod: "", adic: "", status: "aprovado", ...(inicial || {}) });
+  const [sal, setSal] = useState(false);
+  const opc = cadastro.some((m: any) => m.nome === f.montador) || !f.montador ? cadastro : [{ id: "x", nome: f.montador }, ...cadastro];
+  const ir = async () => {
+    if (!f.montador) { toast("Selecione o montador"); return; }
+    if (!(num(f.prod) + num(f.adic) > 0)) { toast("Informe o valor"); return; }
+    if (f.tipo === "outro" && !f.descricao.trim()) { toast("Descreva o serviço"); return; }
+    setSal(true);
+    try { await salvarAvulsa({ ...f, prod: num(f.prod), adic: num(f.adic) }); toast("Ordem avulsa salva — já está no total do montador"); setModal(null); await pronto(); }
+    catch (e: any) { toast(e.message); setSal(false); }
+  };
+  return <Modal titulo={f.chave ? "Editar ordem avulsa" : "＋ Ordem avulsa para o montador"} onFechar={() => setModal(null)}>
+    <div className="field"><label>Montador *</label><select value={f.montador} onChange={e => setF({ ...f, montador: e.target.value })}><option value="">Selecione…</option>{opc.map((m: any) => <option key={m.id} value={m.nome}>{m.nome}</option>)}</select></div>
+    <div className="field"><label>Tipo *</label><div className="chips" style={{ margin: 0 }}>{Object.entries(TIPOS_AV).map(([k, l]) => <button key={k} type="button" className={"chip" + (f.tipo === k ? " on" : "")} onClick={() => setF({ ...f, tipo: k })}>{l}</button>)}</div></div>
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      <div className="field"><label>Data *</label><input type="date" value={f.data} onChange={e => setF({ ...f, data: e.target.value })} /></div>
-      <div className="field" style={{ maxWidth: 140 }}><label>Valor (R$) *</label><input inputMode="decimal" value={f.prod} onChange={e => setF({ ...f, prod: e.target.value })} /></div>
-      <div className="field" style={{ maxWidth: 140 }}><label>Adicional (R$)</label><input inputMode="decimal" value={f.adic} onChange={e => setF({ ...f, adic: e.target.value })} /></div>
-      <div className="field"><label>Status</label><select value={f.status} onChange={e => setF({ ...f, status: e.target.value })}><option value="aprovado">✅ Aprovado p/ pagamento</option><option value="aguardando">⏳ Aguardando aprovação</option></select></div>
+      <div className="field"><label>Período: de *</label><input type="date" value={f.de} onChange={e => setF({ ...f, de: e.target.value, ate: f.ate < e.target.value ? e.target.value : f.ate })} /></div>
+      <div className="field"><label>até *</label><input type="date" value={f.ate} min={f.de} onChange={e => setF({ ...f, ate: e.target.value })} /></div>
+      <div className="field" style={{ maxWidth: 150 }}><label>Valor (R$) *</label><input inputMode="decimal" value={f.prod} onChange={e => setF({ ...f, prod: e.target.value })} placeholder="0,00" /></div>
     </div>
-    <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" onClick={ir}>Salvar</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
+    <div className="field"><label>Descrição {f.tipo === "outro" ? "*" : "(opcional)"}</label><input value={f.descricao} onChange={e => setF({ ...f, descricao: e.target.value })} placeholder={f.tipo === "frete" ? "Ex.: fretes da semana, entrega em Joinville" : f.tipo === "servico_loja" ? "Ex.: montagem do mostruário, ajuste no showroom" : "Descreva o serviço"} /></div>
+    <div className="field"><label>Status</label><select value={f.status} onChange={e => setF({ ...f, status: e.target.value })}><option value="aprovado">✅ Aprovado p/ pagamento</option><option value="aguardando">⏳ Aguardando aprovação</option></select></div>
+    <p className="hint" style={{ margin: "6px 0 0" }}>Entra no relatório de pagamento do montador, somada ao total. No filtro do relatório conta pela data final do período.</p>
+    <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" disabled={sal} onClick={ir}>{sal ? "Salvando…" : "Salvar"}</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
   </Modal>;
 }
