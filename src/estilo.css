@@ -1718,3 +1718,6 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 @media(max-width:560px){.ql-etapa-h{grid-template-columns:84px 1fr 48px 12px;gap:6px}}
 .ck-dp{display:flex;flex-direction:column;gap:4px;font-size:13px}.ck-dp>div{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line-soft)}
 .ck-dp b{min-width:90px}.ck-dp label{display:flex;gap:3px;align-items:center;font-weight:500}.ck-dp input{width:auto}
+.mm-per{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 14px;font-size:15px}
+.mm-dias{display:flex;flex-direction:column;gap:4px;font-size:13px}.mm-dias div{display:grid;grid-template-columns:48px 1fr 36px;gap:8px;align-items:center}
+.mm-dias i{display:block;height:10px;border-radius:5px;background:var(--primary)}.mm-dias b{text-align:right}

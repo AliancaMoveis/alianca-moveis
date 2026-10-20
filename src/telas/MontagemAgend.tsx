@@ -11,6 +11,7 @@ import { Modal } from "../comp/Modal";
 import { fmtMoeda } from "../lib/regras";
 import { col, lerArquivo } from "./Medidas";
 import { Kpi } from "./Dashboard";
+import { ciclo } from "./MontagemMeus";
 
 type Ag = { chave: string; os: string; lider: string; montador: string; status: string; indisponivel: boolean; data_inclusao: string; data_montagem: string; data_finalizacao: string | null; tipos: string; total: number; bruto?: any[] | null };
 
@@ -197,6 +198,8 @@ export default function MontagemAgend() {
           <div className="field"><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
           <div className="field"><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
           <div className="chips" style={{ margin: 0 }}>
+            <button className="chip" onClick={() => { const c = ciclo(h); periodo(c.de, c.ate); }}>Ciclo 26 a 25</button>
+            <button className="chip" onClick={() => { const c = ciclo(h, -1); periodo(c.de, c.ate); }}>Ciclo anterior</button>
             <button className="chip" onClick={() => periodo(h.slice(0, 8) + "01", h)}>Este mês</button>
             <button className="chip" onClick={mesPassado}>Mês passado</button>
             <button className="chip" onClick={() => periodo(somaDias(h, -6), h)}>Últimos 7 dias</button>
@@ -261,13 +264,29 @@ function FragLinha({ x, mx, aba, vU, aberto, abrir }: { x: Grupo; mx: number; ab
 }
 
 function ModalPagas({ todas, pagas, salvar }: { todas: string[]; pagas: string[]; salvar: (l: string[]) => Promise<void> }) {
-  const { setModal, toast } = useApp() as any;
+  const { setModal, toast, st } = useApp() as any;
   const [sel, setSel] = useState<string[]>(pagas);
   const tem = (n: string) => ehPaga(n, sel);
+  // vínculo usuária do 360 ↔ nome no Exact (para os "Agendamentos pessoais" de cada uma)
+  const users = ((st.usuarios || []) as any[]).filter(u => u.ativo !== false && (u.setores || []).includes("montagem"));
+  const [vin, setVin] = useState<Record<string, string>>({}); const [vin0, setVin0] = useState<Record<string, string>>({});
+  useEffect(() => { if (MOCK || !users.length) return; sb.from("usuarios").select("id,nome_exact").in("id", users.map(u => u.id)).then(({ data }) => {
+    const m = Object.fromEntries(((data || []) as any[]).map(x => [x.id, x.nome_exact || ""])); setVin(m); setVin0(m); }); }, []);
+  const ir = async () => {
+    try {
+      await salvar(sel);
+      for (const u of users) if ((vin[u.id] || "") !== (vin0[u.id] || "") && !MOCK) { const { error } = await sb.rpc("usuario_nome_exact", { p_usuario: u.id, p_nome: vin[u.id] || null }); if (error) throw new Error(error.message); }
+      toast("Salvo"); setModal(null);
+    } catch (e: any) { toast(e.message); }
+  };
   return <Modal titulo="⚙ Quem recebe por agendamento" onFechar={() => setModal(null)}>
     <p style={{ marginTop: 0 }}>Só as marcadas aparecem em Agendadoras, no relatório e no fechamento. As demais não contam.</p>
     <div style={{ display: "grid", gap: 6 }}>{todas.map(n => <label key={n} style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" style={{ width: "auto" }} checked={tem(n)} onChange={() => setSel(tem(n) ? sel.filter(x => x.toLowerCase() !== n.toLowerCase()) : [...sel, n])} /> {n}</label>)}</div>
-    <div style={{ display: "flex", gap: 8, marginTop: 14 }}><button className="btn primary" onClick={() => salvar(sel).then(() => { toast("Salvo"); setModal(null); }, (e: any) => toast(e.message))}>Salvar</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
+    {users.length > 0 && <><h4 style={{ margin: "16px 0 6px" }}>Usuárias da montagem no 360 ↔ nome no Exact</h4>
+      <p className="hint" style={{ margin: "0 0 8px" }}>Com o vínculo, cada uma vê os próprios números em Montagem → 📅 Agendamentos pessoais (ciclo 26 a 25).</p>
+      <div style={{ display: "grid", gap: 6 }}>{users.map(u => <div key={u.id} style={{ display: "flex", gap: 8, alignItems: "center" }}><b style={{ minWidth: 110 }}>{u.nome}</b>
+        <select value={vin[u.id] || ""} onChange={e => setVin({ ...vin, [u.id]: e.target.value })} style={{ flex: 1 }}><option value="">— sem vínculo —</option>{todas.map(n => <option key={n} value={n}>{n}</option>)}</select></div>)}</div></>}
+    <div style={{ display: "flex", gap: 8, marginTop: 14 }}><button className="btn primary" onClick={ir}>Salvar</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
   </Modal>;
 }
 

@@ -827,6 +827,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     let abrirNoSetor = !veCC && podeCriarCC(), consultaNoSetor = !veCC;
     SETORES_MENU.filter(([id]) => mySetores().includes(id)).forEach(([id, nome, ic]) => {
       const it: string[][] = [["st_" + id + "_mim", "Para mim"], ["st_" + id + "_fila", "Fila do setor"], ["st_" + id + "_resolvidos", "Resolvidos"]];
+      // agendadoras da montagem: os próprios agendamentos do Exact no ciclo 26 → 25
+      if (id === "montagem") it.push(["montagem_meus", "📅 Agendamentos pessoais"]);
       if (abrirNoSetor) { it.push(["nova", "Abrir solicitação"]); abrirNoSetor = false; }
       if (consultaNoSetor) { it.push(["consulta", "Consulta"]); consultaNoSetor = false; }
       G.push({ g: nome, ic, itens: it });

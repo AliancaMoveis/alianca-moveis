@@ -9,6 +9,7 @@ import Qualidade from "./Qualidade";
 import AgendaConsultores from "./AgendaConsultores";
 import VisitasRealizadas from "./VisitasRealizadas";
 import MontagemPagamento from "./MontagemPagamento";
+import MontagemMeus from "./MontagemMeus";
 import ControleVendedores from "./ControleVendedores";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
@@ -189,6 +190,7 @@ export default function Shell() {
             {atual === "anuncios" && R.veAnuncios() && <section className="view active"><div className="view-head"><div><h2>📣 Anúncios</h2><p>Investimento e resultado das campanhas do Meta (Instagram/Facebook) e do Google, e o que viraram no 360. Dados do Reportei.</p></div></div><Anuncios /></section>}
             {atual === "ce_realizadas" && <VisitasRealizadas />}
             {atual === "montagem_pag" && <MontagemPagamento />}
+            {atual === "montagem_meus" && <MontagemMeus />}
             {atual === "encontrar_vendas360" && R.podeEncontrarVendas() && <EncontrarVendas360 />}
             {atual === "treino" && <Treino />}
             {atual.startsWith("st_") && (() => { const m = atual.match(/^st_(.+)_([a-z]+)$/); return m ? <SetorFila key={atual} setor={m[1]} aba={m[2]} /> : null; })()}
