@@ -1,0 +1,3 @@
+-- Medidas (am-230): medida_aprovar_visita360(p_id, p_visita, p_obs) — a Supervisão de Medidas aprova a medida (pendente, aguardando
+-- medição ou em análise) usando as fotos da visita do consultor no 360 (antes da venda). Grava origem 'consultor_360', visita360,
+-- consultor e semPagamento; depois segue o mesmo caminho de medida_liberar (medida oficial no checklist).

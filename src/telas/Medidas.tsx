@@ -211,7 +211,6 @@ const ABAS_MD: Record<string, [string, string]> = {
 };
 function ListaMedidas({ aba }: { aba: string }) {
   const { R, st, abrirDetalhe, executar: ex } = useApp() as any;
-  const consIds = new Set(R.quemMede().consultores.map((u: any) => u.id));
   // aprovar direto da lista (quando a análise foi feita em outro sistema)
   const aprovar = (c: any) => { if (!confirm("Aprovar a medida de " + c.cliente + " (venda " + (c.pedido || "—") + ") como medida oficial?")) return; ex(() => A.medidaLiberar(c.id, "Aprovada pela lista"), "Medida aprovada — medida oficial"); };
   const [q, setQ] = useState("");
@@ -246,10 +245,12 @@ function ListaMedidas({ aba }: { aba: string }) {
           return (
             <div key={c.id} className="acao" style={{ borderLeftColor: alerta ? "var(--critico)" : "var(--line)", margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)" }} onClick={() => abrirDetalhe(c.id)}>
               <span><b>{c.cliente}</b> · venda {c.pedido || "—"} <Selo360 c={c} />
-                {c.medidorId ? <> · 📐 {R.nomeUser(c.medidorId)} <span className={"pill md-quem" + (consIds.has(c.medidorId) ? " cons" : "")}>{consIds.has(c.medidorId) ? "consultor como medidor · depois da venda" : "medidor · depois da venda"}</span></> : m.consultorNome ? <> · 📐 {m.consultorNome}</> : null}
+                {/* dois tipos de medida, bem separados: do CONSULTOR (antes da venda) e do MEDIDOR (pedida depois da venda — mesmo que quem foi seja um consultor) */}
+                {c.medidorId ? <> <span className="md-tipo med">📐 MEDIDOR · depois da venda</span> {R.nomeUser(c.medidorId)}</>
+                  : (m.etapa === "validar" || m.origem === "consultor_360" || m.origem === "minha_visita") ? <> <span className="md-tipo cons">📷 CONSULTOR · antes da venda</span> {m.consultorNome || ""}</>
+                  : m.consultorNome ? <> · {m.consultorNome}</> : null}
                 {c.dataMedida && ["agendada"].includes(R.etapaMedida(c)) ? <> · {fmtDateTime(c.dataMedida)}</> : null}
                 {m.origem === "minha_visita" && <span className="pill" style={{ marginLeft: 6 }}>Minha Visita · sem pagamento</span>}
-                {m.etapa === "validar" && <span className="pill" style={{ marginLeft: 6 }}>medidas do consultor</span>}
                 {m.etapa === "em_obra" && m.previsaoObra && <span className="pill" style={{ marginLeft: 6 }}>previsão {String(m.previsaoObra).split("-").reverse().join("/")}</span>}
                 {(aba === "minhas" || aba === "minhasfeitas") && <span className="pill" style={{ marginLeft: 6 }}>{ETAPA_MEDIDA[R.etapaMedida(c)] || ""}</span>}
                 {aba === "minhas" && <span className="pill" style={{ marginLeft: 6, background: "var(--st-concluida)", color: "#fff" }}>MEDIDA · R$ 40 · sem comissão</span>}

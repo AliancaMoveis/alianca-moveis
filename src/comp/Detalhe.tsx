@@ -15,7 +15,8 @@ import {
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
 import { SeloMedidaVenda } from "../telas/Medidas";
-import { achar360, Galeria360 } from "./Visita360";
+import { achar360, AprovarMedida, Galeria360 } from "./Visita360";
+import { FotoViewer } from "./Fotos";
 import { baixarFotosZip } from "./Overlays";
 import { BotaoWhats, msgWhatsCliente, separarTelefones } from "./Whats";
 import { SelVendedor, confirmarDisp, registrarIndisp } from "./SelVendedor";
@@ -779,13 +780,15 @@ function MedidaBloco({ c }: any) {
   const anexosConsultor = venda ? (venda.anexos || []).length : 0;
   // fotos para o Exact: as desta ficha (medidor) + as da visita do consultor no 360 (antes da venda)
   const vis360 = achar360(R, st, c);
-  const [zipando, setZipando] = useState(false);
+  const [zipando, setZipando] = useState(false); const [verFoto, setVerFoto] = useState<number | null>(null);
+  const fotosTodas = [...(c.anexos || []).filter((a: any) => a.tipo === "img").map((a: any) => ({ ...a, legenda: "medida " + c.id })),
+    ...vis360.flatMap((v: any) => (v.anexos || []).filter((a: any) => a.tipo === "img").map((a: any) => ({ ...a, legenda: "visita do consultor " + R.nomeUser(v.consultorId) + " (antes da venda)" })))];
   const nFotos = (c.anexos || []).length + vis360.reduce((s: number, v: any) => s + (v.anexos || []).length, 0);
   const baixarTudo = async () => { setZipando(true);
     try { const r = await baixarFotosZip("venda " + (c.pedido || "") + " " + c.cliente, [...((c.anexos || []).length ? [{ pasta: "medida " + c.id, anexos: c.anexos }] : []), ...vis360.map((v: any) => ({ pasta: "visita consultor " + v.id, anexos: v.anexos || [] }))]);
       toast(r.n + " arquivo(s) baixado(s)" + (r.falhas.length ? " · " + r.falhas.length + " não baixaram" : "") + " — é só salvar no cliente do Exact"); }
     catch (e: any) { toast(e.message || "Não foi possível baixar"); } finally { setZipando(false); } };
-  const quemMediu = c.medidorId ? (consultores.some((u: any) => u.id === c.medidorId) ? "consultor atuando como medidor (depois da venda)" : "medidor (depois da venda)") : "";
+  const quemMediu = c.medidorId ? "medidor " + R.nomeUser(c.medidorId) + " (depois da venda)" : "";
   return (
     <div className="resp-box" style={{ borderColor: cor }}>
       {(nFotos > 0 || vis360.length > 0) && <div className="md-exact">
@@ -793,7 +796,10 @@ function MedidaBloco({ c }: any) {
           <small>{[(c.anexos || []).length ? (c.anexos || []).length + " da medida" + (quemMediu ? " · " + quemMediu : "") : "", vis360.length ? vis360.reduce((s: number, v: any) => s + (v.anexos || []).length, 0) + " da visita do consultor " + vis360.map((v: any) => R.nomeUser(v.consultorId)).join(", ") + " (antes da venda)" : ""].filter(Boolean).join(" · ")}</small></div>
         <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{vis360.length > 0 && <button className="btn sm" onClick={() => setModal(<Galeria360 lista={vis360} titulo={c.cliente} />)}>Ver visita do consultor</button>}
           {nFotos > 0 && <button className="btn primary sm" disabled={zipando} onClick={baixarTudo}>{zipando ? "Preparando…" : "⬇ Baixar todas (" + nFotos + ")"}</button>}</span>
+        {fotosTodas.length > 0 && <div className="md-tiras">{fotosTodas.map((a: any, k: number) => <img key={a.id || k} src={a.url} alt={a.nome || ""} loading="lazy" title={a.legenda} onClick={() => setVerFoto(k)} />)}</div>}
+        {sup && ["pendente", "agendada"].includes(etapa) && vis360.length > 0 && <div style={{ flexBasis: "100%" }}><AprovarMedida medida={c} visita={vis360[0]} /> <span className="hint">usa as fotos da visita do consultor como medida oficial</span></div>}
       </div>}
+      {verFoto !== null && <FotoViewer fotos={fotosTodas} inicio={verFoto} onFechar={() => setVerFoto(null)} acoes={<AprovarMedida medida={c} visita={vis360[0]} depois={() => setVerFoto(null)} />} />}
       <h4>📐 Medidas <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{ETAPA_MEDIDA[etapa] || etapa}</span></h4>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "0 0 10px" }}>
         <span className="pill" style={{ background: "var(--st-concluida)", color: "#fff", fontWeight: 700 }}>SOLICITAÇÃO DE MEDIDA — não é visita de venda</span>

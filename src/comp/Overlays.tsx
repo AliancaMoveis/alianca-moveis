@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { urlAnexo } from "../lib/dados";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
+import { FotoViewer } from "./Fotos";
 
 /** baixa o arquivo do anexo; se a URL estiver vazia ou vencida, pede uma nova (antes saía um arquivo vazio no .zip) */
 export async function blobDe(a: any): Promise<Blob> {
@@ -36,16 +37,8 @@ export async function baixarFotosZip(nomeArq: string, grupos: { pasta: string; a
 
 export function Overlays({ lb, setLb, gal, setGal }: any) {
   const { st, R, toast, executar, openImg } = useApp();
-  const tx = useRef<number | null>(null);
   const [zipando, setZipando] = useState(false);
 
-  // lightbox com navegação (setas, teclado, swipe, clique nas metades)
-  const mover = (d: number) => setLb((x: any) => x && { ...x, i: (x.i + d + x.lista.length) % x.lista.length });
-  useEffect(() => {
-    if (!lb) return;
-    const k = (e: KeyboardEvent) => { if (e.key === "ArrowLeft") mover(-1); else if (e.key === "ArrowRight") mover(1); else if (e.key === "Escape") setLb(null); };
-    document.addEventListener("keydown", k); return () => document.removeEventListener("keydown", k);
-  }, [!!lb]);
 
   const c = gal ? st.chamados.find((x: any) => x.id === gal.id) : null;
   const imgs = c ? (c.anexos || []).filter((a: any) => a.tipo === "img") : [];
@@ -74,17 +67,7 @@ export function Overlays({ lb, setLb, gal, setGal }: any) {
 
   return (
     <>
-      <div className={"overlay" + (lb ? " on" : "")} id="imgOverlay" onClick={e => { if (e.target === e.currentTarget) setLb(null); }}>
-        {lb && <>
-          <button className="lb-seta lb-prev" style={{ display: lb.lista.length > 1 ? "grid" : "none" }} onClick={e => { e.stopPropagation(); mover(-1); }} aria-label="Anterior">‹</button>
-          <img id="imgBig" alt="" src={lb.lista[lb.i]}
-            onTouchStart={e => { tx.current = e.touches[0].clientX; }}
-            onTouchEnd={e => { if (tx.current === null) return; const dx = e.changedTouches[0].clientX - tx.current; if (Math.abs(dx) > 40) mover(dx < 0 ? 1 : -1); tx.current = null; }}
-            onClick={e => { if (lb.lista.length < 2) return; const r = (e.target as HTMLElement).getBoundingClientRect(); mover((e.clientX - r.left) > r.width / 2 ? 1 : -1); }} />
-          <button className="lb-seta lb-next" style={{ display: lb.lista.length > 1 ? "grid" : "none" }} onClick={e => { e.stopPropagation(); mover(1); }} aria-label="Próxima">›</button>
-          {lb.lista.length > 1 && <div className="lb-contador" id="lbContador">{lb.i + 1} / {lb.lista.length}</div>}
-        </>}
-      </div>
+      {lb && <FotoViewer fotos={lb.lista.map((u: string) => ({ url: u }))} inicio={lb.i} onFechar={() => setLb(null)} />}
       <div className={"overlay" + (gal && c ? " on" : "")} id="galOverlay" onClick={e => { if (e.target === e.currentTarget) setGal(null); }}>
         {gal && c && (
           <div className="gal-box">
