@@ -1706,3 +1706,13 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ql-ativa{display:flex;align-items:center;gap:6px;font-size:13px}
 .ql-pq{align-items:center;margin-bottom:6px}.ql-pn{width:24px;height:24px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
 .ql-pq{display:flex;gap:8px}.ql-pq input{flex:1;min-width:0}
+.av-sec{display:flex;align-items:center;gap:10px}.av-sec h2{margin:0}.av-sec small{font-size:12.5px;color:#5b6b62}
+.av-sn{width:30px;height:30px;border-radius:50%;background:#0e4d33;color:#f3dfa6;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex:none}
+.av-pulou{opacity:.7}.av-skip{font-size:13px;color:#5b6b62;border-top:1px dashed #e1e5dc;padding-top:6px}
+.ql-etapas{display:flex;flex-direction:column;gap:6px}
+.ql-etapa{border:1px solid var(--line,#e3e7e0);border-radius:10px;overflow:hidden}
+.ql-etapa-h{width:100%;display:grid;grid-template-columns:110px 1fr 56px 16px;align-items:center;gap:10px;padding:10px 12px;background:none;border:0;font:inherit;text-align:left;cursor:pointer}
+.ql-barra{height:10px;border-radius:5px;background:var(--bg,#eef1ec);overflow:hidden}.ql-barra i{display:block;height:100%;border-radius:5px}
+.ql-etapa-q{padding:4px 12px 10px;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.ql-etapa-q div{display:grid;grid-template-columns:1fr 40px 60px;gap:8px;align-items:center}.ql-etapa-q small{color:var(--ink-faint)}
+@media(max-width:560px){.ql-etapa-h{grid-template-columns:84px 1fr 48px 12px;gap:6px}}

@@ -139,11 +139,16 @@ export const A = {
     return r;
   },
   agendaPublicaVeioHoje: (token: string, id: string) => rpc("agenda_publica_veio_hoje", { p_token: token, p_id: id }),
+  avaliacaoCriar2: (p: any) => rpc<{ id: string; token: string; reaproveitada: boolean }>("avaliacao_criar2", { p }),
+  avaliacaoResponder3: (token: string, nps: number, estrelas: (number | null)[], comentario: string, podeLigar: boolean) =>
+    (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ ok: true, google: nps >= 9 ? "https://g.page/r/exemplo/review" : null }) : rpc<{ ok: boolean; google: string | null }>("avaliacao_responder3", { p_token: token, p_nps: nps, p_estrelas: estrelas, p_comentario: comentario, p_pode_ligar: podeLigar }),
+  questionario: async () => { if ((import.meta as any).env?.VITE_MOCK) return null; const { data, error } = await sb.from("avaliacao_questionario").select("*").eq("id", 1).maybeSingle(); if (error) throw new Error(error.message); return data; },
+  questionarioSalvar: (titulo: string, secoes: any[]) => rpc("avaliacao_questionario_salvar", { p_titulo: titulo, p_secoes: secoes }),
   avaliacaoCriar: (p: any) => rpc<{ id: string; token: string; reaproveitada: boolean }>("avaliacao_criar", { p }),
   avaliacaoEnviada: (id: string) => rpc("avaliacao_enviada", { p_id: id }),
   avaliacaoTratar: (id: string, obs: string) => rpc("avaliacao_tratar", { p_id: id, p_obs: obs }),
   avaliacaoGoogle: (url: string) => rpc("avaliacao_google_salvar", { p_url: url }),
-  avaliacaoPublica: (token: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ cliente: "Mariana", etapa: "montagem", responsavel: "João", servicoEm: "2026-10-18", respondida: false }) : rpc<any>("avaliacao_publica", { p_token: token }),
+  avaliacaoPublica: (token: string) => (import.meta as any).env?.VITE_MOCK ? import("./qualidade").then(q => ({ cliente: "Mariana", etapa: "montagem", responsavel: "João", servicoEm: "2026-10-18", respondida: false, titulo: q.QUESTIONARIO_PADRAO.titulo, secoes: q.QUESTIONARIO_PADRAO.secoes, pessoas: { Montador: "João", Vendedor: "Roy" } })) : rpc<any>("avaliacao_publica", { p_token: token }),
   avaliacaoResponder: (token: string, nps: number, estrelas: number[], comentario: string, podeLigar: boolean) =>
     (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ ok: true, google: nps >= 9 ? "https://g.page/r/exemplo/review" : null }) : rpc<{ ok: boolean; google: string | null }>("avaliacao_responder2", { p_token: token, p_nps: nps, p_estrelas: estrelas, p_comentario: comentario, p_pode_ligar: podeLigar }),
   avaliacaoModelos: async () => { if ((import.meta as any).env?.VITE_MOCK) return null; const { data, error } = await sb.from("avaliacao_modelos").select("*").order("ordem"); if (error) throw new Error(error.message); return data || []; },

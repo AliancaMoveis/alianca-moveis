@@ -8,3 +8,6 @@
 -- avaliacao_modelos(etapa, nome, titulo, resp, perguntas text[1..5], ativa, ordem): perguntas editáveis por tema (Gestão: avaliacao_modelo_salvar).
 -- avaliacoes + titulo, perguntas, estrelas int[] (cópia das perguntas no envio). avaliacao_criar exige tema ativo.
 -- avaliacao_responder2(token, nps, estrelas int[], comentario, pode_ligar) — o app usa esta. config.google_review_url = link de escrever avaliação.
+
+-- Tela Qualidade (am-221): questionário único com envio por pessoas (avaliacao_criar2), painel por etapa/pergunta/pessoa
+-- e aba Perguntas que edita avaliacao_questionario (avaliacao_questionario_salvar, só Gestão).

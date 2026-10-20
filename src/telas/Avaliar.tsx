@@ -1,29 +1,39 @@
 // Pesquisa de satisfação que o cliente responde pelo link do WhatsApp (sem login).
-// O banco só aceita uma resposta por link; nota de 0 a 6 avisa o pós-venda e a Gestão.
+// Questionário único da jornada: Venda, Medição, Checklist, Entrega e Montagem (editável pela Gestão).
+// O cliente pode marcar "não participei" numa etapa. Uma resposta por link; nota 0–6 avisa o pós-venda e a Gestão.
 import { useEffect, useState } from "react";
 import { A } from "../lib/acoes";
-import { ETAPAS, type Etapa } from "../lib/qualidade";
+import { ETAPAS, type Etapa, type Secao } from "../lib/qualidade";
 
-const Estrela = ({ on }: { on: boolean }) => <svg width="32" height="32" viewBox="0 0 24 24" aria-hidden="true">
+const Estrela = ({ on }: { on: boolean }) => <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
   <path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z" fill={on ? "#e3a91c" : "#ffffff"} stroke={on ? "#c98a12" : "#b9c2b5"} strokeWidth="1.4" strokeLinejoin="round" /></svg>;
 const corNota = (v: number) => v <= 6 ? "#c0392b" : v <= 8 ? "#c98a12" : "#1f7a44";
+const cap = (s: string) => { const t = String(s || "").trim().split(/\s+/)[0] || ""; return t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : ""; };
 
 export default function Avaliar() {
   const token = new URLSearchParams(location.search).get("t") || "";
-  const [info, setInfo] = useState<any>(undefined); const [erro, setErro] = useState("");
-  const [nps, setNps] = useState<number | null>(null); const [est, setEst] = useState<number[]>([]);
+  const [info, setInfo] = useState<any>(undefined);
+  const [nps, setNps] = useState<number | null>(null); const [est, setEst] = useState<Record<string, number>>({}); const [pulou, setPulou] = useState<Record<number, boolean>>({});
   const [coment, setComent] = useState(""); const [ligar, setLigar] = useState(true);
   const [enviando, setEnviando] = useState(false); const [fim, setFim] = useState<{ nps: number; google: string | null } | null>(null); const [aviso, setAviso] = useState("");
-  useEffect(() => { document.title = "Pesquisa · Aliança Móveis"; if (!token) { setErro("Link incompleto"); setInfo(null); return; }
-    A.avaliacaoPublica(token).then(setInfo).catch((e: any) => { setErro(e.message || "Link inválido"); setInfo(null); }); }, []);
+  useEffect(() => { document.title = "Pesquisa · Aliança Móveis"; if (!token) { setInfo(null); return; }
+    A.avaliacaoPublica(token).then(setInfo).catch(() => setInfo(null)); }, []);
+  // pesquisas antigas (de uma etapa só) viram uma seção única
   const et = ETAPAS[(info?.etapa || "montagem") as Etapa] || ETAPAS.montagem;
-  const perguntas: string[] = (info && Array.isArray(info.perguntas) && info.perguntas.length) ? info.perguntas : et.perguntas;
+  const secoes: Secao[] = info && Array.isArray(info.secoes) && info.secoes.length ? info.secoes
+    : [{ nome: et.nome, quem: et.resp, perguntas: info && Array.isArray(info.perguntas) && info.perguntas.length ? info.perguntas : et.perguntas }];
+  const unica = !(info && Array.isArray(info.secoes) && info.secoes.length);
   const titulo: string = (info && info.titulo) || et.titulo;
+  const pessoas: Record<string, string> = (info && info.pessoas) || {};
   const enviar = async () => {
-    if (nps === null) { setAviso("Escolha uma nota de 0 a 10"); return; }
-    if (perguntas.some((_, i) => !est[i])) { setAviso("Toque nas estrelas de todas as perguntas"); return; }
+    if (nps === null) { setAviso("Escolha uma nota de 0 a 10"); window.scrollTo(0, 0); return; }
+    const falta = secoes.findIndex((s, si) => !pulou[si] && s.perguntas.some((_, qi) => !est[si + "." + qi]));
+    if (falta >= 0) { setAviso("Falta responder: " + secoes[falta].nome + " (ou marque “não participei desta etapa”)"); return; }
+    const lista: (number | null)[] = []; secoes.forEach((s, si) => s.perguntas.forEach((_, qi) => lista.push(pulou[si] ? null : est[si + "." + qi])));
+    if (!lista.some(x => x != null)) { setAviso("Responda pelo menos uma etapa"); return; }
     setEnviando(true); setAviso("");
-    try { const r = await A.avaliacaoResponder(token, nps, perguntas.map((_, i) => est[i]), coment, ligar); setFim({ nps, google: r?.google || null }); window.scrollTo(0, 0); }
+    try { const r = unica ? await A.avaliacaoResponder(token, nps, lista as number[], coment, ligar) : await A.avaliacaoResponder3(token, nps, lista, coment, ligar);
+      setFim({ nps, google: r?.google || null }); window.scrollTo(0, 0); }
     catch (e: any) { setAviso(e.message || "Não foi possível enviar. Tente de novo."); }
     finally { setEnviando(false); }
   };
@@ -40,18 +50,20 @@ export default function Avaliar() {
         {fim && n != null && n <= 6 && <section className="av-card"><div className="av-tag ruim">NOTA {n}</div><h2>Sentimos muito que não foi como esperava.</h2><p>{ligar ? "Nossa equipe de pós-venda vai te ligar em até 1 dia útil para resolver." : "Sua resposta foi registrada e a gerência vai analisar."}</p></section>}
       </main></div>;
   }
-  const quando = info.servicoEm ? String(info.servicoEm).slice(8, 10) + "/" + String(info.servicoEm).slice(5, 7) : "";
   return <div className="av">
     <Topo><h1>Olá{info.cliente ? ", " + cap(info.cliente) : ""}! {titulo}</h1>
-      <p>{info.etapa === "montagem" ? "Montagem feita" + (quando ? " em " + quando : "") + (info.responsavel ? " por " + cap(info.responsavel) : "") + ". " : ""}Leva menos de 1 minuto e ajuda a gente a melhorar.</p></Topo>
+      <p>{unica ? "Leva menos de 1 minuto" : "Da compra até a montagem. Leva cerca de 2 minutos"} e ajuda a gente a melhorar.</p></Topo>
     <main className="av-main">
       <section className="av-card"><h2>De 0 a 10, quanto você indicaria a Aliança para um amigo?</h2>
         <div className="av-notas">{Array.from({ length: 11 }, (_, v) => <button key={v} type="button" aria-label={"Nota " + v} aria-pressed={nps === v} onClick={() => setNps(v)}
           style={nps === v ? { background: corNota(v), borderColor: corNota(v), color: "#fff" } : undefined}>{v}</button>)}</div>
         <div className="av-escala"><span>0 · nada provável</span><span>10 · com certeza</span></div></section>
-      <section className="av-card"><h2>Sobre {info.etapa === "montagem" ? "a montagem" : info.etapa === "loja" ? "o atendimento" : info.etapa === "medicao" ? "a medição" : info.etapa === "checklist" ? "o checklist" : "o pós-venda"}</h2>
-        {perguntas.map((q, i) => <div key={i} className="av-q"><div>{q}</div>
-          <div className="av-est">{[1, 2, 3, 4, 5].map(k => <button key={k} type="button" aria-label={k + (k === 1 ? " estrela" : " estrelas")} onClick={() => { const n = perguntas.map((_, j) => est[j] || 0); n[i] = k; setEst(n); }}><Estrela on={k <= est[i]} /></button>)}</div></div>)}</section>
+      {secoes.map((s, si) => <section key={si} className={"av-card" + (pulou[si] ? " av-pulou" : "")}>
+        <div className="av-sec"><span className="av-sn">{si + 1}</span><div><h2>{s.nome}</h2>{s.quem && pessoas[s.quem] ? <small>{s.quem}: {pessoas[s.quem]}</small> : null}</div></div>
+        {!pulou[si] && s.perguntas.map((q, qi) => <div key={qi} className="av-q"><div>{q}</div>
+          <div className="av-est">{[1, 2, 3, 4, 5].map(k => <button key={k} type="button" aria-label={q + ": " + k + (k === 1 ? " estrela" : " estrelas")} onClick={() => setEst({ ...est, [si + "." + qi]: k })}><Estrela on={k <= (est[si + "." + qi] || 0)} /></button>)}</div></div>)}
+        {!unica && <label className="av-chk av-skip"><input type="checkbox" checked={!!pulou[si]} onChange={e => setPulou({ ...pulou, [si]: e.target.checked })} /> Não participei desta etapa</label>}
+      </section>)}
       <section className="av-card"><label htmlFor="av-com" className="av-lbl">Quer contar algo para a gente? <small>(opcional)</small></label>
         <textarea id="av-com" rows={4} value={coment} onChange={e => setComent(e.target.value)} maxLength={2000} placeholder="Ex.: o montador foi muito cuidadoso, mas faltou um puxador" />
         <label className="av-chk"><input type="checkbox" checked={ligar} onChange={e => setLigar(e.target.checked)} /> Pode me ligar se precisar resolver algo</label></section>
@@ -60,4 +72,3 @@ export default function Avaliar() {
       <p className="av-rod">Suas respostas vão direto para a gerência da Aliança Móveis.</p>
     </main></div>;
 }
-const cap = (s: string) => { const t = String(s || "").trim().split(/\s+/)[0] || ""; return t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : ""; };
