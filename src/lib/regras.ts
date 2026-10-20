@@ -609,21 +609,45 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
   function waLink(c: Chamado) { const rep = getRep(c); if (!rep) return ""; const n = sanitizeWhats(rep.whats); return n ? `https://wa.me/${n}?text=${encodeURIComponent(msgWhats(c))}` : ""; }
   const dh = (v: any) => fmtDiaHora(v).replace(", ", " às ");
+  // nome do cliente como se fala (RAMON → Ramon)
+  const nomeCli = (n: string) => { const p = String(n || "").trim().split(/\s+/)[0] || ""; return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : ""; };
+  const endCli = (c: Chamado) => enderecoSemTelefone(c.endereco || "");
+  // dia da semana + data + hora ("quinta, 22/10 às 14h")
+  const diaHoraCli = (v: any) => { const d = parseData(v); const ds = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"][d.getDay()];
+    const hh = d.getHours(), mm = d.getMinutes(); return ds + ", " + String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + " às " + hh + "h" + (mm ? String(mm).padStart(2, "0") : ""); };
+  // consultor externo: 1ª mensagem ao cliente do marketing — confirma que está tudo certo e pede um "sim"
   function msgWhatsConsultor(c: Chamado) {
     const u = me(); const L: string[] = [];
-    L.push(`Olá, ${primeiroNome(c.cliente)}! Sou o(a) ${nomeNatural(u ? u.nome : "")}, consultor(a) externo(a) da Aliança Móveis.`); L.push("");
-    const dv = c.dataVisita ? dh(c.dataVisita) : null;
-    const proj = c.produto ? ", para tratarmos do projeto de " + c.produto : "";
-    L.push(dv ? `Estou confirmando nossa visita no dia ${dv}${proj}.` : `Estou entrando em contato sobre a visita${proj}.`); L.push("");
-    // confirmar o endereço: a mesma rua existe em Curitiba, Araucária, Colombo… e o consultor já foi a lugar errado
-    if (c.endereco) {
-      L.push("📍 O endereço que tenho aqui é:"); L.push(`*${c.endereco}*`); L.push("");
-      L.push("Pode me confirmar se está certo, com o *bairro* e a *cidade*? Algumas ruas têm o mesmo nome em Curitiba, Araucária, Colombo e outras cidades.");
-    } else {
-      L.push("📍 Pode me passar o endereço completo da visita, com *rua, número, bairro e cidade*?");
-    }
-    L.push("Se tiver complemento (apto, bloco, casa dos fundos) ou um ponto de referência, me avise também."); L.push("");
-    L.push("Da minha parte está tudo certo — estarei aí no dia e horário marcado!");
+    const nome = nomeCli(c.cliente), proj = c.produto ? " do seu projeto de " + String(c.produto).trim().toLowerCase() : " do seu projeto";
+    L.push(`Olá${nome ? ", " + nome : ""}! Tudo bem?`); L.push("");
+    L.push(`Meu nome é ${nomeNatural(u ? u.nome : "")}, sou da equipe de consultores da Aliança Móveis e estou passando para dizer que está tudo certo para a nossa visita${proj}! 😊`); L.push("");
+    if (c.dataVisita) L.push(`📅 ${diaHoraCli(c.dataVisita)}`);
+    const e = endCli(c);
+    if (e) {
+      L.push(`📍 *${e}*`); L.push("");
+      L.push("Só me confirma se o endereço está certinho, com o bairro e a cidade? Se tiver complemento ou ponto de referência, me avise também.");
+    } else { if (c.dataVisita) L.push(""); L.push("📍 Me passa o endereço completo da visita, com rua, número, bairro e cidade?"); }
+    L.push("");
+    L.push("Na visita, vou conhecer os ambientes, tirar as medidas e entender o que você imagina para o projeto. Se tiver fotos, plantas ou referências de que gostou, pode separar que ajuda bastante."); L.push("");
+    L.push(c.dataVisita ? "Posso confirmar a nossa visita? 😊" : "Qual o melhor dia e horário para eu passar aí? 😊");
+    return L.join("\n");
+  }
+  // Setor de Medidas: ordem de medição direcionada ao consultor/medidor — sem horário: o cliente diz o melhor dia
+  function msgWhatsMedida(c: Chamado) {
+    const u = me(); const L: string[] = [];
+    const nome = nomeCli(c.cliente);
+    L.push(`Olá${nome ? ", " + nome : ""}! Tudo bem?`); L.push("");
+    L.push(`Meu nome é ${nomeNatural(u ? u.nome : "")}, sou da equipe de consultores da Aliança Móveis e estarei com você na visita de medição técnica dos seus móveis.`); L.push("");
+    const e = endCli(c);
+    if (e) { L.push(`📍 Endereço: *${e}*`); L.push("Pode me confirmar se está certo, com o bairro e a cidade? Se tiver complemento (apto, bloco, casa dos fundos) ou um ponto de referência, me avise também."); }
+    else L.push("📍 Pode me passar o endereço completo, com rua, número, bairro e cidade?");
+    L.push(""); L.push("⏰ Qual o melhor dia e horário para fazermos a medição?"); L.push("");
+    const amb = String(c.produto || "").split(/\s*(?:,|;|\+|\/|\s+e\s+)\s*/i).map(x => x.trim()).filter(Boolean).map(x => x.charAt(0).toUpperCase() + x.slice(1));
+    if (amb.length) { L.push(`Nesta visita, iremos medir ${amb.length} ambiente${amb.length === 1 ? "" : "s"}, ${amb.length === 1 ? "sendo ele" : "sendo eles"}:`); amb.forEach(a => L.push("• " + a)); }
+    else L.push("Nesta visita, iremos medir os ambientes do seu projeto.");
+    L.push(""); L.push("Peço, se possível, que os ambientes estejam livres e acessíveis para uma medição tranquila."); L.push("");
+    L.push("👉 Caso o imóvel ainda esteja em obra (piso, gesso ou revestimentos pendentes), me avise a previsão de término para evitarmos interferências na fabricação."); L.push("");
+    L.push("Fico no aguardo para agendarmos! 😌");
     return L.join("\n");
   }
   function msgWhatsProjetista(c: Chamado) {
@@ -660,7 +684,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const t: any = (c as any).tratativa || {};
     if ((souConsultor && t.contatoIniciado) || (souProjetista && t.emContato)) return `https://wa.me/${n}`;
     let msg;
-    if (souSuporte) msg = msgWhatsSuporte(c);
+    if (c.tipo === "medidas") msg = msgWhatsMedida(c);
+    else if (souSuporte) msg = msgWhatsSuporte(c);
     else if (souProjetista || (!souConsultor && c.dataLoja && ["agendado_loja", "com_vendedor"].includes(statusClienteDe(c)))) msg = msgWhatsProjetista(c);
     else if (souConsultor || c.dataVisita) msg = msgWhatsConsultor(c);
     else msg = msgWhatsGenerica(c);
@@ -878,7 +903,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    ehDireto, ehPorta, temPresenca, veAnuncios, veQualidade, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
+    msgWhatsMedida, ehDireto, ehPorta, temPresenca, veAnuncios, veQualidade, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };
