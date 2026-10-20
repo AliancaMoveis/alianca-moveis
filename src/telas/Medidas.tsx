@@ -2,7 +2,7 @@
 // Cliente comprador que foi visitado por um consultor do Minha Visita = medidas oficiais ok; sem visita = sem medidas.
 // O resultado fica gravado por nº de venda e aparece nos clientes do Checklist.
 import { Ticket } from "../comp/Ticket";
-import { Selo360, visitados360, Galeria360 } from "../comp/Visita360";
+import { Selo360, visitados360, Galeria360, achar360 } from "../comp/Visita360";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
@@ -188,7 +188,7 @@ function FilaCallcenter() {
   const lista = (f === "abertas" ? R.ordenar(abertas) : fin.slice().sort((a: any, b: any) => String(b.criadoEm).localeCompare(String(a.criadoEm))));
   return (
     <section className="view active">
-      <div className="view-head"><div><h2>📞 Fila do call center</h2><p>Solicitações de medida abertas pelo call center. Trate cada uma: se precisar medir, use “Encaminhar para medir” (vai para Pendentes para medir) e depois finalize o ticket — o call center vê a resposta.</p></div></div>
+      <div className="view-head"><div><h2>📞 Fila do call center</h2><p>Solicitações de medida abertas pelo call center. Trate cada uma e finalize o ticket com a resposta — o call center vê. Só use “Encaminhar para medir” quando o cliente precisar de medição; se foi só uma tratativa, finalize direto.</p></div></div>
       <div className="subnav" style={{ marginBottom: 12 }}>
         <button className={f === "abertas" ? "on" : ""} onClick={() => setF("abertas")}>Em aberto ({abertas.length})</button>
         <button className={f === "finalizadas" ? "on" : ""} onClick={() => setF("finalizadas")}>Finalizadas ({fin.length})</button>
@@ -210,7 +210,10 @@ const ABAS_MD: Record<string, [string, string]> = {
   minhas: ["Medidas para fazer", "Solicitações de MEDIDA — não é visita de venda: paga R$ 40 por cliente, sem comissão. Depois de medir, anexe as fotos/planta e finalize."],
 };
 function ListaMedidas({ aba }: { aba: string }) {
-  const { R, st, abrirDetalhe } = useApp() as any;
+  const { R, st, abrirDetalhe, executar: ex } = useApp() as any;
+  const consIds = new Set(R.quemMede().consultores.map((u: any) => u.id));
+  // aprovar direto da lista (quando a análise foi feita em outro sistema)
+  const aprovar = (c: any) => { if (!confirm("Aprovar a medida de " + c.cliente + " (venda " + (c.pedido || "—") + ") como medida oficial?")) return; ex(() => A.medidaLiberar(c.id, "Aprovada pela lista"), "Medida aprovada — medida oficial"); };
   const [q, setQ] = useState("");
   const [t, d] = ABAS_MD[aba] || ABAS_MD.pendentes;
   const eu = R.currentUserId;
@@ -243,7 +246,7 @@ function ListaMedidas({ aba }: { aba: string }) {
           return (
             <div key={c.id} className="acao" style={{ borderLeftColor: alerta ? "var(--critico)" : "var(--line)", margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)" }} onClick={() => abrirDetalhe(c.id)}>
               <span><b>{c.cliente}</b> · venda {c.pedido || "—"} <Selo360 c={c} />
-                {c.medidorId ? <> · 📐 {R.nomeUser(c.medidorId)}</> : m.consultorNome ? <> · 📐 {m.consultorNome}</> : null}
+                {c.medidorId ? <> · 📐 {R.nomeUser(c.medidorId)} <span className={"pill md-quem" + (consIds.has(c.medidorId) ? " cons" : "")}>{consIds.has(c.medidorId) ? "consultor como medidor · depois da venda" : "medidor · depois da venda"}</span></> : m.consultorNome ? <> · 📐 {m.consultorNome}</> : null}
                 {c.dataMedida && ["agendada"].includes(R.etapaMedida(c)) ? <> · {fmtDateTime(c.dataMedida)}</> : null}
                 {m.origem === "minha_visita" && <span className="pill" style={{ marginLeft: 6 }}>Minha Visita · sem pagamento</span>}
                 {m.etapa === "validar" && <span className="pill" style={{ marginLeft: 6 }}>medidas do consultor</span>}
@@ -251,7 +254,8 @@ function ListaMedidas({ aba }: { aba: string }) {
                 {(aba === "minhas" || aba === "minhasfeitas") && <span className="pill" style={{ marginLeft: 6 }}>{ETAPA_MEDIDA[R.etapaMedida(c)] || ""}</span>}
                 {aba === "minhas" && <span className="pill" style={{ marginLeft: 6, background: "var(--st-concluida)", color: "#fff" }}>MEDIDA · R$ 40 · sem comissão</span>}
                 {c.endereco ? <span className="hint"> · {c.endereco}</span> : null}</span>
-              <span className="g" style={alerta ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{dck ? (alerta ? "⚠️ " : "") + "checklist " + fmtDateTime(dck) : ""}</span>
+              <span className="g" style={alerta ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{dck ? (alerta ? "⚠️ " : "") + "checklist " + fmtDateTime(dck) : ""}
+                {aba === "analise" && R.ehSupMedidas() && <button className="btn primary sm" style={{ marginLeft: 8 }} onClick={e => { e.stopPropagation(); aprovar(c); }}>✅ Aprovar</button>}</span>
             </div>);
         })}</div>}
     </section>
@@ -476,7 +480,10 @@ function ImportarExact() {
   </>;
 }
 function ModalImportarMedidas({ dados, prev, semEtapa }: { dados: any[]; prev: any; semEtapa: number }) {
-  const { setModal, toast, recarregar } = useApp() as any;
+  const { setModal, toast, recarregar, R, st } = useApp() as any;
+  // clientes da planilha que já tiveram visita de consultor no 360 (fotos prontas para o Exact)
+  const com360 = dados.map(d => ({ d, v: achar360(R, st, { id: "", telefone: d.telefone, cliente: d.cliente }) })).filter(x => x.v.length);
+  const nFotos360 = (x: any) => x.v.reduce((s: number, v: any) => s + (v.anexos || []).length, 0);
   const [sal, setSal] = useState(false); const [ver, setVer] = useState("");
   const fechar = () => setModal(null);
   const porEtapa: Record<string, number> = {}; dados.forEach(d => (porEtapa[d.etapa] = (porEtapa[d.etapa] || 0) + 1));
@@ -499,6 +506,8 @@ function ModalImportarMedidas({ dados, prev, semEtapa }: { dados: any[]; prev: a
       {!prev.novos && <L n={0} t="medidas novas" />}
       <L id="a" n={prev.avancam} t="já estão no 360 e avançam de etapa" lista={prev.listaAvancam} cor="var(--primary)" />
       <L n={prev.iguais} t="já estão no 360 na mesma etapa (ou mais adiante, em obra ou aprovadas) — não mudam" />
+      <L id="v360" n={com360.length} t={<>tiveram <b>visita do consultor no 360</b> (antes da venda) — as fotos aparecem na ficha para baixar e salvar no Exact</>} cor="#7a3fb0"
+        lista={com360.map(x => `${x.d.cliente} · venda ${x.d.venda} — consultor ${x.v.map((v: any) => R.nomeUser(v.consultorId)).join(", ")} · ${nFotos360(x)} arquivo(s)`)} />
       {prev.semVenda > 0 && <div className="hint" style={{ marginTop: 6, color: "var(--warn)" }}>{prev.semVenda} linha(s) sem nº de venda (no Título nem na Descrição) — ignoradas.</div>}
       {semEtapa > 0 && <div className="hint" style={{ marginTop: 4 }}>{semEtapa} linha(s) com outra Situação — ignoradas.</div>}
       {(prev.medidorDesconhecido || []).length > 0 && <div className="hint" style={{ marginTop: 4, color: "var(--warn)" }}>Medidor não encontrado no 360 (fica só o nome do Exact): <b>{prev.medidorDesconhecido.join(", ")}</b></div>}

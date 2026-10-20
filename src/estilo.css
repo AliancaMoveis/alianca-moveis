@@ -1741,3 +1741,8 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ql-pp{cursor:pointer}.ql-pp:hover td{background:var(--surface-2)}
 .ql-ppd{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;padding:8px 4px;border-bottom:1px solid var(--line-soft);font-size:13px}
 .ql-ppd i{font-style:normal;margin-right:10px}.ql-ppd q{flex-basis:100%;color:var(--ink-soft)}
+.md-exact{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:#f3ecfa;border:1px solid #d9c5ee;border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.md-exact small{display:block;color:var(--ink-soft);font-size:12px;margin-top:2px}
+.md-quem{font-size:10.5px;margin-left:4px;background:#e8f1ea;color:#1f6b3a;border-color:#bfdcc8}.md-quem.cons{background:#f3ecfa;color:#6b3b9a;border-color:#d9c5ee}
+:root[data-theme="dark"] .md-exact{background:#2a2236;border-color:#4a3a60}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .md-exact{background:#2a2236;border-color:#4a3a60}}

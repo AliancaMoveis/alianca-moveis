@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useApp } from "../estado";
 import { Modal } from "./Modal";
 import { fmtDate } from "../lib/regras";
+import { baixarFotosZip } from "./Overlays";
 
 const so = (s: string) => (s || "").replace(/\D/g, "");
 const chaveTel = (s: string) => { const d = so(s); return d.length >= 8 ? d.slice(-8) : ""; };
@@ -50,15 +51,22 @@ export function Selo360({ c, lista }: { c?: any; lista?: any[] }) {
   const nImg = m.reduce((s: number, x: any) => s + imgs(x).length, 0);
   return <span className="pill sel360" title="Cliente visitado por consultor no ALIANÇA 360 — clique para ver as imagens"
     onClick={e => { e.stopPropagation(); setModal(<Galeria360 lista={m} titulo={c ? c.cliente : m[0].cliente} />); }}>
-    📷 Consultor 360{nImg ? " · " + nImg + " foto" + (nImg > 1 ? "s" : "") : " · sem fotos"}</span>;
+    📷 Visita do consultor (antes da venda){nImg ? " · " + nImg + " foto" + (nImg > 1 ? "s" : "") : " · sem fotos"}</span>;
 }
 
 export function Galeria360({ lista, titulo }: { lista: any[]; titulo: string }) {
-  const { R, setModal, abrirDetalhe } = useApp() as any;
-  const [grande, setGrande] = useState("");
+  const { R, setModal, abrirDetalhe, toast } = useApp() as any;
+  const [grande, setGrande] = useState(""); const [zip, setZip] = useState(false);
+  const total = lista.reduce((s: number, v: any) => s + (v.anexos || []).length, 0);
+  const baixar = async () => { setZip(true);
+    try { const r = await baixarFotosZip(titulo + " - fotos consultor", lista.map((v: any) => ({ pasta: v.cliente + " " + v.id, anexos: v.anexos || [] })));
+      toast(r.n + " arquivo(s) baixado(s)" + (r.falhas.length ? " · " + r.falhas.length + " não baixaram" : "") + " — é só salvar no cliente do Exact"); }
+    catch (e: any) { toast(e.message || "Não foi possível baixar"); } finally { setZip(false); } };
   const fechar = () => setModal(null);
   return (
     <Modal titulo={"📷 Visita do consultor · " + titulo} onFechar={fechar}>
+      <div className="hint" style={{ marginBottom: 8 }}>Visita feita pelo consultor <b>antes da venda</b>, registrada no ALIANÇA 360.</div>
+      {total > 0 && <button className="btn primary" style={{ marginBottom: 12 }} disabled={zip} onClick={baixar}>{zip ? "Preparando…" : "⬇ Baixar todas as fotos e arquivos (" + total + ") — para o Exact"}</button>}
       {lista.map((v: any) => { const t = v.tratativa || {}; return (
         <div key={v.id} className="g360">
           <div className="g360-h"><b>{v.cliente}</b> <span className="pill">{v.id}</span>

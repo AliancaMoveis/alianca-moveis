@@ -5,16 +5,33 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 
 /** baixa o arquivo do anexo; se a URL estiver vazia ou vencida, pede uma nova (antes saía um arquivo vazio no .zip) */
-async function blobDe(a: any): Promise<Blob> {
+export async function blobDe(a: any): Promise<Blob> {
   const tentar = async (u: string) => { if (!u) return null; const r = await fetch(u); if (!r.ok) return null; const b = await r.blob(); return b.size && !/text\/html/i.test(b.type) ? b : null; };
   let b = await tentar(a.url).catch(() => null);
   if (!b && a.path) b = await tentar(await urlAnexo(a.path)).catch(() => null);
   if (!b) throw new Error("falhou " + (a.nome || ""));
   return b;
 }
-function salvarBlob(blob: Blob, nome: string) {
+export function salvarBlob(blob: Blob, nome: string) {
   const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nome; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** baixa várias imagens num .zip só (uma pasta por cliente/visita) — para salvar no Exact em um clique */
+export async function baixarFotosZip(nomeArq: string, grupos: { pasta: string; anexos: any[] }[]): Promise<{ n: number; falhas: string[] }> {
+  const zip = new JSZip(); const falhas: string[] = []; let n = 0;
+  for (const g of grupos) {
+    const pasta = grupos.length > 1 ? zip.folder((g.pasta || "fotos").replace(/[^\w\- ]+/g, "").trim() || "fotos")! : zip;
+    const usados = new Set<string>();
+    for (const a of g.anexos) {
+      let nome = a.nome || ("foto-" + Math.random().toString(36).slice(2) + ".jpg");
+      while (usados.has(nome)) nome = "1-" + nome; usados.add(nome);
+      try { pasta.file(nome, await blobDe(a)); n++; } catch { falhas.push(nome); }
+    }
+  }
+  if (!n) throw new Error("Nenhuma foto baixou");
+  salvarBlob(await zip.generateAsync({ type: "blob" }), nomeArq.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".zip");
+  return { n, falhas };
 }
 
 export function Overlays({ lb, setLb, gal, setGal }: any) {

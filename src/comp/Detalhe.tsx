@@ -15,6 +15,8 @@ import {
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
 import { SeloMedidaVenda } from "../telas/Medidas";
+import { achar360, Galeria360 } from "./Visita360";
+import { baixarFotosZip } from "./Overlays";
 import { BotaoWhats, msgWhatsCliente, separarTelefones } from "./Whats";
 import { SelVendedor, confirmarDisp, registrarIndisp } from "./SelVendedor";
 import { TratJuridico } from "../telas/Setores";
@@ -746,7 +748,7 @@ function FinalizarAtend({ c }: any) {
     <div style={{ margin: "12px 0" }}>
       {!abrir ? <button className="btn primary" onClick={() => setAbrir(true)}>{titulo}</button>
         : <div className="resp-box" style={{ borderColor: "var(--st-concluida)" }}><h4>{titulo}</h4>
-          {c.tipo === "solicitacao_medida" && !(c.tratativa || {}).ordemMedida && <div className="ro-note" style={{ marginBottom: 8, background: "#fff1d6", borderColor: "#e0a84a", color: "#7a4a00" }}>⚠️ Ainda <b>não foi encaminhado para medir</b>. Se o cliente precisa de medição, use “📐 Encaminhar para medir” antes de finalizar — senão a medida não entra na fila.</div>}
+          {c.tipo === "solicitacao_medida" && !(c.tratativa || {}).ordemMedida && <div className="hint" style={{ marginBottom: 8 }}>Não precisa abrir ordem de medida: se foi só uma tratativa (informação, dúvida, retorno), escreva o que foi feito e finalize. Use “📐 Encaminhar para medir” só quando o cliente precisar de medição.</div>}
           <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 8px" }}>{passaCC ? "O chamado vai para “Informar cliente”: o call center avisa o cliente e encerra." : "Encerra o atendimento. O texto fica no histórico do cliente."}</p>
           <div className="field"><textarea value={tx} onChange={e => setTx(e.target.value)} placeholder={passaCC ? "Solução / previsão para o call center passar ao cliente" : "O que foi resolvido / informado ao cliente"} /></div>
           <div className="row" style={{ gap: 8, marginTop: 8 }}>
@@ -759,7 +761,7 @@ function FinalizarAtend({ c }: any) {
 
 // 📐 medidas: venda → medidas → checklist. Supervisora valida/direciona/libera; medidor (ou consultor) mede.
 function MedidaBloco({ c }: any) {
-  const { R, st, executar: ex, toast, abrirDetalhe } = useApp() as any;
+  const { R, st, executar: ex, toast, abrirDetalhe, setModal } = useApp() as any;
   const m = (c.tratativa && c.tratativa.medida) || {};
   const etapa = R.etapaMedida(c);
   const venda = c.vinculadoA ? st.chamados.find((x: any) => x.id === c.vinculadoA) : null;
@@ -775,8 +777,23 @@ function MedidaBloco({ c }: any) {
   const [prevObra, setPrevObra] = useState(""); const [obsObra, setObsObra] = useState("");
   const ckVenda = checklist || st.chamados.find((x: any) => x.tipo === "checklist" && c.pedido && x.pedido === c.pedido);
   const anexosConsultor = venda ? (venda.anexos || []).length : 0;
+  // fotos para o Exact: as desta ficha (medidor) + as da visita do consultor no 360 (antes da venda)
+  const vis360 = achar360(R, st, c);
+  const [zipando, setZipando] = useState(false);
+  const nFotos = (c.anexos || []).length + vis360.reduce((s: number, v: any) => s + (v.anexos || []).length, 0);
+  const baixarTudo = async () => { setZipando(true);
+    try { const r = await baixarFotosZip("venda " + (c.pedido || "") + " " + c.cliente, [...((c.anexos || []).length ? [{ pasta: "medida " + c.id, anexos: c.anexos }] : []), ...vis360.map((v: any) => ({ pasta: "visita consultor " + v.id, anexos: v.anexos || [] }))]);
+      toast(r.n + " arquivo(s) baixado(s)" + (r.falhas.length ? " · " + r.falhas.length + " não baixaram" : "") + " — é só salvar no cliente do Exact"); }
+    catch (e: any) { toast(e.message || "Não foi possível baixar"); } finally { setZipando(false); } };
+  const quemMediu = c.medidorId ? (consultores.some((u: any) => u.id === c.medidorId) ? "consultor atuando como medidor (depois da venda)" : "medidor (depois da venda)") : "";
   return (
     <div className="resp-box" style={{ borderColor: cor }}>
+      {(nFotos > 0 || vis360.length > 0) && <div className="md-exact">
+        <div><b>📷 Fotos para o Exact</b>
+          <small>{[(c.anexos || []).length ? (c.anexos || []).length + " da medida" + (quemMediu ? " · " + quemMediu : "") : "", vis360.length ? vis360.reduce((s: number, v: any) => s + (v.anexos || []).length, 0) + " da visita do consultor " + vis360.map((v: any) => R.nomeUser(v.consultorId)).join(", ") + " (antes da venda)" : ""].filter(Boolean).join(" · ")}</small></div>
+        <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{vis360.length > 0 && <button className="btn sm" onClick={() => setModal(<Galeria360 lista={vis360} titulo={c.cliente} />)}>Ver visita do consultor</button>}
+          {nFotos > 0 && <button className="btn primary sm" disabled={zipando} onClick={baixarTudo}>{zipando ? "Preparando…" : "⬇ Baixar todas (" + nFotos + ")"}</button>}</span>
+      </div>}
       <h4>📐 Medidas <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{ETAPA_MEDIDA[etapa] || etapa}</span></h4>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "0 0 10px" }}>
         <span className="pill" style={{ background: "var(--st-concluida)", color: "#fff", fontWeight: 700 }}>SOLICITAÇÃO DE MEDIDA — não é visita de venda</span>
