@@ -33,7 +33,7 @@ export default function ConfirmacaoVendas() {
   const { R, st, toast, abrirDetalhe, recarregar } = useApp() as any;
   const [itens, setItens] = useState<Item[] | null>(null);
   const [aba, setAba] = useState<Aba>("pendente");
-  const [tipo, setTipo] = useState<"" | "consultor" | "marketing">("");
+  const [tipo, setTipo] = useState<"" | "consultor" | "marketing">(() => { try { const v = localStorage.getItem("cv_tipo"); return v === "consultor" || v === "marketing" ? v : ""; } catch { return ""; } });
   const [q, setQ] = useState(""); const [ocup, setOcup] = useState<Record<string, boolean>>({});
   const [valEd, setValEd] = useState<Record<string, string>>({});
   const [metodo, setMetodo] = useState(""); const [sel, setSel] = useState<Record<string, boolean>>({});
@@ -145,20 +145,21 @@ export default function ConfirmacaoVendas() {
     <div className="view-head"><div><h2>✅ Confirmação de vendas</h2>
       <p>Tudo o que o <b>Encontrar vendas</b> acha (Exact × 360 e Exact × Minha Visita) entra aqui, sem apagar o que já estava. Confira com o Exact/Tático e decida na mesma tela: <b>Validar</b> vira venda efetivada no 360 (com o vendedor e o cliente comprador do Exact), <b>Promissória</b> divide em entrada paga + promissória (ou 100% promissória — só o que foi pago conta como venda à vista), <b>Negar</b> descarta e <b>Checklist</b> guarda como pedido da fábrica (não conta como venda). O valor pode ser corrigido direto na linha.</p></div></div>
 
+    {/* trabalhar separado: só os dos consultores ou só os do marketing */}
+    <div className="cv-sep">
+      {([["consultor", "🧭 Só consultores"], ["marketing", "🏬 Só marketing"], ["", "Todos"]] as const).map(([k, l]) => { const n = todos.filter(x => (!k || x.tipo === k) && x.status === "pendente").length;
+        return <button key={k || "todos"} type="button" className={"cv-sep-b" + (tipo === k ? " on" : "")} onClick={() => { setTipo(k); setSel({}); try { localStorage.setItem("cv_tipo", k); } catch { /* sem armazenamento */ } }}>
+          {l}<small>{n} a conferir</small></button>; })}
+    </div>
     <div className="kpis" style={{ margin: "6px 0 10px" }}>
       <Kpi n={pend.length} l={"A conferir · " + brl(pend.reduce((s, x) => s + Number(x.valor), 0))} cor="var(--warn)" />
-      <Kpi n={pend.filter(x => x.tipo === "consultor").length} l="🧭 De consultores" cor="var(--primary)" />
-      <Kpi n={pend.filter(x => x.tipo === "marketing").length} l="🏬 Do marketing" cor="var(--primary)" />
+      <Kpi n={pend.filter(x => comoDe(x.como)[1] === "ok").length} l="🟢 Achadas por telefone / nº" cor="var(--st-concluida)" />
+      <Kpi n={pend.filter(x => comoDe(x.como)[1] !== "ok").length} l="🟡 Por endereço / nome — conferir" cor="var(--warn)" />
       <Kpi n={validHoje.length} l={"Validadas hoje · " + brl(validHoje.reduce((s, x) => s + Number(x.valor), 0))} cor="var(--st-concluida)" />
     </div>
 
     <div className="cv-barra">
       <div className="chips" style={{ margin: 0 }}>{ABAS.map(([k, l]) => <button key={k} className={"chip" + (aba === k ? " on" : "")} onClick={() => setAba(k)}>{l}<span className="n">{doTipo.filter(x => k === "todas" || x.status === k).length}</span></button>)}</div>
-      <div className="subnav" style={{ margin: 0 }}>
-        <button className={!tipo ? "on" : ""} onClick={() => setTipo("")}>Tudo</button>
-        <button className={tipo === "consultor" ? "on" : ""} onClick={() => setTipo("consultor")}>🧭 Consultores</button>
-        <button className={tipo === "marketing" ? "on" : ""} onClick={() => setTipo("marketing")}>🏬 Marketing</button>
-      </div>
       <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="🔎 cliente, nº, telefone, consultor, vendedor" style={{ marginLeft: "auto", maxWidth: 300 }} />
       {aba === "pendente" && lista.length > 0 && <button className="btn sm" onClick={validarTodas}>✅ Validar todas da lista ({lista.length})</button>}
     </div>
