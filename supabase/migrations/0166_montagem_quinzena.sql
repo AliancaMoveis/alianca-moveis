@@ -1,0 +1,2 @@
+-- Montagem (am-233): pagamento quinzenal. montagem_fechar aceita referência de quinzena: 'AAAA-MM-1' (10 a 24 do mês)
+-- e 'AAAA-MM-2' (25 do mês a 9 do mês seguinte), além do mês 'AAAA-MM'.

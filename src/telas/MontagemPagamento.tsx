@@ -95,7 +95,23 @@ async function itensFech(id: number): Promise<any[]> {
   const { data, error } = await sb.from("montagem_fech_itens").select("*").eq("fechamento_id", id).order("total", { ascending: false }); if (error) throw new Error(error.message); return data || [];
 }
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-const nomeMes = (ref: string) => MESES[Number(ref.slice(5, 7)) - 1] + "/" + ref.slice(0, 4);
+const MES3 = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+// pagamento quinzenal dos montadores: 1ª quinzena = 10 a 24 do mês · 2ª quinzena = 25 do mês a 9 do mês seguinte
+const isoU = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
+export function quinzenaDe(iso: string): { de: string; ate: string; ref: string } {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (d >= 10 && d <= 24) return { de: isoU(y, m - 1, 10), ate: isoU(y, m - 1, 24), ref: isoU(y, m - 1, 1).slice(0, 7) + "-1" };
+  const base = d >= 25 ? new Date(Date.UTC(y, m - 1, 1)) : new Date(Date.UTC(y, m - 2, 1)); // a 2ª quinzena leva o nome do mês em que começa
+  const by = base.getUTCFullYear(), bm = base.getUTCMonth();
+  return { de: isoU(by, bm, 25), ate: isoU(by, bm + 1, 9), ref: isoU(by, bm, 1).slice(0, 7) + "-2" };
+}
+const quinzenaAntes = (q: { de: string }) => quinzenaDe(somaDias(q.de, -1));
+const nomeMes = (ref: string) => {
+  const mes = MESES[Number(ref.slice(5, 7)) - 1] + "/" + ref.slice(0, 4);
+  if (!/-[12]$/.test(ref)) return mes;
+  const q = quinzenaDe(ref.slice(0, 7) + (ref.endsWith("-1") ? "-10" : "-25"));
+  return (ref.endsWith("-1") ? "1ª" : "2ª") + " quinzena de " + MES3[Number(ref.slice(5, 7)) - 1] + "/" + ref.slice(2, 4) + " (" + br(q.de).slice(0, 5) + " a " + br(q.ate).slice(0, 5) + ")";
+};
 const CAB_FIN = ["Montador", "Nome no Exact", "Titular da conta", "CPF/CNPJ", "Banco", "Agência", "Conta", "Tipo de conta", "PIX (tipo)", "PIX (chave)", "Montagens", "Total produtos", "Adicionais", "TOTAL A PAGAR", "Aprovado p/ pagamento", "Aguardando aprovação", "Período", "Obs."];
 async function vincular(nome: string, id: string | null) {
   if (MOCK) { mockVinc[nome] = id; return; }
@@ -108,12 +124,13 @@ export default function MontagemPagamento() {
   const { R, st, toast } = useApp() as any;
   const [dados, setDados] = useState<{ ef: Ef[]; vinc: Record<string, string | null> } | null>(null); const [erro, setErro] = useState("");
   const h = hoje();
-  const [de, setDe] = useState(h.slice(0, 8) + "01"); const [ate, setAte] = useState(h);
+  const [de, setDe] = useState(() => quinzenaDe(h).de); const [ate, setAte] = useState(() => quinzenaDe(h).ate);
   const [pelo, setPelo] = useState<"fin" | "mont">("fin");
   const [fs, setFs] = useState<"todos" | "aprov" | "agu">("todos");
   const [q, setQ] = useState(""); const [aberto, setAberto] = useState("");
   const [enviando, setEnviando] = useState(""); const inp = useRef<HTMLInputElement>(null);
   const [tela, setTela] = useState<"periodo" | "hist">("periodo");
+  const [ord, setOrd] = useState<{ k: string; desc: boolean }>({ k: "nome", desc: false });
   const { setModal } = useApp() as any;
   const recarregar = () => carregar().then(setDados).catch(e => setErro(e.message));
   useEffect(() => { recarregar(); }, []);
@@ -157,7 +174,13 @@ export default function MontagemPagamento() {
     if (aprovado(e)) { g.aprov += e.total; g.aprovN++; } else { g.agu += e.total; g.aguN++; }
     return m;
   }, {})).sort((a, b) => b.total - a.total);
-  const vis = grupos.filter(g => !q.trim() || norm(g.nome + " " + (g.cad?.nome || "")).includes(norm(q)));
+  // padrão: ordem alfabética; clicar no cabeçalho ordena pela coluna (1º clique: maior primeiro · 2º: menor primeiro)
+  const nomeG = (g: G) => g.cad?.nome || g.nome;
+  const valOrd: Record<string, (g: G) => number> = { n: g => g.n, prod: g => g.prod, adic: g => g.adic, total: g => g.total, aprov: g => g.aprov, agu: g => g.agu };
+  const cmp = (a: G, b: G) => ord.k === "nome" ? (ord.desc ? -1 : 1) * nomeG(a).localeCompare(nomeG(b), "pt-BR") : (ord.desc ? -1 : 1) * (valOrd[ord.k](a) - valOrd[ord.k](b)) || nomeG(a).localeCompare(nomeG(b), "pt-BR");
+  const vis = grupos.filter(g => !q.trim() || norm(g.nome + " " + (g.cad?.nome || "")).includes(norm(q))).sort(cmp);
+  const Th = ({ k, l, n }: { k: string; l: string; n?: boolean }) => <th className={(n ? "n " : "") + "ma-ord" + (ord.k === k ? " on" : "")} title="Clique para ordenar"
+    onClick={() => setOrd(ord.k === k ? { k, desc: !ord.desc } : { k, desc: k !== "nome" })}>{l}{ord.k === k ? (ord.desc ? " ▼" : " ▲") : ""}</th>;
   const soma = (f: (g: G) => number) => r2(grupos.reduce((s, g) => s + f(g), 0));
   const temConta = (g: G) => !!(g.cad && g.cad.conta && (g.cad.conta.conta || g.cad.conta.pixChave));
   const semConta = grupos.filter(g => !temConta(g));
@@ -168,13 +191,13 @@ export default function MontagemPagamento() {
 
   const relFinanceiro = () => {
     const cab = CAB_FIN;
-    const linhas = grupos.map(g => { const k = g.cad?.conta || {}; return [g.cad?.nome || g.nome, g.nome, k.titular || "", k.docTitular || "", k.banco || "", k.agencia || "", k.conta || "", k.tipoConta || "", k.pixTipo || "", k.pixChave || "", g.n, r2(g.prod), r2(g.adic), r2(g.total), r2(g.aprov), r2(g.agu), per, temConta(g) ? "" : "SEM CONTA CADASTRADA"]; });
+    const linhas = grupos.slice().sort(cmp).map(g => { const k = g.cad?.conta || {}; return [g.cad?.nome || g.nome, g.nome, k.titular || "", k.docTitular || "", k.banco || "", k.agencia || "", k.conta || "", k.tipoConta || "", k.pixTipo || "", k.pixChave || "", g.n, r2(g.prod), r2(g.adic), r2(g.total), r2(g.aprov), r2(g.agu), per, temConta(g) ? "" : "SEM CONTA CADASTRADA"]; });
     linhas.push(["TOTAL", "", "", "", "", "", "", "", "", "", soma(g => g.n), soma(g => g.prod), soma(g => g.adic), soma(g => g.total), soma(g => g.aprov), soma(g => g.agu), per, ""]);
     baixarXlsx("pagamento_montadores_" + de + "_a_" + ate + ".xlsx", cab, linhas, "Pagamento montadores");
   };
   const relDetalhado = () => {
     const cab = ["Montador", "O.S.", "Status", "Data montagem", "Data finalização", "Total produtos", "Adicionais", "Total O.S."];
-    const linhas = grupos.flatMap(g => g.itens.slice().sort((a, b) => dataDe(a).localeCompare(dataDe(b))).map(e => [g.cad?.nome || g.nome, e.origem === "avulsa" ? "Avulsa · " + rotAv(e) : e.os, aprovado(e) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(e.data_montagem), br(e.data_finalizacao), e.produtos, e.adicionais, e.total]));
+    const linhas = grupos.slice().sort(cmp).flatMap(g => g.itens.slice().sort((a, b) => dataDe(a).localeCompare(dataDe(b))).map(e => [g.cad?.nome || g.nome, e.origem === "avulsa" ? "Avulsa · " + rotAv(e) : e.os, aprovado(e) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(e.data_montagem), br(e.data_finalizacao), e.produtos, e.adicionais, e.total]));
     baixarXlsx("montagens_detalhadas_" + de + "_a_" + ate + ".xlsx", cab, linhas, "Montagens");
   };
 
@@ -193,6 +216,14 @@ export default function MontagemPagamento() {
           <div className="field"><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
           <div className="field"><label>Pela data de</label><select value={pelo} onChange={e => setPelo(e.target.value as any)}><option value="fin">Finalização</option><option value="mont">Montagem</option></select></div>
           <div className="chips" style={{ margin: 0 }}>
+            {(() => { const qa = quinzenaDe(h), qp = quinzenaAntes(qa); const lista = [qa]; for (let k = 0; k < 11; k++) lista.push(quinzenaAntes(lista[lista.length - 1]));
+              const atual = lista.find(q => q.de === de && q.ate === ate);
+              return <>
+                <button className={"chip" + (de === qa.de && ate === qa.ate ? " on" : "")} onClick={() => periodo(qa.de, qa.ate)} title={nomeMes(qa.ref)}>Quinzena atual</button>
+                <button className={"chip" + (de === qp.de && ate === qp.ate ? " on" : "")} onClick={() => periodo(qp.de, qp.ate)} title={nomeMes(qp.ref)}>Quinzena passada</button>
+                <select className="ma-quinz" value={atual ? atual.ref : ""} onChange={e => { const q = lista.find(x => x.ref === e.target.value); if (q) periodo(q.de, q.ate); }}>
+                  <option value="">📅 Escolher quinzena…</option>{lista.map(q => <option key={q.ref} value={q.ref}>{nomeMes(q.ref)}</option>)}</select>
+              </>; })()}
             <button className="chip" onClick={() => periodo(h.slice(0, 8) + "01", h)}>Este mês</button>
             <button className="chip" onClick={mesPassado}>Mês passado</button>
             <button className="chip" onClick={() => periodo(somaDias(h, -6), h)}>Últimos 7 dias</button>
@@ -225,10 +256,10 @@ export default function MontagemPagamento() {
           <button className="btn primary sm" onClick={relFinanceiro} disabled={!grupos.length}>⬇ Relatório para o financeiro</button>
           <button className="btn sm" onClick={relDetalhado} disabled={!grupos.length}>⬇ Detalhado por O.S.</button>
           <button className="btn sm" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={de} ate={ate} />)}>＋ Ordem avulsa</button>
-          <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} mapa={Object.fromEntries(grupos.flatMap(g => Array.from(new Set([g.nome, ...g.itens.map(e => e.montador)])).map(n => [n, g.cad?.id || ""])))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento do mês</button>
+          <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} mapa={Object.fromEntries(grupos.flatMap(g => Array.from(new Set([g.nome, ...g.itens.map(e => e.montador)])).map(n => [n, g.cad?.id || ""])))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento da quinzena</button>
         </div>
         {!vis.length ? <div className="empty" style={{ padding: 24 }}>{dados && dados.ef.length ? "Nenhuma montagem efetivada neste período." : "Envie o relatório do Exact para começar."}</div> :
-          <table className="ma-tab"><thead><tr><th>Montador</th><th className="n">Montagens</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total a pagar</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Conta para pagamento</th></tr></thead>
+          <table className="ma-tab"><thead><tr><Th k="nome" l="Montador" /><Th k="n" l="Montagens" n /><Th k="prod" l="Produtos" n /><Th k="adic" l="Adicionais" n /><Th k="total" l="Total a pagar" n /><Th k="aprov" l="✅ Aprovado" n /><Th k="agu" l="⏳ Aguardando" n /><th>Conta para pagamento</th></tr></thead>
             <tbody>{vis.map(g => <Linha key={g.nome} g={g} recarregar={recarregar} aberto={aberto === g.nome} abrir={() => setAberto(aberto === g.nome ? "" : g.nome)} cadastro={cadastro} temConta={temConta(g)}
               vincular={async (id: string | null) => { try { await vincular(g.nome, id); await recarregar(); toast("Vínculo salvo"); } catch (e: any) { toast(e.message); } }} dataDe={dataDe} />)}</tbody>
             <tfoot><tr><td>Total</td><td className="n">{soma(g => g.n)}</td><td className="n">{fmtMoeda(soma(g => g.prod))}</td><td className="n">{fmtMoeda(soma(g => g.adic))}</td><td className="n">{fmtMoeda(soma(g => g.total))}</td><td className="n">{fmtMoeda(soma(g => g.aprov))}</td><td className="n">{fmtMoeda(soma(g => g.agu))}</td><td></td></tr></tfoot>
@@ -276,7 +307,10 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
 // ---------- fechar o pagamento do mês: guarda uma foto do que foi gerado para o financeiro ----------
 function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto }: any) {
   const { setModal, toast } = useApp() as any;
-  const [ref, setRef] = useState(ate.slice(0, 7)); const [obs, setObs] = useState(""); const [ind, setInd] = useState(false);
+  // período igual a uma quinzena → referência da quinzena; senão, o mês
+  const qz = quinzenaDe(de), ehQ = qz.de === de && qz.ate === ate;
+  const [ref, setRef] = useState(ehQ ? qz.ref : ate.slice(0, 7)); const [obs, setObs] = useState(""); const [ind, setInd] = useState(false);
+  const opRef = (() => { const l = [quinzenaDe(hoje())]; for (let k = 0; k < 7; k++) l.push(quinzenaAntes(l[l.length - 1])); const r = l.map(q => q.ref); if (!r.includes(ref)) r.unshift(ref); return r; })();
   const tot = grupos.reduce((s: number, g: any) => s + g.total, 0), n = grupos.reduce((s: number, g: any) => s + g.n, 0);
   const _itens = grupos.map((g: any) => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, nome_exact: g.nome, montador_id: g.cad?.id || null, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipo_conta: k.tipoConta, pix_tipo: k.pixTipo, pix_chave: k.pixChave, montagens: g.n, produtos: r2(g.prod), adicionais: r2(g.adic), total: r2(g.total), aprovado: r2(g.aprov), aguardando: r2(g.agu), ordens: g.itens.map((e: any) => ({ os: e.os, desc: e.descricao, origem: e.origem, tipo: e.tipo, status: e.status, mont: e.data_montagem, fin: e.data_finalizacao, prod: e.produtos, adic: e.adicionais, total: e.total })) }; });
   const ir = async (substituir: boolean) => {
@@ -285,9 +319,10 @@ function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto }: any) {
     catch (e: any) { if (/já existe/i.test(e.message) && !substituir) { if (confirm("Já existe um fechamento de " + nomeMes(ref) + ".\n\nSubstituir? O fechamento anterior NÃO é apagado: fica guardado no histórico como “substituído”.")) { setInd(false); return ir(true); } } else toast(e.message); }
     finally { setInd(false); }
   };
-  return <Modal titulo="🔒 Fechar pagamento do mês" onFechar={() => setModal(null)}>
+  return <Modal titulo="🔒 Fechar pagamento" onFechar={() => setModal(null)}>
     <p style={{ marginTop: 0 }}>Guarda uma foto deste relatório (valores por montador, contas e as O.S.) no histórico, para consultar depois.</p>
-    <div className="field"><label>Mês de referência</label><input type="month" value={ref} onChange={e => setRef(e.target.value)} /></div>
+    <div className="field"><label>Referência do pagamento</label><select value={ref} onChange={e => setRef(e.target.value)}>{opRef.map(r => <option key={r} value={r}>{nomeMes(r)}</option>)}</select>
+      {!ehQ && <span className="hint">O período escolhido não é uma quinzena exata ({br(de)} a {br(ate)}). Confira a referência.</span>}</div>
     <div className="resp-box" style={{ margin: "10px 0" }}>Período {br(de)} a {br(ate)} · pela data de {pelo === "fin" ? "finalização" : "montagem"} · {fs === "aprov" ? "só aprovados" : fs === "agu" ? "só aguardando" : "aprovados + aguardando"}<br /><b>{grupos.length} montadores · {n} O.S. · {fmtMoeda(tot)}</b></div>
     <div className="field"><label>Observação (opcional)</label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: enviado ao financeiro em 05/11" /></div>
     <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" disabled={ind || !ref} onClick={() => ir(false)}>{ind ? "Guardando…" : "Fechar e guardar"}</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
@@ -300,7 +335,7 @@ function Historico() {
   useEffect(() => { if (ab) itensFech(ab).then(setItens).catch(() => setItens([])); }, [ab]);
   if (erro) return <div className="empty">{erro}</div>;
   if (!l) return <div className="empty">Carregando…</div>;
-  if (!l.length) return <div className="empty" style={{ padding: 24 }}>Nenhum pagamento fechado ainda. Na aba “Montagens e pagamento”, filtre o mês e clique em “🔒 Fechar pagamento do mês”.</div>;
+  if (!l.length) return <div className="empty" style={{ padding: 24 }}>Nenhum pagamento fechado ainda. Na aba “Montagens e pagamento”, filtre a quinzena e clique em “🔒 Fechar pagamento da quinzena”.</div>;
   const f = l.find(x => x.id === ab);
   const per = (x: any) => br(x.de) + " a " + br(x.ate);
   const baixarFin = () => { if (!f) return; const linhas = itens.map(x => [x.montador, x.nome_exact, x.titular || "", x.doc || "", x.banco || "", x.agencia || "", x.conta || "", x.tipo_conta || "", x.pix_tipo || "", x.pix_chave || "", x.montagens, Number(x.produtos), Number(x.adicionais), Number(x.total), Number(x.aprovado), Number(x.aguardando), per(f), (x.conta || x.pix_chave) ? "" : "SEM CONTA CADASTRADA"]);
@@ -310,7 +345,7 @@ function Historico() {
     baixarXlsx("montagens_" + f.referencia + ".xlsx", ["Montador", "O.S.", "Status", "Data montagem", "Data finalização", "Total produtos", "Adicionais", "Total O.S."], linhas, "Montagens " + f.referencia); };
   return <>
     <div className="card" style={{ padding: 0 }}>
-      <table className="ma-tab"><thead><tr><th>Mês</th><th>Período</th><th className="n">Montadores</th><th className="n">O.S.</th><th className="n">Total</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Fechado por</th><th></th></tr></thead>
+      <table className="ma-tab"><thead><tr><th>Referência</th><th>Período</th><th className="n">Montadores</th><th className="n">O.S.</th><th className="n">Total</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Fechado por</th><th></th></tr></thead>
         <tbody>{l.map(x => <tr key={x.id} className={"ma-lin" + (ab === x.id ? " on" : "")} style={x.ativo ? undefined : { opacity: .55 }} onClick={() => setAb(ab === x.id ? null : x.id)}>
           <td><b>{nomeMes(x.referencia)}</b>{!x.ativo && <span className="pill" style={{ marginLeft: 6 }}>substituído</span>}</td><td>{per(x)}</td><td className="n">{x.n_montadores}</td><td className="n">{x.n_os}</td><td className="n"><b>{fmtMoeda(Number(x.total))}</b></td><td className="n">{fmtMoeda(Number(x.aprovado))}</td><td className="n">{fmtMoeda(Number(x.aguardando))}</td>
           <td><small>{x.criado_por || ""} · {new Date(x.criado_em).toLocaleString("pt-BR").slice(0, 16)}{x.obs ? " · " + x.obs : ""}{x.substituido_em ? " · substituído em " + new Date(x.substituido_em).toLocaleDateString("pt-BR") : ""}</small></td><td className="g">ver ›</td></tr>)}</tbody></table>
