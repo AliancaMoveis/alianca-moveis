@@ -103,6 +103,8 @@ export default function EncontrarVendas360() {
   const nomeDif = (r: Res) => { const c = alvo(r), cm = r.cands[escolha[r.n] ?? 0]; return !!(c && cm && cm.como !== "nome" && !mesmoNome(col(r.ex, "Cliente"), c.cliente)); };
   const pagadorSalvo = (r: Res) => { const p = ((alvo(r)?.tratativa || {}).pagadores || {})[r.n]; return p && mesmoNome(p.nome, col(r.ex, "Cliente")); };
   const faltaPagador = (r: Res) => nomeDif(r) && !pagadorSalvo(r);
+  // toda venda confirmada guarda quem comprou no Exact (cliente comprador), mesmo quando o nome é igual
+  const semComprador = (r: Res) => !!alvo(r) && !!col(r.ex, "Cliente").trim() && !pagadorSalvo(r);
   const aConfirmar = (r: Res) => !ehCk(r) && (estado(r) !== "ok" || vendDif(r) || faltaPagador(r));
   const passa = (r: Res, k: string) => k === "ck" ? ehCk(r) : k === "todas" ? true : ehCk(r) ? false : k === "confirmar" ? aConfirmar(r) : k === "ok" ? !aConfirmar(r) : vendDif(r);
 
@@ -141,13 +143,13 @@ export default function EncontrarVendas360() {
     const ok = lst.filter(r => alvo(r) && aConfirmar(r));
     if (!ok.length) { toast("Nada para confirmar"); return; }
     const tot = ok.reduce((s, r) => s + r.valor, 0);
-    if (!confirm(`Confirmar ${ok.length} venda(s) do Exact no 360 · ${fmtMoeda(tot)}?\n\nVale o que está no Exact: nº, valor, situação e o VENDEDOR (o vendedor do cliente é corrigido quando for diferente).\n\n${ok.filter(faltaPagador).length ? "\n\nNome diferente: em " + ok.filter(faltaPagador).length + " venda(s) quem comprou entra como CLIENTE PAGADOR; o cliente do 360 continua o mesmo.\n" : "\n"}${ok.slice(0, 15).map(r => "• " + r.n + " · " + alvo(r).cliente + (faltaPagador(r) ? " (pagador: " + col(r.ex, "Cliente") + ")" : "") + " · " + fmtMoeda(r.valor) + " · vendedor " + (vendEf(r)?.nome || r.vend)).join("\n")}${ok.length > 15 ? "\n…" : ""}`)) return;
+    if (!confirm(`Confirmar ${ok.length} venda(s) do Exact no 360 · ${fmtMoeda(tot)}?\n\nVale o que está no Exact: nº, valor, situação e o VENDEDOR (o vendedor do cliente é corrigido quando for diferente).\n\n${ok.filter(faltaPagador).length ? "\n\nNome diferente: em " + ok.filter(faltaPagador).length + " venda(s) quem comprou entra como CLIENTE COMPRADOR; o cliente do 360 continua o mesmo.\n" : "\n"}${ok.slice(0, 15).map(r => "• " + r.n + " · " + alvo(r).cliente + (faltaPagador(r) ? " (comprador: " + col(r.ex, "Cliente") + ")" : "") + " · " + fmtMoeda(r.valor) + " · vendedor " + (vendEf(r)?.nome || r.vend)).join("\n")}${ok.length > 15 ? "\n…" : ""}`)) return;
     let feitas = 0; const erros: string[] = [];
     for (const r of ok) {
       setRodando(`Confirmando ${feitas + 1} de ${ok.length}…`);
       try {
         if (estado(r) !== "ok" || vendDif(r)) await A.exactConfirmarVenda(alvo(r).id, r.n, r.valor, r.data || null, r.vend, r.sit, vendDif(r) || (!alvo(r).atendenteId && vendEf(r)) ? vendEf(r).id : null);
-        if (faltaPagador(r)) await A.clientePagadorSalvar(alvo(r).id, r.n, { nome: col(r.ex, "Cliente").trim(), telefone1: col(r.ex, "ClienteTel1"), telefone2: col(r.ex, "ClienteTel2"), endereco: col(r.ex, "Orçamento"), idTatico: col(r.ex, "IDPessoaCli") });
+        if (semComprador(r)) await A.clientePagadorSalvar(alvo(r).id, r.n, { nome: col(r.ex, "Cliente").trim(), telefone1: col(r.ex, "ClienteTel1"), telefone2: col(r.ex, "ClienteTel2"), endereco: col(r.ex, "Orçamento"), idTatico: col(r.ex, "IDPessoaCli") });
         feitas++;
       }
       catch (e: any) { erros.push(r.n + ": " + (e.message || "erro")); }
@@ -220,8 +222,8 @@ export default function EncontrarVendas360() {
                   <td style={td}><span className="pill" style={{ background: COMO[cm.como][1], color: "#fff", fontSize: 11 }}>{COMO[cm.como][0]}</span>
                     <div><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.id); }}><b>{c.cliente}</b></a> <span className="hint">{c.id}</span></div>
                     <div className="hint">{c.telefone || ""} · {STATUS_CLIENTE[R.statusClienteDe(c)] || ""}{c.dataLoja ? " · loja " + fmtDate(c.dataLoja) : c.dataVisita ? " · visita " + fmtDate(c.dataVisita) : ""}</div>
-                    {nomeDif(r) && (pagadorSalvo(r) ? <div className="hint" style={{ color: "var(--st-concluida)", fontWeight: 700 }}>🧾 cliente pagador: {col(r.ex, "Cliente")}</div>
-                      : <div style={{ color: "var(--warn)", fontWeight: 700, fontSize: 12 }}>⚠️ nome diferente de quem comprou — ao confirmar, {col(r.ex, "Cliente")} entra como cliente pagador (o cliente do 360 continua {c.cliente})</div>)}
+                    {pagadorSalvo(r) ? <div className="hint" style={{ color: "var(--st-concluida)", fontWeight: 700 }}>🧾 cliente comprador: {col(r.ex, "Cliente")}</div> : nomeDif(r) && (
+                      <div style={{ color: "var(--warn)", fontWeight: 700, fontSize: 12 }}>⚠️ nome diferente de quem comprou — ao confirmar, {col(r.ex, "Cliente")} entra como cliente comprador (o cliente do 360 continua {c.cliente})</div>)}
                     {r.data && String(c.criadoEm || "").slice(0, 10) > r.data && <div className="hint" style={{ color: "var(--warn)" }}>⚠️ cadastrado no 360 depois da venda ({fmtDate(c.criadoEm)})</div>}
                     {r.cands.length > 1 && <select style={{ fontSize: 12, marginTop: 4, maxWidth: 240 }} value={escolha[r.n] ?? 0} onChange={e => setEscolha({ ...escolha, [r.n]: Number(e.target.value) })}>{r.cands.map((x, i) => <option key={x.c.id} value={i}>{COMO[x.como][0]} · {x.c.cliente} ({x.c.id})</option>)}</select>}
                   </td>

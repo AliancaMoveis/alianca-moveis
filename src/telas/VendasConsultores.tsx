@@ -57,7 +57,7 @@ export default function VendasConsultores() {
   const pagador = (l: Linha) => (((l.c.tratativa || {}).pagadores || {})[String(l.i.numero)] || {}).nome || "";
   const rotOrig = orig === "mkt" ? "Responsável" : "Consultor";
 
-  const exportar = () => baixarXlsx("vendas-" + orig + "-" + ini + "-a-" + fim, ["Data", "Nº venda", "Cliente 360", "Cliente pagador", rotOrig, "Vendedor", "Valor", "Situação"],
+  const exportar = () => baixarXlsx("vendas-" + orig + "-" + ini + "-a-" + fim, ["Data", "Nº venda", "Cliente 360", "Cliente comprador", rotOrig, "Vendedor", "Valor", "Situação"],
     lista.map(l => [l.dia ? fmtDate(l.dia) : "", l.i.numero, l.c.cliente, pagador(l), l.cons, l.c.atendenteId ? R.nomeUser(l.c.atendenteId) : "", l.valor, l.ok ? "Aprovada" : "Aguardando Gestão"]), "Vendas");
 
   const escolhido = porCons.find(x => x.k === sel);
@@ -107,7 +107,7 @@ export default function VendasConsultores() {
           <table className="vc-tab"><thead><tr><th>Data</th><th>Nº venda</th><th>Cliente</th><th>{rotOrig}</th><th>Vendedor</th><th style={{ textAlign: "right" }}>Valor</th><th>Situação</th></tr></thead>
             <tbody>{lista.slice(0, 600).map(l => <tr key={l.c.id + l.i.numero} className="clic" onClick={() => abrirDetalhe(l.c.id)}>
               <td>{l.dia ? fmtDate(l.dia) : "—"}</td><td><b>{l.i.numero}</b>{l.i.tipo === "promissoria" ? <small className="hint"> promissória</small> : null}</td>
-              <td><b>{l.c.cliente}</b>{pagador(l) ? <div className="hint">🧾 pagador: {pagador(l)}</div> : null}</td>
+              <td><b>{l.c.cliente}</b>{pagador(l) ? <div className="hint">🧾 comprador: {pagador(l)}</div> : null}</td>
               <td><b>{l.cons}</b></td><td>{l.c.atendenteId ? R.nomeUser(l.c.atendenteId) : "—"}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}><b>{fmtMoeda(l.valor)}</b></td>
               <td>{l.ok ? <span className="pill" style={{ background: "var(--st-concluida)", color: "#fff" }}>✔ aprovada</span> : <span className="pill" style={{ color: "var(--warn)", borderColor: "var(--warn)" }}>⏳ aguardando</span>}</td></tr>)}</tbody></table>
