@@ -1,0 +1,5 @@
+-- Segurança: funções SECURITY DEFINER do schema public deixam de aceitar chamada sem login (anon).
+-- Ficam abertas só as das telas públicas (protegidas por token): agenda_publica_* , avaliacao_publica, avaliacao_responder*.
+-- Aplicada direto no banco: para cada função secdef executável por anon fora dessa lista:
+--   revoke execute ... from public, anon;  grant execute ... to authenticated, service_role;
+-- Também removidas as tabelas temporárias da importação de vendas de outubro (_imp_out10, _imp_vmap).
