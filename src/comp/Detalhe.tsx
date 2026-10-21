@@ -94,6 +94,8 @@ export default function Detalhe({ id }: { id: string }) {
           </>}
           {!presale && <>
             <Row k="Cliente"><b>{c.cliente}</b> <EditarCliente c={c} /></Row>
+            {/* quem pagou a venda (Exact/Tático) quando é outra pessoa: o cliente atendido continua o mesmo */}
+            {Object.entries((c.tratativa || {}).pagadores || {}).map(([v, p]: any) => <Row key={v} k={"Cliente pagador"}><b>{p.nome}</b> <span className="hint">venda {v}{p.telefone1 ? " · " + p.telefone1 : ""}{p.endereco ? " · " + p.endereco : ""}</span></Row>)}
             <Row k="CPF">{c.clienteDoc || "—"}</Row>
             <Row k="Contato">{(() => { const tels = separarTelefones(c.telefone); const eu = R.nomeUser(R.currentUserId); const msg = c.tipo === "medidas" ? R.msgWhatsMedida(c) : msgWhatsCliente(c, eu ? eu.split(" ")[0] : "");
               return tels.length ? <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>{tels.map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b><BotaoWhats tel={t} texto={msg} /></span>)}</span> : (c.telefone || "—"); })()}</Row>

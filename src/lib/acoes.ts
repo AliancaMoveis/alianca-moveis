@@ -203,6 +203,9 @@ export const A = {
   mktDefinirResponsavel: (id: string, uid: string) => rpc("mkt_definir_responsavel", { p_id: id, p_uid: uid }),
   exactConfirmarVenda: (id: string, numero: string, valor: number, data: string | null, vendedor: string, situacao: string, vendedorId: string | null) =>
     rpc<string>("exact_confirmar_venda", { p_id: id, p_numero: numero, p_valor: valor, p_data: data, p_vendedor: vendedor, p_situacao: situacao, p_vendedor_id: vendedorId }),
+  clientePagadorSalvar: (id: string, venda: string, p: { nome: string; telefone1?: string; telefone2?: string; endereco?: string; idTatico?: string }) => rpc("cliente_pagador_salvar", { p_id: id, p_venda: venda, p }),
+  exactChecklistMarcar: (numero: string, chamado: string | null, p: Record<string, any>, desfazer = false) => rpc("exact_checklist_marcar", { p_numero: numero, p_chamado: chamado, p, p_desfazer: desfazer }),
+  exactChecklistLista: () => rpc<any[]>("exact_checklist_lista", {}),
   cienteCancelamento: (id: string) => rpc("ciente_cancelamento", { p_id: id }),
   excluirClienteMkt: async (id: string, motivo: string) => {
     const paths = await rpc<string[]>("mkt_excluir_cliente", { p_id: id, p_motivo: motivo });

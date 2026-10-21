@@ -2,6 +2,7 @@ import { NotifPC } from "../comp/NotifPC";
 import { SinoAvisos } from "../comp/Avisos";
 import { ChatFlutuante } from "../comp/Chat";
 import EncontrarVendas360 from "./EncontrarVendas360";
+import VendasConsultores from "./VendasConsultores";
 import MontagemAgend from "./MontagemAgend";
 import Presenca from "./Presenca";
 import Anuncios from "./Anuncios";
@@ -190,6 +191,7 @@ export default function Shell() {
             {atual === "qualidade" && R.veQualidade() && <Qualidade />}
             {atual === "anuncios" && R.veAnuncios() && <section className="view active"><div className="view-head"><div><h2>📣 Anúncios</h2><p>Investimento e resultado das campanhas do Meta (Instagram/Facebook) e do Google, e o que viraram no 360. Dados do Reportei.</p></div></div><Anuncios /></section>}
             {atual === "ce_realizadas" && <VisitasRealizadas />}
+            {atual === "ce_vendas" && <VendasConsultores />}
             {atual === "montagem_pag" && <MontagemPagamento />}
             {atual === "montagem_meus" && <MontagemMeus />}
             {atual === "agenda_vendedores" && <AgendaVendedores />}
@@ -197,7 +199,7 @@ export default function Shell() {
             {atual === "treino" && <Treino />}
             {atual.startsWith("st_") && (() => { const m = atual.match(/^st_(.+)_([a-z]+)$/); return m ? <SetorFila key={atual} setor={m[1]} aba={m[2]} /> : null; })()}
             {atual.startsWith("jur_") && <Juridico key={atual} aba={atual.slice(4)} />}
-            {atual.startsWith("ce_") && !["ce_agenda", "ce_realizadas"].includes(atual) && <Consultores key={atual} aba={atual.slice(3)} />}
+            {atual.startsWith("ce_") && !["ce_agenda", "ce_realizadas", "ce_vendas"].includes(atual) && <Consultores key={atual} aba={atual.slice(3)} />}
           </main>
         </div>
       </div>

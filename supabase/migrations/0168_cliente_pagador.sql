@@ -1,0 +1,11 @@
+-- Cliente pagador: ao confirmar uma venda do Exact cujo comprador tem outro nome, o cliente do 360 (quem foi atendido)
+-- continua o mesmo e o comprador fica salvo como "cliente pagador" daquela venda.
+-- Aplicada direto no banco: public.cliente_pagador_salvar(p_id text, p_venda text, p jsonb)
+--   * só Gestão (eh_gestao); grava chamados.tratativa.pagadores[venda] = {nome, telefone1, telefone2, endereco, idTatico, em, por}
+--   * não muda chamados.cliente; registra no histórico (_reg) na primeira vez de cada venda
+--   * revoke from public, anon; grant execute to authenticated
+
+-- Vendas do Exact que são de CHECKLIST finalizado (pedido da fábrica): tabela public.exact_venda_checklist
+--   (numero pk, chamado_id, cliente, telefone, valor, data_venda, vendedor, situacao, por, em) — RLS sem políticas, só via RPC
+--   exact_checklist_marcar(p_numero, p_chamado, p jsonb, p_desfazer) e exact_checklist_lista() — só Gestão
+-- exact_confirmar_venda: ao corrigir o vendedor também atualiza vendas.atendente_nome
