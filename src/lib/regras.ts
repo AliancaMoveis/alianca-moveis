@@ -644,7 +644,15 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const e = endCli(c);
     if (e) { L.push(`📍 Endereço: *${e}*`); L.push("Pode me confirmar se está certo, com o bairro e a cidade? Se tiver complemento (apto, bloco, casa dos fundos) ou um ponto de referência, me avise também."); }
     else L.push("📍 Pode me passar o endereço completo, com rua, número, bairro e cidade?");
-    L.push(""); L.push("⏰ Qual o melhor dia e horário para fazermos a medição?"); L.push("");
+    // com data marcada: propõe o dia/horário e deixa o cliente ajustar; sem data: pergunta o melhor dia
+    const dm = String(c.dataMedida || "").replace(" ", "T");
+    if (dm.length >= 16) {
+      const dia = dm.slice(0, 10), hj = hojeISO(), am = isoLocal(new Date(Date.now() + 864e5)).slice(0, 10);
+      const DS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+      const quando = dia === hj ? "hoje" : dia === am ? "amanhã" : DS[parseData(dia + "T12:00").getDay()] + " (" + dia.slice(8, 10) + "/" + dia.slice(5, 7) + ")";
+      const hh = Number(dm.slice(11, 13)), mm = dm.slice(14, 16);
+      L.push(""); L.push(`⏰ Horário: consigo passar ${quando} às ${hh}h${mm !== "00" ? mm : ""}. Caso não seja possível, me avise outro dia ou horário que ajusto na minha rota.`); L.push("");
+    } else { L.push(""); L.push("⏰ Qual o melhor dia e horário para fazermos a medição?"); L.push(""); }
     const amb = String(c.produto || "").split(/\s*(?:,|;|\+|\/|\s+e\s+)\s*/i).map(x => x.trim()).filter(Boolean).map(x => x.charAt(0).toUpperCase() + x.slice(1));
     if (amb.length) { L.push(`Nesta visita, iremos medir ${amb.length} ambiente${amb.length === 1 ? "" : "s"}, ${amb.length === 1 ? "sendo ele" : "sendo eles"}:`); amb.forEach(a => L.push("• " + a)); }
     else L.push("Nesta visita, iremos medir os ambientes do seu projeto.");
