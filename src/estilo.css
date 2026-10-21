@@ -1773,3 +1773,7 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .acao.md-comfoto{background:#2d2340}}
 .ma-quinz{width:auto;height:36px;border-radius:18px;padding:0 12px;font-size:13px}
 .ma-ord{cursor:pointer;user-select:none;white-space:nowrap}.ma-ord:hover{color:var(--primary)}.ma-ord.on{color:var(--primary)}
+.ma-aprovar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:#e8f5ec;border-bottom:1px solid #bfdcc8;position:sticky;top:0;z-index:2}
+.ma-aprovar span{flex:1}.ma-os tr.ma-sel td{background:#eef7f1}
+:root[data-theme="dark"] .ma-aprovar{background:#1d3326;border-color:#2f5a40}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ma-aprovar{background:#1d3326;border-color:#2f5a40}}
