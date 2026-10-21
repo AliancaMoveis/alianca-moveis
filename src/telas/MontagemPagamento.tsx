@@ -16,7 +16,7 @@ import { Modal } from "../comp/Modal";
 
 type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number; origem?: string; descricao?: string | null; criado_por?: string | null; tipo?: string | null };
 // ordem avulsa: serviço dentro da loja, frete ou outro pagamento manual — entra no total do montador
-export const TIPOS_AV: Record<string, string> = { servico_loja: "🏬 Serviço na loja", frete: "🚚 Frete de assistência", outro: "📝 Outro" };
+export const TIPOS_AV: Record<string, string> = { servico_loja: "🏬 Serviço na loja", frete: "🚚 Frete", frete_assistencia: "🛠 Frete de assistência", outro: "📝 Outro" };
 const rotAv = (e: Ef) => (TIPOS_AV[e.tipo || "outro"] || "Avulsa").replace(/^\S+ /, "") + (e.descricao ? ": " + e.descricao : "");
 
 const iso = (s: string) => { const m = String(s || "").match(/(\d{2})[-\/](\d{2})[-\/](\d{4})/); return m ? m[3] + "-" + m[2] + "-" + m[1] : ""; };
@@ -380,7 +380,7 @@ function ModalAvulsa({ cadastro, pronto, de, ate, inicial }: any) {
       <div className="field"><label>até *</label><input type="date" value={f.ate} min={f.de} onChange={e => setF({ ...f, ate: e.target.value })} /></div>
       <div className="field" style={{ maxWidth: 150 }}><label>Valor (R$) *</label><input inputMode="decimal" value={f.prod} onChange={e => setF({ ...f, prod: e.target.value })} placeholder="0,00" /></div>
     </div>
-    <div className="field"><label>Descrição {f.tipo === "outro" ? "*" : "(opcional)"}</label><input value={f.descricao} onChange={e => setF({ ...f, descricao: e.target.value })} placeholder={f.tipo === "frete" ? "Ex.: frete da assistência do cliente X, fretes da quinzena" : f.tipo === "servico_loja" ? "Ex.: montagem do mostruário, ajuste no showroom" : "Descreva o serviço"} /></div>
+    <div className="field"><label>Descrição {f.tipo === "outro" ? "*" : "(opcional)"}</label><input value={f.descricao} onChange={e => setF({ ...f, descricao: e.target.value })} placeholder={f.tipo === "frete" ? "Ex.: fretes da quinzena, entrega em Joinville" : f.tipo === "frete_assistencia" ? "Ex.: frete da assistência do cliente X" : f.tipo === "servico_loja" ? "Ex.: montagem do mostruário, ajuste no showroom" : "Descreva o serviço"} /></div>
     <div className="field"><label>Status</label><select value={f.status} onChange={e => setF({ ...f, status: e.target.value })}><option value="aprovado">✅ Aprovado p/ pagamento</option><option value="aguardando">⏳ Aguardando aprovação</option></select></div>
     <p className="hint" style={{ margin: "6px 0 0" }}>Entra no relatório de pagamento do montador, somada ao total. No filtro do relatório conta pela data final do período.</p>
     <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" disabled={sal} onClick={ir}>{sal ? "Salvando…" : "Salvar"}</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
