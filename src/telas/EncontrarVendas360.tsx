@@ -7,6 +7,7 @@ import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
 import { col, lerArquivo, mesmoNome, tira } from "./Medidas";
 import { tipoPlanilha, type Linha } from "../lib/cruzarVendas";
+import { camposExact } from "../lib/vendaExact";
 import { baixarXlsx } from "../lib/planilha";
 import { STATUS_CLIENTE, fmtDate, fmtMoeda, itensVenda } from "../lib/regras";
 
@@ -131,6 +132,20 @@ export default function EncontrarVendas360() {
     daAba.filter(r => efet(r) && !ehCk(r)).forEach(r => { const k = quem(alvo(r)) || "—"; m[k] = m[k] || { n: 0, v: 0, conf: 0 }; m[k].n++; m[k].v += r.valor; if (!aConfirmar(r)) m[k].conf++; });
     return Object.entries(m).sort((a, b) => b[1].v - a[1].v);
   }, [daAba, escolha, st.chamados, ckl]);
+
+  // tudo o que foi achado e ainda falta confirmar vai para a fila de Confirmação de vendas (sem apagar o que já estava lá)
+  const enviados = useRef(new Set<string>());
+  useEffect(() => {
+    if (!gestao || !res.length) return;
+    const l = res.filter(r => alvo(r) && aConfirmar(r) && !ehCk(r) && !enviados.current.has(r.n));
+    if (!l.length) return;
+    l.forEach(r => enviados.current.add(r.n));
+    const linhas = l.map(r => { const c = alvo(r), cm = r.cands[escolha[r.n] ?? 0], v = vendEf(r);
+      return { ...camposExact(r.ex), numero: r.n, valor: r.valor, data: r.data, ex_situacao: r.sit, ex_vendedor: r.vend, fonte: "360", tipo: origem(r) === "mkt" ? "marketing" : "consultor",
+        chamado_id: c.id, cands: r.cands.map(x => ({ id: x.c.id, cliente: x.c.cliente, como: x.como })), cliente_ref: c.cliente, como: cm?.como || "",
+        consultor_id: (R.ehDireto(c) ? c.solicitanteId : c.consultorId) || "", consultor_nome: quem(c), vendedor_id: v?.id || "" }; });
+    A.vendaConfEnviar(linhas).then(n => { if (n) toast(n + " venda(s) nova(s) na ✅ Confirmação de vendas"); }).catch(() => l.forEach(r => enviados.current.delete(r.n)));
+  }, [res, ckl]);
 
   async function marcarCk(r: Res, desfazer = false) {
     const c = alvo(r);

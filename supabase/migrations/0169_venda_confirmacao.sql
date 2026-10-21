@@ -1,0 +1,8 @@
+-- ✅ Confirmação de vendas: fila única das vendas do Exact achadas no 360 e no Minha Visita (aplicada direto no banco)
+-- tabela public.venda_confirmacao (numero pk, fonte 360|minha_visita, tipo consultor|marketing, chamado_id, cands, cliente_ref,
+--   consultor_id/nome, mv jsonb, ex_* do Exact, vendedor_id, valor, valor_exact, data, como, status pendente|validada|negada|checklist,
+--   decidido_por/em) — RLS sem políticas, só via RPC (Gestão)
+-- venda_conf_enviar(p jsonb): insere sem apagar (on conflict do nothing); pula o que já está efetivado no 360 ou marcado como checklist
+-- venda_conf_lista() · venda_conf_editar(numero, {valor|chamado_id|vendedor_id|consultor_id})
+-- venda_conf_decidir(numero, validar|negar|checklist|reabrir): validar = exact_confirmar_venda + valor + efetivada + cliente comprador;
+--   cliente do Minha Visita que não está no 360 é procurado pelo telefone e, se não achar, cadastrado no consultor (visita realizada)

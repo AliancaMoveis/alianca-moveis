@@ -1796,3 +1796,14 @@ tr.ev-nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .vc-tab{width:100%;border-collapse:collapse}.vc-tab th{text-align:left;font-size:11.5px;color:var(--ink-soft);padding:7px 8px;border-bottom:2px solid var(--line);position:sticky;top:0;background:var(--surface);white-space:nowrap}
 .vc-tab td{padding:7px 8px;font-size:13px;border-bottom:1px solid var(--line-soft);vertical-align:top}.vc-tab tr.clic:hover td{background:var(--primary-soft);cursor:pointer}
 .vc-rank,.vc-lista{padding:12px}.vc-tab td:last-child{white-space:nowrap}
+/* ✅ Confirmação de vendas */
+.cv-barra{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+.cv-tipo{display:inline-block;margin-top:4px;font-size:11px;font-weight:800;padding:2px 7px;border-radius:999px;background:var(--primary-soft);color:var(--primary)}
+.cv-tipo.marketing{background:#fdeedd;color:#9a5b12}
+.cv-valor{width:105px;font-weight:700;text-align:right;padding:5px 8px}
+.cv-acoes{display:flex;flex-direction:column;gap:5px;align-items:stretch}
+.cv-neg{color:var(--danger)}
+.cv-l.validada td{background:color-mix(in srgb,var(--st-concluida) 6%,transparent)}
+.cv-l.negada td{opacity:.65}
+.cv-l.checklist td{background:color-mix(in srgb,#6b4fbb 6%,transparent)}
+.cv-st.validada{background:var(--st-concluida);color:#fff}.cv-st.negada{color:var(--danger);border-color:var(--danger)}.cv-st.checklist{background:#6b4fbb;color:#fff}

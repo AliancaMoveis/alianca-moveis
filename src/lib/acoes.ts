@@ -205,6 +205,10 @@ export const A = {
     rpc<string>("exact_confirmar_venda", { p_id: id, p_numero: numero, p_valor: valor, p_data: data, p_vendedor: vendedor, p_situacao: situacao, p_vendedor_id: vendedorId }),
   clientePagadorSalvar: (id: string, venda: string, p: { nome: string; telefone1?: string; telefone2?: string; endereco?: string; idTatico?: string }) => rpc("cliente_pagador_salvar", { p_id: id, p_venda: venda, p }),
   exactChecklistMarcar: (numero: string, chamado: string | null, p: Record<string, any>, desfazer = false) => rpc("exact_checklist_marcar", { p_numero: numero, p_chamado: chamado, p, p_desfazer: desfazer }),
+  vendaConfEnviar: (linhas: any[]) => rpc<number>("venda_conf_enviar", { p: linhas }),
+  vendaConfLista: () => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(((window as any).__confMock || []) as any[]) : rpc<any[]>("venda_conf_lista", {}),
+  vendaConfEditar: (numero: string, p: Record<string, any>) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(null) : rpc("venda_conf_editar", { p_numero: numero, p }),
+  vendaConfDecidir: (numero: string, acao: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(acao) : rpc<string>("venda_conf_decidir", { p_numero: numero, p_acao: acao }),
   exactChecklistLista: () => rpc<any[]>("exact_checklist_lista", {}),
   cienteCancelamento: (id: string) => rpc("ciente_cancelamento", { p_id: id }),
   excluirClienteMkt: async (id: string, motivo: string) => {

@@ -6,6 +6,8 @@ import { useApp } from "../estado";
 import { Kpi } from "./Dashboard";
 import { col, fmtTel, lerArquivo, tira } from "./Medidas";
 import { cruzarVendas, tipoPlanilha, type Achado, type Linha, type ResVenda } from "../lib/cruzarVendas";
+import { A } from "../lib/acoes";
+import { acharConsultor, acharVendedorExact, camposExact } from "../lib/vendaExact";
 
 type Arq = { nome: string; linhas: Linha[] };
 type Filtro = "achados" | "telefone" | "venda" | "end_ok" | "end_sem" | "end_dif" | "nada" | "todos";
@@ -60,7 +62,7 @@ function FiltroColuna({ campo, valores, sel, setSel, fechar, pos }: { campo: Cam
 }
 
 export default function EncontrarVendas() {
-  const { toast } = useApp() as any;
+  const { toast, st, R } = useApp() as any;
   const inMv = useRef<HTMLInputElement>(null), inEx = useRef<HTMLInputElement>(null);
   const [mvs, setMvs] = useState<Arq[]>([]), [exs, setExs] = useState<Arq[]>([]);
   const [res, setRes] = useState<ResVenda[] | null>(null);
@@ -88,6 +90,15 @@ export default function EncontrarVendas() {
     const sts = Array.from(new Set(r.map(x => valorDe(x, "status"))));
     setFiltros(sts.some(ehChecklist) ? { status: new Set(sts.filter(v => !ehChecklist(v))) } : {});
     toast(`${r.filter(x => x.melhor).length} de ${r.length} vendas encontradas no Minha Visita`);
+    // o que foi achado (menos o que já é checklist no Minha Visita) vai para a fila de Confirmação de vendas
+    if (R.ehGestao()) {
+      const linhas = r.filter(x => x.melhor && !ehChecklist(col(x.melhor.mv, "Status"))).map(x => { const c = x.melhor!.mv, e = camposExact(x.ex);
+        const cons = acharConsultor(st.usuarios, consultorDe(c)), vend = acharVendedorExact(st.usuarios, e.ex_vendedor);
+        return { ...e, fonte: "minha_visita", tipo: "consultor", chamado_id: "", cliente_ref: col(c, "Nome"), como: x.melhor!.como,
+          consultor_id: cons?.id || "", consultor_nome: consultorDe(c), vendedor_id: vend?.id || "",
+          mv: { nome: col(c, "Nome"), telefone: col(c, "Celular", "Telefone", "Whatsapp"), endereco: col(c, "Endereco", "Endereço"), status: col(c, "Status") } }; }).filter(x => x.numero && x.valor > 0);
+      if (linhas.length) A.vendaConfEnviar(linhas).then(n => toast(n ? n + " venda(s) nova(s) na ✅ Confirmação de vendas" : "Essas vendas já estavam na Confirmação de vendas")).catch((e: any) => toast(e.message));
+    }
   }
 
   const passa = (x: ResVenda, menos?: Campo) => (Object.keys(filtros) as Campo[]).every(k => k === menos || !filtros[k] || filtros[k]!.has(valorDe(x, k)));
