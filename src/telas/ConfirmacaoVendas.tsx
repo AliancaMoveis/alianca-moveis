@@ -11,7 +11,7 @@ import { tira } from "./Medidas";
 type Item = {
   numero: string; fonte: string; tipo: string; chamado_id: string | null; cands: { id: string; cliente: string; como: string }[]; cliente_ref: string;
   consultor_id: string | null; consultor_nome: string; mv: any; ex_cliente: string; ex_tel1: string; ex_tel2: string; ex_end: string; ex_idpessoa?: string; ex_vendedor: string;
-  vendedor_id: string | null; ex_situacao: string; motivo?: string; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
+  vendedor_id: string | null; ex_situacao: string; motivo?: string; ex_total?: number | null; ex_recebido?: number | null; forma?: string; entrada?: number | null; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
 };
 type Aba = "pendente" | "validada" | "negada" | "checklist" | "todas";
 const ABAS: [Aba, string][] = [["pendente", "⏳ A conferir"], ["validada", "✅ Validadas"], ["negada", "❌ Negadas"], ["checklist", "📋 Checklist"], ["todas", "Todas"]];
@@ -26,6 +26,7 @@ const COMO: Record<string, [string, "ok" | "conf" | "risco", string]> = {
 };
 const comoDe = (k: string) => COMO[k] || [k || "—", "conf", ""] as [string, "conf", string];
 const brl = (n: number) => fmtMoeda(Number(n) || 0);
+const fmtN = (n: number) => (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const lerValor = (s: string) => { const n = Number(String(s).replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
 
 export default function ConfirmacaoVendas() {
@@ -36,6 +37,19 @@ export default function ConfirmacaoVendas() {
   const [q, setQ] = useState(""); const [ocup, setOcup] = useState<Record<string, boolean>>({});
   const [valEd, setValEd] = useState<Record<string, string>>({});
   const [metodo, setMetodo] = useState(""); const [sel, setSel] = useState<Record<string, boolean>>({});
+  // promissória: total da venda e quanto foi pago à vista (0 = 100% promissória)
+  const [prom, setProm] = useState<Record<string, { total: string; entrada: string }>>({});
+  const abrirProm = (x: Item) => { const tot = Number(x.ex_total) || Number(x.valor_exact) || Number(x.valor); const rec = Number(x.ex_recebido) || 0;
+    setProm(p => ({ ...p, [x.numero]: { total: fmtN(tot), entrada: fmtN(rec > 0 && rec < tot ? rec : 0) } })); };
+  async function confirmarProm(x: Item) {
+    const p = prom[x.numero]; if (!p) return; const tot = lerValor(p.total), ent = lerValor(p.entrada);
+    if (tot <= 0) { toast("Informe o total da venda"); return; } if (ent >= tot) { toast("A entrada tem que ser menor que o total"); return; }
+    setOcup(o => ({ ...o, [x.numero]: true }));
+    try { await A.vendaConfPromissoria(x.numero, tot, ent); troca(x.numero, { status: "validada", forma: ent > 0 ? "entrada" : "promissoria", entrada: ent, valor: tot, decidido_em: new Date().toISOString() });
+      setProm(q => { const n = { ...q }; delete n[x.numero]; return n; }); recarregarDepois(); }
+    catch (e: any) { toast(x.numero + ": " + (e.message || "não deu certo")); }
+    finally { setOcup(o => ({ ...o, [x.numero]: false })); }
+  }
   const tRecarga = useRef<any>(null);
 
   const ler = async () => { try { setItens(((await A.vendaConfLista()) || []) as Item[]); } catch (e: any) { toast(e.message || "Não consegui carregar a confirmação"); setItens([]); } };
@@ -129,7 +143,7 @@ export default function ConfirmacaoVendas() {
 
   return <section className="view active">
     <div className="view-head"><div><h2>✅ Confirmação de vendas</h2>
-      <p>Tudo o que o <b>Encontrar vendas</b> acha (Exact × 360 e Exact × Minha Visita) entra aqui, sem apagar o que já estava. Confira com o Exact/Tático e decida na mesma tela: <b>Validar</b> vira venda efetivada no 360 (com o vendedor e o cliente comprador do Exact), <b>Negar</b> descarta e <b>Checklist</b> guarda como pedido da fábrica (não conta como venda). O valor pode ser corrigido direto na linha.</p></div></div>
+      <p>Tudo o que o <b>Encontrar vendas</b> acha (Exact × 360 e Exact × Minha Visita) entra aqui, sem apagar o que já estava. Confira com o Exact/Tático e decida na mesma tela: <b>Validar</b> vira venda efetivada no 360 (com o vendedor e o cliente comprador do Exact), <b>Promissória</b> divide em entrada paga + promissória (ou 100% promissória — só o que foi pago conta como venda à vista), <b>Negar</b> descarta e <b>Checklist</b> guarda como pedido da fábrica (não conta como venda). O valor pode ser corrigido direto na linha.</p></div></div>
 
     <div className="kpis" style={{ margin: "6px 0 10px" }}>
       <Kpi n={pend.length} l={"A conferir · " + brl(pend.reduce((s, x) => s + Number(x.valor), 0))} cor="var(--warn)" />
@@ -208,14 +222,26 @@ export default function ConfirmacaoVendas() {
                 {pendente ? <input className="cv-valor" inputMode="decimal" value={ed !== undefined ? ed : Number(x.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   onChange={e => setValEd(v => ({ ...v, [x.numero]: e.target.value }))} onBlur={() => salvarValor(x)} onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
                   : <b>{brl(x.valor)}</b>}
-                {mudou && <div className="hint">Exact: {brl(x.valor_exact)}</div>}</td>
+                {mudou && <div className="hint">Exact: {brl(x.valor_exact)}</div>}
+                {x.forma === "entrada" && <div className="hint">à vista {brl(Number(x.entrada))} · promissória {brl(Number(x.valor) - Number(x.entrada))}</div>}
+                {Number(x.ex_total) > 0 && Number(x.ex_recebido) >= 0 && Number(x.ex_total) - Number(x.ex_recebido) > 0.5 && x.status === "pendente" && <div className="hint" style={{ color: "var(--warn)" }}>Exact: total {brl(Number(x.ex_total))} · recebido {brl(Number(x.ex_recebido))}</div>}</td>
               <td style={{ ...td, whiteSpace: "nowrap" }}>
                 {pendente ? <div className="cv-acoes">
                   <button className="btn primary sm" disabled={!!ocup[x.numero]} onClick={() => decidir(x, "validar")}>✅ Validar</button>
                   <button className="btn sm cv-neg" disabled={!!ocup[x.numero]} onClick={() => decidir(x, "negar")}>❌ Negar</button>
+                  <button className={"btn sm" + (/promiss/i.test(x.ex_situacao) ? " cv-prom-sug" : "")} disabled={!!ocup[x.numero]} title="Entrada + promissória, ou 100% promissória" onClick={() => prom[x.numero] ? setProm(q => { const n = { ...q }; delete n[x.numero]; return n; }) : abrirProm(x)}>💳 Promissória</button>
                   <button className="btn sm" disabled={!!ocup[x.numero]} title="Pedido da fábrica de um checklist finalizado — não conta como venda" onClick={() => decidir(x, "checklist")}>📋 Checklist</button>
+                  {prom[x.numero] && (() => { const p = prom[x.numero]; const tot = lerValor(p.total), ent = lerValor(p.entrada), resto = Math.max(0, tot - ent);
+                    return <div className="cv-prom">
+                      <label>Total da venda<input inputMode="decimal" value={p.total} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, total: e.target.value } }))} /></label>
+                      <label>Pago à vista (entrada)<input inputMode="decimal" value={p.entrada} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: e.target.value } }))} /></label>
+                      <div className="hint">Promissória: <b>{brl(resto)}</b>{tot > 0 ? " (" + Math.round(resto / tot * 100) + "%)" : ""}<br />{ent > 0 ? "Fica: Vendido — entrada + promissória" : "Fica: Vendido — 100% promissória (reserva)"}</div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button className="btn ghost sm" type="button" onClick={() => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: "0,00" } }))}>100%</button>
+                        <button className="btn primary sm" type="button" disabled={!!ocup[x.numero]} onClick={() => confirmarProm(x)}>✅ Confirmar</button>
+                      </div></div>; })()}
                 </div> : <div>
-                  <span className={"pill cv-st " + x.status}>{x.status === "validada" ? "✅ validada" : x.status === "negada" ? "❌ negada" : "📋 checklist"}</span>
+                  <span className={"pill cv-st " + x.status}>{x.status === "validada" ? (x.forma === "entrada" ? "✅ entrada + promissória" : x.forma === "promissoria" ? "✅ 100% promissória" : "✅ validada") : x.status === "negada" ? "❌ negada" : "📋 checklist"}</span>
                   <div className="hint">{x.decidido_em ? new Date(x.decidido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}{x.decidido_por ? " · " + R.nomeUser(x.decidido_por) : ""}</div>
                   {x.status !== "validada" && <button className="btn ghost sm" disabled={!!ocup[x.numero]} onClick={() => decidir(x, "reabrir")}>↩ voltar</button>}
                 </div>}

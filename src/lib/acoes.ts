@@ -207,6 +207,7 @@ export const A = {
   exactChecklistMarcar: (numero: string, chamado: string | null, p: Record<string, any>, desfazer = false) => rpc("exact_checklist_marcar", { p_numero: numero, p_chamado: chamado, p, p_desfazer: desfazer }),
   vendaConfEnviar: (linhas: any[]) => rpc<number>("venda_conf_enviar", { p: linhas }),
   vendaConfExcluir: (numeros: string[]) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(numeros.length) : rpc<number>("venda_conf_excluir", { p_numeros: numeros }),
+  vendaConfPromissoria: (numero: string, total: number, entrada: number) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve("ok") : rpc<string>("venda_conf_promissoria", { p_numero: numero, p_total: total, p_entrada: entrada }),
   vendaConfLista: () => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(((window as any).__confMock || []) as any[]) : rpc<any[]>("venda_conf_lista", {}),
   vendaConfEditar: (numero: string, p: Record<string, any>) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(null) : rpc("venda_conf_editar", { p_numero: numero, p }),
   vendaConfDecidir: (numero: string, acao: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(acao) : rpc<string>("venda_conf_decidir", { p_numero: numero, p_acao: acao }),

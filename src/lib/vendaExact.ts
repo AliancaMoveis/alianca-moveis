@@ -35,6 +35,7 @@ export const camposExact = (ex: Linha) => ({
   numero: String(col(ex, "ID")).replace(/\D/g, ""),
   ex_cliente: col(ex, "Cliente").trim(), ex_tel1: col(ex, "ClienteTel1").trim(), ex_tel2: col(ex, "ClienteTel2").trim(),
   ex_end: col(ex, "Orçamento").trim(), ex_idpessoa: col(ex, "IDPessoaCli").trim(), ex_vendedor: col(ex, "Vendedor").trim(),
-  ex_situacao: col(ex, "SituaçãoVenda").trim(), valor: numBr(col(ex, "ValorTotaRecebido")) || numBr(col(ex, "ValorTotal")),
+  ex_situacao: col(ex, "SituaçãoVenda").trim(), ex_total: numBr(col(ex, "ValorTotal")) || null, ex_recebido: numBr(col(ex, "ValorTotaRecebido")),
+  valor: numBr(col(ex, "ValorTotaRecebido")) || numBr(col(ex, "ValorTotal")),
   data: isoBr(col(ex, "DataSituação", "IncluidaEm")),
 });

@@ -9,3 +9,6 @@
 -- + coluna motivo (por que entrou: não lançada, a confirmar, vendedor/comprador diferente, Minha Visita)
 -- + do 360 entra mesmo o que já está efetivado, quando falta acertar vendedor/comprador; do Minha Visita, só o que não está efetivado
 -- + venda_conf_excluir(numeros[]): tira da fila (o que já foi validado continua efetivado no cliente)
+-- + colunas ex_total, ex_recebido (do Exact), forma (entrada|promissoria), entrada
+-- + venda_conf_promissoria(numero, total, entrada): valida e divide em item 'pago' (entrada, efetivada) + item 'promissoria' (resto);
+--   entrada 0 = 100% promissória → status Vendido — 100% promissória; com entrada → Vendido — entrada + promissória

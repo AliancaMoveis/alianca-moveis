@@ -1816,3 +1816,6 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .cv-ja{margin-top:4px;font-size:12px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;color:var(--ink-soft)}
 .cv-jai{display:inline-block;padding:1px 7px;border-radius:999px;background:var(--st-concluida);color:#fff;font-weight:700;font-size:11px}
 .cv-jai.registrada{background:var(--warn)}
+.cv-prom{display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);white-space:normal;width:190px}
+.cv-prom label{font-size:11.5px;color:var(--ink-soft);display:flex;flex-direction:column;gap:2px}.cv-prom input{padding:4px 6px;font-weight:700;text-align:right}
+.btn.cv-prom-sug{border-color:var(--warn);color:var(--warn);font-weight:700}
