@@ -6,3 +6,6 @@
 -- venda_conf_lista() · venda_conf_editar(numero, {valor|chamado_id|vendedor_id|consultor_id})
 -- venda_conf_decidir(numero, validar|negar|checklist|reabrir): validar = exact_confirmar_venda + valor + efetivada + cliente comprador;
 --   cliente do Minha Visita que não está no 360 é procurado pelo telefone e, se não achar, cadastrado no consultor (visita realizada)
+-- + coluna motivo (por que entrou: não lançada, a confirmar, vendedor/comprador diferente, Minha Visita)
+-- + do 360 entra mesmo o que já está efetivado, quando falta acertar vendedor/comprador; do Minha Visita, só o que não está efetivado
+-- + venda_conf_excluir(numeros[]): tira da fila (o que já foi validado continua efetivado no cliente)

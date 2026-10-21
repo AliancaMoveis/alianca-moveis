@@ -143,7 +143,8 @@ export default function EncontrarVendas360() {
     const linhas = l.map(r => { const c = alvo(r), cm = r.cands[escolha[r.n] ?? 0], v = vendEf(r);
       return { ...camposExact(r.ex), numero: r.n, valor: r.valor, data: r.data, ex_situacao: r.sit, ex_vendedor: r.vend, fonte: "360", tipo: origem(r) === "mkt" ? "marketing" : "consultor",
         chamado_id: c.id, cands: r.cands.map(x => ({ id: x.c.id, cliente: x.c.cliente, como: x.como })), cliente_ref: c.cliente, como: cm?.como || "",
-        consultor_id: (R.ehDireto(c) ? c.solicitanteId : c.consultorId) || "", consultor_nome: quem(c), vendedor_id: v?.id || "" }; });
+        consultor_id: (R.ehDireto(c) ? c.solicitanteId : c.consultorId) || "", consultor_nome: quem(c), vendedor_id: v?.id || "",
+        motivo: [estado(r) === "nova" ? "não lançada no 360" : estado(r) === "lancada" ? "lançada, a confirmar" : "", vendDif(r) ? "vendedor diferente" : "", faltaPagador(r) ? "comprador com outro nome" : ""].filter(Boolean).join(" · ") }; });
     A.vendaConfEnviar(linhas).then(n => { if (n) toast(n + " venda(s) nova(s) na ✅ Confirmação de vendas"); }).catch(() => l.forEach(r => enviados.current.delete(r.n)));
   }, [res, ckl]);
 

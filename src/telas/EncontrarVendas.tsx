@@ -95,7 +95,7 @@ export default function EncontrarVendas() {
       const linhas = r.filter(x => x.melhor && !ehChecklist(col(x.melhor.mv, "Status"))).map(x => { const c = x.melhor!.mv, e = camposExact(x.ex);
         const cons = acharConsultor(st.usuarios, consultorDe(c)), vend = acharVendedorExact(st.usuarios, e.ex_vendedor);
         return { ...e, fonte: "minha_visita", tipo: "consultor", chamado_id: "", cliente_ref: col(c, "Nome"), como: x.melhor!.como,
-          consultor_id: cons?.id || "", consultor_nome: consultorDe(c), vendedor_id: vend?.id || "",
+          consultor_id: cons?.id || "", consultor_nome: consultorDe(c), vendedor_id: vend?.id || "", motivo: "cliente do Minha Visita",
           mv: { nome: col(c, "Nome"), telefone: col(c, "Celular", "Telefone", "Whatsapp"), endereco: col(c, "Endereco", "Endereço"), status: col(c, "Status") } }; }).filter(x => x.numero && x.valor > 0);
       if (linhas.length) A.vendaConfEnviar(linhas).then(n => toast(n ? n + " venda(s) nova(s) na ✅ Confirmação de vendas" : "Essas vendas já estavam na Confirmação de vendas")).catch((e: any) => toast(e.message));
     }

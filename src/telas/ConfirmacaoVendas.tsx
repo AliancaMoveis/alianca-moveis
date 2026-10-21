@@ -11,11 +11,20 @@ import { tira } from "./Medidas";
 type Item = {
   numero: string; fonte: string; tipo: string; chamado_id: string | null; cands: { id: string; cliente: string; como: string }[]; cliente_ref: string;
   consultor_id: string | null; consultor_nome: string; mv: any; ex_cliente: string; ex_tel1: string; ex_tel2: string; ex_end: string; ex_vendedor: string;
-  vendedor_id: string | null; ex_situacao: string; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
+  vendedor_id: string | null; ex_situacao: string; motivo?: string; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
 };
 type Aba = "pendente" | "validada" | "negada" | "checklist" | "todas";
 const ABAS: [Aba, string][] = [["pendente", "⏳ A conferir"], ["validada", "✅ Validadas"], ["negada", "❌ Negadas"], ["checklist", "📋 Checklist"], ["todas", "Todas"]];
-const COMO: Record<string, string> = { venda: "nº da venda", telefone: "telefone", nome: "só o nome", end_ok: "endereço + compl.", end_sem: "endereço", end_dif: "endereço (compl. diferente)" };
+// como o cliente foi achado — telefone e nº da venda são confiáveis; endereço e nome precisam de conferência
+const COMO: Record<string, [string, "ok" | "conf" | "risco", string]> = {
+  venda: ["🧾 Nº da venda", "ok", "O nº da venda já está no cliente"],
+  telefone: ["📞 Telefone", "ok", "O telefone da venda é o mesmo do cliente"],
+  end_ok: ["🏠 Endereço + complemento", "ok", "Mesma rua, número e cidade — bloco/apto/casa também conferem"],
+  end_sem: ["🏠 Endereço sem complemento", "conf", "Mesma rua, número e cidade, mas um dos lados não tem bloco/apto/casa — confira"],
+  end_dif: ["⚠️ Endereço, complemento diferente", "risco", "Mesma rua e número, mas bloco/apto/casa diferentes — provavelmente outro morador"],
+  nome: ["👤 Só o nome", "conf", "Achado só pelo nome — confira o telefone antes de validar"],
+};
+const comoDe = (k: string) => COMO[k] || [k || "—", "conf", ""] as [string, "conf", string];
 const brl = (n: number) => fmtMoeda(Number(n) || 0);
 const lerValor = (s: string) => { const n = Number(String(s).replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
 
@@ -26,6 +35,7 @@ export default function ConfirmacaoVendas() {
   const [tipo, setTipo] = useState<"" | "consultor" | "marketing">("");
   const [q, setQ] = useState(""); const [ocup, setOcup] = useState<Record<string, boolean>>({});
   const [valEd, setValEd] = useState<Record<string, string>>({});
+  const [metodo, setMetodo] = useState(""); const [sel, setSel] = useState<Record<string, boolean>>({});
   const tRecarga = useRef<any>(null);
 
   const ler = async () => { try { setItens(((await A.vendaConfLista()) || []) as Item[]); } catch (e: any) { toast(e.message || "Não consegui carregar a confirmação"); setItens([]); } };
@@ -41,7 +51,7 @@ export default function ConfirmacaoVendas() {
   const todos = itens || [];
   const doTipo = todos.filter(x => !tipo || x.tipo === tipo);
   const busca = tira(q), dig = q.replace(/\D/g, "");
-  const lista = doTipo.filter(x => (aba === "todas" || x.status === aba)
+  const lista = doTipo.filter(x => (aba === "todas" || x.status === aba) && (!metodo || x.como === metodo)
     && (!q || tira([x.ex_cliente, x.cliente_ref, chamado(x.chamado_id)?.cliente || "", x.consultor_nome, x.ex_vendedor].join(" ")).includes(busca) || (dig.length >= 3 && (x.numero.includes(dig) || (x.ex_tel1 + x.ex_tel2).replace(/\D/g, "").includes(dig)))))
     .sort((a, b) => tira(a.ex_cliente).localeCompare(tira(b.ex_cliente)) || a.numero.localeCompare(b.numero));
   const pend = doTipo.filter(x => x.status === "pendente");
@@ -74,6 +84,19 @@ export default function ConfirmacaoVendas() {
   async function editar(x: Item, patch: any, local: Partial<Item>) {
     try { await A.vendaConfEditar(x.numero, patch); troca(x.numero, local); } catch (e: any) { toast(e.message); }
   }
+  const marcadas = lista.filter(x => sel[x.numero]);
+  async function excluir(l: Item[]) {
+    if (!l.length) return;
+    if (!confirm(`Tirar ${l.length} venda(s) da Confirmação?${l.some(x => x.status === "validada") ? "\n\nAs já validadas continuam efetivadas no cliente — só saem desta lista." : ""}`)) return;
+    try { await A.vendaConfExcluir(l.map(x => x.numero)); const s = new Set(l.map(x => x.numero)); setItens(v => (v || []).filter(x => !s.has(x.numero))); setSel({}); toast(l.length + " venda(s) tirada(s) da Confirmação"); }
+    catch (e: any) { toast(e.message); }
+  }
+  async function validarMarcadas() {
+    const l = marcadas.filter(x => x.status === "pendente"); if (!l.length) return;
+    if (!confirm(`Validar ${l.length} venda(s) marcada(s) (${brl(l.reduce((s, x) => s + Number(x.valor), 0))})?`)) return;
+    for (const x of l) await decidir(x, "validar");
+    setSel({});
+  }
   async function validarTodas() {
     const l = lista.filter(x => x.status === "pendente"); if (!l.length) return;
     if (!confirm(`Validar as ${l.length} vendas desta lista (${brl(l.reduce((s, x) => s + Number(x.valor), 0))})? Cada uma vira venda efetivada no 360.`)) return;
@@ -104,29 +127,44 @@ export default function ConfirmacaoVendas() {
       <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="🔎 cliente, nº, telefone, consultor, vendedor" style={{ marginLeft: "auto", maxWidth: 300 }} />
       {aba === "pendente" && lista.length > 0 && <button className="btn sm" onClick={validarTodas}>✅ Validar todas da lista ({lista.length})</button>}
     </div>
+    <div className="cv-barra">
+      <span className="hint">Achado por:</span>
+      <div className="chips" style={{ margin: 0 }}>
+        <button className={"chip" + (!metodo ? " on" : "")} onClick={() => setMetodo("")}>Todos</button>
+        {Object.keys(COMO).map(k => { const n = doTipo.filter(x => (aba === "todas" || x.status === aba) && x.como === k).length; if (!n) return null;
+          return <button key={k} className={"chip cv-m " + COMO[k][1] + (metodo === k ? " on" : "")} title={COMO[k][2]} onClick={() => setMetodo(metodo === k ? "" : k)}>{COMO[k][0]}<span className="n">{n}</span></button>; })}
+      </div>
+      {marcadas.length > 0 && <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+        {marcadas.some(x => x.status === "pendente") && <button className="btn primary sm" onClick={validarMarcadas}>✅ Validar marcadas ({marcadas.filter(x => x.status === "pendente").length})</button>}
+        <button className="btn sm cv-neg" onClick={() => excluir(marcadas)}>🗑 Excluir marcadas ({marcadas.length})</button>
+        <button className="btn ghost sm" onClick={() => setSel({})}>limpar</button></span>}
+    </div>
 
     {itens === null ? <div className="empty" style={{ padding: 30 }}>Carregando…</div> :
       <div className="card" style={{ padding: 0, overflow: "auto", maxHeight: "72vh" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead><tr><th style={th}>Venda (Exact)</th><th style={th}>Cliente comprador (Exact)</th><th style={th}>Cliente no 360 / Minha Visita</th><th style={th}>Consultor / Responsável</th><th style={th}>Vendedor</th><th style={th}>Valor</th><th style={th}>Decisão</th></tr></thead>
+          <thead><tr><th style={th}><input type="checkbox" style={{ width: "auto" }} checked={lista.length > 0 && lista.slice(0, 600).every(x => sel[x.numero])} onChange={e => { const n: Record<string, boolean> = {}; if (e.target.checked) lista.slice(0, 600).forEach(x => (n[x.numero] = true)); setSel(n); }} /></th><th style={th}>Venda (Exact)</th><th style={th}>Cliente comprador (Exact)</th><th style={th}>Cliente no 360 / Minha Visita</th><th style={th}>Consultor / Responsável</th><th style={th}>Vendedor</th><th style={th}>Valor</th><th style={th}>Decisão</th></tr></thead>
           <tbody>{lista.slice(0, 600).map(x => { const c = chamado(x.chamado_id); const ed = valEd[x.numero]; const mudou = Number(x.valor) !== Number(x.valor_exact);
             const pendente = x.status === "pendente"; const vend = x.vendedor_id ? R.nomeUser(x.vendedor_id) : "";
-            return <tr key={x.numero} className={"cv-l " + x.status}>
+            const cm = comoDe(x.como);
+            return <tr key={x.numero} className={"cv-l " + x.status + (sel[x.numero] ? " sel" : "")}>
+              <td style={td}><input type="checkbox" style={{ width: "auto" }} checked={!!sel[x.numero]} onChange={() => setSel(s => ({ ...s, [x.numero]: !s[x.numero] }))} /></td>
               <td style={{ ...td, whiteSpace: "nowrap" }}><b>{x.numero}</b><div className="hint">{x.data ? fmtDate(x.data) : ""}</div>
                 <div className="hint" style={{ color: /aguard|promiss/i.test(x.ex_situacao) ? "var(--warn)" : undefined }}>{x.ex_situacao}</div>
+                {x.motivo ? <div className="hint" style={{ whiteSpace: "normal", maxWidth: 150 }}>{x.motivo}</div> : null}
                 <span className={"cv-tipo " + x.tipo}>{x.tipo === "marketing" ? "🏬 Marketing" : "🧭 Consultor"}</span> <span className="hint">{x.fonte === "minha_visita" ? "Minha Visita" : "360"}</span></td>
               <td style={td}><b>{x.ex_cliente || "—"}</b><div className="hint">{[x.ex_tel1, x.ex_tel2].filter(Boolean).join(" · ")}</div><div className="hint" style={{ maxWidth: 200 }}>{x.ex_end}</div></td>
               <td style={td}>
                 {c ? <><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.id); }}><b>{c.cliente}</b></a> <span className="hint">{c.id}</span></>
                   : x.fonte === "minha_visita" ? <><b>{x.mv?.nome || x.cliente_ref}</b> <span className="pill" style={{ fontSize: 11 }}>Minha Visita</span>
-                    <div className="hint">{[x.mv?.telefone, x.mv?.status].filter(Boolean).join(" · ")}</div>{pendente && <div className="hint">ao validar, entra no 360 como cliente do consultor (visita realizada)</div>}</>
+                    <div className="hint">{[x.mv?.telefone, x.mv?.status].filter(Boolean).join(" · ")}</div>{pendente && <div className="hint">entra no 360 ao validar</div>}</>
                   : <b>{x.cliente_ref || "—"}</b>}
-                {x.como && <div className="hint">achado por {COMO[x.como] || x.como}</div>}
+                {x.como && <div><span className={"cv-como " + cm[1]} title={cm[2]}>{cm[0]}</span></div>}
                 {pendente && x.cands.length > 1 && <select style={{ fontSize: 12, marginTop: 4, maxWidth: 200 }} value={x.chamado_id || ""} onChange={e => editar(x, { chamado_id: e.target.value }, { chamado_id: e.target.value })}>
-                  {x.cands.map(k => <option key={k.id} value={k.id}>{k.cliente} ({k.id}) · {COMO[k.como] || k.como}</option>)}</select>}
+                  {x.cands.map(k => <option key={k.id} value={k.id}>{k.cliente} ({k.id}) · {comoDe(k.como)[0]}</option>)}</select>}
               </td>
               <td style={td}>{x.consultor_id ? <b>{R.nomeUser(x.consultor_id)}</b> : x.consultor_nome ? <b>{x.consultor_nome}</b> : "—"}
-                {pendente && x.fonte === "minha_visita" && !x.chamado_id && !x.consultor_id && <div><div className="hint" style={{ color: "var(--warn)" }}>consultor não achado — escolha:</div>
+                {pendente && x.fonte === "minha_visita" && !x.chamado_id && !x.consultor_id && <div><div className="hint" style={{ color: "var(--warn)" }}>escolha o consultor:</div>
                   <select style={{ fontSize: 12 }} value="" onChange={e => editar(x, { consultor_id: e.target.value }, { consultor_id: e.target.value })}><option value="">—</option>{consultores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>}</td>
               <td style={td}><div>Exact: <b>{x.ex_vendedor || "—"}</b></div>
                 {pendente ? <select style={{ fontSize: 12, width: 150, marginTop: 2 }} value={x.vendedor_id || ""} onChange={e => editar(x, { vendedor_id: e.target.value }, { vendedor_id: e.target.value || null })}>
