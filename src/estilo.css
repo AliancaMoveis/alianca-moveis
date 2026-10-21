@@ -1811,3 +1811,8 @@ tr.ev-nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .cv-como.conf{background:var(--warn)}.cv-como.risco{background:var(--danger)}
 .chip.cv-m.conf:not(.on){border-color:var(--warn)}.chip.cv-m.risco:not(.on){border-color:var(--danger)}
 .cv-l.sel td{background:var(--primary-soft)}
+.cv-grupo td{background:var(--primary-soft);padding:7px 10px;font-size:13px;border-top:2px solid var(--primary);border-bottom:1px solid var(--line-soft)}
+tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
+.cv-ja{margin-top:4px;font-size:12px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;color:var(--ink-soft)}
+.cv-jai{display:inline-block;padding:1px 7px;border-radius:999px;background:var(--st-concluida);color:#fff;font-weight:700;font-size:11px}
+.cv-jai.registrada{background:var(--warn)}
