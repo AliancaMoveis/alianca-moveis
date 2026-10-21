@@ -58,7 +58,7 @@ export function calcGeral(R: any, st: any, de: string, ate: string) {
   const visPer = ext.filter((c: any) => c.consultorId && dentro(c.dataVisita)), visFeitas = visPer.filter(feita);
   const semConsT = R.pendentesDirecionamento(), visAFazer = ext.filter((c: any) => c.setorDestino === "consultor_externo" && !feita(c));
   const visAtras = visAFazer.filter((c: any) => c.dataVisita && String(c.dataVisita).slice(0, 10) < hojeS);
-  const cancelT = ext.filter((c: any) => R.statusClienteDe(c) === "visita_cancelada");
+  const cancelT = ext.filter((c: any) => R.cancelouSemCiente(c)); // depois do "Estou ciente" sai do alerta
 
   // ----- checklist -----
   const cfgCk = cfgAgenda(st);

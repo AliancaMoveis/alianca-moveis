@@ -113,7 +113,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const visPer = ext.filter((c: any) => c.consultorId && dentro(c.dataVisita, de, ate)), visFeitas = visPer.filter(feita);
   const semConsT = R.pendentesDirecionamento(), visAFazer = ext.filter((c: any) => c.setorDestino === "consultor_externo" && !feita(c));
   const visAtras = visAFazer.filter((c: any) => c.dataVisita && String(c.dataVisita).slice(0, 10) < hojeS);
-  const cancelT = ext.filter((c: any) => R.statusClienteDe(c) === "visita_cancelada");
+  const cancelT = ext.filter((c: any) => R.cancelouSemCiente(c)); // depois do "Estou ciente" sai do alerta
   // ---------- vendas ----------
   const vendasPer = mk.filter((c: any) => vendaContaVolume(c.venda) && pagamentosVenda(c.venda).some((p: any) => dentro(p.data + "T12:00", de, ate)));
   const valorPer = vendasPer.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0);

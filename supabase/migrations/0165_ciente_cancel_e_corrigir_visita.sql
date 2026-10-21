@@ -1,0 +1,5 @@
+-- am-232
+-- Front: "Cancelou visita do consultor" sai do Direcionar consultor, das pendências e dos alertas (computador e celular)
+--        assim que alguém da coordenação marca "Estou ciente"; continua nos Clientes com o status.
+-- Banco: visita_realizada_desfazer — além da coordenação, o próprio consultor corrige a visita realizada que marcou
+--        (até 24h depois do registro e sem venda).

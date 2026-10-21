@@ -367,7 +367,7 @@ export function ResCons({ todos, noPer, P, L }: any) {
   const semData = aFazer.filter((c: any) => !c.dataVisita);
   const faltaLoja = mk.filter((c: any) => c.setorDestino === "consultor_externo" && feita(c) && !c.dataLoja);
   const semAnexo = mk.filter((c: any) => R.semAnexo(c) && !c.venda && R.emAberto(c));
-  const cancel = mk.filter((c: any) => R.statusClienteDe(c) === "visita_cancelada");
+  const cancel = mk.filter((c: any) => R.cancelouSemCiente(c)); // depois do "Estou ciente" sai do alerta
   const linhas = R.consultores().map((u: any) => {
     const v = vis.filter((c: any) => c.consultorId === u.id), f = v.filter(feita);
     const pend = aFazer.filter((c: any) => c.consultorId === u.id), at = pend.filter((c: any) => c.dataVisita && dia(c.dataVisita) < hoje);

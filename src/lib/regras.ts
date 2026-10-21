@@ -420,6 +420,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const souRespLoja = (c: Chamado) => (mySetores().includes("suporte_consultores") && !ehDireto(c)) || (temMarketing() && ehDireto(c) && !ehGerenteLoja());
   // quem entra na agenda (definir vendedor, fila, chamar): sem os que estão "fora da agenda" (ex.: freelance)
   const cienteDe = (c: Chamado, sc: string) => !!(c.tratativa && c.tratativa["ciente_" + sc] && c.tratativa["ciente_" + sc][currentUserId]);
+  // alguém da coordenação (Bruno, Haisla…) já marcou "Estou ciente": sai das listas de ação e fica só no status do cliente
+  const alguemCiente = (c: Chamado, sc: string) => !!(c.tratativa && c.tratativa["ciente_" + sc] && Object.keys(c.tratativa["ciente_" + sc]).length);
+  const cancelouSemCiente = (c: Chamado) => statusClienteDe(c) === "visita_cancelada" && !alguemCiente(c, "visita_cancelada");
   const vendAgenda = () => projetistas().filter((u: any) => u.naAgenda !== false);
   const folgaDia = (uid: string, dia: string) => folgaEm(getUser(uid), dia, (state.vendedorDias || {})[uid]);
   const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente")).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -702,7 +705,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const transferencias = state.chamados.filter(c => c.transferencia && c.transferencia.status === "pendente");
     return { vendasConfirmar, promissorias, transferencias, total: vendasConfirmar.length + promissorias.length + transferencias.length };
   }
-  const pendentesDirecionamento = () => state.chamados.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c));
+  // cancelou a visita e alguém já está ciente: não polui o "Direcionar consultor" (fica nos Clientes com o status "Cancelou visita do consultor")
+  const pendentesDirecionamento = () => state.chamados.filter(c => domMarketing(c) && c.setorDestino === "marketing_supervisao" && podeVer(c) && !(statusClienteDe(c) === "visita_cancelada" && alguemCiente(c, "visita_cancelada")));
 
   function minhasPendencias() {
     const eu = currentUserId; const G: any[] = [];
@@ -738,7 +742,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
       add("aptransf", "Transferências a decidir", "Pedidos entre vendedores aguardando sua aprovação.", p.transferencias.filter(c => c.transferencia.para !== eu), "var(--primary)");
     }
     // cliente cancelou a visita do consultor: a Supervisão do Marketing acompanha (reagenda, redireciona ou encerra)
-    if (mySetores().includes("marketing_supervisao") || (ehGestao() && !ehProprietario())) add("visitacanc", "Cancelaram a visita do consultor", "Voltaram para direcionar de novo (Direcionar consultor). Clique em “Estou ciente” depois de ver.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "visita_cancelada" && !cienteDe(c, "visita_cancelada")), "var(--danger)");
+    if (mySetores().includes("marketing_supervisao") || (ehGestao() && !ehProprietario())) add("visitacanc", "Cancelaram a visita do consultor", "Voltaram para direcionar de novo (Direcionar consultor). Clique em “Estou ciente” depois de ver.", ch.filter(c => domMarketing(c) && podeVer(c) && cancelouSemCiente(c)), "var(--danger)");
     if (mySetores().includes("marketing_supervisao") || (ehGestao() && !ehProprietario())) add("lojacanc", "Cancelaram a visita na loja", "O cliente cancelou a vinda à loja. Clique em “Estou ciente” depois de ver.", ch.filter(c => domMarketing(c) && podeVer(c) && statusClienteDe(c) === "loja_cancelada" && !cienteDe(c, "loja_cancelada") && recente(c)), "var(--warn)");
     // confirmação da vinda na loja (hoje e amanhã): a Supervisão/Suporte acompanham todos; vendedor, consultor e marketing os seus
     { const am = new Date(); am.setDate(am.getDate() + 1); const h0 = hojeISO(), h1 = isoLocal(am).slice(0, 10);
@@ -909,7 +913,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
     msgWhatsMedida, ehDireto, ehPorta, temPresenca, veAnuncios, veQualidade, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
-    podeChecklist, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
+    podeChecklist, alguemCiente, cancelouSemCiente, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };
 }
 export type Regras = ReturnType<typeof criarRegras>;

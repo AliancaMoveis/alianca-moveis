@@ -118,10 +118,12 @@ export function VisitaRealizada({ c, movel }: { c: any; movel?: boolean }) {
   if (!R.domMarketing(c) || !c.consultorId) return null;
   const t = c.tratativa || {}; const eu = R.currentUserId;
   const gere = R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
+  // o próprio consultor corrige o que marcou sem querer: até 24h depois e sem venda (o banco confere)
+  const proprio = c.consultorId === eu && t.visitaRealizadaPorId === eu && !c.venda && t.visitaRealizadaEm && Date.now() - +new Date(t.visitaRealizadaEm) < 864e5;
   if (t.realizada) return <div className={"vr-card ok mini" + (movel ? " movel" : "")}>
     <div className="vr-ic">✅</div>
     <div className="vr-tx"><b>VISITA REALIZADA</b><small>{t.visitaRealizadaEm ? fmtDateTime(t.visitaRealizadaEm) + (t.visitaRealizadaPor ? " · registrada por " + t.visitaRealizadaPor : "") : "registrada"}{t.visitaRealizadaObs ? " · " + t.visitaRealizadaObs : ""}</small></div>
-    {gere && <button type="button" className="vr-desf" onClick={() => { const m = prompt("Motivo para desfazer a visita realizada de " + c.cliente + ":"); if (m && m.trim().length >= 3 && confirm("Desfazer a visita realizada? Ela deixa de contar para o pagamento do consultor.")) ex(() => A.visitaRealizadaDesfazer(c.id, m.trim()), "Visita realizada desfeita"); else if (m !== null) toast("Escreva o motivo"); }}>Desfazer</button>}
+    {(gere || proprio) && <button type="button" className="vr-desf" title="Marcou sem querer? Volta o cliente para “Direcionado ao consultor”" onClick={() => { const m = prompt("Corrigir o status de " + c.cliente + "\n\nPor que não foi visita realizada? (ex.: marquei sem querer, era só contato feito)", gere ? "" : "Marquei sem querer — era contato feito"); if (m && m.trim().length >= 3 && confirm("Desfazer a visita realizada? O cliente volta para “Direcionado ao consultor” e a visita deixa de contar para o pagamento.")) ex(() => A.visitaRealizadaDesfazer(c.id, m.trim()), "Status corrigido — visita realizada desfeita"); else if (m !== null) toast("Escreva o motivo"); }}>↩ Corrigir status</button>}
   </div>;
   // não realizada: sem botão grande — o consultor marca no passo "2 · Visita realizada" ou no menu "Mudar status do cliente"
   return null;
