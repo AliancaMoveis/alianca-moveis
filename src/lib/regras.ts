@@ -92,8 +92,12 @@ export const PV_SITUACAO: Record<string, string> = {
   parado: "🚨 Parado na obra — não consegue continuar", peca_faltante: "Peça faltante", peca_defeito: "Peça com defeito / avariada",
   medida: "Medida não confere", duvida_projeto: "Dúvida de projeto", local: "Problema no local (obra, elétrica, hidráulica)", outro: "Outro",
 };
+/** texto para o WhatsApp sem emojis: em alguns celulares/computadores o emoji que vai pelo link chega como "�" para o cliente */
+export const semEmoji = (t: string) => String(t || "").replace(/[\u{1F000}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}][\u{FE0F}\u{200D}\u{1F3FB}-\u{1F3FF}]* ?/gu, "").replace(/[\u{FE0F}\u{200D}]/gu, "").replace(/[ \t]+\n/g, "\n").replace(/[ \t]+$/g, "");
+/** link do WhatsApp com o texto já pronto (sem emojis) */
+export const waTexto = (numero: string, texto = "") => "https://wa.me/" + numero + (texto ? "?text=" + encodeURIComponent(semEmoji(texto)) : "");
 /** link do WhatsApp: número com DDD (sem 55 → acrescenta) */
-export const linkWhats = (tel: string, texto = "") => { let d = String(tel || "").replace(/\D/g, ""); if (d.length < 10) return ""; if (!d.startsWith("55") || d.length <= 11) d = "55" + d; return "https://wa.me/" + d + (texto ? "?text=" + encodeURIComponent(texto) : ""); };
+export const linkWhats = (tel: string, texto = "") => { let d = String(tel || "").replace(/\D/g, ""); if (d.length < 10) return ""; if (!d.startsWith("55") || d.length <= 11) d = "55" + d; return waTexto(d, texto); };
 export const PV_ENCAMINHAR: Record<string, string> = { vistoria: "Solicitar vistoria", assistencia: "Solicitar assistência (peça + montador)", montagem: "Nova montagem / retorno do montador", medidas: "Conferir medidas", checklist: "Revisar projeto (checklist)", prazo_fabrica: "Cobrar fábrica (prazo)" };
 export const corDoSetor = (id: string) => COR_SETOR[id] || "#8b94a3";
 // conta como venda: o que já foi pago e efetivado (100% promissória ainda não pago não conta; entrada + promissória conta a parte paga)
@@ -610,7 +614,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     L.push(""); L.push(`Assunto (${tipoNome(c.tipo)}): ${c.motivo}`); L.push(""); L.push("Poderia nos passar uma previsão atualizada? Obrigado!");
     return L.join("\n");
   }
-  function waLink(c: Chamado) { const rep = getRep(c); if (!rep) return ""; const n = sanitizeWhats(rep.whats); return n ? `https://wa.me/${n}?text=${encodeURIComponent(msgWhats(c))}` : ""; }
+  function waLink(c: Chamado) { const rep = getRep(c); if (!rep) return ""; const n = sanitizeWhats(rep.whats); return n ? waTexto(n, msgWhats(c)) : ""; }
   const dh = (v: any) => fmtDiaHora(v).replace(", ", " às ");
   // nome do cliente como se fala (RAMON → Ramon)
   const nomeCli = (n: string) => { const p = String(n || "").trim().split(/\s+/)[0] || ""; return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : ""; };
@@ -623,16 +627,16 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const u = me(); const L: string[] = [];
     const nome = nomeCli(c.cliente), proj = c.produto ? " do seu projeto de " + String(c.produto).trim().toLowerCase() : " do seu projeto";
     L.push(`Olá${nome ? ", " + nome : ""}! Tudo bem?`); L.push("");
-    L.push(`Meu nome é ${nomeNatural(u ? u.nome : "")}, sou da equipe de consultores da Aliança Móveis e estou passando para dizer que está tudo certo para a nossa visita${proj}! 😊`); L.push("");
-    if (c.dataVisita) L.push(`📅 ${diaHoraCli(c.dataVisita)}`);
+    L.push(`Meu nome é ${nomeNatural(u ? u.nome : "")}, sou da equipe de consultores da Aliança Móveis. Está tudo certo para a nossa visita${proj}!`); L.push("");
+    if (c.dataVisita) L.push(`*Data:* ${diaHoraCli(c.dataVisita)}`);
     const e = endCli(c);
     if (e) {
-      L.push(`📍 *${e}*`); L.push("");
-      L.push("Só me confirma se o endereço está certinho, com o bairro e a cidade? Se tiver complemento ou ponto de referência, me avise também.");
-    } else { if (c.dataVisita) L.push(""); L.push("📍 Me passa o endereço completo da visita, com rua, número, bairro e cidade?"); }
+      L.push(`*Endereço:* ${e}`); L.push("");
+      L.push("Pode me confirmar se o endereço está correto, com o bairro e a cidade? Se tiver complemento ou ponto de referência, me avise também.");
+    } else { if (c.dataVisita) L.push(""); L.push("Pode me passar o endereço completo da visita, com rua, número, bairro e cidade?"); }
     L.push("");
     L.push("Na visita, vou conhecer os ambientes, tirar as medidas e entender o que você imagina para o projeto. Se tiver fotos, plantas ou referências de que gostou, pode separar que ajuda bastante."); L.push("");
-    L.push(c.dataVisita ? "Posso confirmar a nossa visita? 😊" : "Qual o melhor dia e horário para eu passar aí? 😊");
+    L.push(c.dataVisita ? "Posso confirmar a nossa visita?" : "Qual o melhor dia e horário para eu passar aí?");
     return L.join("\n");
   }
   // Setor de Medidas: ordem de medição direcionada ao consultor/medidor — sem horário: o cliente diz o melhor dia
@@ -642,8 +646,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     L.push(`Olá${nome ? ", " + nome : ""}! Tudo bem?`); L.push("");
     L.push(`Meu nome é ${nomeNatural(u ? u.nome : "")}, sou da equipe de consultores da Aliança Móveis e estarei com você na visita de medição técnica dos seus móveis.`); L.push("");
     const e = endCli(c);
-    if (e) { L.push(`📍 Endereço: *${e}*`); L.push("Pode me confirmar se está certo, com o bairro e a cidade? Se tiver complemento (apto, bloco, casa dos fundos) ou um ponto de referência, me avise também."); }
-    else L.push("📍 Pode me passar o endereço completo, com rua, número, bairro e cidade?");
+    if (e) { L.push(`*Endereço:* ${e}`); L.push("Pode me confirmar se está certo, com o bairro e a cidade? Se tiver complemento (apto, bloco, casa dos fundos) ou um ponto de referência, me avise também."); }
+    else L.push("Pode me passar o endereço completo, com rua, número, bairro e cidade?");
     // com data marcada: propõe o dia/horário e deixa o cliente ajustar; sem data: pergunta o melhor dia
     const dm = String(c.dataMedida || "").replace(" ", "T");
     if (dm.length >= 16) {
@@ -651,14 +655,14 @@ export function criarRegras(state: Estado, currentUserId: string) {
       const DS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
       const quando = dia === hj ? "hoje" : dia === am ? "amanhã" : DS[parseData(dia + "T12:00").getDay()] + " (" + dia.slice(8, 10) + "/" + dia.slice(5, 7) + ")";
       const hh = Number(dm.slice(11, 13)), mm = dm.slice(14, 16);
-      L.push(""); L.push(`⏰ Horário: consigo passar ${quando} às ${hh}h${mm !== "00" ? mm : ""}. Caso não seja possível, me avise outro dia ou horário que ajusto na minha rota.`); L.push("");
-    } else { L.push(""); L.push("⏰ Qual o melhor dia e horário para fazermos a medição?"); L.push(""); }
+      L.push(""); L.push(`*Horário:* consigo passar ${quando} às ${hh}h${mm !== "00" ? mm : ""}. Caso não seja possível, me avise outro dia ou horário que ajusto na minha rota.`); L.push("");
+    } else { L.push(""); L.push("Qual o melhor dia e horário para fazermos a medição?"); L.push(""); }
     const amb = String(c.produto || "").split(/\s*(?:,|;|\+|\/|\s+e\s+)\s*/i).map(x => x.trim()).filter(Boolean).map(x => x.charAt(0).toUpperCase() + x.slice(1));
     if (amb.length) { L.push(`Nesta visita, iremos medir ${amb.length} ambiente${amb.length === 1 ? "" : "s"}, ${amb.length === 1 ? "sendo ele" : "sendo eles"}:`); amb.forEach(a => L.push("• " + a)); }
     else L.push("Nesta visita, iremos medir os ambientes do seu projeto.");
     L.push(""); L.push("Peço, se possível, que os ambientes estejam livres e acessíveis para uma medição tranquila."); L.push("");
-    L.push("👉 Caso o imóvel ainda esteja em obra (piso, gesso ou revestimentos pendentes), me avise a previsão de término para evitarmos interferências na fabricação."); L.push("");
-    L.push("Fico no aguardo para agendarmos! 😌");
+    L.push("*Importante:* caso o imóvel ainda esteja em obra (piso, gesso ou revestimentos pendentes), me avise a previsão de término para evitarmos interferências na fabricação."); L.push("");
+    L.push("Fico no aguardo para agendarmos!");
     return L.join("\n");
   }
   function msgWhatsProjetista(c: Chamado) {
@@ -700,7 +704,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     else if (souProjetista || (!souConsultor && c.dataLoja && ["agendado_loja", "com_vendedor"].includes(statusClienteDe(c)))) msg = msgWhatsProjetista(c);
     else if (souConsultor || c.dataVisita) msg = msgWhatsConsultor(c);
     else msg = msgWhatsGenerica(c);
-    return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
+    return waTexto(n, msg);
   }
   // endereço para o Maps sem telefone no meio (às vezes o telefone foi digitado junto com o endereço)
   const mapsLink = (c: Chamado) => { const e = enderecoSemTelefone(c.endereco || ""); return e ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e)}` : ""; };

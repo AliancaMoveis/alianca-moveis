@@ -1648,7 +1648,7 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 :root[data-theme="dark"] .an-aviso{background:#2e2610;border-color:#8a6a1a;color:#f0d27a}:root[data-theme="dark"] .an-aviso b{color:#ffe59a}
 :root[data-theme="dark"] .cv-freela{background:#2c2346;color:#c9b4ff}
 /* ---------- ⭐ Pesquisa de satisfação (página do cliente, sempre clara) ---------- */
-.av{min-height:100vh;background:#f6f3ea;color:#1c2620;color-scheme:light;display:flex;flex-direction:column}
+.av-pg{min-height:100vh;background:#f6f3ea;color:#1c2620;color-scheme:light;display:flex;flex-direction:column}
 .av-top{background:#0e4d33;padding:22px 20px 26px;display:flex;flex-direction:column;gap:12px}
 .av-top>.av-marca{display:flex;align-items:center;gap:10px}.av-marca b{color:#f3dfa6;font-size:15px;letter-spacing:.3px}
 .av-logo{width:46px;height:30px;border-radius:50%;border:2px solid #c9a04a;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:8px;color:#f3dfa6}

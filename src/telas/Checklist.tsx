@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { agendaPlanilha, dataPlanilha, lerXlsx } from "../lib/planilha";
-import { fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
+import { fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats, waTexto } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
 import { SeloMedidaVenda } from "./Medidas";
@@ -1382,7 +1382,7 @@ export function ModalWhats({ c, inicial }: any) {
       else if (tipo === "cobranca") await A.checklistRegistrar(c.id, { acao: "cobranca", texto });
       else if (tipo === "confirmacao" && e === "agendado") await A.checklistRegistrar(c.id, k.confirmacao === "confirmada" ? { acao: "nota", texto } : { acao: "confirmacao_enviada", texto });
     } catch (x: any) { toast(x.message); return; }
-    window.open(`https://wa.me/${n}?text=${encodeURIComponent(texto)}`, "_blank");
+    window.open(waTexto(n, texto), "_blank");
     await recarregar(); fechar(); toast(tipo === "confirmacao" ? (k.confirmacao === "confirmada" ? "WhatsApp aberto — mensagem salva no cliente" : "Confirmação enviada — cliente em “Aguardando confirmação de presença”") : "Contato registrado — quando o cliente responder, registre o resultado");
   }
   return (
