@@ -138,8 +138,8 @@ export default function ConfirmacaoVendas() {
     for (const x of l) await decidir(x, "validar");
   }
 
-  const th: React.CSSProperties = { textAlign: "left", padding: "8px", fontSize: 12, color: "var(--ink-soft)", borderBottom: "2px solid var(--line)", whiteSpace: "nowrap", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 };
-  const td: React.CSSProperties = { padding: "8px", fontSize: 13, borderBottom: "1px solid var(--line-soft)", verticalAlign: "top" };
+  const th: React.CSSProperties = { textAlign: "left", padding: "8px 6px", fontSize: 12, color: "var(--ink-soft)", borderBottom: "2px solid var(--line)", whiteSpace: "normal", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 };
+  const td: React.CSSProperties = { padding: "7px 6px", overflowWrap: "anywhere", fontSize: 13, borderBottom: "1px solid var(--line-soft)", verticalAlign: "top" };
 
   return <section className="view active">
     <div className="view-head"><div><h2>✅ Confirmação de vendas</h2>
@@ -178,7 +178,8 @@ export default function ConfirmacaoVendas() {
 
     {itens === null ? <div className="empty" style={{ padding: 30 }}>Carregando…</div> :
       <div className="card" style={{ padding: 0, overflow: "auto", maxHeight: "72vh" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: 980 }}>
+          <colgroup><col style={{ width: 28 }} /><col style={{ width: "12%" }} /><col style={{ width: "17%" }} /><col style={{ width: "17%" }} /><col style={{ width: "11%" }} /><col style={{ width: "14%" }} /><col style={{ width: 130 }} /><col style={{ width: 130 }} /></colgroup>
           <thead><tr><th style={th}><input type="checkbox" style={{ width: "auto" }} checked={lista.length > 0 && lista.every(x => sel[x.numero])} onChange={e => { const n: Record<string, boolean> = {}; if (e.target.checked) lista.forEach(x => (n[x.numero] = true)); setSel(n); }} /></th><th style={th}>Venda (Exact)</th><th style={th}>Cliente comprador (Exact)</th><th style={th}>Cliente no 360 / Minha Visita</th><th style={th}>Consultor / Responsável</th><th style={th}>Vendedor</th><th style={th}>Valor</th><th style={th}>Decisão</th></tr></thead>
           <tbody>{grupos.map(g => { const c0 = cli360(g.l[0]); const ja = vendas360(c0); const pg = g.l.filter(x => x.status === "pendente");
             const cab = g.l.length > 1 || ja.length > 0;
@@ -194,14 +195,14 @@ export default function ConfirmacaoVendas() {
             const pendente = x.status === "pendente"; const vend = x.vendedor_id ? R.nomeUser(x.vendedor_id) : "";
             const cm = comoDe(x.como);
             const provavel = !c ? cli360(x) : null;
-            return <tr key={x.numero} className={"cv-l " + x.status + (sel[x.numero] ? " sel" : "") + (cab ? " nog" : "")}>
+            return <Fragment key={x.numero}><tr className={"cv-l " + x.status + (sel[x.numero] ? " sel" : "") + (cab ? " nog" : "")}>
               <td style={td}><input type="checkbox" style={{ width: "auto" }} checked={!!sel[x.numero]} onChange={() => setSel(s => ({ ...s, [x.numero]: !s[x.numero] }))} /></td>
-              <td style={{ ...td, whiteSpace: "nowrap" }}><b>{x.numero}</b><div className="hint">{x.data ? fmtDate(x.data) : ""}</div>
+              <td style={td}><b>{x.numero}</b><div className="hint">{x.data ? fmtDate(x.data) : ""}</div>
                 <div className="hint" style={{ color: /aguard|promiss/i.test(x.ex_situacao) ? "var(--warn)" : undefined }}>{x.ex_situacao}</div>
-                {x.motivo ? <div className="hint" style={{ whiteSpace: "normal", maxWidth: 150 }}>{x.motivo}</div> : null}
+                {x.motivo ? <div className="hint" style={{ whiteSpace: "normal", maxWidth: 120 }}>{x.motivo}</div> : null}
                 <span className={"cv-tipo " + x.tipo}>{x.tipo === "marketing" ? "🏬 Marketing" : "🧭 Consultor"}</span> <span className="hint">{x.fonte === "minha_visita" ? "Minha Visita" : "360"}</span></td>
-              <td style={td}><b>{x.ex_cliente || "—"}</b><div className="hint">{[x.ex_tel1, x.ex_tel2].filter(Boolean).join(" · ")}</div><div className="hint" style={{ maxWidth: 200 }}>{x.ex_end}</div></td>
-              <td style={td}>
+              <td style={{ ...td, maxWidth: 210 }}><b>{x.ex_cliente || "—"}</b><div className="hint">{[x.ex_tel1, x.ex_tel2].filter(Boolean).join(" · ")}</div><div className="hint" style={{ maxWidth: 190 }}>{x.ex_end}</div></td>
+              <td style={{ ...td, maxWidth: 190 }}>
                 {c ? <><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.id); }}><b>{c.cliente}</b></a> <span className="hint">{c.id}</span></>
                   : x.fonte === "minha_visita" ? <><b>{x.mv?.nome || x.cliente_ref}</b> <span className="pill" style={{ fontSize: 11 }}>Minha Visita</span>
                     <div className="hint">{[x.mv?.telefone, x.mv?.status].filter(Boolean).join(" · ")}</div>{pendente && <div className="hint">entra no 360 ao validar</div>}</>
@@ -212,42 +213,44 @@ export default function ConfirmacaoVendas() {
                 {pendente && x.cands.length > 1 && <select style={{ fontSize: 12, marginTop: 4, maxWidth: 200 }} value={x.chamado_id || ""} onChange={e => editar(x, { chamado_id: e.target.value }, { chamado_id: e.target.value })}>
                   {x.cands.map(k => <option key={k.id} value={k.id}>{k.cliente} ({k.id}) · {comoDe(k.como)[0]}</option>)}</select>}
               </td>
-              <td style={td}>{x.consultor_id ? <b>{R.nomeUser(x.consultor_id)}</b> : x.consultor_nome ? <b>{x.consultor_nome}</b> : "—"}
+              <td style={{ ...td, maxWidth: 120 }}>{x.consultor_id ? <b>{R.nomeUser(x.consultor_id)}</b> : x.consultor_nome ? <b>{x.consultor_nome}</b> : "—"}
                 {pendente && x.fonte === "minha_visita" && !x.chamado_id && !x.consultor_id && <div><div className="hint" style={{ color: "var(--warn)" }}>escolha o consultor:</div>
                   <select style={{ fontSize: 12 }} value="" onChange={e => editar(x, { consultor_id: e.target.value }, { consultor_id: e.target.value })}><option value="">—</option>{consultores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>}</td>
-              <td style={td}><div>Exact: <b>{x.ex_vendedor || "—"}</b></div>
-                {pendente ? <select style={{ fontSize: 12, width: 150, marginTop: 2 }} value={x.vendedor_id || ""} onChange={e => editar(x, { vendedor_id: e.target.value }, { vendedor_id: e.target.value || null })}>
+              <td style={{ ...td, maxWidth: 150 }}><div>Exact: <b>{x.ex_vendedor || "—"}</b></div>
+                {pendente ? <select style={{ fontSize: 12, width: "100%", marginTop: 2 }} value={x.vendedor_id || ""} onChange={e => editar(x, { vendedor_id: e.target.value }, { vendedor_id: e.target.value || null })}>
                   <option value="">{c?.atendenteId ? "manter " + R.nomeUser(c.atendenteId) : "sem vendedor"}</option>{vendedores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>
                   : <div className="hint">360: {vend || (c?.atendenteId ? R.nomeUser(c.atendenteId) : "—")}</div>}</td>
-              <td style={{ ...td, whiteSpace: "nowrap" }}>
+              <td style={{ ...td, width: 130, minWidth: 130 }}>
                 {pendente ? <input className="cv-valor" inputMode="decimal" value={ed !== undefined ? ed : Number(x.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   onChange={e => setValEd(v => ({ ...v, [x.numero]: e.target.value }))} onBlur={() => salvarValor(x)} onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
                   : <b>{brl(x.valor)}</b>}
                 {mudou && <div className="hint">Exact: {brl(x.valor_exact)}</div>}
                 {x.forma === "entrada" && <div className="hint">à vista {brl(Number(x.entrada))} · promissória {brl(Number(x.valor) - Number(x.entrada))}</div>}
-                {Number(x.ex_total) > 0 && Number(x.ex_recebido) >= 0 && Number(x.ex_total) - Number(x.ex_recebido) > 0.5 && x.status === "pendente" && <div className="hint" style={{ color: "var(--warn)" }}>Exact: total {brl(Number(x.ex_total))} · recebido {brl(Number(x.ex_recebido))}</div>}</td>
+                {Number(x.ex_total) > 0 && Number(x.ex_recebido) >= 0 && Number(x.ex_total) - Number(x.ex_recebido) > 0.5 && x.status === "pendente" && <div className="hint" style={{ color: "var(--warn)" }}>Exact: total {brl(Number(x.ex_total))}<br />recebido {brl(Number(x.ex_recebido))}</div>}</td>
               <td style={{ ...td, whiteSpace: "nowrap" }}>
                 {pendente ? <div className="cv-acoes">
                   <button className="btn primary sm" disabled={!!ocup[x.numero]} onClick={() => decidir(x, "validar")}>✅ Validar</button>
                   <button className="btn sm cv-neg" disabled={!!ocup[x.numero]} onClick={() => decidir(x, "negar")}>❌ Negar</button>
                   <button className={"btn sm" + (/promiss/i.test(x.ex_situacao) ? " cv-prom-sug" : "")} disabled={!!ocup[x.numero]} title="Entrada + promissória, ou 100% promissória" onClick={() => prom[x.numero] ? setProm(q => { const n = { ...q }; delete n[x.numero]; return n; }) : abrirProm(x)}>💳 Promissória</button>
                   <button className="btn sm" disabled={!!ocup[x.numero]} title="Pedido da fábrica de um checklist finalizado — não conta como venda" onClick={() => decidir(x, "checklist")}>📋 Checklist</button>
-                  {prom[x.numero] && (() => { const p = prom[x.numero]; const tot = lerValor(p.total), ent = lerValor(p.entrada), resto = Math.max(0, tot - ent);
-                    return <div className="cv-prom">
-                      <label>Total da venda<input inputMode="decimal" value={p.total} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, total: e.target.value } }))} /></label>
-                      <label>Pago à vista (entrada)<input inputMode="decimal" value={p.entrada} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: e.target.value } }))} /></label>
-                      <div className="hint">Promissória: <b>{brl(resto)}</b>{tot > 0 ? " (" + Math.round(resto / tot * 100) + "%)" : ""}<br />{ent > 0 ? "Fica: Vendido — entrada + promissória" : "Fica: Vendido — 100% promissória (reserva)"}</div>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button className="btn ghost sm" type="button" onClick={() => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: "0,00" } }))}>100%</button>
-                        <button className="btn primary sm" type="button" disabled={!!ocup[x.numero]} onClick={() => confirmarProm(x)}>✅ Confirmar</button>
-                      </div></div>; })()}
                 </div> : <div>
                   <span className={"pill cv-st " + x.status}>{x.status === "validada" ? (x.forma === "entrada" ? "✅ entrada + promissória" : x.forma === "promissoria" ? "✅ 100% promissória" : "✅ validada") : x.status === "negada" ? "❌ negada" : "📋 checklist"}</span>
                   <div className="hint">{x.decidido_em ? new Date(x.decidido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}{x.decidido_por ? " · " + R.nomeUser(x.decidido_por) : ""}</div>
                   {x.status !== "validada" && <button className="btn ghost sm" disabled={!!ocup[x.numero]} onClick={() => decidir(x, "reabrir")}>↩ voltar</button>}
                 </div>}
               </td>
-            </tr>; })}
+            </tr>
+            {prom[x.numero] && (() => { const p = prom[x.numero]; const tot = lerValor(p.total), ent = lerValor(p.entrada), resto = Math.max(0, tot - ent);
+              return <tr className="cv-prom-row"><td colSpan={8}><div className="cv-prom">
+                <b>💳 Promissória · venda {x.numero}</b>
+                <label>Total da venda<input inputMode="decimal" value={p.total} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, total: e.target.value } }))} /></label>
+                <label>Pago à vista (entrada)<input inputMode="decimal" value={p.entrada} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: e.target.value } }))} /></label>
+                <button className="btn ghost sm" type="button" onClick={() => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: "0,00" } }))}>100% promissória</button>
+                <div className="cv-prom-res">Promissória: <b>{brl(resto)}</b>{tot > 0 ? " (" + Math.round(resto / tot * 100) + "%)" : ""}<br /><span className="hint">{ent > 0 ? "Fica: Vendido — entrada + promissória" : "Fica: Vendido — 100% promissória (reserva)"}</span></div>
+                <button className="btn primary sm" type="button" disabled={!!ocup[x.numero]} onClick={() => confirmarProm(x)}>✅ Confirmar promissória</button>
+                <button className="btn ghost sm" type="button" onClick={() => setProm(q => { const n = { ...q }; delete n[x.numero]; return n; })}>cancelar</button>
+              </div></td></tr>; })()}
+            </Fragment>; })}
             </Fragment>; })}</tbody>
         </table>
         {!lista.length && <div className="empty" style={{ padding: 24 }}>{aba === "pendente" ? "Nada para conferir. Anexe o relatório do Exact em Encontrar vendas do 360 ou da Minha Visita — o que for achado aparece aqui." : "Nenhuma venda aqui."}</div>}
