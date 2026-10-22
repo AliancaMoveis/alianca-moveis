@@ -498,7 +498,7 @@ const CORES_PROJ = ["#2f6fd6", "#c2410c", "#0f8a5f", "#8b3fd1", "#b8860b", "#d63
 export const cfgAgenda = (st: any) => ({ ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) });
 let _projs: string[] = AGENDA_PADRAO.projetistas;
 // cor fixa de cada projetista (não muda quando a ordem das colunas muda)
-const COR_FIXA: Record<string, string> = { Angela: "#2f6fd6", Cleberson: "#c2410c", Eduardo: "#0f8a5f", Giovanni: "#8b3fd1", Gislaine: "#b8860b", Juliana: "#d6336c", Rafael: "#0e7490", Silvane: "#4d5b7c" };
+const COR_FIXA: Record<string, string> = { Angela: "#2f6fd6", Cleberson: "#c2410c", Eduardo: "#0f8a5f", Giovanni: "#8b3fd1", Gislaine: "#b8860b", Juliana: "#d6336c", Rafael: "#0e7490", Silvane: "#4d5b7c", Wagner: "#7c2d12" };
 export const corProj = (n?: string) => (n ? COR_FIXA[n] || CORES_PROJ[Math.max(0, _projs.indexOf(n)) % CORES_PROJ.length] : "var(--ink-faint)");
 const isoDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 /** quem está ocupado: agendados (com ou sem projetista) + datas oferecidas que ainda esperam o cliente (reservam o projetista por alguns dias) */
@@ -576,11 +576,16 @@ export const diasOk = (cfg: any, proj: string, dia: string) => { const d = diasD
 const NOMES_DIA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 export const rotuloDias = (cfg: any, proj: string) => { const d = diasDe(cfg, proj); if (!d) return ""; const n = [...d].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(x => NOMES_DIA[x]);
   return `${proj} faz checklist só ${n.length > 1 ? n.slice(0, -1).join(", ") + " e " + n[n.length - 1] : n[0]}`; };
-export const atendeNoDia = (cfg: any, proj: string, dia: string) => diasOk(cfg, proj, dia) && (periodoDe(cfg, proj) ? periodoOk(cfg, proj, dia) : cfg.dias.includes(parseData(dia + "T12:00").getDay()));
+/** projetista novo: só entra na agenda a partir de uma data (config.inicioProjetista = { nome: "AAAA-MM-DD" }), ex.: Wagner a partir de 26/10 */
+export const inicioOk = (cfg: any, proj: string, dia: string) => { const d = (cfg.inicioProjetista || {})[proj]; return !d || dia >= d; };
+/** quem trabalha no feriado: o feriado "de todos" não fecha a agenda dele (config.trabalhaFeriado = [nomes]) */
+export const trabalhaFeriado = (cfg: any, proj: string) => !!proj && (cfg.trabalhaFeriado || []).includes(proj);
+export const atendeNoDia = (cfg: any, proj: string, dia: string) => inicioOk(cfg, proj, dia) && diasOk(cfg, proj, dia) && (periodoDe(cfg, proj) ? periodoOk(cfg, proj, dia) : cfg.dias.includes(parseData(dia + "T12:00").getDay()));
 export const diaComAgenda = (cfg: any, dia: string) => cfg.projetistas.some((n: string) => atendeNoDia(cfg, n, dia));
 export const rotuloPeriodo = (cfg: any, proj: string) => { const p = periodoDe(cfg, proj); return p ? `${proj} atende só de ${fmtDate(p.de).slice(0, 5)} a ${fmtDate(p.ate).slice(0, 5)}${(p.exceto || []).length ? " (exceto " + p.exceto.map((x: string) => fmtDate(x).slice(0, 5)).join(", ") + ")" : ""}` : ""; };
 export function bloqueiosEm(st: any, proj: string, ini: number, fim: number) {
-  return ((st.ckBloqueios || []) as any[]).filter(b => (!b.projetista || !proj || b.projetista === proj) && +parseData(b.inicio) < fim && ini < +parseData(b.fim));
+  const tf = trabalhaFeriado(cfgAgenda(st), proj);
+  return ((st.ckBloqueios || []) as any[]).filter(b => (!b.projetista || !proj || b.projetista === proj) && !(tf && !b.projetista && /feriado/i.test(b.motivo || "")) && +parseData(b.inicio) < fim && ini < +parseData(b.fim));
 }
 export const rotuloBloq = (b: any) => "🚫 " + b.motivo + (b.obs ? " — " + b.obs : "") + (b.projetista ? "" : " (todos)");
 export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?: Ocup[], durMin?: number): { livres: string[]; ocupados: string[] } {
@@ -790,6 +795,10 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
   const { setModal, toast, recarregar } = useApp() as any;
   const [sal, setSal] = useState(false); const [ver, setVer] = useState("");
   const [trocar, setTrocar] = useState(true);
+  // quem saiu da planilha de agendados cancelou: sai da agenda (volta para a agendar). Se parecer planilha incompleta (mais da metade sumiu), vem desmarcado.
+  const [liberar, setLiberar] = useState(!prev.alertaLiberar);
+  // a planilha é a agenda oficial: quem está em outra data no 360 é readequado (padrão: sim)
+  const [corrigir, setCorrigir] = useState(true);
   const fechar = () => setModal(null);
   const fmt = (d: string) => d ? d.slice(8, 10) + "/" + d.slice(5, 7) + " " + d.slice(11, 16) : "";
   const dias = (d: any) => [{ data: d.agendadoPara, projetista: d.projetista }, ...d.diasExtras].map((e: any) => fmt(e.data) + (e.projetista ? " " + e.projetista : "")).join(" + ");
@@ -799,9 +808,9 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
     setSal(true);
     try {
       const r = await A.checklistImportar(futuros);
-      const d = await A.checklistAgendadosPlanilha(dados, true, trocar, false);
+      const d = await A.checklistAgendadosPlanilha(dados, true, trocar, corrigir, liberar);
       await recarregar(); fechar();
-      toast(`${r.novos} novo(s) · ${d.agendar} passaram para agendado · ${d.projetista} com projetista atualizado`);
+      toast(`${r.novos} novo(s) · ${d.agendar} passaram para agendado · ${d.projetista} com projetista atualizado` + (liberar && d.liberar ? ` · ${d.liberar} saíram da agenda (não estão na planilha)` : ""));
     } catch (x: any) { toast(x.message); setSal(false); }
   }
   const L = ({ n, t, cor, lista, id }: any) => <>
@@ -818,8 +827,9 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
       {novos.some(d => d.refeito) && <div className="hint" style={{ margin: "2px 0 6px 58px" }}>{novos.filter(d => d.refeito).length} deles já tiveram checklist feito: o anterior é mantido e entra um agendamento novo.</div>}
       <L id="a" n={prev.agendar} t="estavam a agendar / aguardando no 360 → passam para AGENDADO" cor="var(--st-respondida)" lista={prev.listaAgendar} />
       <L id="p" n={prev.projetista} t="já agendados com projetista diferente (ou sem) da coluna Agenda → atualiza só o projetista" cor="var(--primary)" lista={prev.listaProjetista} />
-      <L id="d" n={prev.diferentes} t="já agendados no 360 em outra data — NÃO mudam (só para conferir no Exact)" cor="var(--warn)" lista={prev.listaDiferentes} />
-      <L id="l" n={prev.liberar} t="agendados no 360 que não estão na planilha — NÃO saem da agenda (só para conferir)" cor="var(--ink-soft)" lista={prev.listaLiberar} />
+      <L id="m" n={prev.maisDias} t="já agendados que ganham DIA(S) NOVO(S) da planilha (ex.: continua em outra data)" cor="var(--st-respondida)" lista={prev.listaMaisDias} />
+      <L id="d" n={prev.diferentes} t={corrigir ? "agendados no 360 em OUTRA DATA → passam para a data da planilha" : "já agendados no 360 em outra data — não mudam (só para conferir)"} cor="var(--warn)" lista={prev.listaDiferentes} />
+      <L id="l" n={prev.liberar} t={liberar ? "agendados no 360 que NÃO estão mais na planilha (cancelaram) → SAEM DA AGENDA e voltam para a agendar" : "agendados no 360 que não estão na planilha — ficam na agenda (só para conferir)"} cor={liberar ? "var(--danger)" : "var(--ink-soft)"} lista={prev.listaLiberar} />
       <L id="v" n={varios.length} t={<>linhas com <b>mais de um dia</b> (cada data = um dia, cada nome da Agenda = um dia)</>} lista={varios.map(d => `${d.cliente} · venda ${d.numero} — ${dias(d)}`)} />
       {(prev.desconhecidos || []).length > 0 && <div className="hint" style={{ color: "var(--warn)", marginTop: 8 }}>⚠️ Nomes na coluna Agenda que não são projetistas da agenda (ficam sem projetista): <b>{prev.desconhecidos.join(", ")}</b></div>}
       {passados > 0 && <div className="hint" style={{ marginTop: 8, fontWeight: 600 }}>⏭ {passados} linha(s) com data <b>passada</b> ficaram de fora — só entram agendamentos de hoje em diante (não criam cliente nem mudam nada no 360).</div>}
@@ -827,7 +837,10 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
       {semAgenda.length > 0 && <div className="hint" style={{ marginTop: 4 }}>{semAgenda.length} linha(s) com data e sem nome na coluna Agenda.</div>}
       <div style={{ marginTop: 10, padding: 10, background: "var(--surface-2)", borderRadius: 10 }}>
         <Chk v={trocar} set={setTrocar}>Atualizar o <b>projetista</b> dos já agendados conforme a coluna <b>Agenda</b></Chk>
-        <div className="hint" style={{ marginTop: 8 }}>Quem <b>já está agendado</b> no 360 não muda: data, horário, duração e dias continuam como estão. A planilha só <b>acrescenta os novos</b> e <b>atualiza o projetista</b>. Checklist <b>já realizado</b> nunca é substituído: se a venda voltar com data nova, entra um agendamento novo e o anterior fica.</div>
+        {prev.diferentes > 0 && <Chk v={corrigir} set={setCorrigir}>Readequar no 360 os <b>{prev.diferentes}</b> agendados em <b>outra data</b> conforme a planilha</Chk>}
+        {prev.liberar > 0 && <Chk v={liberar} set={setLiberar}>Tirar da agenda os <b>{prev.liberar}</b> que <b>não estão na planilha</b> (cancelaram) — voltam para "a agendar"</Chk>}
+        {prev.liberar > 0 && prev.alertaLiberar && <div className="hint" style={{ color: "var(--danger)", fontWeight: 700 }}>⚠️ Mais da metade dos agendados não está nesta planilha — confira se ela está completa antes de tirar da agenda.</div>}
+        <div className="hint" style={{ marginTop: 8 }}>A planilha é a <b>agenda oficial</b>: entra quem é novo, os já agendados ganham os <b>dias novos</b> da planilha, quem está em <b>outra data</b> é readequado e quem <b>saiu da planilha</b> sai da agenda (você pode desmarcar acima). Checklist <b>já realizado</b> nunca é substituído: se a venda voltar com data nova, entra um agendamento novo e o anterior fica.</div>
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
         <button className="btn" onClick={fechar}>Cancelar</button>

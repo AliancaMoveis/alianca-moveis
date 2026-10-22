@@ -191,7 +191,7 @@ export const A = {
   medidasCruzSalvar: (linhas: any[]) => rpc<{ novos: number; atualizados: number }>("medidas_cruzamento_salvar", { p: linhas }),
   medidasCruzTratar: (venda: string, tratativa: string, obs: string, resultado?: string) => rpc("medidas_cruzamento_tratar", { p_venda: venda, p_tratativa: tratativa, p_obs: obs, p_resultado: resultado || null }),
   checklistSincronizar: (linhas: any[], aplicar: boolean, forcar = false) => rpc<any>("checklist_sincronizar", { p: linhas, p_aplicar: aplicar, p_forcar: forcar }),
-  checklistAgendadosPlanilha: (linhas: any[], aplicar: boolean, trocarProj: boolean, corrigir: boolean) => rpc<any>("checklist_agendados_planilha", { p: linhas, p_aplicar: aplicar, p_trocar_proj: trocarProj, p_corrigir: corrigir }),
+  checklistAgendadosPlanilha: (linhas: any[], aplicar: boolean, trocarProj: boolean, corrigir: boolean, liberar = false) => rpc<any>("checklist_agendados_planilha", { p: linhas, p_aplicar: aplicar, p_trocar_proj: trocarProj, p_corrigir: corrigir, p_liberar: liberar }),
   checklistDiasPlanilha: (linhas: any[], aplicar: boolean) => rpc<any>("checklist_dias_planilha", { p: linhas, p_aplicar: aplicar }),
   checklistImportar: (linhas: any[]) => rpc<{ novos: number; ignorados: number; agendados?: number }>("checklist_importar", { p: linhas }),
   vendedorCadastrar: (nome: string, email: string, senha: string, freelancer: boolean, fazProjeto: boolean) => rpc<string>("vendedor_cadastrar", { p_nome: nome, p_email: email, p_senha: senha, p_freelancer: freelancer, p_faz_projeto: fazProjeto }),

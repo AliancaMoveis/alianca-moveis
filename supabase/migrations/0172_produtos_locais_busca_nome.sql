@@ -25,3 +25,5 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- pode_produtos(): todos os vendedores (setor atendente_cliente) passam a consultar.
 -- pode_produtos(): + call center e Salete, Francyne, Francilene, Sônia (assistência) — só consulta.
 -- produto_importar_fim(locais, codigos): o que tinha o estoque do arquivo e não veio nele fica zerado nesse estoque (Tático omite itens zerados).
+-- Checklist: Wagner na agenda (inicioProjetista 2026-10-26, trabalhaFeriado); salvar_checklist_agenda preserva essas chaves.
+-- checklist_agendados_planilha(+p_liberar): acrescenta dias futuros, readequa outra data (p_corrigir), tira quem saiu da planilha (p_liberar).
