@@ -4,6 +4,7 @@ import { fmtTel } from "../lib/baseClientes";
 import { useEffect, useState } from "react";
 import { A } from "../lib/acoes";
 import Senha from "../comp/Senha";
+import { baixarFotosZip } from "../comp/Overlays";
 
 const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -231,6 +232,13 @@ export default function AgendaPublica() {
           {ver.passo === "ok" && <>
             <b>Imagens de {ver.x.cliente}</b>
             <span>Links válidos por 10 minutos. Toque numa imagem para ampliar.</span>
+            {(ver.arquivos || []).length > 0 && <button className="ap-confirmar" disabled={!!ver.zipando} onClick={async () => {
+              setVer((v: any) => ({ ...v, zipando: true, zipMsg: "" }));
+              let m = ""; try { const z = await baixarFotosZip(ver.x.cliente || "cliente", [{ pasta: "arquivos", anexos: ver.arquivos }]); m = z.n + " arquivo(s) baixado(s)" + (z.falhas.length ? " · " + z.falhas.length + " não baixaram" : ""); }
+              catch { m = "Não consegui baixar — tente de novo"; }
+              setVer((v: any) => v ? { ...v, zipando: false, zipMsg: m } : v);
+            }}>{ver.zipando ? "⏳ Preparando o .zip…" : "⬇ Baixar todas de uma vez (.zip · " + (ver.arquivos || []).length + ")"}</button>}
+            {ver.zipMsg && <span>{ver.zipMsg}</span>}
             <div className="ap-imgs">
               {(ver.arquivos || []).filter((a: any) => a.tipo === "img").map((a: any, i: number) => <img key={i} src={a.url} alt={a.nome || ""} onClick={() => setZoom(a.url)} />)}
             </div>

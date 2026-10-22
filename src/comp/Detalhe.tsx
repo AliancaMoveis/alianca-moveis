@@ -104,7 +104,7 @@ export default function Detalhe({ id }: { id: string }) {
             <Row k="Produto">{c.produto}</Row>
             {ehFab && <>
               <Row k="Pedido fábrica">{c.pedidoFabrica || "—"}</Row>
-              <Row k="Fábrica">{fab ? fab.nome : (tratar ? <DefinirFabrica c={c} /> : "—")}{fab && fab.emails ? " · " + fab.emails : ""}</Row>
+              <Row k="Fábrica">{tratar ? <DefinirFabrica c={c} atual={fab} /> : fab ? fab.nome : "—"}{fab && fab.emails ? " · " + fab.emails : ""}</Row>
               <Row k="Representante">{rep ? rep.nome : "—"}{rep && rep.whats ? " · " + rep.whats : ""}</Row>
             </>}
             {(ehFab || c.tipo === "entrega") && c.prazoTatico && <Row k="Prazo Tático">{fmtDate(c.prazoTatico)}</Row>}
@@ -687,12 +687,17 @@ function HistoricoCliente({ c }: any) {
   );
 }
 
-function DefinirFabrica({ c }: any) {
-  const { R, st, executar: ex } = useApp() as any;
-  const [f, setF] = useState("");
-  return <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-    <select value={f} onChange={e => setF(e.target.value)}><option value="">Informar a fábrica…</option>{(st.fabricas || []).filter((x: any) => x.ativo !== false).map((x: any) => <option key={x.id} value={x.id}>{x.nome}</option>)}</select>
-    <button className="btn sm" disabled={!f} onClick={() => ex(() => A.definirFabrica(c.id, f), "Fábrica definida")}>Salvar</button>
+// informar ou ALTERAR a fábrica a qualquer momento (com ou sem fábrica já definida)
+function DefinirFabrica({ c, atual }: any) {
+  const { st, executar: ex } = useApp() as any;
+  const [f, setF] = useState(""); const [editando, setEditando] = useState(!atual);
+  if (atual && !editando) return <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><b>{atual.nome}</b>
+    <button className="btn ghost sm" onClick={() => { setF(atual.id); setEditando(true); }}>✏️ Alterar fábrica</button></span>;
+  const fabs = (st.fabricas || []).filter((x: any) => x.ativo !== false).sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+  return <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+    <select value={f} onChange={e => setF(e.target.value)}><option value="">{atual ? "Escolha a nova fábrica…" : "Informar a fábrica…"}</option>{fabs.map((x: any) => <option key={x.id} value={x.id}>{x.nome}</option>)}</select>
+    <button className="btn sm" disabled={!f || (atual && f === atual.id)} onClick={async () => { if (await ex(() => A.definirFabrica(c.id, f), atual ? "Fábrica alterada" : "Fábrica definida")) setEditando(false); }}>Salvar</button>
+    {atual && <button className="btn ghost sm" onClick={() => setEditando(false)}>Cancelar</button>}
   </span>;
 }
 
