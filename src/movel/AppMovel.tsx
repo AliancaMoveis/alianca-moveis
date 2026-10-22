@@ -44,7 +44,7 @@ export type Perfil = "consultor" | "vendedor" | "gestor" | "gerente" | "marketin
 export function perfilMovel(R: any): Perfil | null {
   const s = R.mySetores();
   if (s.includes("proprietario")) return "dono";
-  if (s.includes("produtos") && s.every((x: string) => x === "produtos" || x === "prazo_fabrica")) return "produtos"; // TI e produtos (Alexandre): no celular, a consulta de produto; a cobrança de fábrica fica no computador
+  if (s.length && s.every((x: string) => x === "produtos")) return "produtos"; // só TI e produtos: no celular, a consulta de produto (com outro setor, ex.: fábrica, usa a mesma tela do computador)
   if (R.ehGerenteLoja()) return "gerente";
   if (s.includes("juridico") && !R.ehGestao()) return "juridico";
   if (s.includes("posvenda") && !R.ehGestao()) return "posvenda";

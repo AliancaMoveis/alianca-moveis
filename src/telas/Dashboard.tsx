@@ -98,6 +98,8 @@ export default function Dashboard() {
 
   const cabecalho = <>
       <div className="view-head"><div><h2>Dashboard</h2><p id="dashSub">{sub}</p></div></div>
+      {/* TI e cadastro de produtos (Alexandre): atalho para a consulta/cadastro de produto, no computador e no celular */}
+      {R.mySetores().includes("produtos") && !R.ehGestao() && <button type="button" className="mv-btn-produto" style={{ maxWidth: 520 }} onClick={() => irPara("consulta_produto")}><span>🏷</span><b>Consulta e cadastro de produto</b><small>ler o código de barras · estoque · tirar/liberar venda · mostruário · importar planilha</small></button>}
       <div className="card" style={{ padding: "14px 18px", marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div className="chips" style={{ margin: 0 }}>
