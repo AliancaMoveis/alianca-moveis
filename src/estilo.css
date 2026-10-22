@@ -1861,8 +1861,12 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .cp-cam-top b{font-size:14px}.cp-cam-top span{display:flex;gap:8px}.cp-cam-top button{background:#fff;color:#111;border:0;border-radius:999px;padding:8px 14px;font-weight:800;font-size:14px}
 .cp-cam-erro{position:absolute;left:16px;right:16px;bottom:40px;background:#fff;color:#a00;border-radius:12px;padding:14px;font-weight:700}
 .cp-imp{border:1px solid var(--primary);background:var(--primary-soft);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:13.5px}
-.cp-estq{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.cp-estq div{background:var(--surface-2);border-radius:10px;padding:7px 4px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.cp-estq{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.cp-estq div{background:var(--surface-2);border-radius:10px;padding:7px 4px;display:flex;flex-direction:column;align-items:center;text-align:center}
 .cp-estq span{font-size:11px;color:var(--ink-soft)}.cp-estq b{font-size:16px}.cp-estq .s{background:var(--primary-soft)}.cp-estq .s b{color:var(--primary)}
 .cp-preco{display:flex;flex-direction:column;align-items:flex-start;background:var(--st-concluida);color:#fff;border-radius:12px;padding:10px 14px}
 .cp-preco span{font-size:12px;opacity:.9}.cp-preco b{font-size:26px;line-height:1.1}.cp-preco small{font-size:11.5px;opacity:.85}
 .cp-preco-lido{align-items:center;text-align:center;background:var(--st-concluida);color:#fff;border:0}.cp-preco-lido b{font-size:34px}.cp-preco-lido span,.cp-preco-lido small{opacity:.9}
+.cp-estoque{display:flex;flex-direction:column;gap:6px}
+.cp-saldo{border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;align-items:center;text-align:center;color:#fff;background:var(--st-concluida)}
+.cp-saldo.zero{background:var(--danger)}.cp-saldo span{font-size:12.5px;opacity:.95;font-weight:700}.cp-saldo b{font-size:40px;line-height:1.05}.cp-saldo small{font-size:12px;opacity:.9}
+.cp-estq small{font-size:10.5px;color:var(--ink-faint)}

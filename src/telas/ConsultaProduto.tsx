@@ -202,11 +202,18 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       <div className="cp-tags">
         <span className="cp-tag cod">Cód. {prod.codigo}</span>
         {prod.ref && <span className="cp-tag">REF {prod.ref}</span>}
-        {(prod.saldo ?? prod.estoque) != null && <span className={"cp-tag " + (Number(prod.saldo ?? prod.estoque) > 0 ? "ok" : "zero")}>{Number(prod.saldo ?? prod.estoque) > 0 ? qtd(prod.saldo ?? prod.estoque) + " disponível para venda" : "Sem saldo para venda"}</span>}
         {prod.deposito && <span className="cp-tag">{prod.deposito}</span>}
       </div>
-      {(prod.estoque != null || prod.reservas != null || prod.expedicao != null) && <div className="cp-estq">
-        <div><span>Em estoque</span><b>{qtd(prod.estoque)}</b></div><div><span>Reservado</span><b>{qtd(prod.reservas)}</b></div><div><span>Em expedição</span><b>{qtd(prod.expedicao)}</b></div><div className="s"><span>Saldo p/ venda</span><b>{qtd(prod.saldo)}</b></div></div>}
+      {/* estoque é a informação principal: o saldo para venda é o que realmente dá para vender */}
+      {(prod.saldo != null || prod.estoque != null || prod.reservas != null || prod.expedicao != null) && <div className="cp-estoque">
+        <div className={"cp-saldo " + (Number(prod.saldo ?? 0) > 0 ? "ok" : "zero")}><span>Saldo para venda (disponível)</span><b>{qtd(prod.saldo ?? (prod.estoque != null ? Number(prod.estoque) - Number(prod.reservas || 0) - Number(prod.expedicao || 0) : null))}</b>
+          <small>{Number(prod.saldo ?? 0) > 0 ? "pode vender" : Number(prod.saldo ?? 0) < 0 ? "vendido além do estoque — aguardando chegada" : "sem saldo — consulte a reposição"}</small></div>
+        <div className="cp-estq">
+          <div><span>Em estoque</span><b>{qtd(prod.estoque)}</b><small>na loja/depósito</small></div>
+          <div><span>Reservado</span><b>{qtd(prod.reservas)}</b><small>vendas esperando o produto</small></div>
+          <div><span>Em expedição</span><b>{qtd(prod.expedicao)}</b><small>sendo enviado</small></div></div>
+        {prod.atualizado_em && <small className="hint">Estoque atualizado em {new Date(prod.atualizado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</small>}
+      </div>}
       {prod.cor && <div className="cp-linha"><span>Acabamento / cor</span><b>{prod.cor}</b></div>}
       {prod.tamanho && <div className="cp-linha"><span>Tamanho</span><b>{prod.tamanho}</b></div>}
       {(prod.altura != null || prod.profundidade != null || prod.largura != null) && <div className="cp-medidas">
