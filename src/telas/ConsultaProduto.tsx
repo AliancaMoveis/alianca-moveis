@@ -12,8 +12,8 @@ import { baixarXlsx } from "../lib/planilha";
 // planilha de produtos: aceita os nomes de coluna mais comuns (Tático, Excel feito à mão)
 const COLS: [keyof Produto, string, string[]][] = [
   ["codigo", "Código de barras", ["Código de barras", "Codigo de barras", "Código", "Codigo", "Cód", "Cod", "EAN", "Cód. barras", "CodBarras", "ID"]],
-  ["nome", "Descrição", ["Descrição", "Descricao", "Produto", "Nome", "Nome do produto"]],
-  ["cor", "Acabamento / cor", ["Acabamento", "Cor", "Acabamento / cor", "Cores"]],
+  ["nome", "Descrição", ["Item", "Descrição", "Descricao", "Produto", "Nome", "Nome do produto"]],
+  ["cor", "Acabamento / cor", ["Grade", "Acabamento", "Cor", "Acabamento / cor", "Cores"]],
   ["tamanho", "Tamanho", ["Tamanho", "Versão", "Versao"]],
   ["ref", "REF", ["REF", "Referência", "Referencia"]],
   ["fabricante", "Fabricante", ["Fabricante", "Marca", "Fornecedor"]],
@@ -22,18 +22,56 @@ const COLS: [keyof Produto, string, string[]][] = [
   ["altura", "Altura (cm)", ["Altura", "A", "Altura (cm)"]],
   ["profundidade", "Profundidade (cm)", ["Profundidade", "P", "Profundidade (cm)"]],
   ["largura", "Largura (cm)", ["Largura", "L", "Largura (cm)"]],
-  ["estoque", "Estoque", ["Estoque", "Saldo", "Qtd", "Quantidade", "Qtde"]],
+  ["estoque", "Estoque", ["Qtde. Estoque", "Qtde Estoque", "Qtd. Estoque", "Quantidade em estoque", "Qtd", "Quantidade", "Qtde", "Estoque"]],
+  ["reservas", "Reservas", ["Reservas", "Reserva", "Reservado"]],
+  ["expedicao", "Em expedição", ["Em Expedição", "Expedição", "Em expedicao"]],
+  ["saldo", "Saldo para venda", ["Saldo para Venda", "Saldo p/ venda", "Saldo para vendas", "Disponível", "Disponivel", "Saldo"]],
+  ["deposito", "Estoque / depósito", ["Estoque", "Depósito", "Deposito", "Local"]],
   ["preco", "Preço", ["Preço", "Preco", "Valor", "Preço venda", "Preço de venda"]],
   ["especificacoes", "Especificações técnicas", ["Especificações", "Especificacoes", "Especificações técnicas", "Descrição técnica", "Detalhes"]],
   ["imagem_url", "Imagem (link)", ["Imagem", "Foto", "URL da imagem", "Link da imagem"]],
   ["obs", "Observações", ["Observações", "Observacoes", "Obs"]],
 ];
+// fabricantes que aparecem no nome do produto (Tático não manda a coluna)
+const MARCAS = ["DALLA COSTA", "LUCIANE", "ROBEL", "LINEA", "ARTELY", "HENN", "KAPPESBERG", "SIENA", "BERTOLINI", "MADESA", "ITATIAIA", "POLIMOVEIS", "RUFATO", "TUBRAX", "MOVELBENTO", "NOVO HORIZONTE", "TECNOMOBILI", "PEROBELL", "CASA D", "LINEA BRASIL"];
+/** CSV do Tático: vem em Latin-1 e as quantidades com vírgula (0,929) saem sem aspas e quebram em duas colunas — junta de volta
+ *  (Saldo para Venda = Qtde. Estoque − Reservas − Em Expedição decide qual junção está certa) */
+async function lerCsvTatico(f: File): Promise<Record<string, string>[]> {
+  const buf = await f.arrayBuffer();
+  let txt = new TextDecoder("utf-8").decode(buf); if (txt.includes("\uFFFD")) txt = new TextDecoder("windows-1252").decode(buf);
+  const sep = (txt.split(/\r?\n/)[0].match(/;/g) || []).length > (txt.split(/\r?\n/)[0].match(/,/g) || []).length ? ";" : ",";
+  const linhas: string[][] = []; let campo = "", lin: string[] = [], aspas = false;
+  for (let i = 0; i < txt.length; i++) { const ch = txt[i];
+    if (aspas) { if (ch === '"') { if (txt[i + 1] === '"') { campo += '"'; i++; } else aspas = false; } else campo += ch; continue; }
+    if (ch === '"') aspas = true; else if (ch === sep) { lin.push(campo); campo = ""; } else if (ch === "\n" || ch === "\r") { if (ch === "\r" && txt[i + 1] === "\n") i++; lin.push(campo); linhas.push(lin); lin = []; campo = ""; } else campo += ch; }
+  if (campo || lin.length) { lin.push(campo); linhas.push(lin); }
+  const cab = (linhas.shift() || []).map(x => x.trim());
+  const nomesNum = ["Qtde. Estoque", "Reservas", "Em Expedição", "Saldo para Venda"];
+  const iNum = nomesNum.map(n => cab.findIndex(c => c.toLowerCase() === n.toLowerCase()));
+  const tatico = sep === "," && iNum.every(i => i >= 0) && iNum.every((v, k) => k === 0 || v === iNum[k - 1] + 1);
+  return linhas.filter(r => r.some(x => x.trim())).map(r => {
+    if (tatico) {
+      const ini = iNum[0]; const toks = r.slice(ini).filter((x, k, arr) => x.trim() !== "" || arr.slice(k).some(y => y.trim() !== "")).map(x => x.trim()).filter(x => x !== "");
+      if (toks.length > 4) { // escolhe quais vizinhos juntar ("0","929" → 0,929) para fechar a conta do saldo
+        const n = toks.length - 4; let melhor: string[] | null = null;
+        const tenta = (pos: number, rest: number, acc: string[]) => { if (melhor) return; if (pos >= toks.length) { if (rest === 0 && acc.length === 4) { const v = acc.map(x => Number(x.replace(",", "."))); if (Math.abs(v[0] - v[1] - v[2] - v[3]) < 0.0005) melhor = acc; } return; }
+          tenta(pos + 1, rest, [...acc, toks[pos]]); if (rest > 0 && pos + 1 < toks.length && /^\d{1,3}$/.test(toks[pos + 1])) tenta(pos + 2, rest - 1, [...acc, toks[pos] + "," + toks[pos + 1]]); };
+        tenta(0, n, []);
+        const v = melhor || toks.slice(0, 4); r = [...r.slice(0, ini), ...v];
+      }
+    }
+    const o: Record<string, string> = {}; cab.forEach((c, k) => { if (c) o[c] = (r[k] ?? "").trim(); }); return o; });
+}
 const numTxt = (s: string) => String(s || "").replace(/cm/i, "").replace(/R\$/, "").trim().replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
 
-type Produto = { codigo: string; nome: string; modulo: string; grupo: string; cor: string; tamanho: string; especificacoes: string; estoque: number | null; preco: number | null;
+type Produto = { codigo: string; nome: string; modulo: string; grupo: string; cor: string; tamanho: string; especificacoes: string; estoque: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null; deposito?: string; preco: number | null;
   imagem_url: string; obs: string; ref: string; fabricante: string; altura: number | null; profundidade: number | null; largura: number | null; cod_etiqueta: string; atualizado_em?: string; variacoes?: Produto[] };
 const VAZIO: Produto = { codigo: "", nome: "", modulo: "", grupo: "", cor: "", tamanho: "", especificacoes: "", estoque: null, preco: null, imagem_url: "", obs: "", ref: "", fabricante: "", altura: null, profundidade: null, largura: null, cod_etiqueta: "" };
 const soCod = (s: string) => String(s || "").replace(/\s/g, "");
+/** código de preço da etiqueta: "88" + reais + "," + centavos (+ dígitos de controle). 881496,820688 → R$ 1.496,82 */
+export const precoEtiqueta = (cod: string): number | null => { const m = String(cod || "").replace(/\s/g, "").match(/^88(\d+)(?:[.,](\d{1,2}))?/); if (!m) return null;
+  const v = Number(m[1] + "." + (m[2] || "0").padEnd(2, "0")); return isFinite(v) && v > 0 ? v : null; };
+const qtd = (n: any) => n == null || n === "" ? "—" : Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 3 });
 const cm = (n: number | null) => n == null || n === ("" as any) ? "—" : String(n).replace(".", ",") + " cm";
 
 /** câmera em tela cheia lendo código de barras; chama onCodigo uma vez */
@@ -91,29 +129,43 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   const [form, setForm] = useState<Produto | null>(null);
   const [lista, setLista] = useState<Produto[] | null>(null); const [q, setQ] = useState("");
   const [recentes, setRecentes] = useState<string[]>([]);
-  const [imp, setImp] = useState<{ nome: string; linhas: any[]; semCod: number } | null>(null); const [importando, setImportando] = useState(false);
+  const [imp, setImp] = useState<{ nome: string; linhas: any[]; semCod: number } | null>(null); const [importando, setImportando] = useState(false); const [prog, setProg] = useState(0);
   const inpArq = { current: null as HTMLInputElement | null };
   async function lerPlanilha(f: File | undefined) {
     if (!f) return;
     try {
-      const l = await lerArquivo(f);
-      const linhas = l.map(r => { const o: any = {}; COLS.forEach(([k, , nomes]) => { const v = String(col(r, ...nomes) || "").trim(); if (v) o[k] = ["altura", "profundidade", "largura", "estoque", "preco"].includes(k as string) ? numTxt(v) : v; });
-        o.codigo = String(o.codigo || "").replace(/\s/g, ""); return o; });
+      const l = /\.csv$/i.test(f.name) ? await lerCsvTatico(f) : await lerArquivo(f);
+      const NUM = ["altura", "profundidade", "largura", "estoque", "reservas", "expedicao", "saldo", "preco"];
+      const linhas = l.map(r => { const o: any = {}; COLS.forEach(([k, , nomes]) => { const v = String(col(r, ...nomes) || "").trim(); if (v) o[k] = NUM.includes(k as string) ? numTxt(v) : v; });
+        // "Estoque" do Tático é o depósito (LINHA PRONTA); só vale como quantidade quando é número
+        if (o.estoque != null && !/^-?\d+(\.\d+)?$/.test(String(o.estoque))) delete o.estoque;
+        if (o.deposito && /^-?[\d.,]+$/.test(String(o.deposito))) delete o.deposito;
+        o.codigo = String(o.codigo || "").replace(/\s/g, "");
+        if (o.nome && !o.fabricante) { const m = MARCAS.find(x => new RegExp("\\b" + x + "\\b", "i").test(o.nome)); if (m) o.fabricante = m.replace(/\b\w/g, c => c.toUpperCase()).replace(/\B\w/g, c => c.toLowerCase()); }
+        // medidas no nome: "73.5X220X45CM" = largura × altura × profundidade (como na etiqueta)
+        if (o.nome && o.altura == null && o.largura == null) { const m = String(o.nome).match(/(\d+(?:[.,]\d+)?)\s*X\s*(\d+(?:[.,]\d+)?)\s*X\s*(\d+(?:[.,]\d+)?)\s*CM/i);
+          if (m) { o.largura = m[1].replace(",", "."); o.altura = m[2].replace(",", "."); o.profundidade = m[3].replace(",", "."); } }
+        return o; });
       const ok = linhas.filter(x => x.codigo && x.nome);
       setImp({ nome: f.name, linhas: ok, semCod: linhas.length - ok.length });
     } catch (e: any) { toast("Não consegui ler a planilha: " + (e.message || e)); }
   }
   async function importar() {
     if (!imp) return; setImportando(true);
-    try { const r: any = await A.produtoImportar(imp.linhas);
-      toast(`${r?.novos ?? 0} produto(s) novo(s) · ${r?.atualizados ?? 0} atualizado(s)` + ((r?.erros || []).length ? ` · ${(r.erros || []).length} com erro` : ""));
+    try { let nv = 0, at = 0, er = 0; const L = 400;
+      for (let i = 0; i < imp.linhas.length; i += L) { setProg(Math.round(i / imp.linhas.length * 100)); const r: any = await A.produtoImportar(imp.linhas.slice(i, i + L)); nv += r?.novos || 0; at += r?.atualizados || 0; er += (r?.erros || []).length; }
+      toast(`${nv} produto(s) novo(s) · ${at} atualizado(s)` + (er ? ` · ${er} com erro` : ""));
       setImp(null); carregarLista(q); }
     catch (e: any) { toast(e.message); } finally { setImportando(false); }
   }
   const modelo = () => baixarXlsx("modelo-produtos", COLS.map(c => c[1]), [["1875840", "MÓDULO CLOSET DALLA COSTA 01 TORRE C/ 02 GAV TW401", "OFF WHITE BRILHO / FREIJÓ", "", "WJG", "Dalla Costa", "Módulo closet", "DALLA COSTA TW401", 220, 45, 73.5, 2, "", "", "", ""]], "Produtos");
 
+  const [precoLido, setPrecoLido] = useState<number | null>(null);
   async function buscar(c: string) {
     const k = soCod(c); if (!k) return;
+    // digitou o código de preço da etiqueta (88…,…): só traduz o preço, não é código de produto
+    if (/^88\d+[.,]\d/.test(k)) { setPrecoLido(precoEtiqueta(k)); setProd(null); setNaoAchou(""); return; }
+    setPrecoLido(null);
     setCod(k); setBusy(true); setForm(null); setNaoAchou(""); setProd(null);
     try { const r = await A.produtoBuscar(k); if (r) { setProd(r); setRecentes(x => [k, ...x.filter(y => y !== k)].slice(0, 8)); } else setNaoAchou(k); }
     catch (e: any) { toast(e.message || "Não consegui consultar"); }
@@ -137,11 +189,12 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
     <div className="cp-busca">
       <button type="button" className="btn primary cp-scan" onClick={() => setCam(true)}>📷 Ler código de barras</button>
       <form className="cp-dig" onSubmit={e => { e.preventDefault(); buscar(cod); }}>
-        <input inputMode="numeric" placeholder="ou digite o código (ex.: 1875840)" value={cod} onChange={e => setCod(e.target.value)} />
+        <input inputMode="numeric" placeholder="código do produto (1875840) ou de preço (881496,82…)" value={cod} onChange={e => setCod(e.target.value)} />
         <button className="btn" type="submit" disabled={busy}>{busy ? "…" : "Buscar"}</button>
       </form>
     </div>
 
+    {precoLido != null && <div className="cp-card cp-preco-lido"><span>Preço da etiqueta</span><b>{fmtMoeda(precoLido)}</b><small>preço bruto · código {cod}</small></div>}
     {prod && !form && <div className="cp-card">
       {prod.imagem_url ? <img className="cp-img" src={prod.imagem_url} alt={prod.nome} /> : null}
       <div className="cp-nome">{prod.nome}</div>
@@ -149,18 +202,22 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       <div className="cp-tags">
         <span className="cp-tag cod">Cód. {prod.codigo}</span>
         {prod.ref && <span className="cp-tag">REF {prod.ref}</span>}
-        {prod.estoque != null && <span className={"cp-tag " + (Number(prod.estoque) > 0 ? "ok" : "zero")}>{Number(prod.estoque) > 0 ? prod.estoque + " em estoque" : "Sem estoque"}</span>}
+        {(prod.saldo ?? prod.estoque) != null && <span className={"cp-tag " + (Number(prod.saldo ?? prod.estoque) > 0 ? "ok" : "zero")}>{Number(prod.saldo ?? prod.estoque) > 0 ? qtd(prod.saldo ?? prod.estoque) + " disponível para venda" : "Sem saldo para venda"}</span>}
+        {prod.deposito && <span className="cp-tag">{prod.deposito}</span>}
       </div>
+      {(prod.estoque != null || prod.reservas != null || prod.expedicao != null) && <div className="cp-estq">
+        <div><span>Em estoque</span><b>{qtd(prod.estoque)}</b></div><div><span>Reservado</span><b>{qtd(prod.reservas)}</b></div><div><span>Em expedição</span><b>{qtd(prod.expedicao)}</b></div><div className="s"><span>Saldo p/ venda</span><b>{qtd(prod.saldo)}</b></div></div>}
       {prod.cor && <div className="cp-linha"><span>Acabamento / cor</span><b>{prod.cor}</b></div>}
       {prod.tamanho && <div className="cp-linha"><span>Tamanho</span><b>{prod.tamanho}</b></div>}
       {(prod.altura != null || prod.profundidade != null || prod.largura != null) && <div className="cp-medidas">
         <div><span>Altura</span><b>{cm(prod.altura)}</b></div><div><span>Profundidade</span><b>{cm(prod.profundidade)}</b></div><div><span>Largura</span><b>{cm(prod.largura)}</b></div></div>}
-      {prod.preco != null && <div className="cp-linha"><span>Preço</span><b>{fmtMoeda(Number(prod.preco))}</b></div>}
+      {(prod.preco != null || precoEtiqueta(prod.cod_etiqueta) != null) && <div className="cp-preco"><span>Preço (bruto)</span><b>{fmtMoeda(Number(prod.preco ?? precoEtiqueta(prod.cod_etiqueta)))}</b>
+        {prod.cod_etiqueta && <small>código na etiqueta: {prod.cod_etiqueta}</small>}</div>}
       {prod.especificacoes && <div className="cp-esp"><span>Especificações técnicas</span><div>{prod.especificacoes}</div></div>}
       {prod.obs && <div className="cp-esp"><span>Observações</span><div>{prod.obs}</div></div>}
       {(prod.variacoes || []).length > 0 && <div className="cp-var"><span>Outras opções deste produto</span>
         {(prod.variacoes || []).map(v => <button key={v.codigo} type="button" className="cp-var-it" onClick={() => buscar(v.codigo)}>
-          <b>{[v.tamanho, v.cor].filter(Boolean).join(" · ") || v.nome}</b><small>Cód. {v.codigo}{v.estoque != null ? " · " + (Number(v.estoque) > 0 ? v.estoque + " em estoque" : "sem estoque") : ""}</small></button>)}</div>}
+          <b>{[v.tamanho, v.cor].filter(Boolean).join(" · ") || v.nome}</b><small>Cód. {v.codigo}{(v.saldo ?? v.estoque) != null ? " · " + (Number(v.saldo ?? v.estoque) > 0 ? qtd(v.saldo ?? v.estoque) + " disponível" : "sem saldo") : ""}</small></button>)}</div>}
       <div className="cp-acoes"><button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod })}>✏️ Editar</button>
         <button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod, codigo: "", cor: "", tamanho: "", estoque: null })}>＋ Nova cor/tamanho deste produto</button></div>
     </div>}
@@ -183,8 +240,14 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         {campo("altura", "Altura (cm)", { num: true })}
         {campo("profundidade", "Profundidade (cm)", { num: true })}
         {campo("largura", "Largura (cm)", { num: true })}
-        {campo("estoque", "Estoque (unidades)", { num: true })}
-        {campo("preco", "Preço (R$)", { num: true })}
+        {campo("estoque", "Em estoque", { num: true })}
+        {campo("reservas", "Reservado", { num: true })}
+        {campo("expedicao", "Em expedição", { num: true })}
+        {campo("saldo", "Saldo para venda", { num: true })}
+        {campo("deposito", "Estoque / depósito")}
+        <label className="cp-f">Código de preço da etiqueta (88…)<input value={form.cod_etiqueta ?? ""} placeholder="ex.: 881496,820688" onChange={e => { const v = e.target.value; const pr = precoEtiqueta(v); setForm({ ...(form as Produto), cod_etiqueta: v, ...(pr != null ? { preco: pr as any } : {}) }); }} />
+          {precoEtiqueta(form.cod_etiqueta) != null && <small style={{ color: "var(--st-concluida)", fontWeight: 700 }}>= {fmtMoeda(precoEtiqueta(form.cod_etiqueta) as number)}</small>}</label>
+        {campo("preco", "Preço bruto (R$)", { num: true })}
         {campo("imagem_url", "Link da imagem (opcional)", { largo: true })}
         {campo("especificacoes", "Especificações técnicas", { area: true, largo: true })}
         {campo("obs", "Observações", { area: true, largo: true })}
@@ -203,14 +266,14 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {imp && <div className="cp-imp">
         <b>📄 {imp.nome}</b> · <b>{imp.linhas.length}</b> produto(s) prontos para importar{imp.semCod ? <span className="hint"> · {imp.semCod} linha(s) sem código ou sem descrição foram ignoradas</span> : null}
         <div className="hint">Produto com o mesmo código é atualizado; código novo é cadastrado. Colunas reconhecidas: {COLS.filter(([k]) => imp.linhas.some(x => x[k] != null && x[k] !== "")).map(c => c[1]).join(", ") || "—"}.</div>
-        <div style={{ maxHeight: 220, overflow: "auto", margin: "6px 0" }}><table className="cp-tab"><thead><tr><th>Código</th><th>Descrição</th><th>Acabamento</th><th>A × P × L</th><th>Estoque</th></tr></thead>
-          <tbody>{imp.linhas.slice(0, 50).map((x, i) => <tr key={i}><td>{x.codigo}</td><td>{x.nome}</td><td>{x.cor || ""}</td><td>{[x.altura, x.profundidade, x.largura].map(v => v || "—").join(" × ")}</td><td>{x.estoque ?? ""}</td></tr>)}</tbody></table>
+        <div style={{ maxHeight: 220, overflow: "auto", margin: "6px 0" }}><table className="cp-tab"><thead><tr><th>Código</th><th>Descrição</th><th>Acabamento</th><th>A × P × L</th><th>Estoque</th><th>Saldo p/ venda</th></tr></thead>
+          <tbody>{imp.linhas.slice(0, 50).map((x, i) => <tr key={i}><td>{x.codigo}</td><td>{x.nome}</td><td>{x.cor || ""}</td><td>{[x.altura, x.profundidade, x.largura].map(v => v || "—").join(" × ")}</td><td>{x.estoque ?? ""}</td><td>{x.saldo ?? ""}</td></tr>)}</tbody></table>
           {imp.linhas.length > 50 && <div className="hint">… e mais {imp.linhas.length - 50}</div>}</div>
-        <div className="cp-acoes"><button type="button" className="btn primary sm" disabled={importando || !imp.linhas.length} onClick={importar}>{importando ? "Importando…" : `✅ Importar ${imp.linhas.length} produto(s)`}</button><button type="button" className="btn ghost sm" onClick={() => setImp(null)}>Cancelar</button></div>
+        <div className="cp-acoes"><button type="button" className="btn primary sm" disabled={importando || !imp.linhas.length} onClick={importar}>{importando ? `Importando… ${prog}%` : `✅ Importar ${imp.linhas.length} produto(s)`}</button><button type="button" className="btn ghost sm" onClick={() => setImp(null)}>Cancelar</button></div>
       </div>}
-      <table className="cp-tab"><thead><tr><th>Código</th><th>Produto</th><th>Acabamento</th><th>A × P × L</th><th>REF</th><th>Estoque</th></tr></thead>
+      <table className="cp-tab"><thead><tr><th>Código</th><th>Produto</th><th>Acabamento</th><th>A × P × L</th><th>REF</th><th>Saldo p/ venda</th></tr></thead>
         <tbody>{(lista || []).map(p => <tr key={p.codigo} className="clic" onClick={() => { buscar(p.codigo); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-          <td><b>{p.codigo}</b></td><td>{p.nome}</td><td>{p.cor}</td><td>{[p.altura, p.profundidade, p.largura].map(x => x == null ? "—" : String(x).replace(".", ",")).join(" × ")}</td><td>{p.ref}</td><td>{p.estoque ?? "—"}</td></tr>)}</tbody></table>
+          <td><b>{p.codigo}</b></td><td>{p.nome}</td><td>{p.cor}</td><td>{[p.altura, p.profundidade, p.largura].map(x => x == null ? "—" : String(x).replace(".", ",")).join(" × ")}</td><td>{p.ref}</td><td>{qtd(p.saldo ?? p.estoque)}</td></tr>)}</tbody></table>
       {lista && !lista.length && <div className="empty" style={{ padding: 20 }}>Nenhum produto cadastrado ainda.</div>}
     </div>}
 

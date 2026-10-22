@@ -7,3 +7,5 @@
 -- + setor 'produtos' (TI e cadastro de produtos): pode_produtos() = Gestão ou quem tem esse setor
 -- + produto_importar(p jsonb): planilha — cria ou atualiza pelo código; na atualização só muda as colunas que vieram na planilha
 -- + produto_salvar: campo que não veio fica como estava
+-- + estoque numeric (quantidades fracionadas), reservas, expedicao, saldo (saldo para venda), deposito (ex.: LINHA PRONTA) — colunas do CSV do Tático
+-- + cod_etiqueta = código de preço da etiqueta: "88" + reais + "," + centavos (881496,820688 → R$ 1.496,82); o app traduz e mostra o preço bruto
