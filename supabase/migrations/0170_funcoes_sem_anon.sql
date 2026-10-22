@@ -3,3 +3,10 @@
 -- Aplicada direto no banco: para cada função secdef executável por anon fora dessa lista:
 --   revoke execute ... from public, anon;  grant execute ... to authenticated, service_role;
 -- Também removidas as tabelas temporárias da importação de vendas de outubro (_imp_out10, _imp_vmap).
+
+-- Funções internas (prefixo _) que não são usadas em políticas de RLS nem pelo app deixam de ser chamáveis por usuários logados
+-- (antes um usuário logado podia, pela API, calcular o pagamento de qualquer operadora com _calc_pagamento_mkt):
+--   _cadastra_vendedores, _calc_pagamento_mkt, _chat_destinatarios, _checklist_da_venda, _ck_local, _ck_nome_proj,
+--   _consultor_bloqueio, _consultor_por_nome, _eh_resp_mkt_valido, _eh_so_vendedor, _gere_vendedores, _medidor_por_nome,
+--   _pode_chamar_vendedor, _vend_folga_em, _vend_motivo_indisp
+--   revoke execute ... from public, anon, authenticated; grant execute ... to service_role
