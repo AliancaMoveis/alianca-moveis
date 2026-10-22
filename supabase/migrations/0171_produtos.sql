@@ -4,3 +4,6 @@
 -- pode_produtos() = eh_gestao() (teste: o menu aparece só para o Bruno)
 -- produto_buscar(codigo) → produto + variacoes (mesmo grupo, ou mesmo nome) · produto_lista(q) · produto_salvar(p jsonb)
 -- cadastrados os 2 produtos das etiquetas de exemplo: 1875840 (Módulo closet Dalla Costa TW401) e 1974993 (Roupeiro Dalla Costa W203)
+-- + setor 'produtos' (TI e cadastro de produtos): pode_produtos() = Gestão ou quem tem esse setor
+-- + produto_importar(p jsonb): planilha — cria ou atualiza pelo código; na atualização só muda as colunas que vieram na planilha
+-- + produto_salvar: campo que não veio fica como estava

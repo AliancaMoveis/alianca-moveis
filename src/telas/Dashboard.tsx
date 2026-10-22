@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { PainelConsultor, PainelLoja, PainelVendedor } from "./DashLoja";
+import ConsultaProduto from "./ConsultaProduto";
 import PainelOperadora from "./PainelOperadora";
 import PainelConsultorVisual from "./PainelConsultorVisual";
 import PainelGestao from "./PainelGestao";
@@ -125,6 +126,8 @@ export default function Dashboard() {
     {vDono === "dono" ? <PainelDono /> : <>{cabecalho}<PainelBruno de={de} ate={ate} /></>}
   </section>;
   if (R.ehGestao()) return <section className="view active" id="view-dashboard">{cabecalho}<PainelBruno de={de} ate={ate} /></section>;
+  // TI e cadastro de produtos: o início é a consulta/cadastro de produto
+  if (R.mySetores().length && R.mySetores().every((x: string) => x === "produtos")) return <ConsultaProduto />;
   if (R.soCallCenter()) return <PainelSupervisao />;
   // equipe do Checklist: o dashboard é o painel do dia do setor
   if (R.mySetores().includes("checklist") && !R.mySetores().includes("callcenter") && !R.verTudo()) return <PainelChecklist />;

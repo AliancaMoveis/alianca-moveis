@@ -1860,3 +1860,4 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .cp-cam-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 14px calc(14px + env(safe-area-inset-top));color:#fff;background:linear-gradient(#000a,#0000)}
 .cp-cam-top b{font-size:14px}.cp-cam-top span{display:flex;gap:8px}.cp-cam-top button{background:#fff;color:#111;border:0;border-radius:999px;padding:8px 14px;font-weight:800;font-size:14px}
 .cp-cam-erro{position:absolute;left:16px;right:16px;bottom:40px;background:#fff;color:#a00;border-radius:12px;padding:14px;font-weight:700}
+.cp-imp{border:1px solid var(--primary);background:var(--primary-soft);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:13.5px}

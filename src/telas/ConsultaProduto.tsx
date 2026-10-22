@@ -6,6 +6,29 @@ import { createPortal } from "react-dom";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { fmtMoeda } from "../lib/regras";
+import { col, lerArquivo } from "./Medidas";
+import { baixarXlsx } from "../lib/planilha";
+
+// planilha de produtos: aceita os nomes de coluna mais comuns (Tático, Excel feito à mão)
+const COLS: [keyof Produto, string, string[]][] = [
+  ["codigo", "Código de barras", ["Código de barras", "Codigo de barras", "Código", "Codigo", "Cód", "Cod", "EAN", "Cód. barras", "CodBarras", "ID"]],
+  ["nome", "Descrição", ["Descrição", "Descricao", "Produto", "Nome", "Nome do produto"]],
+  ["cor", "Acabamento / cor", ["Acabamento", "Cor", "Acabamento / cor", "Cores"]],
+  ["tamanho", "Tamanho", ["Tamanho", "Versão", "Versao"]],
+  ["ref", "REF", ["REF", "Referência", "Referencia"]],
+  ["fabricante", "Fabricante", ["Fabricante", "Marca", "Fornecedor"]],
+  ["modulo", "Tipo", ["Tipo", "Categoria", "Módulo", "Modulo", "Grupo de produto", "Linha"]],
+  ["grupo", "Grupo (junta cores/tamanhos)", ["Grupo", "Modelo", "Família", "Familia"]],
+  ["altura", "Altura (cm)", ["Altura", "A", "Altura (cm)"]],
+  ["profundidade", "Profundidade (cm)", ["Profundidade", "P", "Profundidade (cm)"]],
+  ["largura", "Largura (cm)", ["Largura", "L", "Largura (cm)"]],
+  ["estoque", "Estoque", ["Estoque", "Saldo", "Qtd", "Quantidade", "Qtde"]],
+  ["preco", "Preço", ["Preço", "Preco", "Valor", "Preço venda", "Preço de venda"]],
+  ["especificacoes", "Especificações técnicas", ["Especificações", "Especificacoes", "Especificações técnicas", "Descrição técnica", "Detalhes"]],
+  ["imagem_url", "Imagem (link)", ["Imagem", "Foto", "URL da imagem", "Link da imagem"]],
+  ["obs", "Observações", ["Observações", "Observacoes", "Obs"]],
+];
+const numTxt = (s: string) => String(s || "").replace(/cm/i, "").replace(/R\$/, "").trim().replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
 
 type Produto = { codigo: string; nome: string; modulo: string; grupo: string; cor: string; tamanho: string; especificacoes: string; estoque: number | null; preco: number | null;
   imagem_url: string; obs: string; ref: string; fabricante: string; altura: number | null; profundidade: number | null; largura: number | null; cod_etiqueta: string; atualizado_em?: string; variacoes?: Produto[] };
@@ -68,6 +91,26 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   const [form, setForm] = useState<Produto | null>(null);
   const [lista, setLista] = useState<Produto[] | null>(null); const [q, setQ] = useState("");
   const [recentes, setRecentes] = useState<string[]>([]);
+  const [imp, setImp] = useState<{ nome: string; linhas: any[]; semCod: number } | null>(null); const [importando, setImportando] = useState(false);
+  const inpArq = { current: null as HTMLInputElement | null };
+  async function lerPlanilha(f: File | undefined) {
+    if (!f) return;
+    try {
+      const l = await lerArquivo(f);
+      const linhas = l.map(r => { const o: any = {}; COLS.forEach(([k, , nomes]) => { const v = String(col(r, ...nomes) || "").trim(); if (v) o[k] = ["altura", "profundidade", "largura", "estoque", "preco"].includes(k as string) ? numTxt(v) : v; });
+        o.codigo = String(o.codigo || "").replace(/\s/g, ""); return o; });
+      const ok = linhas.filter(x => x.codigo && x.nome);
+      setImp({ nome: f.name, linhas: ok, semCod: linhas.length - ok.length });
+    } catch (e: any) { toast("Não consegui ler a planilha: " + (e.message || e)); }
+  }
+  async function importar() {
+    if (!imp) return; setImportando(true);
+    try { const r: any = await A.produtoImportar(imp.linhas);
+      toast(`${r?.novos ?? 0} produto(s) novo(s) · ${r?.atualizados ?? 0} atualizado(s)` + ((r?.erros || []).length ? ` · ${(r.erros || []).length} com erro` : ""));
+      setImp(null); carregarLista(q); }
+    catch (e: any) { toast(e.message); } finally { setImportando(false); }
+  }
+  const modelo = () => baixarXlsx("modelo-produtos", COLS.map(c => c[1]), [["1875840", "MÓDULO CLOSET DALLA COSTA 01 TORRE C/ 02 GAV TW401", "OFF WHITE BRILHO / FREIJÓ", "", "WJG", "Dalla Costa", "Módulo closet", "DALLA COSTA TW401", 220, 45, 73.5, 2, "", "", "", ""]], "Produtos");
 
   async function buscar(c: string) {
     const k = soCod(c); if (!k) return;
@@ -154,7 +197,17 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
     {!movel && <div className="card cp-lista">
       <div className="cp-lista-cab"><b>Produtos cadastrados</b> <span className="hint">{lista ? lista.length : "…"}</span>
         <form style={{ marginLeft: "auto", display: "flex", gap: 6 }} onSubmit={e => { e.preventDefault(); carregarLista(q); }}><input type="search" placeholder="🔎 nome, código, REF" value={q} onChange={e => setQ(e.target.value)} /><button className="btn sm">Buscar</button></form>
-        <button type="button" className="btn sm" onClick={() => { setProd(null); setNaoAchou(""); setForm({ ...VAZIO }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>＋ Novo produto</button></div>
+        <button type="button" className="btn sm" onClick={() => { setProd(null); setNaoAchou(""); setForm({ ...VAZIO }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>＋ Novo produto</button>
+        <label className="btn sm" style={{ cursor: "pointer" }}>⬆ Importar planilha<input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} ref={el => { inpArq.current = el; }} onChange={e => { lerPlanilha(e.target.files?.[0]); e.target.value = ""; }} /></label>
+        <button type="button" className="btn ghost sm" onClick={modelo}>⬇ Modelo de planilha</button></div>
+      {imp && <div className="cp-imp">
+        <b>📄 {imp.nome}</b> · <b>{imp.linhas.length}</b> produto(s) prontos para importar{imp.semCod ? <span className="hint"> · {imp.semCod} linha(s) sem código ou sem descrição foram ignoradas</span> : null}
+        <div className="hint">Produto com o mesmo código é atualizado; código novo é cadastrado. Colunas reconhecidas: {COLS.filter(([k]) => imp.linhas.some(x => x[k] != null && x[k] !== "")).map(c => c[1]).join(", ") || "—"}.</div>
+        <div style={{ maxHeight: 220, overflow: "auto", margin: "6px 0" }}><table className="cp-tab"><thead><tr><th>Código</th><th>Descrição</th><th>Acabamento</th><th>A × P × L</th><th>Estoque</th></tr></thead>
+          <tbody>{imp.linhas.slice(0, 50).map((x, i) => <tr key={i}><td>{x.codigo}</td><td>{x.nome}</td><td>{x.cor || ""}</td><td>{[x.altura, x.profundidade, x.largura].map(v => v || "—").join(" × ")}</td><td>{x.estoque ?? ""}</td></tr>)}</tbody></table>
+          {imp.linhas.length > 50 && <div className="hint">… e mais {imp.linhas.length - 50}</div>}</div>
+        <div className="cp-acoes"><button type="button" className="btn primary sm" disabled={importando || !imp.linhas.length} onClick={importar}>{importando ? "Importando…" : `✅ Importar ${imp.linhas.length} produto(s)`}</button><button type="button" className="btn ghost sm" onClick={() => setImp(null)}>Cancelar</button></div>
+      </div>}
       <table className="cp-tab"><thead><tr><th>Código</th><th>Produto</th><th>Acabamento</th><th>A × P × L</th><th>REF</th><th>Estoque</th></tr></thead>
         <tbody>{(lista || []).map(p => <tr key={p.codigo} className="clic" onClick={() => { buscar(p.codigo); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
           <td><b>{p.codigo}</b></td><td>{p.nome}</td><td>{p.cor}</td><td>{[p.altura, p.profundidade, p.largura].map(x => x == null ? "—" : String(x).replace(".", ",")).join(" × ")}</td><td>{p.ref}</td><td>{p.estoque ?? "—"}</td></tr>)}</tbody></table>

@@ -40,10 +40,11 @@ import ConsultaProduto from "../telas/ConsultaProduto";
 import AgendaVendedores from "../telas/AgendaVendedores";
 import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados } from "./Medidas";
 
-export type Perfil = "consultor" | "vendedor" | "gestor" | "gerente" | "marketing" | "medidor" | "dono" | "juridico" | "posvenda";
+export type Perfil = "consultor" | "vendedor" | "gestor" | "gerente" | "marketing" | "medidor" | "dono" | "juridico" | "posvenda" | "produtos";
 export function perfilMovel(R: any): Perfil | null {
   const s = R.mySetores();
   if (s.includes("proprietario")) return "dono";
+  if (s.length && s.every((x: string) => x === "produtos")) return "produtos";
   if (R.ehGerenteLoja()) return "gerente";
   if (s.includes("juridico") && !R.ehGestao()) return "juridico";
   if (s.includes("posvenda") && !R.ehGestao()) return "posvenda";
@@ -92,6 +93,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : perfil === "gerente" ? [...(R.mySetores().includes("presenca") ? [["presenca", "Presença", "✅"], ["porta", "Porta", "＋"]] as [string, string, string][] : []), ["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
+    : perfil === "produtos" ? [["produto", "Produto", "🏷"], ["eu", "Mais", "☰"]]
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["cagenda", "Agenda", "📅"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["urgente", "Urgente", "🚨"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
@@ -107,7 +109,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const gereMkt = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
   const { abrirDetalhe } = useApp() as any;
   const podeRegistrar = !gerAnuncios && (perfil === "marketing" || perfil === "consultor" || (perfil === "gestor" && (R.ehGestao() || R.temMarketing())));
-  const papel = perfil === "juridico" ? "Jurídico" : perfil === "posvenda" ? "Pós-venda" : perfil === "dono" ? "Proprietário" : perfil === "gerente" ? "Gerente" : perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
+  const papel = perfil === "produtos" ? "TI · Produtos" : perfil === "juridico" ? "Jurídico" : perfil === "posvenda" ? "Pós-venda" : perfil === "dono" ? "Proprietário" : perfil === "gerente" ? "Gerente" : perfil === "marketing" ? "Marketing" : perfil === "medidor" ? "Medidas" : perfil === "consultor" ? "Consultor" : perfil === "vendedor" ? "Vendedor" : R.ehGestao() ? "Gestão" : R.temMarketing() ? "Marketing" : R.mySetores().includes("suporte_consultores") ? "Suporte" : "Supervisão";
   const urg = perfil === "vendedor" ? pendUrgentes(R) : 0;
   const apv = perfil === "gestor" && R.ehGestao() ? R.pendenciasGestao().total - R.pendenciasGestao().promissorias.length + (R.state.reembolsos || []).filter((r: any) => r.status === "pendente").length : 0;
   const pend = perfil === "vendedor" ? R.state.chamados.filter((c: any) => c.atendenteId === R.currentUserId && (R.parecerCobrado(c) || R.semParecer(c))).length : 0;

@@ -468,7 +468,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // Encontrar vendas (Exact × Minha Visita): por enquanto só o Bruno
   const podeEncontrarVendas = () => ["00000000-0000-4000-a000-000000000007"].includes(currentUserId);
   // 🏷 Consulta de produto: por enquanto só o Bruno (teste)
-  const podeConsultaProduto = () => ["00000000-0000-4000-a000-000000000007"].includes(currentUserId);
+  const podeConsultaProduto = () => ["00000000-0000-4000-a000-000000000007"].includes(currentUserId) || mySetores().includes("produtos");
   const ehSupMedidas = () => ehGestao() || mySetores().includes("medidas_supervisao");
   const etapaMedida = (c: Chamado) => (c.tratativa && c.tratativa.medida && c.tratativa.medida.etapa) || (c.status === "concluida" ? "liberada" : "validar");
   const quemMede = () => ({

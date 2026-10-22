@@ -211,6 +211,7 @@ export const A = {
   // 🏷 Consulta de produto (etiqueta do Tático)
   produtoBuscar: (codigo: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(((window as any).__prodMock || []).find((x: any) => x.codigo === codigo) ? { ...((window as any).__prodMock || []).find((x: any) => x.codigo === codigo), variacoes: [] } : null) : rpc<any>("produto_buscar", { p_codigo: codigo }),
   produtoLista: (q = "") => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((window as any).__prodMock || []) : rpc<any[]>("produto_lista", { p_q: q }),
+  produtoImportar: (linhas: any[]) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ novos: linhas.length, atualizados: 0, erros: [] }) : rpc<any>("produto_importar", { p: linhas }),
   produtoSalvar: (p: Record<string, any>) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(p.codigo) : rpc<string>("produto_salvar", { p }),
   vendaConfLista: () => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(((window as any).__confMock || []) as any[]) : rpc<any[]>("venda_conf_lista", {}),
   vendaConfEditar: (numero: string, p: Record<string, any>) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(null) : rpc("venda_conf_editar", { p_numero: numero, p }),
