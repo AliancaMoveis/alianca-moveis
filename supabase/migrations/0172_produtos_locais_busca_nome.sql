@@ -10,3 +10,6 @@ create or replace function public.produto_lista(p_q text default '')
        where w <> '' and not (translate(lower(concat_ws(' ', p.nome, p.cor, p.codigo, p.ref, p.fabricante, p.tamanho, p.modulo)), 'áàâãäéèêëíìîïóòôõöúùûüç', 'aaaaaeeeeiiiiooooouuuuc')
                               like '%' || translate(lower(w), 'áàâãäéèêëíìîïóòôõöúùûüç', 'aaaaaeeeeiiiiooooouuuuc') || '%'))
   order by p.nome, p.cor limit 300 $function$;
+-- produto_importar: com planilhas separadas (MATRIZ / LINHA PRONTA), mantém os locais que não vieram no arquivo
+-- e recalcula estoque/reservas/expedição/saldo/deposito somando os locais (aplicado direto no banco).
+-- App: itens com descrição em letras minúsculas (linha projetado) não são importados.

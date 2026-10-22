@@ -156,7 +156,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   const sugsVis = sugs.map(x => ({ x, d: vendavel(x) })).filter(o => !soDisp || Number(o.d.disp) > 0)
     .sort((a, b) => (Number(b.d.disp) > 0 ? 1 : 0) - (Number(a.d.disp) > 0 ? 1 : 0) || a.x.nome.localeCompare(b.x.nome, "pt-BR")).map(o => o.x);
   function escolher(c: string) { setSugs([]); buscar(c); }
-  const [imp, setImp] = useState<{ nome: string; linhas: any[]; semCod: number } | null>(null); const [importando, setImportando] = useState(false); const [prog, setProg] = useState(0);
+  const [imp, setImp] = useState<{ nome: string; linhas: any[]; semCod: number; projetado: number } | null>(null); const [importando, setImportando] = useState(false); const [prog, setProg] = useState(0);
   const inpArq = { current: null as HTMLInputElement | null };
   async function lerPlanilha(f: File | undefined) {
     if (!f) return;
@@ -175,7 +175,11 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         return o; });
       // o mesmo código pode estar na Loja (MATRIZ) e no Depósito (LINHA PRONTA): vira um produto só, com o estoque de cada local
       const porCod = new Map<string, any>();
-      linhas.filter(x => x.codigo && x.nome).forEach(x => {
+      // descrição com letra minúscula = linha PROJETADO (outra categoria de venda): não entra na consulta de produto.
+      // Só sobem os itens com a descrição toda em CAIXA ALTA.
+      const ehProjetado = (n: string) => /[a-zà-ÿ]/.test(String(n || ""));
+      const projetado = linhas.filter(x => x.codigo && x.nome && ehProjetado(x.nome)).length;
+      linhas.filter(x => x.codigo && x.nome && !ehProjetado(x.nome)).forEach(x => {
         const loc: Local = { local: String(x.deposito || ""), estoque: x.estoque ?? null, reservas: x.reservas ?? null, expedicao: x.expedicao ?? null, saldo: x.saldo ?? null };
         const a = porCod.get(x.codigo);
         if (!a) { porCod.set(x.codigo, { ...x, locais: [loc] }); return; }
@@ -184,7 +188,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         a.deposito = [...new Set(a.locais.map((l: Local) => l.local).filter(Boolean))].join(" + ");
       });
       const ok = [...porCod.values()];
-      setImp({ nome: f.name, linhas: ok, semCod: linhas.filter(x => !(x.codigo && x.nome)).length });
+      setImp({ nome: f.name, linhas: ok, semCod: linhas.filter(x => !(x.codigo && x.nome)).length, projetado });
     } catch (e: any) { toast("Não consegui ler a planilha: " + (e.message || e)); }
   }
   async function importar() {
@@ -326,7 +330,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         <label className="btn sm" style={{ cursor: "pointer" }}>⬆ Importar planilha<input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} ref={el => { inpArq.current = el; }} onChange={e => { lerPlanilha(e.target.files?.[0]); e.target.value = ""; }} /></label>
         <button type="button" className="btn ghost sm" onClick={modelo}>⬇ Modelo de planilha</button></div>
       {imp && <div className="cp-imp">
-        <b>📄 {imp.nome}</b> · <b>{imp.linhas.length}</b> produto(s) prontos para importar{imp.semCod ? <span className="hint"> · {imp.semCod} linha(s) sem código ou sem descrição foram ignoradas</span> : null}
+        <b>📄 {imp.nome}</b> · <b>{imp.linhas.length}</b> produto(s) prontos para importar{imp.semCod ? <span className="hint"> · {imp.semCod} linha(s) sem código ou sem descrição foram ignoradas</span> : null}{imp.projetado ? <span className="hint"> · <b>{imp.projetado}</b> item(ns) da linha projetado (descrição em letras minúsculas) ficaram de fora</span> : null}
         <div className="hint">Produto com o mesmo código é atualizado; código novo é cadastrado. Colunas reconhecidas: {COLS.filter(([k]) => imp.linhas.some(x => x[k] != null && x[k] !== "")).map(c => c[1]).join(", ") || "—"}.</div>
         <div style={{ maxHeight: 220, overflow: "auto", margin: "6px 0" }}><table className="cp-tab"><thead><tr><th>Código</th><th>Descrição</th><th>Acabamento</th><th>A × P × L</th><th>Estoque</th><th>Saldo p/ venda</th></tr></thead>
           <tbody>{imp.linhas.slice(0, 50).map((x, i) => <tr key={i}><td>{x.codigo}</td><td>{x.nome}</td><td>{x.cor || ""}</td><td>{[x.altura, x.profundidade, x.largura].map(v => v || "—").join(" × ")}</td><td>{x.estoque ?? ""}</td><td>{x.saldo ?? ""}</td></tr>)}</tbody></table>
