@@ -162,7 +162,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   // busca pelo nome: vai mostrando os produtos enquanto digita (cada palavra precisa aparecer: "mesa freijo")
   const porNome = /[a-zA-ZÀ-ú]/.test(cod) && cod.trim().length >= 2 && !prod && !form;
   const [sugs, setSugs] = useState<Produto[]>([]); const [buscandoNome, setBuscandoNome] = useState(false);
-  const [soDisp, setSoDisp] = useState(true);
+  const [soDisp, setSoDisp] = useState(false); // mostra TODOS os que batem com o nome (com saldo primeiro); o filtro é opcional
   useEffect(() => {
     if (!porNome) { setSugs([]); return; }
     let vivo = true; setBuscandoNome(true);
@@ -264,6 +264,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {sugsVis.slice(0, 60).map(x => { const d = vendavel(x); return <button key={x.codigo} type="button" className="cp-sug" onClick={() => escolher(x.codigo)}>
         <span><b>{x.nome}</b><small>{[x.cor, x.tamanho].filter(Boolean).join(" · ")}{x.cor || x.tamanho ? " · " : ""}Cód. {x.codigo}</small></span>
         <i className={d.congelado ? "cong" : Number(d.disp) > 0 ? "ok" : d.mostruario ? "mostr" : "zero"}>{d.congelado ? "fora de venda" : Number(d.disp) > 0 ? qtd(d.disp) + " disp." : d.mostruario ? "mostruário" : "sem saldo"}</i></button>; })}
+      {soDisp && sugs.length > sugsVis.length && <button type="button" className="cp-sug" style={{ justifyContent: "center", fontWeight: 700 }} onClick={() => setSoDisp(false)}>Mostrar também {sugs.length - sugsVis.length} sem saldo para venda</button>}
       {sugsVis.length > 60 && <div className="hint" style={{ padding: 8 }}>Mostrando 60 de {sugsVis.length}. Digite mais palavras para filtrar (ex.: "mesa jantar freijo").</div>}
     </div>}
 
