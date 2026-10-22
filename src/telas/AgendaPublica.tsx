@@ -3,6 +3,7 @@ import { fmtTel } from "../lib/baseClientes";
 // Só leitura: horário, cliente, vendedor, consultor, origem e situação. Atualiza a cada minuto.
 import { useEffect, useState } from "react";
 import { A } from "../lib/acoes";
+import Senha from "../comp/Senha";
 
 const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -203,7 +204,7 @@ export default function AgendaPublica() {
               {!escolher._troca && <option value="outro">Outro (não estou na lista)</option>}
             </select></label>
           {sel === "outro" && <label className="ap-campo">Escreva seu nome completo<input value={outro} onChange={e => setOutro(e.target.value)} placeholder="Ex.: Pedro Almeida (freelancer)" autoFocus /></label>}
-          {sel && sel !== "outro" && <label className="ap-campo">Sua senha do sistema<input type="password" autoComplete="off" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => { if (e.key === "Enter") assumir(); }} placeholder="a mesma do app" autoFocus /></label>}
+          {sel && sel !== "outro" && <label className="ap-campo">Sua senha do sistema<Senha autoComplete="off" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => { if (e.key === "Enter") assumir(); }} placeholder="a mesma do app" autoFocus /></label>}
           <button className="ap-confirmar" disabled={enviando === escolher.id || !sel || (sel === "outro" ? outro.trim().length < 2 : !senha)} onClick={assumir}>{enviando === escolher.id ? "Assumindo…" : "✋ Assumir atendimento"}</button>
           <button className="ap-cancelar" onClick={() => { setEscolher(null); setSenha(""); }}>Cancelar</button>
         </div></div>}
@@ -223,7 +224,7 @@ export default function AgendaPublica() {
           {ver.passo === "confirmar" && <>
             <b>Você vai assumir este projeto?</b>
             <span>{ver.programado ? <>O projetista programado para <b>{ver.x.cliente}</b> é <b>{soNome(ver.programado)}</b>.</> : <><b>{ver.x.cliente}</b> está sem projetista.</>} Se você abrir as imagens, <b>o projeto passa para o seu nome</b>{ver.programado ? " e " + soNome(ver.programado) + " e a coordenação são avisados" : " e a coordenação é avisada"}.</span>
-            <label className="ap-campo">Sua senha do sistema<input type="password" autoComplete="off" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => { if (e.key === "Enter") verImagens(true); }} placeholder="a mesma do app" autoFocus /></label>
+            <label className="ap-campo">Sua senha do sistema<Senha autoComplete="off" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => { if (e.key === "Enter") verImagens(true); }} placeholder="a mesma do app" autoFocus /></label>
             <button className="ap-confirmar" disabled={enviando === ver.x.id || !senha} onClick={() => verImagens(true)}>{enviando === ver.x.id ? "Assumindo…" : "✋ Sim, vou assumir o projeto"}</button>
             <button className="ap-cancelar" onClick={() => setVer({ ...ver, passo: "nome" })}>Voltar</button>
           </>}

@@ -6,6 +6,7 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { DIAS_SEMANA, TURNOS, domingoDeFolga, fmtDate, folgaEm, hojeISO } from "../lib/regras";
 import { ModalFerias, textoFerias } from "../comp/Ferias";
+import Senha from "../comp/Senha";
 
 // cadastrar / descadastrar vendedor (gera o acesso só com a função de vendedor): gerentes e Gestão — o banco confere (_cadastra_vendedores)
 export const podeCadastrarVendedores = (R: any) => R.ehGestao() || R.mySetores().includes("gerente_loja");
@@ -110,7 +111,7 @@ function NovoVendedor({ fechar }: { fechar: () => void }) {
     <div className="cv-form">
       <label>Nome<input value={f.nome} onChange={e => setF({ ...f, nome: e.target.value })} placeholder="Ex.: Pedro Almeida" autoFocus /></label>
       <label>E-mail (login)<input value={f.email} onChange={e => setF({ ...f, email: e.target.value })} placeholder="pedro@alianca360.com.br" inputMode="email" /></label>
-      <label>Senha inicial<input value={f.senha} onChange={e => setF({ ...f, senha: e.target.value })} /></label>
+      <label>Senha inicial<Senha value={f.senha} onChange={e => setF({ ...f, senha: e.target.value })} autoComplete="new-password" /></label>
       <label>Categoria<select value={f.freelancer ? "1" : "0"} onChange={e => setF({ ...f, freelancer: e.target.value === "1" })}><option value="0">Vendedor da loja</option><option value="1">Freelancer</option></select></label>
       <label>Tipo<select value={f.fazProjeto ? "1" : "0"} onChange={e => setF({ ...f, fazProjeto: e.target.value === "1" })}><option value="1">📐 Projetista (faz projeto)</option><option value="0">Só vendedor (não faz projeto)</option></select></label>
     </div>

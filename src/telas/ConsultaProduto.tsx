@@ -26,7 +26,7 @@ const COLS: [keyof Produto, string, string[]][] = [
   ["reservas", "Reservas", ["Reservas", "Reserva", "Reservado"]],
   ["expedicao", "Em expedição", ["Em Expedição", "Expedição", "Em expedicao"]],
   ["saldo", "Saldo para venda", ["Saldo para Venda", "Saldo p/ venda", "Saldo para vendas", "Disponível", "Disponivel", "Saldo"]],
-  ["deposito", "Estoque / depósito", ["Estoque", "Depósito", "Deposito", "Local"]],
+  ["deposito", "Local (Matriz = loja · Linha pronta = depósito)", ["Estoque", "Depósito", "Deposito", "Local"]],
   ["preco", "Preço", ["Preço", "Preco", "Valor", "Preço venda", "Preço de venda"]],
   ["especificacoes", "Especificações técnicas", ["Especificações", "Especificacoes", "Especificações técnicas", "Descrição técnica", "Detalhes"]],
   ["imagem_url", "Imagem (link)", ["Imagem", "Foto", "URL da imagem", "Link da imagem"]],
@@ -66,6 +66,20 @@ const numTxt = (s: string) => String(s || "").replace(/cm/i, "").replace(/R\$/, 
 
 type Produto = { codigo: string; nome: string; modulo: string; grupo: string; cor: string; tamanho: string; especificacoes: string; estoque: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null; deposito?: string; preco: number | null;
   imagem_url: string; obs: string; ref: string; fabricante: string; altura: number | null; profundidade: number | null; largura: number | null; cod_etiqueta: string; atualizado_em?: string; variacoes?: Produto[] };
+/** Locais do Tático: MATRIZ = Loja; LINHA PRONTA = Depósito. Na MATRIZ (loja), saldo 1 é o MOSTRUÁRIO: não está disponível para venda. */
+const MATRIZ = /matriz/i;
+export const nomeLocal = (d: string) => MATRIZ.test(d || "") ? "Loja (Matriz)" : /linha\s*pronta/i.test(d || "") ? "Depósito" : (d || "");
+type Local = { local: string; estoque?: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null };
+const ehMostr = (l: Local) => MATRIZ.test(l.local || "") && Number(l.saldo) === 1;
+const saldoDe = (p: any) => p.saldo != null ? Number(p.saldo) : p.estoque != null ? Number(p.estoque) - Number(p.reservas || 0) - Number(p.expedicao || 0) : null;
+export function vendavel(p: any) {
+  if (!p) return { disp: null as number | null, mostruario: false, locais: [] as (Local & { disp: number | null; mostr: boolean })[] };
+  const ls: Local[] = Array.isArray(p.locais) && p.locais.length ? p.locais : p.deposito || p.saldo != null || p.estoque != null ? [{ local: p.deposito || "", estoque: p.estoque, reservas: p.reservas, expedicao: p.expedicao, saldo: p.saldo }] : [];
+  const locais = ls.map(l => { const sd = saldoDe(l), mostr = ehMostr(l); return { ...l, disp: mostr ? 0 : sd, mostr }; });
+  const comNum = locais.filter(l => l.disp != null);
+  return { disp: comNum.length ? comNum.reduce((t, l) => t + Number(l.disp), 0) : null, mostruario: locais.some(l => l.mostr), locais };
+}
+
 const VAZIO: Produto = { codigo: "", nome: "", modulo: "", grupo: "", cor: "", tamanho: "", especificacoes: "", estoque: null, preco: null, imagem_url: "", obs: "", ref: "", fabricante: "", altura: null, profundidade: null, largura: null, cod_etiqueta: "" };
 const soCod = (s: string) => String(s || "").replace(/\s/g, "");
 /** código de preço da etiqueta: "88" + reais + "," + centavos (+ dígitos de controle). 881496,820688 → R$ 1.496,82 */
@@ -129,6 +143,19 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   const [form, setForm] = useState<Produto | null>(null);
   const [lista, setLista] = useState<Produto[] | null>(null); const [q, setQ] = useState("");
   const [recentes, setRecentes] = useState<string[]>([]);
+  // busca pelo nome: vai mostrando os produtos enquanto digita (cada palavra precisa aparecer: "mesa freijo")
+  const porNome = /[a-zA-ZÀ-ú]/.test(cod) && cod.trim().length >= 2 && !prod && !form;
+  const [sugs, setSugs] = useState<Produto[]>([]); const [buscandoNome, setBuscandoNome] = useState(false);
+  const [soDisp, setSoDisp] = useState(true);
+  useEffect(() => {
+    if (!porNome) { setSugs([]); return; }
+    let vivo = true; setBuscandoNome(true);
+    const t = setTimeout(async () => { try { const r = ((await A.produtoLista(cod.trim())) || []) as Produto[]; if (vivo) setSugs(r); } catch { /* */ } finally { if (vivo) setBuscandoNome(false); } }, 280);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [cod, porNome]);
+  const sugsVis = sugs.map(x => ({ x, d: vendavel(x) })).filter(o => !soDisp || Number(o.d.disp) > 0)
+    .sort((a, b) => (Number(b.d.disp) > 0 ? 1 : 0) - (Number(a.d.disp) > 0 ? 1 : 0) || a.x.nome.localeCompare(b.x.nome, "pt-BR")).map(o => o.x);
+  function escolher(c: string) { setSugs([]); buscar(c); }
   const [imp, setImp] = useState<{ nome: string; linhas: any[]; semCod: number } | null>(null); const [importando, setImportando] = useState(false); const [prog, setProg] = useState(0);
   const inpArq = { current: null as HTMLInputElement | null };
   async function lerPlanilha(f: File | undefined) {
@@ -146,8 +173,18 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         if (o.nome && o.altura == null && o.largura == null) { const m = String(o.nome).match(/(\d+(?:[.,]\d+)?)\s*X\s*(\d+(?:[.,]\d+)?)\s*X\s*(\d+(?:[.,]\d+)?)\s*CM/i);
           if (m) { o.largura = m[1].replace(",", "."); o.altura = m[2].replace(",", "."); o.profundidade = m[3].replace(",", "."); } }
         return o; });
-      const ok = linhas.filter(x => x.codigo && x.nome);
-      setImp({ nome: f.name, linhas: ok, semCod: linhas.length - ok.length });
+      // o mesmo código pode estar na Loja (MATRIZ) e no Depósito (LINHA PRONTA): vira um produto só, com o estoque de cada local
+      const porCod = new Map<string, any>();
+      linhas.filter(x => x.codigo && x.nome).forEach(x => {
+        const loc: Local = { local: String(x.deposito || ""), estoque: x.estoque ?? null, reservas: x.reservas ?? null, expedicao: x.expedicao ?? null, saldo: x.saldo ?? null };
+        const a = porCod.get(x.codigo);
+        if (!a) { porCod.set(x.codigo, { ...x, locais: [loc] }); return; }
+        a.locais.push(loc);
+        ["estoque", "reservas", "expedicao", "saldo"].forEach(k => { if (x[k] != null) a[k] = Number(a[k] || 0) + Number(x[k]); });
+        a.deposito = [...new Set(a.locais.map((l: Local) => l.local).filter(Boolean))].join(" + ");
+      });
+      const ok = [...porCod.values()];
+      setImp({ nome: f.name, linhas: ok, semCod: linhas.filter(x => !(x.codigo && x.nome)).length });
     } catch (e: any) { toast("Não consegui ler a planilha: " + (e.message || e)); }
   }
   async function importar() {
@@ -173,7 +210,11 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   }
   async function salvar() {
     if (!form) return;
-    try { const k = await A.produtoSalvar(form as any); toast("Produto salvo"); setForm(null); await buscar(k || form.codigo); if (lista) carregarLista(); }
+    // editou o estoque à mão: passa a valer o que foi digitado (o estoque por local volta na próxima planilha)
+    const f: any = { ...form }; delete f.variacoes;
+    const mudou = ["estoque", "reservas", "expedicao", "saldo", "deposito"].some(k => String((prod as any)?.[k] ?? "") !== String(f[k] ?? ""));
+    if (!Array.isArray(f.locais) || f.locais.length <= 1 || mudou || prod?.codigo !== f.codigo) f.locais = [];
+    try { const k = await A.produtoSalvar(f); toast("Produto salvo"); setForm(null); await buscar(k || form.codigo); if (lista) carregarLista(); }
     catch (e: any) { toast(e.message || "Não consegui salvar"); }
   }
   async function carregarLista(busca = q) { try { setLista(((await A.produtoLista(busca)) || []) as Produto[]); } catch (e: any) { toast(e.message); } }
@@ -183,16 +224,24 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       : <input value={(form as any)[k] ?? ""} inputMode={extra.num ? "decimal" : undefined} onChange={e => setForm({ ...(form as Produto), [k]: e.target.value })} />}</label>;
 
   return <section className={movel ? "cp cp-movel" : "view active cp"}>
-    {!movel && <div className="view-head"><div><h2>🏷 Consulta de produto</h2><p>Leia o código de barras da etiqueta (câmera do celular ou leitor) ou digite o número. Mostra o produto, as medidas, o acabamento, o estoque e as outras opções do mesmo produto.</p></div></div>}
+    {!movel && <div className="view-head"><div><h2>🏷 Consulta de produto</h2><p>Leia o código de barras da etiqueta (câmera do celular ou leitor) ou digite o número ou o nome do produto. Mostra o produto, as medidas, o acabamento, o estoque e as outras opções do mesmo produto.</p></div></div>}
     {movel && <div className="mv-sec">🏷 Consulta de produto</div>}
 
     <div className="cp-busca">
       <button type="button" className="btn primary cp-scan" onClick={() => setCam(true)}>📷 Ler código de barras</button>
-      <form className="cp-dig" onSubmit={e => { e.preventDefault(); buscar(cod); }}>
-        <input inputMode="numeric" placeholder="código do produto (1875840) ou de preço (881496,82…)" value={cod} onChange={e => setCod(e.target.value)} />
+      <form className="cp-dig" onSubmit={e => { e.preventDefault(); if (/[a-zA-ZÀ-ú]/.test(cod)) { const d = sugsVis[0]; if (d) escolher(d.codigo); } else buscar(cod); }}>
+        <input type="search" autoComplete="off" placeholder="nome do produto, código (1875840) ou código de preço (88…)" value={cod} onChange={e => { setCod(e.target.value); if (/[a-zA-ZÀ-ú]/.test(e.target.value)) { setProd(null); setNaoAchou(""); setPrecoLido(null); } }} />
         <button className="btn" type="submit" disabled={busy}>{busy ? "…" : "Buscar"}</button>
       </form>
     </div>
+    {porNome && <div className="cp-sugs">
+      <div className="cp-sugs-cab"><span>{buscandoNome ? "Procurando…" : sugsVis.length ? sugsVis.length + (sugsVis.length === 1 ? " produto" : " produtos") + (soDisp ? " com saldo para venda" : "") : soDisp ? "Nenhum produto com saldo para venda com esse nome" : "Nenhum produto com esse nome"}</span>
+        <label><input type="checkbox" checked={soDisp} onChange={e => setSoDisp(e.target.checked)} /> só com saldo para venda</label></div>
+      {sugsVis.slice(0, 60).map(x => { const d = vendavel(x); return <button key={x.codigo} type="button" className="cp-sug" onClick={() => escolher(x.codigo)}>
+        <span><b>{x.nome}</b><small>{[x.cor, x.tamanho].filter(Boolean).join(" · ")}{x.cor || x.tamanho ? " · " : ""}Cód. {x.codigo}</small></span>
+        <i className={Number(d.disp) > 0 ? "ok" : d.mostruario ? "mostr" : "zero"}>{Number(d.disp) > 0 ? qtd(d.disp) + " disp." : d.mostruario ? "mostruário" : "sem saldo"}</i></button>; })}
+      {sugsVis.length > 60 && <div className="hint" style={{ padding: 8 }}>Mostrando 60 de {sugsVis.length}. Digite mais palavras para filtrar (ex.: "mesa jantar freijo").</div>}
+    </div>}
 
     {precoLido != null && <div className="cp-card cp-preco-lido"><span>Preço da etiqueta</span><b>{fmtMoeda(precoLido)}</b><small>preço bruto · código {cod}</small></div>}
     {prod && !form && <div className="cp-card">
@@ -202,12 +251,18 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       <div className="cp-tags">
         <span className="cp-tag cod">Cód. {prod.codigo}</span>
         {prod.ref && <span className="cp-tag">REF {prod.ref}</span>}
-        {prod.deposito && <span className="cp-tag">{prod.deposito}</span>}
+        {prod.deposito && <span className="cp-tag">{String(prod.deposito).split(" + ").map(nomeLocal).join(" + ")}</span>}
       </div>
       {/* estoque é a informação principal: o saldo para venda é o que realmente dá para vender */}
       {(prod.saldo != null || prod.estoque != null || prod.reservas != null || prod.expedicao != null) && <div className="cp-estoque">
-        <div className={"cp-saldo " + (Number(prod.saldo ?? 0) > 0 ? "ok" : "zero")}><span>Saldo para venda (disponível)</span><b>{qtd(prod.saldo ?? (prod.estoque != null ? Number(prod.estoque) - Number(prod.reservas || 0) - Number(prod.expedicao || 0) : null))}</b>
-          <small>{Number(prod.saldo ?? 0) > 0 ? "pode vender" : Number(prod.saldo ?? 0) < 0 ? "vendido além do estoque — aguardando chegada" : "sem saldo — consulte a reposição"}</small></div>
+        {(() => { const v = vendavel(prod); const so = v.mostruario && !Number(v.disp); return <>
+          <div className={"cp-saldo " + (so ? "mostr" : Number(v.disp ?? 0) > 0 ? "ok" : "zero")}><span>Saldo para venda (disponível)</span><b>{qtd(v.disp)}</b>
+            <small>{so ? "só tem o MOSTRUÁRIO da loja — não está disponível para venda" : Number(v.disp ?? 0) > 0 ? "pode vender" + (v.mostruario ? " (o mostruário da loja não entra)" : "") : Number(v.disp ?? 0) < 0 ? "vendido além do estoque — aguardando chegada" : "sem saldo — consulte a reposição"}</small></div>
+          {v.locais.some(l => l.local) && <div className="cp-locais">{v.locais.map((l, i) => <div key={i} className={"cp-local" + (l.mostr ? " mostr" : "")}>
+            <b>{nomeLocal(l.local)}</b>
+            <span>{l.mostr ? "1 peça · MOSTRUÁRIO — não vender" : (Number(l.disp ?? 0) > 0 ? qtd(l.disp) + " disponível" : Number(l.disp ?? 0) < 0 ? qtd(l.disp) + " (vendido além do estoque)" : "sem saldo")}</span>
+            <small>estoque {qtd(l.estoque)} · reservado {qtd(l.reservas)} · expedição {qtd(l.expedicao)}</small></div>)}</div>}
+        </>; })()}
         <div className="cp-estq">
           <div><span>Em estoque</span><b>{qtd(prod.estoque)}</b><small>na loja/depósito</small></div>
           <div><span>Reservado</span><b>{qtd(prod.reservas)}</b><small>vendas esperando o produto</small></div>
@@ -224,7 +279,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {prod.obs && <div className="cp-esp"><span>Observações</span><div>{prod.obs}</div></div>}
       {(prod.variacoes || []).length > 0 && <div className="cp-var"><span>Outras opções deste produto</span>
         {(prod.variacoes || []).map(v => <button key={v.codigo} type="button" className="cp-var-it" onClick={() => buscar(v.codigo)}>
-          <b>{[v.tamanho, v.cor].filter(Boolean).join(" · ") || v.nome}</b><small>Cód. {v.codigo}{(v.saldo ?? v.estoque) != null ? " · " + (Number(v.saldo ?? v.estoque) > 0 ? qtd(v.saldo ?? v.estoque) + " disponível" : "sem saldo") : ""}</small></button>)}</div>}
+          <b>{[v.tamanho, v.cor].filter(Boolean).join(" · ") || v.nome}</b><small>Cód. {v.codigo}{(() => { const d = vendavel(v); return d.disp != null ? " · " + (Number(d.disp) > 0 ? qtd(d.disp) + " disponível" : d.mostruario ? "só mostruário" : "sem saldo") : ""; })()}</small></button>)}</div>}
       <div className="cp-acoes"><button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod })}>✏️ Editar</button>
         <button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod, codigo: "", cor: "", tamanho: "", estoque: null })}>＋ Nova cor/tamanho deste produto</button></div>
     </div>}
@@ -251,7 +306,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         {campo("reservas", "Reservado", { num: true })}
         {campo("expedicao", "Em expedição", { num: true })}
         {campo("saldo", "Saldo para venda", { num: true })}
-        {campo("deposito", "Estoque / depósito")}
+        {campo("deposito", "Local (Matriz = loja · Linha pronta = depósito)")}
         <label className="cp-f">Código de preço da etiqueta (88…)<input value={form.cod_etiqueta ?? ""} placeholder="ex.: 881496,820688" onChange={e => { const v = e.target.value; const pr = precoEtiqueta(v); setForm({ ...(form as Produto), cod_etiqueta: v, ...(pr != null ? { preco: pr as any } : {}) }); }} />
           {precoEtiqueta(form.cod_etiqueta) != null && <small style={{ color: "var(--st-concluida)", fontWeight: 700 }}>= {fmtMoeda(precoEtiqueta(form.cod_etiqueta) as number)}</small>}</label>
         {campo("preco", "Preço bruto (R$)", { num: true })}
@@ -280,7 +335,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       </div>}
       <table className="cp-tab"><thead><tr><th>Código</th><th>Produto</th><th>Acabamento</th><th>A × P × L</th><th>REF</th><th>Saldo p/ venda</th></tr></thead>
         <tbody>{(lista || []).map(p => <tr key={p.codigo} className="clic" onClick={() => { buscar(p.codigo); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-          <td><b>{p.codigo}</b></td><td>{p.nome}</td><td>{p.cor}</td><td>{[p.altura, p.profundidade, p.largura].map(x => x == null ? "—" : String(x).replace(".", ",")).join(" × ")}</td><td>{p.ref}</td><td>{qtd(p.saldo ?? p.estoque)}</td></tr>)}</tbody></table>
+          <td><b>{p.codigo}</b></td><td>{p.nome}</td><td>{p.cor}</td><td>{[p.altura, p.profundidade, p.largura].map(x => x == null ? "—" : String(x).replace(".", ",")).join(" × ")}</td><td>{p.ref}</td><td>{(() => { const d = vendavel(p); return d.mostruario && !Number(d.disp) ? <span title="Na loja (matriz), saldo 1 é mostruário">0 · mostruário</span> : qtd(d.disp); })()}</td></tr>)}</tbody></table>
       {lista && !lista.length && <div className="empty" style={{ padding: 20 }}>Nenhum produto cadastrado ainda.</div>}
     </div>}
 

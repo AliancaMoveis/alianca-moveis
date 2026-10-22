@@ -3,6 +3,7 @@ import { useApp } from "../estado";
 import { sb } from "../lib/supabase";
 import { A } from "../lib/acoes";
 import { fmtTel } from "../lib/baseClientes";
+import Senha from "./Senha";
 
 export function Modal({ titulo, onFechar, children, tituloNode }: { titulo?: string; tituloNode?: React.ReactNode; onFechar: () => void; children: React.ReactNode }) {
   return (
@@ -28,8 +29,8 @@ export function AlterarSenha() {
   }
   return (
     <Modal titulo="Alterar minha senha" onFechar={fechar}>
-      <div className="field" style={{ marginBottom: 14 }}><label>Nova senha <span className="hint">(mínimo 8 caracteres)</span></label><input type="password" value={s1} onChange={e => setS1(e.target.value)} autoComplete="new-password" /></div>
-      <div className="field" style={{ marginBottom: 20 }}><label>Repita a nova senha</label><input type="password" value={s2} onChange={e => setS2(e.target.value)} autoComplete="new-password" /></div>
+      <div className="field" style={{ marginBottom: 14 }}><label>Nova senha <span className="hint">(mínimo 8 caracteres)</span></label><Senha value={s1} onChange={e => setS1(e.target.value)} autoComplete="new-password" /></div>
+      <div className="field" style={{ marginBottom: 20 }}><label>Repita a nova senha</label><Senha value={s2} onChange={e => setS2(e.target.value)} autoComplete="new-password" /></div>
       <button className="btn primary" onClick={salvar}>Salvar</button>
     </Modal>
   );

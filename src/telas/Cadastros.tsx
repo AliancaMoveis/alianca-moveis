@@ -5,6 +5,7 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { LIBS, inicial } from "../lib/regras";
 import { Modal } from "../comp/Modal";
+import Senha from "../comp/Senha";
 
 // ================= Fábricas e representantes =================
 export function Cadastros() {
@@ -142,7 +143,7 @@ function EditUser({ id }: { id: string | null }) {
     <Modal titulo={id ? "Editar usuário" : "Novo usuário"} onFechar={fechar}>
       <div className="field" style={{ marginBottom: 14 }}><label>Nome <span className="req-star">*</span></label><input value={nome} onChange={e => setNome(e.target.value)} /></div>
       <div className="field" style={{ marginBottom: 14 }}><label>E-mail de acesso {!id && <span className="req-star">*</span>}</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nome@aliancamoveis.com.br" /></div>
-      <div className="field" style={{ marginBottom: 14 }}><label>{id ? <>Nova senha <span className="hint">(deixe vazio para não mudar)</span></> : <>Senha inicial <span className="req-star">*</span> <span className="hint">(mín. 8 caracteres — a pessoa pode trocar depois)</span></>}</label><input type="text" value={senha} onChange={e => setSenha(e.target.value)} autoComplete="off" /></div>
+      <div className="field" style={{ marginBottom: 14 }}><label>{id ? <>Nova senha <span className="hint">(deixe vazio para não mudar)</span></> : <>Senha inicial <span className="req-star">*</span> <span className="hint">(mín. 8 caracteres — a pessoa pode trocar depois)</span></>}</label><Senha value={senha} onChange={e => setSenha(e.target.value)} autoComplete="new-password" /></div>
       <div className="field" style={{ marginBottom: 14 }}><label>Setores <span className="req-star">*</span> <span className="hint">(pode marcar mais de um)</span></label>
         <div id="uSetores">{st.setores.map(s => <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--line-soft)" }}><input type="checkbox" checked={setores.includes(s.id)} onChange={() => toggle(s.id)} style={{ width: "auto" }} /> {s.nome}</label>)}</div></div>
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}><input type="checkbox" checked={ext} onChange={e => setExt(e.target.checked)} style={{ width: "auto" }} /> É consultor externo <span className="hint">(vê e trata apenas o que for atribuído a ele mesmo, mesmo dentro do setor)</span></label>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { sb } from "../lib/supabase";
+import Senha from "../comp/Senha";
 
 function Cena({ children }: { children: React.ReactNode }) {
   return (
@@ -70,7 +71,7 @@ export default function Login({ aviso, carregando, sairAntes }: { aviso?: string
           </div>
           <div className="lg-field">
             <label>Senha</label>
-            <input type="password" autoComplete="current-password" value={senha} onChange={e => setSenha(e.target.value)} placeholder="••••••••" />
+            <Senha autoComplete="current-password" value={senha} onChange={e => setSenha(e.target.value)} placeholder="••••••••" />
           </div>
           {erro && <div className="lg-info" style={{ borderColor: "rgba(194,59,59,.5)", color: "#f0b4b4" }}>{erro}</div>}
           {info && <div className="lg-info">{info}</div>}
@@ -98,8 +99,8 @@ export function NovaSenha({ aoConcluir }: { aoConcluir: () => void }) {
     <Cena>
       <h1>Criar nova senha</h1>
       <form onSubmit={salvar}>
-        <div className="lg-field"><label>Nova senha</label><input type="password" value={s1} onChange={e => setS1(e.target.value)} autoComplete="new-password" /></div>
-        <div className="lg-field"><label>Repita a nova senha</label><input type="password" value={s2} onChange={e => setS2(e.target.value)} autoComplete="new-password" /></div>
+        <div className="lg-field"><label>Nova senha</label><Senha value={s1} onChange={e => setS1(e.target.value)} autoComplete="new-password" /></div>
+        <div className="lg-field"><label>Repita a nova senha</label><Senha value={s2} onChange={e => setS2(e.target.value)} autoComplete="new-password" /></div>
         {erro && <div className="lg-info" style={{ color: "#f0b4b4" }}>{erro}</div>}
         {ok && <div className="lg-info">Senha alterada.</div>}
         <button className="lg-btn" type="submit">Salvar senha</button>
