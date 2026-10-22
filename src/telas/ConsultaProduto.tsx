@@ -64,7 +64,7 @@ async function lerCsvTatico(f: File): Promise<Record<string, string>[]> {
 }
 const numTxt = (s: string) => String(s || "").replace(/cm/i, "").replace(/R\$/, "").trim().replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
 
-type Produto = { codigo: string; nome: string; modulo: string; grupo: string; cor: string; tamanho: string; especificacoes: string; estoque: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null; deposito?: string; preco: number | null;
+type Produto = { congelado?: boolean; congelado_motivo?: string; mostruario_liberado?: boolean; codigo: string; nome: string; modulo: string; grupo: string; cor: string; tamanho: string; especificacoes: string; estoque: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null; deposito?: string; preco: number | null;
   imagem_url: string; obs: string; ref: string; fabricante: string; altura: number | null; profundidade: number | null; largura: number | null; cod_etiqueta: string; atualizado_em?: string; variacoes?: Produto[] };
 /** Locais do Tático: MATRIZ = Loja; ESTOQUE 1 / LINHA PRONTA = Depósito; ESTOFADOS = Estoque Estofados. Na MATRIZ (loja), saldo 1 é o MOSTRUÁRIO: não está disponível para venda. */
 const MATRIZ = /matriz/i;
@@ -76,9 +76,13 @@ const saldoDe = (p: any) => p.saldo != null ? Number(p.saldo) : p.estoque != nul
 export function vendavel(p: any) {
   if (!p) return { disp: null as number | null, mostruario: false, locais: [] as (Local & { disp: number | null; mostr: boolean })[] };
   const ls: Local[] = Array.isArray(p.locais) && p.locais.length ? p.locais : p.deposito || p.saldo != null || p.estoque != null ? [{ local: p.deposito || "", estoque: p.estoque, reservas: p.reservas, expedicao: p.expedicao, saldo: p.saldo }] : [];
-  const locais = ls.map(l => { const sd = saldoDe(l), mostr = ehMostr(l); return { ...l, disp: mostr ? 0 : sd, mostr }; });
+  // mostruário liberado (gerente/TI/Gestão): a peça única da loja pode ser vendida
+  const lib = !!p.mostruario_liberado;
+  const locais = ls.map(l => { const sd = saldoDe(l), mostr = ehMostr(l); return { ...l, disp: mostr && !lib ? 0 : sd, mostr }; });
   const comNum = locais.filter(l => l.disp != null);
-  return { disp: comNum.length ? comNum.reduce((t, l) => t + Number(l.disp), 0) : null, mostruario: locais.some(l => l.mostr), locais };
+  const soma = comNum.length ? comNum.reduce((t, l) => t + Number(l.disp), 0) : null;
+  // tirado de venda (congelado): continua cadastrado, mas não aparece como disponível
+  return { disp: p.congelado ? 0 : soma, mostruario: locais.some(l => l.mostr), mostrLiberado: lib && locais.some(l => l.mostr), congelado: !!p.congelado, locais };
 }
 
 const VAZIO: Produto = { codigo: "", nome: "", modulo: "", grupo: "", cor: "", tamanho: "", especificacoes: "", estoque: null, preco: null, imagem_url: "", obs: "", ref: "", fabricante: "", altura: null, profundidade: null, largura: null, cod_etiqueta: "" };
@@ -137,7 +141,11 @@ export function LeitorCodigo({ onCodigo, onFechar }: { onCodigo: (c: string) => 
 }
 
 export default function ConsultaProduto({ movel = false }: { movel?: boolean }) {
-  const { toast } = useApp() as any;
+  const { toast, R } = useApp() as any;
+  const edita = R.podeEditarProduto(), libMostr = R.podeLiberarMostruario();
+  async function acao(f: () => Promise<any>, msg: string, recarregar = true) {
+    try { await f(); toast(msg); if (recarregar && prod) await buscar(prod.codigo); if (lista) carregarLista(); } catch (e: any) { toast(e.message || "Não consegui salvar"); }
+  }
   const [cam, setCam] = useState(false);
   const [cod, setCod] = useState(""); const [busy, setBusy] = useState(false);
   const [prod, setProd] = useState<Produto | null>(null); const [naoAchou, setNaoAchou] = useState("");
@@ -222,7 +230,8 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
     try { const k = await A.produtoSalvar(f); toast("Produto salvo"); setForm(null); await buscar(k || form.codigo); if (lista) carregarLista(); }
     catch (e: any) { toast(e.message || "Não consegui salvar"); }
   }
-  async function carregarLista(busca = q) { try { setLista(((await A.produtoLista(busca)) || []) as Produto[]); } catch (e: any) { toast(e.message); } }
+  async function carregarLista(busca = q) { try { const [l, t] = await Promise.all([A.produtoLista(busca), A.produtoTotal()]); setLista((l || []) as Produto[]); setTotal(t || null); } catch (e: any) { toast(e.message); } }
+  const [total, setTotal] = useState<{ total: number; congelados: number } | null>(null);
   useEffect(() => { if (!movel) carregarLista(""); }, []);
   const campo = (k: keyof Produto, l: string, extra: any = {}) => <label className={"cp-f" + (extra.largo ? " largo" : "")}>{l}
     {extra.area ? <textarea rows={4} value={(form as any)[k] ?? ""} onChange={e => setForm({ ...(form as Produto), [k]: e.target.value })} />
@@ -244,7 +253,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         <label><input type="checkbox" checked={soDisp} onChange={e => setSoDisp(e.target.checked)} /> só com saldo para venda</label></div>
       {sugsVis.slice(0, 60).map(x => { const d = vendavel(x); return <button key={x.codigo} type="button" className="cp-sug" onClick={() => escolher(x.codigo)}>
         <span><b>{x.nome}</b><small>{[x.cor, x.tamanho].filter(Boolean).join(" · ")}{x.cor || x.tamanho ? " · " : ""}Cód. {x.codigo}</small></span>
-        <i className={Number(d.disp) > 0 ? "ok" : d.mostruario ? "mostr" : "zero"}>{Number(d.disp) > 0 ? qtd(d.disp) + " disp." : d.mostruario ? "mostruário" : "sem saldo"}</i></button>; })}
+        <i className={d.congelado ? "cong" : Number(d.disp) > 0 ? "ok" : d.mostruario ? "mostr" : "zero"}>{d.congelado ? "fora de venda" : Number(d.disp) > 0 ? qtd(d.disp) + " disp." : d.mostruario ? "mostruário" : "sem saldo"}</i></button>; })}
       {sugsVis.length > 60 && <div className="hint" style={{ padding: 8 }}>Mostrando 60 de {sugsVis.length}. Digite mais palavras para filtrar (ex.: "mesa jantar freijo").</div>}
     </div>}
 
@@ -260,12 +269,12 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       </div>
       {/* estoque é a informação principal: o saldo para venda é o que realmente dá para vender */}
       {(prod.saldo != null || prod.estoque != null || prod.reservas != null || prod.expedicao != null) && <div className="cp-estoque">
-        {(() => { const v = vendavel(prod); const so = v.mostruario && !Number(v.disp); return <>
-          <div className={"cp-saldo " + (so ? "mostr" : Number(v.disp ?? 0) > 0 ? "ok" : "zero")}><span>Saldo para venda (disponível)</span><b>{qtd(v.disp)}</b>
-            <small>{so ? "só tem o MOSTRUÁRIO da loja — não está disponível para venda" : Number(v.disp ?? 0) > 0 ? "pode vender" + (v.mostruario ? " (o mostruário da loja não entra)" : "") : Number(v.disp ?? 0) < 0 ? "vendido além do estoque — aguardando chegada" : "sem saldo — consulte a reposição"}</small></div>
+        {(() => { const v = vendavel(prod); const so = !v.congelado && v.mostruario && !v.mostrLiberado && !Number(v.disp); return <>
+          <div className={"cp-saldo " + (v.congelado ? "cong" : so ? "mostr" : Number(v.disp ?? 0) > 0 ? "ok" : "zero")}><span>Saldo para venda (disponível)</span><b>{qtd(v.disp)}</b>
+            <small>{v.congelado ? "🧊 TIRADO DE VENDA — não vender" + (prod.congelado_motivo ? " (" + prod.congelado_motivo + ")" : "") : so ? "só tem o MOSTRUÁRIO da loja — não está disponível para venda" : Number(v.disp ?? 0) > 0 ? "pode vender" + (v.mostrLiberado ? " (inclui o mostruário da loja, liberado para venda)" : v.mostruario ? " (o mostruário da loja não entra)" : "") : Number(v.disp ?? 0) < 0 ? "vendido além do estoque — aguardando chegada" : "sem saldo — consulte a reposição"}</small></div>
           {v.locais.some(l => l.local) && <div className="cp-locais">{v.locais.map((l, i) => <div key={i} className={"cp-local" + (l.mostr ? " mostr" : "")}>
             <b>{nomeLocal(l.local)}</b>
-            <span>{l.mostr ? "1 peça · MOSTRUÁRIO — não vender" : (Number(l.disp ?? 0) > 0 ? qtd(l.disp) + " disponível" : Number(l.disp ?? 0) < 0 ? qtd(l.disp) + " (vendido além do estoque)" : "sem saldo")}</span>
+            <span>{l.mostr ? (v.mostrLiberado ? "1 peça · mostruário LIBERADO para venda" : "1 peça · MOSTRUÁRIO — não vender") : (Number(l.disp ?? 0) > 0 ? qtd(l.disp) + " disponível" : Number(l.disp ?? 0) < 0 ? qtd(l.disp) + " (vendido além do estoque)" : "sem saldo")}</span>
             <small>estoque {qtd(l.estoque)} · reservado {qtd(l.reservas)} · expedição {qtd(l.expedicao)}</small></div>)}</div>}
         </>; })()}
         <div className="cp-estq">
@@ -284,16 +293,25 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {prod.obs && <div className="cp-esp"><span>Observações</span><div>{prod.obs}</div></div>}
       {(prod.variacoes || []).length > 0 && <div className="cp-var"><span>Outras opções deste produto</span>
         {(prod.variacoes || []).map(v => <button key={v.codigo} type="button" className="cp-var-it" onClick={() => buscar(v.codigo)}>
-          <b>{[v.tamanho, v.cor].filter(Boolean).join(" · ") || v.nome}</b><small>Cód. {v.codigo}{(() => { const d = vendavel(v); return d.disp != null ? " · " + (Number(d.disp) > 0 ? qtd(d.disp) + " disponível" : d.mostruario ? "só mostruário" : "sem saldo") : ""; })()}</small></button>)}</div>}
-      <div className="cp-acoes"><button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod })}>✏️ Editar</button>
-        <button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod, codigo: "", cor: "", tamanho: "", estoque: null })}>＋ Nova cor/tamanho deste produto</button></div>
+          <b>{[v.tamanho, v.cor].filter(Boolean).join(" · ") || v.nome}</b><small>Cód. {v.codigo}{(() => { const d = vendavel(v); return d.disp != null ? " · " + (Number(d.disp) > 0 ? qtd(d.disp) + " disponível" : d.congelado ? "fora de venda" : d.mostruario ? "só mostruário" : "sem saldo") : ""; })()}</small></button>)}</div>}
+      {(edita || (libMostr && vendavel(prod).mostruario)) && <div className="cp-acoes">
+        {edita && <button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod })}>✏️ Editar</button>}
+        {edita && <button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod, codigo: "", cor: "", tamanho: "", estoque: null })}>＋ Nova cor/tamanho deste produto</button>}
+        {libMostr && vendavel(prod).mostruario && (prod.mostruario_liberado
+          ? <button type="button" className="btn ghost sm" onClick={() => acao(() => A.produtoMostruario(prod.codigo, false), "Mostruário volta a não ser vendido")}>↩ Não vender o mostruário</button>
+          : <button type="button" className="btn sm" onClick={() => { if (confirm("Liberar o MOSTRUÁRIO (peça única da loja) para venda?")) acao(() => A.produtoMostruario(prod.codigo, true), "Mostruário liberado para venda"); }}>✅ Liberar mostruário para venda</button>)}
+        {edita && (prod.congelado
+          ? <button type="button" className="btn sm" onClick={() => acao(() => A.produtoVenda(prod.codigo, true), "Produto liberado para venda")}>✅ Liberar para venda</button>
+          : <button type="button" className="btn ghost sm" onClick={() => { const m = prompt("Tirar de venda (congelar) — motivo (opcional):", ""); if (m !== null) acao(() => A.produtoVenda(prod.codigo, false, m), "Produto tirado de venda"); }}>🧊 Tirar de venda</button>)}
+        {edita && <button type="button" className="btn danger sm" onClick={() => { if (confirm("Excluir o produto " + prod.codigo + " — " + prod.nome + "?\nEle sai da base (se vier de novo numa planilha, volta a ser cadastrado).")) acao(async () => { await A.produtoExcluir(prod.codigo); setProd(null); }, "Produto excluído", false); }}>🗑 Excluir</button>}
+      </div>}
     </div>}
 
     {naoAchou && !form && <div className="cp-card cp-nada"><b>Código {naoAchou} ainda não está cadastrado.</b>
       <span className="hint">Cadastre uma vez e, nas próximas leituras, aparece tudo.</span>
-      <button type="button" className="btn primary" onClick={() => setForm({ ...VAZIO, codigo: naoAchou })}>＋ Cadastrar este produto</button></div>}
+      {edita ? <button type="button" className="btn primary" onClick={() => setForm({ ...VAZIO, codigo: naoAchou })}>＋ Cadastrar este produto</button> : <span className="hint">Avise o TI (Alexandre) para cadastrar.</span>}</div>}
 
-    {form && <div className="cp-card cp-form">
+    {form && edita && <div className="cp-card cp-form">
       <b>{form.codigo && prod && prod.codigo === form.codigo ? "Editar produto" : "Cadastrar produto"}</b>
       <div className="cp-grid">
         {campo("codigo", "Código de barras *")}
@@ -325,11 +343,11 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
     {recentes.length > 1 && <div className="cp-rec"><span className="hint">Lidos agora:</span>{recentes.map(r => <button key={r} type="button" className="chip" onClick={() => buscar(r)}>{r}</button>)}</div>}
 
     {!movel && <div className="card cp-lista">
-      <div className="cp-lista-cab"><b>Produtos cadastrados</b> <span className="hint">{lista ? lista.length : "…"}</span>
+      <div className="cp-lista-cab"><b>Produtos cadastrados</b> <span className="cp-total">{total ? Number(total.total).toLocaleString("pt-BR") : "…"}</span>{total && Number(total.congelados) > 0 ? <span className="hint">· {total.congelados} fora de venda</span> : null}{lista && total && lista.length < Number(total.total) ? <span className="hint">· mostrando {lista.length}{lista.length >= 300 ? " (busque pelo nome/código para achar os outros)" : " na busca"}</span> : null}
         <form style={{ marginLeft: "auto", display: "flex", gap: 6 }} onSubmit={e => { e.preventDefault(); carregarLista(q); }}><input type="search" placeholder="🔎 nome, código, REF" value={q} onChange={e => setQ(e.target.value)} /><button className="btn sm">Buscar</button></form>
-        <button type="button" className="btn sm" onClick={() => { setProd(null); setNaoAchou(""); setForm({ ...VAZIO }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>＋ Novo produto</button>
+        {edita && <><button type="button" className="btn sm" onClick={() => { setProd(null); setNaoAchou(""); setForm({ ...VAZIO }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>＋ Novo produto</button>
         <label className="btn sm" style={{ cursor: "pointer" }}>⬆ Importar planilha<input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} ref={el => { inpArq.current = el; }} onChange={e => { lerPlanilha(e.target.files?.[0]); e.target.value = ""; }} /></label>
-        <button type="button" className="btn ghost sm" onClick={modelo}>⬇ Modelo de planilha</button></div>
+        <button type="button" className="btn ghost sm" onClick={modelo}>⬇ Modelo de planilha</button></>}</div>
       {imp && <div className="cp-imp">
         <b>📄 {imp.nome}</b> · <b>{imp.linhas.length}</b> produto(s) prontos para importar{imp.semCod ? <span className="hint"> · {imp.semCod} linha(s) sem código ou sem descrição foram ignoradas</span> : null}{imp.projetado ? <span className="hint"> · <b>{imp.projetado}</b> item(ns) da linha projetado (descrição em letras minúsculas) ficaram de fora</span> : null}
         <div className="hint">Produto com o mesmo código é atualizado; código novo é cadastrado. Colunas reconhecidas: {COLS.filter(([k]) => imp.linhas.some(x => x[k] != null && x[k] !== "")).map(c => c[1]).join(", ") || "—"}.</div>
@@ -340,7 +358,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       </div>}
       <table className="cp-tab"><thead><tr><th>Código</th><th>Produto</th><th>Acabamento</th><th>A × P × L</th><th>REF</th><th>Saldo p/ venda</th></tr></thead>
         <tbody>{(lista || []).map(p => <tr key={p.codigo} className="clic" onClick={() => { buscar(p.codigo); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-          <td><b>{p.codigo}</b></td><td>{p.nome}</td><td>{p.cor}</td><td>{[p.altura, p.profundidade, p.largura].map(x => x == null ? "—" : String(x).replace(".", ",")).join(" × ")}</td><td>{p.ref}</td><td>{(() => { const d = vendavel(p); return d.mostruario && !Number(d.disp) ? <span title="Na loja (matriz), saldo 1 é mostruário">0 · mostruário</span> : qtd(d.disp); })()}</td></tr>)}</tbody></table>
+          <td><b>{p.codigo}</b></td><td>{p.nome}</td><td>{p.cor}</td><td>{[p.altura, p.profundidade, p.largura].map(x => x == null ? "—" : String(x).replace(".", ",")).join(" × ")}</td><td>{p.ref}</td><td>{(() => { const d = vendavel(p); return d.congelado ? <span>🧊 fora de venda</span> : d.mostruario && !Number(d.disp) ? <span title="Na loja (matriz), saldo 1 é mostruário">0 · mostruário</span> : qtd(d.disp); })()}</td></tr>)}</tbody></table>
       {lista && !lista.length && <div className="empty" style={{ padding: 20 }}>Nenhum produto cadastrado ainda.</div>}
     </div>}
 

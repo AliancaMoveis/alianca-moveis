@@ -18,3 +18,6 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- Cadastro de usuários para o TI (setor produtos): pode_usuarios(), usuarios_pode(p_id, p_setores), _setor_restrito(setor)
 -- salvar_usuario / desativar_usuario / reativar_usuario: checam usuarios_pode; edge function admin-usuarios v4 idem.
 -- produto_importar: ignora no servidor descrições com letra minúscula (linha projetado) e devolve 'projetado'.
+-- Trava de edição: pode_editar_produtos() (Gestão e TI), pode_liberar_mostruario() (+ gerentes), pode_produtos() = consulta.
+-- produtos: congelado/_em/_por/_motivo (tirar de venda), mostruario_liberado/_em/_por.
+-- RPCs: produto_excluir, produto_venda(cod, liberar, motivo), produto_mostruario(cod, liberar), produto_total().

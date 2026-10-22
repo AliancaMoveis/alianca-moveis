@@ -472,7 +472,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeUsuarios = () => ehGestao() || mySetores().includes("produtos");
   const setorRestrito = (id: string) => { const s: any = getSetor(id); return id === "proprietario" || !!(s && s.liberacoes && (s.liberacoes.admin || s.liberacoes.verTudo || s.liberacoes.verMarketing)); };
   const podeMexerUsuario = (u: any) => ehGestao() || (podeUsuarios() && (!u || (u.id !== currentUserId && !(u.setores || []).some(setorRestrito))));
-  const podeConsultaProduto = () => ["00000000-0000-4000-a000-000000000007", "412d3e57-c869-493e-b298-28916054ed72"].includes(currentUserId) || mySetores().includes("produtos");
+  const podeConsultaProduto = () => ["00000000-0000-4000-a000-000000000007", "412d3e57-c869-493e-b298-28916054ed72"].includes(currentUserId) || mySetores().includes("produtos") || mySetores().includes("gerente_loja");
+  // editar/importar/excluir/tirar de venda: só Gestão e TI; liberar o mostruário: também os gerentes da loja. Vendedor só consulta.
+  const podeEditarProduto = () => ehGestao() || mySetores().includes("produtos");
+  const podeLiberarMostruario = () => podeEditarProduto() || mySetores().includes("gerente_loja");
   const ehSupMedidas = () => ehGestao() || mySetores().includes("medidas_supervisao");
   const etapaMedida = (c: Chamado) => (c.tratativa && c.tratativa.medida && c.tratativa.medida.etapa) || (c.status === "concluida" ? "liberada" : "validar");
   const quemMede = () => ({
@@ -943,7 +946,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, podeConsultaProduto, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, podeConsultaProduto, podeEditarProduto, podeLiberarMostruario, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
