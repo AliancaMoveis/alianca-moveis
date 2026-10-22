@@ -9,7 +9,12 @@ const KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_ONP
 let renovando: Promise<string | null> | null = null;
 async function renovar(): Promise<string | null> {
   // getSession já devolve o token renovado (e só renova se estiver vencido) — evita duas renovações ao mesmo tempo, que derrubariam a sessão
-  if (!renovando) renovando = sb.auth.getSession().then(({ data }) => data.session?.access_token || null).catch(() => null).finally(() => { setTimeout(() => (renovando = null), 0); });
+  // Se o relógio do computador estiver atrasado, o getSession acha que o token ainda vale e devolve o mesmo token vencido
+  // (o banco recusa com "JWT expired"). Por isso força a renovação (uma só por vez); se falhar, cai no getSession.
+  if (!renovando) renovando = sb.auth.refreshSession()
+    .then(({ data, error }) => (error ? null : data.session?.access_token || null))
+    .then(async tok => tok || (await sb.auth.getSession()).data.session?.access_token || null)
+    .catch(() => null).finally(() => { setTimeout(() => (renovando = null), 1500); });
   return renovando;
 }
 async function fetchComRenovacao(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
