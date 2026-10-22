@@ -101,13 +101,22 @@ const qtd = (n: any) => n == null || n === "" ? "—" : Number(n).toLocaleString
 const cm = (n: number | null) => n == null || n === ("" as any) ? "—" : String(n).replace(".", ",") + " cm";
 
 /** câmera em tela cheia lendo código de barras; chama onCodigo uma vez */
-export function LeitorCodigo({ onCodigo, onFechar }: { onCodigo: (c: string) => void; onFechar: () => void }) {
+// a etiqueta tem 2 códigos de barras: o do PRODUTO (até 7 dígitos, ex. 1875840) e o de PREÇO (começa com 88, mais longo).
+// Se a câmera pegar o de preço, guarda o preço e continua lendo até achar o do produto.
+export const ehCodPreco = (c: string) => /^88\d{6,}$/.test(String(c || "").replace(/\D/g, ""));
+export function LeitorCodigo({ onCodigo, onFechar, onPreco }: { onCodigo: (c: string) => void; onFechar: () => void; onPreco?: (c: string) => void }) {
+  const [vistoPreco, setVistoPreco] = useState("");
   const video = useRef<HTMLVideoElement>(null);
   const [erro, setErro] = useState(""); const [luz, setLuz] = useState(false); const [temLuz, setTemLuz] = useState(false);
   const fim = useRef(false); const trilha = useRef<MediaStreamTrack | null>(null);
   useEffect(() => {
     let parar = () => { /* nada */ }; let vivo = true;
-    const achou = (txt: string) => { if (fim.current || !txt) return; fim.current = true; try { navigator.vibrate?.(80); } catch { /* sem vibração */ } onCodigo(soCod(txt)); };
+    const achou = (txt: string) => {
+      if (fim.current || !txt) return;
+      const dig = String(txt).replace(/\D/g, ""); const c = dig || soCod(txt);
+      if (ehCodPreco(c)) { setVistoPreco(c); onPreco?.(c); return; } // código de preço: segue lendo o do produto
+      fim.current = true; try { navigator.vibrate?.(80); } catch { /* sem vibração */ } onCodigo(c);
+    };
     (async () => {
       try {
         const BD = (window as any).BarcodeDetector;
@@ -119,7 +128,7 @@ export function LeitorCodigo({ onCodigo, onFechar }: { onCodigo: (c: string) => 
           trilha.current = stream.getVideoTracks()[0]; setTemLuz(!!(trilha.current?.getCapabilities as any)?.call(trilha.current)?.torch);
           const det = new BD({ formats: formatos.filter((f: string) => ["code_128", "code_39", "code_93", "codabar", "ean_13", "ean_8", "itf", "upc_a", "upc_e"].includes(f)) });
           let ativo = true;
-          const laco = async () => { if (!ativo || fim.current) return; try { const r = await det.detect(v); if (r && r[0]) achou(r[0].rawValue); } catch { /* quadro ruim */ } setTimeout(laco, 120); };
+          const laco = async () => { if (!ativo || fim.current) return; try { const r = await det.detect(v); if (r && r.length) { const p = r.find((x: any) => !ehCodPreco(x.rawValue)); r.filter((x: any) => ehCodPreco(x.rawValue)).forEach((x: any) => achou(x.rawValue)); if (p) achou(p.rawValue); } } catch { /* quadro ruim */ } setTimeout(laco, 120); };
           laco();
           parar = () => { ativo = false; stream.getTracks().forEach(t => t.stop()); };
         } else {
@@ -141,7 +150,7 @@ export function LeitorCodigo({ onCodigo, onFechar }: { onCodigo: (c: string) => 
   return createPortal(<div className="cp-cam" role="dialog" aria-label="Ler código de barras">
     <video ref={video} playsInline muted autoPlay />
     <div className="cp-mira"><i /></div>
-    <div className="cp-cam-top"><b>Aponte para o código de barras da etiqueta</b>
+    <div className="cp-cam-top"><b>{vistoPreco ? <>Preço lido: {fmtMoeda(precoEtiqueta(vistoPreco) || 0)} — agora aponte para o código do <u>produto</u> (o número curto, ex. 1875840)</> : "Aponte para o código de barras do produto na etiqueta"}</b>
       <span>{temLuz && <button type="button" onClick={alternarLuz}>{luz ? "🔦 Apagar" : "🔦 Lanterna"}</button>}<button type="button" onClick={onFechar}>✕ Fechar</button></span></div>
     {erro && <div className="cp-cam-erro">{erro}</div>}
   </div>, document.body);
@@ -153,7 +162,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   async function acao(f: () => Promise<any>, msg: string, recarregar = true) {
     try { await f(); toast(msg); if (recarregar && prod) await buscar(prod.codigo); if (lista) carregarLista(); } catch (e: any) { toast(e.message || "Não consegui salvar"); }
   }
-  const [cam, setCam] = useState(false);
+  const [cam, setCam] = useState(false); const [precoCam, setPrecoCam] = useState<number | null>(null);
   const [cod, setCod] = useState(""); const [busy, setBusy] = useState(false);
   const [prod, setProd] = useState<Produto | null>(null); const [naoAchou, setNaoAchou] = useState("");
   const [form, setForm] = useState<Produto | null>(null);
@@ -222,9 +231,11 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
 
   const [precoLido, setPrecoLido] = useState<number | null>(null);
   async function buscar(c: string) {
-    const k = soCod(c); if (!k) return;
-    // digitou o código de preço da etiqueta (88…,…): só traduz o preço, não é código de produto
-    if (/^88\d+[.,]\d/.test(k)) { setPrecoLido(precoEtiqueta(k)); setProd(null); setNaoAchou(""); return; }
+    let k = soCod(c); if (!k) return;
+    // digitou/leu o código de preço da etiqueta (88…): só traduz o preço, não é código de produto
+    if (/^88\d+[.,]\d/.test(k) || ehCodPreco(k)) { setPrecoLido(precoEtiqueta(k)); setProd(null); setNaoAchou(""); return; }
+    // leitores às vezes põem zeros na frente (01875840): o código do produto não tem zero à esquerda
+    if (/^0+\d+$/.test(k)) k = k.replace(/^0+/, "");
     setPrecoLido(null);
     setCod(k); setBusy(true); setForm(null); setNaoAchou(""); setProd(null);
     try { const r = await A.produtoBuscar(k); if (r) { setProd(r); setRecentes(x => [k, ...x.filter(y => y !== k)].slice(0, 8)); } else setNaoAchou(k); }
@@ -252,7 +263,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
     {movel && <div className="mv-sec">🏷 Consulta de produto</div>}
 
     <div className="cp-busca">
-      <button type="button" className="btn primary cp-scan" onClick={() => setCam(true)}>📷 Ler código de barras</button>
+      <button type="button" className="btn primary cp-scan" onClick={() => { setCam(true); setPrecoCam(null); }}>📷 Ler código de barras</button>
       <form className="cp-dig" onSubmit={e => { e.preventDefault(); if (/[a-zA-ZÀ-ú]/.test(cod)) { const d = sugsVis[0]; if (d) escolher(d.codigo); } else buscar(cod); }}>
         <input type="search" autoComplete="off" placeholder="nome do produto, código (1875840) ou código de preço (88…)" value={cod} onChange={e => { setCod(e.target.value); if (/[a-zA-ZÀ-ú]/.test(e.target.value)) { setProd(null); setNaoAchou(""); setPrecoLido(null); } }} />
         <button className="btn" type="submit" disabled={busy}>{busy ? "…" : "Buscar"}</button>
@@ -298,6 +309,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {prod.tamanho && <div className="cp-linha"><span>Tamanho</span><b>{prod.tamanho}</b></div>}
       {(prod.altura != null || prod.profundidade != null || prod.largura != null) && <div className="cp-medidas">
         <div><span>Altura</span><b>{cm(prod.altura)}</b></div><div><span>Profundidade</span><b>{cm(prod.profundidade)}</b></div><div><span>Largura</span><b>{cm(prod.largura)}</b></div></div>}
+      {prod.preco == null && precoEtiqueta(prod.cod_etiqueta) == null && precoCam != null && <div className="cp-preco"><span>Preço da etiqueta (lido agora)</span><b>{fmtMoeda(precoCam)}</b></div>}
       {(prod.preco != null || precoEtiqueta(prod.cod_etiqueta) != null) && <div className="cp-preco"><span>Preço (bruto)</span><b>{fmtMoeda(Number(prod.preco ?? precoEtiqueta(prod.cod_etiqueta)))}</b>
         {prod.cod_etiqueta && <small>código na etiqueta: {prod.cod_etiqueta}</small>}</div>}
       {prod.especificacoes && <div className="cp-esp"><span>Especificações técnicas</span><div>{prod.especificacoes}</div></div>}
@@ -318,7 +330,8 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       </div>}
     </div>}
 
-    {naoAchou && !form && <div className="cp-card cp-nada"><b>Código {naoAchou} ainda não está cadastrado.</b>
+    {naoAchou && !form && <div className="cp-card cp-nada"><b>Código {naoAchou} não encontrado.</b>
+      {naoAchou.length >= 8 && <span className="hint">⚠️ Esse número tem {naoAchou.length} dígitos: parece o código do <b>fabricante</b> (caixa/embalagem). Leia o código da <b>etiqueta da Aliança</b> (o número curto, até 7 dígitos, ex. 1875840).</span>}
       <span className="hint">Cadastre uma vez e, nas próximas leituras, aparece tudo.</span>
       {edita ? <button type="button" className="btn primary" onClick={() => setForm({ ...VAZIO, codigo: naoAchou })}>＋ Cadastrar este produto</button> : <span className="hint">Avise o TI (Alexandre) para cadastrar.</span>}</div>}
 
@@ -374,6 +387,6 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {lista && !lista.length && <div className="empty" style={{ padding: 20 }}>Nenhum produto cadastrado ainda.</div>}
     </div>}
 
-    {cam && <LeitorCodigo onFechar={() => setCam(false)} onCodigo={c => { setCam(false); buscar(c); }} />}
+    {cam && <LeitorCodigo onFechar={() => setCam(false)} onPreco={c => setPrecoCam(precoEtiqueta(c))} onCodigo={c => { setCam(false); buscar(c); }} />}
   </section>;
 }
