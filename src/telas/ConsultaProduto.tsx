@@ -26,7 +26,7 @@ const COLS: [keyof Produto, string, string[]][] = [
   ["reservas", "Reservas", ["Reservas", "Reserva", "Reservado"]],
   ["expedicao", "Em expedição", ["Em Expedição", "Expedição", "Em expedicao"]],
   ["saldo", "Saldo para venda", ["Saldo para Venda", "Saldo p/ venda", "Saldo para vendas", "Disponível", "Disponivel", "Saldo"]],
-  ["deposito", "Local (Matriz = loja · Linha pronta = depósito)", ["Estoque", "Depósito", "Deposito", "Local"]],
+  ["deposito", "Local (Matriz = loja · Estoque 1 = depósito · Estofados)", ["Estoque", "Depósito", "Deposito", "Local"]],
   ["preco", "Preço", ["Preço", "Preco", "Valor", "Preço venda", "Preço de venda"]],
   ["especificacoes", "Especificações técnicas", ["Especificações", "Especificacoes", "Especificações técnicas", "Descrição técnica", "Detalhes"]],
   ["imagem_url", "Imagem (link)", ["Imagem", "Foto", "URL da imagem", "Link da imagem"]],
@@ -66,9 +66,10 @@ const numTxt = (s: string) => String(s || "").replace(/cm/i, "").replace(/R\$/, 
 
 type Produto = { codigo: string; nome: string; modulo: string; grupo: string; cor: string; tamanho: string; especificacoes: string; estoque: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null; deposito?: string; preco: number | null;
   imagem_url: string; obs: string; ref: string; fabricante: string; altura: number | null; profundidade: number | null; largura: number | null; cod_etiqueta: string; atualizado_em?: string; variacoes?: Produto[] };
-/** Locais do Tático: MATRIZ = Loja; LINHA PRONTA = Depósito. Na MATRIZ (loja), saldo 1 é o MOSTRUÁRIO: não está disponível para venda. */
+/** Locais do Tático: MATRIZ = Loja; ESTOQUE 1 / LINHA PRONTA = Depósito; ESTOFADOS = Estoque Estofados. Na MATRIZ (loja), saldo 1 é o MOSTRUÁRIO: não está disponível para venda. */
 const MATRIZ = /matriz/i;
-export const nomeLocal = (d: string) => MATRIZ.test(d || "") ? "Loja (Matriz)" : /linha\s*pronta/i.test(d || "") ? "Depósito" : (d || "");
+// MATRIZ = Loja · ESTOQUE 1 (ou LINHA PRONTA) = Depósito · ESTOFADOS/PROMOB 10 = Estoque Estofados
+export const nomeLocal = (d: string) => MATRIZ.test(d || "") ? "Loja (Matriz)" : /estofad/i.test(d || "") ? "Estoque Estofados" : /linha\s*pronta|estoque\s*0*1(?!\d)/i.test(d || "") ? "Depósito" : (d || "");
 type Local = { local: string; estoque?: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null };
 const ehMostr = (l: Local) => MATRIZ.test(l.local || "") && Number(l.saldo) === 1;
 const saldoDe = (p: any) => p.saldo != null ? Number(p.saldo) : p.estoque != null ? Number(p.estoque) - Number(p.reservas || 0) - Number(p.expedicao || 0) : null;
@@ -310,7 +311,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         {campo("reservas", "Reservado", { num: true })}
         {campo("expedicao", "Em expedição", { num: true })}
         {campo("saldo", "Saldo para venda", { num: true })}
-        {campo("deposito", "Local (Matriz = loja · Linha pronta = depósito)")}
+        {campo("deposito", "Local (Matriz = loja · Estoque 1 = depósito · Estofados)")}
         <label className="cp-f">Código de preço da etiqueta (88…)<input value={form.cod_etiqueta ?? ""} placeholder="ex.: 881496,820688" onChange={e => { const v = e.target.value; const pr = precoEtiqueta(v); setForm({ ...(form as Produto), cod_etiqueta: v, ...(pr != null ? { preco: pr as any } : {}) }); }} />
           {precoEtiqueta(form.cod_etiqueta) != null && <small style={{ color: "var(--st-concluida)", fontWeight: 700 }}>= {fmtMoeda(precoEtiqueta(form.cod_etiqueta) as number)}</small>}</label>
         {campo("preco", "Preço bruto (R$)", { num: true })}

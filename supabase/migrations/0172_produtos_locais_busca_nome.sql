@@ -13,3 +13,5 @@ create or replace function public.produto_lista(p_q text default '')
 -- produto_importar: com planilhas separadas (MATRIZ / LINHA PRONTA), mantém os locais que não vieram no arquivo
 -- e recalcula estoque/reservas/expedição/saldo/deposito somando os locais (aplicado direto no banco).
 -- App: itens com descrição em letras minúsculas (linha projetado) não são importados.
+-- Setor TI e cadastro de produtos com acesso a Fábricas (fornecedores e telefones dos representantes)
+update public.setores set lib_cadastros = true where id = 'produtos';
