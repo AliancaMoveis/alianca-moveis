@@ -212,6 +212,7 @@ export const A = {
   produtoBuscar: (codigo: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(((window as any).__prodMock || []).find((x: any) => x.codigo === codigo) ? { ...((window as any).__prodMock || []).find((x: any) => x.codigo === codigo), variacoes: [] } : null) : rpc<any>("produto_buscar", { p_codigo: codigo }),
   produtoLista: (q = "") => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((window as any).__prodMock || []) : rpc<any[]>("produto_lista", { p_q: q }),
   produtoImportar: (linhas: any[]) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ novos: linhas.length, atualizados: 0, erros: [] }) : rpc<any>("produto_importar", { p: linhas }),
+  produtoImportarFim: (locais: string[], codigos: string[]) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ zerados: 0 }) : rpc<any>("produto_importar_fim", { p_locais: locais, p_codigos: codigos }),
   produtoTotal: () => (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ total: ((window as any).__prodMock || []).length, congelados: 0 }) : rpc<any>("produto_total", {}),
   produtoExcluir: (codigo: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(null) : rpc("produto_excluir", { p_codigo: codigo }),
   produtoVenda: (codigo: string, liberar: boolean, motivo = "") => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(null) : rpc("produto_venda", { p_codigo: codigo, p_liberar: liberar, p_motivo: motivo }),

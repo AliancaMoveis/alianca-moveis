@@ -69,6 +69,7 @@ type Produto = { congelado?: boolean; congelado_motivo?: string; mostruario_libe
 /** Locais do Tático: MATRIZ = Loja; ESTOQUE 1 / LINHA PRONTA = Depósito; ESTOFADOS = Estoque Estofados. Na MATRIZ (loja), saldo 1 é o MOSTRUÁRIO: não está disponível para venda. */
 const MATRIZ = /matriz/i;
 // Para o vendedor são só 2 lugares: MATRIZ = Loja; ESTOQUE 1 / LINHA PRONTA / ESTOFADOS (PROMOB 10) = Depósito (os códigos internos ficam todos no depósito)
+const locaisDe = (linhas: any[]) => [...new Set(linhas.flatMap((x: any) => (x.locais || []).map((l: any) => String(l.local || "").trim())).filter(Boolean))] as string[];
 export const nomeLocal = (d: string) => MATRIZ.test(d || "") ? "Loja (Matriz)" : /estofad|linha\s*pronta|estoque\s*0*1(?!\d)/i.test(d || "") ? "Depósito" : (d || "");
 type Local = { local: string; estoque?: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null };
 const ehMostr = (l: Local) => MATRIZ.test(l.local || "") && Number(l.saldo) === 1;
@@ -210,7 +211,10 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
     if (!imp) return; setImportando(true);
     try { let nv = 0, at = 0, er = 0, pj = 0; const L = 400;
       for (let i = 0; i < imp.linhas.length; i += L) { setProg(Math.round(i / imp.linhas.length * 100)); const r: any = await A.produtoImportar(imp.linhas.slice(i, i + L)); nv += r?.novos || 0; at += r?.atualizados || 0; er += (r?.erros || []).length; pj += r?.projetado || 0; }
-      toast(`${nv} produto(s) novo(s) · ${at} atualizado(s)` + (er ? ` · ${er} com erro` : "") + (pj ? ` · ${pj} da linha projetado ficaram de fora` : ""));
+      // a planilha é a foto completa dos estoques que ela traz: quem tinha esse estoque e não veio no arquivo zerou
+      let zr = 0; const locs = locaisDe(imp.linhas);
+      if (locs.length && !er) { const f: any = await A.produtoImportarFim(locs, imp.linhas.map((x: any) => x.codigo)); zr = f?.zerados || 0; }
+      toast(`${nv} produto(s) novo(s) · ${at} atualizado(s)` + (zr ? ` · ${zr} zerado(s) (não vieram na planilha)` : "") + (er ? ` · ${er} com erro` : "") + (pj ? ` · ${pj} da linha projetado ficaram de fora` : ""));
       setImp(null); carregarLista(q); }
     catch (e: any) { toast(e.message); } finally { setImportando(false); }
   }
@@ -356,6 +360,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         <button type="button" className="btn ghost sm" onClick={modelo}>⬇ Modelo de planilha</button></>}</div>
       {imp && <div className="cp-imp">
         <b>📄 {imp.nome}</b> · <b>{imp.linhas.length}</b> produto(s) prontos para importar{imp.semCod ? <span className="hint"> · {imp.semCod} linha(s) sem código ou sem descrição foram ignoradas</span> : null}{imp.projetado ? <span className="hint"> · <b>{imp.projetado}</b> item(ns) da linha projetado (descrição em letras minúsculas) ficaram de fora</span> : null}
+        {locaisDe(imp.linhas).length > 0 && <div className="hint" style={{ marginTop: 6 }}>🔄 <b>Atualiza o estoque de: {locaisDe(imp.linhas).map(nomeLocal).filter((v, i, a) => a.indexOf(v) === i).join(" + ")}</b> ({locaisDe(imp.linhas).join(", ")}). As quantidades são <b>substituídas</b> (não somam com as anteriores) e o produto não duplica. Produto desse estoque que <b>não estiver nesta planilha fica com 0</b> (o Tático não lista o que zerou) — os outros estoques não mudam.</div>}
         <div className="hint">Produto com o mesmo código é atualizado; código novo é cadastrado. Colunas reconhecidas: {COLS.filter(([k]) => imp.linhas.some(x => x[k] != null && x[k] !== "")).map(c => c[1]).join(", ") || "—"}.</div>
         <div style={{ maxHeight: 220, overflow: "auto", margin: "6px 0" }}><table className="cp-tab"><thead><tr><th>Código</th><th>Descrição</th><th>Acabamento</th><th>A × P × L</th><th>Estoque</th><th>Saldo p/ venda</th></tr></thead>
           <tbody>{imp.linhas.slice(0, 50).map((x, i) => <tr key={i}><td>{x.codigo}</td><td>{x.nome}</td><td>{x.cor || ""}</td><td>{[x.altura, x.profundidade, x.largura].map(v => v || "—").join(" × ")}</td><td>{x.estoque ?? ""}</td><td>{x.saldo ?? ""}</td></tr>)}</tbody></table>
