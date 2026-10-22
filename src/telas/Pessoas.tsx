@@ -128,7 +128,15 @@ export function Clientes() {
   const [q, setQ] = useState(""); const [de, setDe] = useState(mesAtual().de); const [ate, setAte] = useState(mesAtual().ate);
   // período (padrão: mês atual) pela data da venda / loja / visita / cadastro
   const [orig, setOrig] = useState<"" | "marketing" | "externo">("");
-  const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c) && (!orig || R.origemLoja(c) === orig)).filter(c => { const x = dataRefCliente(c); return (!de || x >= de) && (!ate || x <= ate); });
+  // filtros: vendedor, consultor e período rápido (para achar tudo de uma pessoa sem rolar a lista)
+  const [fVend, setFVend] = useState(""); const [fCons, setFCons] = useState("");
+  const vendList = (R.vendedores() as any[]).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const consList = (R.consultores() as any[]).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const hojeS = new Date(); const iso = (d: Date) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const periodo = (k: string) => { const h = iso(hojeS); if (k === "hoje") { setDe(h); setAte(h); } else if (k === "7") { const d = new Date(); d.setDate(d.getDate() - 6); setDe(iso(d)); setAte(h); }
+    else if (k === "ant") { setDe(iso(new Date(hojeS.getFullYear(), hojeS.getMonth() - 1, 1))); setAte(iso(new Date(hojeS.getFullYear(), hojeS.getMonth(), 0))); } };
+  const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c) && (!orig || R.origemLoja(c) === orig) && (!fVend || (fVend === "__sem" ? !c.atendenteId : c.atendenteId === fVend)) && (!fCons || (fCons === "__sem" ? !c.consultorId : c.consultorId === fCons)))
+    .filter(c => { const x = dataRefCliente(c); return (!de || x >= de) && (!ate || x <= ate); });
   const cont: Record<string, number> = { todos: base.length };
   Object.keys(STATUS_CLIENTE).forEach(k => (cont[k] = base.filter(c => R.statusClienteDe(c) === k).length));
   cont.cancelamentos = base.filter(temCancelamento).length;
@@ -148,7 +156,10 @@ export function Clientes() {
         <div className="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg><input id="cliBusca" placeholder="Buscar cliente, telefone ou nº da venda" value={q} onChange={e => setQ(e.target.value)} /></div>
         <input type="date" style={{ maxWidth: 160 }} title="De" value={de} onChange={e => setDe(e.target.value)} />
         <input type="date" style={{ maxWidth: 160 }} title="Até" value={ate} onChange={e => setAte(e.target.value)} />
+        <button className="btn ghost sm" onClick={() => periodo("hoje")}>Hoje</button>
+        <button className="btn ghost sm" onClick={() => periodo("7")}>7 dias</button>
         <button className="btn ghost sm" onClick={() => { setDe(mesAtual().de); setAte(mesAtual().ate); }}>Mês atual</button>
+        <button className="btn ghost sm" onClick={() => periodo("ant")}>Mês anterior</button>
         <button className="btn ghost sm" onClick={() => { setDe(""); setAte(""); }}>Todo o período</button>
         {(R.ehGestao() || R.mySetores().includes("marketing_supervisao")) && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => baixarXlsx("clientes-" + (orig || "todos") + (de || ate ? "-" + (de || "inicio") + "_a_" + (ate || "hoje") : ""), ["Nº", "Cliente", "Telefone", "CPF/CNPJ", "Origem", "Status", "Cadastro", "Responsável marketing", "Consultor", "Data visita", "Data loja", "Vendedor", "Ambiente", "Venda nº", "Valor venda", "Situação venda", "Data venda", "Vendedor da venda"],
           arr.map((c: any) => { const v = c.venda; return [c.id, c.cliente, c.telefone || "", c.clienteDoc || "", R.origemLoja(c) === "externo" ? "Consultor externo" : "Marketing", STATUS_CLIENTE[R.statusClienteDe(c)] || "", fmtDate(c.criadoEm), R.nomeUser(c.solicitanteId), c.consultorId ? R.nomeUser(c.consultorId) : "", c.dataVisita ? fmtDate(c.dataVisita) : "", c.dataLoja ? fmtDate(c.dataLoja) : "", c.atendenteId ? R.nomeUser(c.atendenteId) : "", c.produto || "",
@@ -159,7 +170,12 @@ export function Clientes() {
         <button className={orig === "marketing" ? "on" : ""} onClick={() => setOrig("marketing")}>🏬 Marketing (direto na loja)</button>
         <button className={orig === "externo" ? "on" : ""} onClick={() => setOrig("externo")}>📍 Consultor externo</button>
       </div>
-      <div className="chips" id="cliFiltros">{chips.map(([k, l]) => <button key={k} className={"chip" + (filtro === k ? " on" : "")} onClick={() => setFiltro(k)}>{l}<span className="n">{cont[k] || 0}</span></button>)}</div>
+      <div className="cli-filtros">
+        <label>Vendedor<select value={fVend} onChange={e => setFVend(e.target.value)}><option value="">Todos os vendedores</option><option value="__sem">— sem vendedor —</option>{vendList.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></label>
+        <label>Consultor<select value={fCons} onChange={e => setFCons(e.target.value)}><option value="">Todos os consultores</option><option value="__sem">— sem consultor (marketing) —</option>{consList.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></label>
+        <label>Status<select value={filtro} onChange={e => setFiltro(e.target.value)}>{chips.filter(([k]) => k === "todos" || (cont[k] || 0) > 0 || filtro === k).map(([k, l]) => <option key={k} value={k}>{l} ({cont[k] || 0})</option>)}</select></label>
+        {(fVend || fCons || filtro !== "todos" || q) && <button className="btn ghost sm" onClick={() => { setFVend(""); setFCons(""); setFiltro("todos"); setQ(""); }}>Limpar filtros</button>}
+      </div>
       <div className="kpis" id="cliKpis">
         <Kpi n={base.length} l="Clientes" />
         <Kpi n={base.filter(c => ["aguardando_consultor", "direcionado_consultor", "visita_realizada", "agendado_loja", "com_vendedor"].includes(R.statusClienteDe(c))).length} l="Em andamento" />

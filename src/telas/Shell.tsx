@@ -192,7 +192,7 @@ export default function Shell() {
             {atual === "qualidade" && R.veQualidade() && <Qualidade />}
             {atual === "anuncios" && R.veAnuncios() && <section className="view active"><div className="view-head"><div><h2>📣 Anúncios</h2><p>Investimento e resultado das campanhas do Meta (Instagram/Facebook) e do Google, e o que viraram no 360. Dados do Reportei.</p></div></div><Anuncios /></section>}
             {atual === "ce_realizadas" && <VisitasRealizadas />}
-            {atual === "ce_vendas" && <VendasConsultores />}
+            {atual === "ce_vendas" && (R.ehGestao() || R.mySetores().includes("marketing_supervisao")) && <VendasConsultores />}
             {atual === "montagem_pag" && <MontagemPagamento />}
             {atual === "montagem_meus" && <MontagemMeus />}
             {atual === "agenda_vendedores" && <AgendaVendedores />}

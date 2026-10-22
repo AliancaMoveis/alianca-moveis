@@ -28,7 +28,7 @@ export default function Dashboard() {
   const { R, st, irPara, abrirDetalhe, currentUserId } = useApp() as any;
   // período: padrão = mês atual. O que está em aberto (fila, atrasos, críticos) aparece sempre, de qualquer data;
   // o período vale para o que aconteceu nele: abertos, concluídos, agendamentos, vendas.
-  const [preset, setPreset] = useState<"hoje" | "7" | "semana" | "15" | "30" | "mes" | "ant" | "periodo">(R.ehGestao() && !R.ehProprietario() ? "hoje" : "mes");
+  const [preset, setPreset] = useState<"hoje" | "7" | "semana" | "15" | "30" | "mes" | "ant" | "periodo">((R.ehGestao() && !R.ehProprietario()) || (R.mySetores().includes("suporte_consultores") && !R.temMarketing()) ? "hoje" : "mes");
   const [vDono, setVDono] = useState<"dono" | "tudo">("tudo");
   const hoje = hojeISO();
   const menos = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return isoLocal(d); };
@@ -217,14 +217,15 @@ export default function Dashboard() {
           </div></div>
         </div>
       )}
-      <div className="panel-grid">
+      {/* Suporte dos consultores (Carla): o dashboard é o atendimento na loja — sem a lista geral de "sem atualização" */}
+      {!(R.mySetores().includes("suporte_consultores") && !R.temMarketing() && !R.ehGestao() && !verCC) && <div className="panel-grid">
         {verCC && <div className="panel"><h3 id="tPanel1">Situação da fila</h3><div id="bars1">{srows.map(([nm, n, s]) => <BarRow key={s} nm={nm} pct={n / smx * 100} v={n} cor={`var(--st-${s})`} />)}</div></div>}
         <div className="panel"><h3>Precisam de ação agora</h3><div className="acao-list" id="acaoList">
           {acao.length ? acao.map((c: any) => { const sp = pr(c); const lbl = R.domMarketing(c) ? "Sem atualização" : sp === "critico" ? "Crítico" : sp === "atrasado" ? "Atrasado" : "Urgente"; const cor = sp === "critico" ? "var(--critico)" : "var(--danger)";
             return <div className="acao" key={c.id} style={{ borderLeftColor: cor }} onClick={() => abrirDetalhe(c.id)}><span>{c.id} · {c.cliente} · <b>{R.setorNome(c.setorDestino)}</b></span><span className="g" style={{ color: cor }}>{lbl}</span></div>; })
             : <Nada t="Tudo sob controle." />}
         </div></div>
-      </div>
+      </div>}
       <div className="panel-grid">
         {verCC && <div className="panel"><h3>Prazo de fábrica em aberto, por fábrica</h3><div id="barsFabrica">{fr.length ? fr.map(([fid, n]) => <BarRow key={fid} nm={R.nomeFab(fid)} pct={n / mxf * 100} v={n} />) : <Nada t="Nada em aberto." />}</div></div>}
         <div className="panel"><h3>Atividade recente <span className="live"><i></i>ao vivo</span></h3><div className="feed" id="feed">

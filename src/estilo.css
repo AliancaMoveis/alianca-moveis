@@ -1826,3 +1826,11 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .cv-sep-b small{font-size:12px;font-weight:600;color:var(--ink-soft)}
 .cv-sep-b:hover{border-color:var(--primary)}
 .cv-sep-b.on{border-color:var(--primary);background:var(--primary);color:#fff}.cv-sep-b.on small{color:#fff;opacity:.85}
+/* painel da loja (Carla): pendências por vendedor */
+.dl-pv-bar{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px}
+.dl-pv-chips{display:flex;gap:6px;flex-wrap:wrap}
+.dl-pv-cab{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px}
+.dl-vnome{text-decoration:underline dotted;text-underline-offset:3px}
+.cli-filtros{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin:0 0 12px}
+.cli-filtros label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-soft);font-weight:600}
+.cli-filtros select{min-width:200px}

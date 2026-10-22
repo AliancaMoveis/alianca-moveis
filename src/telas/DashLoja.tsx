@@ -1,10 +1,10 @@
 // Painéis do Dashboard para o atendimento na loja:
 // - PainelLoja: Suporte Consultores, Supervisão Marketing, Gerente de Loja e Gestão (agendamentos do dia, sem vendedor, sem parecer, respostas dos vendedores, pós-loja por consultor)
 // - PainelVendedor: o vendedor (agendados de hoje e próximos, parecer pendente, sem atualização)
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { EM_ATENDIMENTO, STATUS_CLIENTE, fmtDateTime, hojeISO, parseData, tempoRel } from "../lib/regras";
+import { EM_ATENDIMENTO, STATUS_CLIENTE, fmtDateTime, hojeISO, parseData, sanitizeWhats, statusFinalCliente, tempoRel, waTexto } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 
 const dia = (c: any) => String(c.dataLoja || "").slice(0, 10);
@@ -75,7 +75,28 @@ export function PainelLoja({ de, ate }: { de: string; ate: string }) {
   });
   const linhasCons = Object.entries(porCons).sort((a: any, b: any) => b[1].ag - a[1].ag);
 
-  const cobrar = (c: any) => ex(() => A.cobrarParecer(c.id), "Parecer cobrado — o vendedor vê nas pendências");
+  const cobrar = (c: any) => ex(() => A.cobrarParecer(c.id), "Cobrado — o vendedor vê nas pendências dele");
+  // pendências de cada vendedor: o cliente já veio e não teve parecer, foi cobrado e não respondeu, ou o status parou (+24h sem atualização)
+  const pendDe = (c: any): string => {
+    if (!c.atendenteId || c.setorDestino !== "atendente_cliente" || c.venda || statusFinalCliente.includes(R.statusClienteDe(c))) return "";
+    if (R.parecerCobrado(c)) return "cobrado";
+    if (R.semParecer(c)) return "semparecer";
+    if (c.dataLoja && parseData(c.dataLoja) < new Date() && EM_ATENDIMENTO.includes(R.statusClienteDe(c)) && R.horasSemAtualizar(c) > 24) return "parado";
+    return "";
+  };
+  const ROT_PEND: Record<string, [string, string]> = { cobrado: ["cobrado, sem resposta", "var(--critico)"], semparecer: ["já veio — sem parecer", "var(--danger)"], parado: ["status parado +24h", "var(--warn)"] };
+  const podeCobrar = (c: any) => !!c.atendenteId && c.setorDestino === "atendente_cliente" && !c.venda && !statusFinalCliente.includes(R.statusClienteDe(c)) && !!c.dataLoja && parseData(c.dataLoja) < new Date();
+  const [vSel, setVSel] = useState(""); const [vBusca, setVBusca] = useState("");
+  const refVend = useRef<HTMLDivElement>(null);
+  const escolherVend = (id: string) => { setVSel(id); setTimeout(() => refVend.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); };
+  const pendVend = (id: string) => mkt.filter((c: any) => c.atendenteId === id && pendDe(c));
+  async function cobrarTodos(l: any[], quem: string) {
+    if (!l.length) return;
+    if (!confirm(`Cobrar ${l.length} cliente(s) de ${quem}? Cada um aparece como "cobrado" nas pendências do vendedor.`)) return;
+    for (const c of l) { try { await A.cobrarParecer(c.id); } catch { /* segue os outros */ } }
+    await ex(async () => null, l.length + " cliente(s) cobrado(s) de " + quem);
+  }
+  const msgVend = (u: any, l: any[]) => `Oi, ${u.nome}! Tudo bem?\n\nPreciso do retorno destes clientes no 360 (status e parecer):\n\n${l.map((c: any) => "• " + c.cliente + (c.dataLoja ? " (loja " + fmtDateTime(c.dataLoja).slice(0, 5) + ")" : "") + " — " + ROT_PEND[pendDe(c)][0]).join("\n")}\n\nAtualize na ficha de cada um, por favor. Obrigada!`;
 
   return (
     <div className="dl-wrap">
@@ -100,18 +121,46 @@ export function PainelLoja({ de, ate }: { de: string; ate: string }) {
               <b className="dl-h" style={soHoje ? undefined : { fontSize: 12 }}>{soHoje ? hora(c) : fmtDateTime(c.dataLoja).slice(0, 5) + " " + hora(c)}</b><Origem c={c} />
               <span className="dl-nm" onClick={() => abrirDetalhe(c.id)}>{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""}<small>{c.consultorId ? R.nomeUser(c.consultorId) : "marketing"} → {c.atendenteId ? R.nomeUser(c.atendenteId) : "sem vendedor"}</small></span>
               <Situacao c={c} />
-              {R.semParecer(c) && <button className="btn sm" onClick={() => cobrar(c)}>Cobrar</button>}
+              {podeCobrar(c) && <button className="btn sm" title={c.tratativa && c.tratativa.cobradoEm ? "Cobrado " + tempoRel(c.tratativa.cobradoEm) : "Cobrar o vendedor sobre o status deste cliente"} onClick={() => cobrar(c)}>{c.tratativa && c.tratativa.cobradoEm ? "Cobrar de novo" : "Cobrar"}</button>}
             </div>))}</div> : <div className="empty" style={{ padding: "18px 8px" }}>Nenhum agendamento {perTxt}.</div>}
         </div>
         <div className="panel"><h3>Vendedores — respostas</h3>
-          {vendedores.length ? vendedores.map(({ u, hoje: h, semParecer: sp, cobrados: cb, emAtendimento: ea, ultimo }: any) => (
+          {vendedores.length ? vendedores.map(({ u, hoje: h, semParecer: sp, cobrados: cb, emAtendimento: ea, ultimo }: any) => { const spl = mkt.filter((c: any) => c.atendenteId === u.id && R.semParecer(c) && !R.parecerCobrado(c)); return (
             <div className="dl-vend" key={u.id}>
-              <div style={{ flex: 1 }}><b>{u.nome}</b><small>{ultimo ? "último parecer " + tempoRel(ultimo) : "nenhum parecer ainda"} · {ea} em atendimento</small></div>
+              <div style={{ flex: 1, cursor: "pointer" }} onClick={() => escolherVend(u.id)} title="Ver todas as pendências deste vendedor"><b className="dl-vnome">{u.nome}</b><small>{ultimo ? "último parecer " + tempoRel(ultimo) : "nenhum parecer ainda"} · {ea} em atendimento</small></div>
               <span className="dv-n cinza">{h} {perTxt}</span>
               {sp > 0 && <span className="dv-n" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>{sp} sem parecer</span>}
               {cb > 0 && <span className="dv-n" style={{ background: "var(--critico-bg)", color: "var(--critico)" }}>{cb} cobrado{cb > 1 ? "s" : ""}</span>}
-            </div>)) : <div className="empty">Nenhum vendedor cadastrado.</div>}
+              {spl.length > 0 && <button className="btn sm" title="Cobrar todos os clientes deste vendedor que já vieram e estão sem parecer" onClick={() => cobrarTodos(spl, u.nome)}>Cobrar todos sem parecer ({spl.length})</button>}
+            </div>); }) : <div className="empty">Nenhum vendedor cadastrado.</div>}
         </div>
+      </div>
+
+      {/* 🔎 pendências de um vendedor: a Carla escolhe o vendedor e cobra tudo o que está parado com ele */}
+      <div className="panel dl-pv" ref={refVend} style={{ marginBottom: 16 }}>
+        <h3>🔎 Pendências por vendedor</h3>
+        <div className="dl-pv-bar">
+          <input type="search" placeholder="Buscar vendedor" value={vBusca} onChange={e => setVBusca(e.target.value)} style={{ maxWidth: 220 }} />
+          <div className="dl-pv-chips">{vendedores.map(({ u }: any) => ({ u, n: pendVend(u.id).length })).filter(({ u, n }: any) => (n > 0 || vSel === u.id) && (!vBusca.trim() || String(u.nome).toLowerCase().includes(vBusca.trim().toLowerCase())))
+            .sort((a: any, b: any) => b.n - a.n).map(({ u, n }: any) => <button key={u.id} type="button" className={"chip" + (vSel === u.id ? " on" : "")} onClick={() => setVSel(vSel === u.id ? "" : u.id)}>{u.nome}<span className="n">{n}</span></button>)}</div>
+        </div>
+        {!vSel ? <div className="hint" style={{ padding: "8px 2px" }}>Escolha um vendedor para ver todos os clientes que estão parados com ele: os que já vieram sem parecer, os já cobrados que não responderam e os com status parado há mais de 24h.</div>
+          : (() => { const u = (R.vendedores() as any[]).find((x: any) => x.id === vSel) || { id: vSel, nome: R.nomeUser(vSel) }; const l = pendVend(vSel).sort((a: any, b: any) => String(a.dataLoja || "").localeCompare(String(b.dataLoja || "")));
+            const tel = sanitizeWhats((st.usuarios.find((x: any) => x.id === vSel) || {}).telefone || "");
+            return <>
+              <div className="dl-pv-cab"><b>{u.nome}</b> <span className="hint">{l.length} cliente{l.length === 1 ? "" : "s"} para cobrar</span>
+                <span style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {l.length > 0 && <button className="btn primary sm" onClick={() => cobrarTodos(l, u.nome)}>📣 Cobrar todos ({l.length})</button>}
+                  {l.length > 0 && tel && <a className="btn wa sm" href={waTexto(tel, msgVend(u, l))} target="_blank" rel="noopener">Mandar a lista no WhatsApp</a>}
+                  <button className="btn ghost sm" onClick={() => setVSel("")}>✕</button></span></div>
+              {l.length ? <div className="dl-lista">{l.map((c: any) => { const p = ROT_PEND[pendDe(c)]; return (
+                <div className="dl-l" key={c.id}>
+                  <b className="dl-h" style={{ fontSize: 12 }}>{c.dataLoja ? fmtDateTime(c.dataLoja).slice(0, 5) + " " + hora(c) : "—"}</b><Origem c={c} />
+                  <span className="dl-nm" onClick={() => abrirDetalhe(c.id)}>{c.cliente}<small>{STATUS_CLIENTE[R.statusClienteDe(c)] || "—"}{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : ""}{c.tratativa && c.tratativa.cobradoEm ? " · cobrado " + tempoRel(c.tratativa.cobradoEm) : ""}</small></span>
+                  <span className="badge" style={{ background: "transparent", color: p[1], border: "1px solid " + p[1] }}>{p[0]}</span>
+                  <button className="btn sm" onClick={() => cobrar(c)}>{c.tratativa && c.tratativa.cobradoEm ? "Cobrar de novo" : "Cobrar"}</button>
+                </div>); })}</div> : <div className="empty" style={{ padding: "14px 8px" }}>Nada parado com {u.nome}. 👏</div>}
+            </>; })()}
       </div>
 
       <div className="panel-grid">
