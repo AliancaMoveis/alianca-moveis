@@ -232,7 +232,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   }
   async function carregarLista(busca = q) { try { const [l, t] = await Promise.all([A.produtoLista(busca), A.produtoTotal()]); setLista((l || []) as Produto[]); setTotal(t || null); } catch (e: any) { toast(e.message); } }
   const [total, setTotal] = useState<{ total: number; congelados: number } | null>(null);
-  useEffect(() => { if (!movel) carregarLista(""); }, []);
+  useEffect(() => { if (!movel && edita) carregarLista(""); }, []); // a lista completa é só para quem edita (Gestão/TI)
   const campo = (k: keyof Produto, l: string, extra: any = {}) => <label className={"cp-f" + (extra.largo ? " largo" : "")}>{l}
     {extra.area ? <textarea rows={4} value={(form as any)[k] ?? ""} onChange={e => setForm({ ...(form as Produto), [k]: e.target.value })} />
       : <input value={(form as any)[k] ?? ""} inputMode={extra.num ? "decimal" : undefined} onChange={e => setForm({ ...(form as Produto), [k]: e.target.value })} />}</label>;
@@ -342,7 +342,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
 
     {recentes.length > 1 && <div className="cp-rec"><span className="hint">Lidos agora:</span>{recentes.map(r => <button key={r} type="button" className="chip" onClick={() => buscar(r)}>{r}</button>)}</div>}
 
-    {!movel && <div className="card cp-lista">
+    {!movel && edita && <div className="card cp-lista">
       <div className="cp-lista-cab"><b>Produtos cadastrados</b> <span className="cp-total">{total ? Number(total.total).toLocaleString("pt-BR") : "…"}</span>{total && Number(total.congelados) > 0 ? <span className="hint">· {total.congelados} fora de venda</span> : null}{lista && total && lista.length < Number(total.total) ? <span className="hint">· mostrando {lista.length}{lista.length >= 300 ? " (busque pelo nome/código para achar os outros)" : " na busca"}</span> : null}
         <form style={{ marginLeft: "auto", display: "flex", gap: 6 }} onSubmit={e => { e.preventDefault(); carregarLista(q); }}><input type="search" placeholder="🔎 nome, código, REF" value={q} onChange={e => setQ(e.target.value)} /><button className="btn sm">Buscar</button></form>
         {edita && <><button type="button" className="btn sm" onClick={() => { setProd(null); setNaoAchou(""); setForm({ ...VAZIO }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>＋ Novo produto</button>

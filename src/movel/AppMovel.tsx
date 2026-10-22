@@ -133,7 +133,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {aba === "presenca" && <div className="mv-anun"><div className="mv-sec">✅ Confirmação de presença</div><Presenca movel /></div>}
         {aba === "porta" && <div className="mv-anun"><div className="mv-sec">🚪 Novo cliente porta</div><Presenca movel novoPorta key={"porta" + nPorta} /></div>}
         {aba === "anuncios" && <div className="mv-anun"><div className="mv-sec">📣 Anúncios</div><Anuncios movel /></div>}
-        {aba === "resumo" && R.podeConsultaProduto() && <button type="button" className="mv-btn-produto" onClick={() => setAba("produto")}><span>🏷</span><b>Consultar produto</b><small>ler o código de barras da etiqueta · estoque e preço</small></button>}
+        {aba === abas[0][0] && perfil !== "produtos" && R.podeConsultaProduto() && <button type="button" className="mv-btn-produto" onClick={() => setAba("produto")}><span>🏷</span><b>Consultar produto</b><small>ler o código de barras da etiqueta · estoque e preço</small></button>}
         {perfil === "dono" && aba === "resumo" && <GestResumo ir={k => abas.some(x => x[0] === k) && setAba(k)} />}
         {perfil === "gerente" && aba === "hoje" && <GerHoje ir={setAba} />}
         {perfil === "gerente" && aba === "chamar" && <GerChamar />}

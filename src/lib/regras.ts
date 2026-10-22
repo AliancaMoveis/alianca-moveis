@@ -472,7 +472,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeUsuarios = () => ehGestao() || mySetores().includes("produtos");
   const setorRestrito = (id: string) => { const s: any = getSetor(id); return id === "proprietario" || !!(s && s.liberacoes && (s.liberacoes.admin || s.liberacoes.verTudo || s.liberacoes.verMarketing)); };
   const podeMexerUsuario = (u: any) => ehGestao() || (podeUsuarios() && (!u || (u.id !== currentUserId && !(u.setores || []).some(setorRestrito))));
-  const podeConsultaProduto = () => ["00000000-0000-4000-a000-000000000007", "412d3e57-c869-493e-b298-28916054ed72"].includes(currentUserId) || mySetores().includes("produtos") || mySetores().includes("gerente_loja");
+  const podeConsultaProduto = () => ["00000000-0000-4000-a000-000000000007", "412d3e57-c869-493e-b298-28916054ed72", "573aa574-2a2b-4faf-a500-bf64e71d06bd" /* vendedor Lucas, em teste */].includes(currentUserId) || mySetores().includes("produtos") || mySetores().includes("gerente_loja");
   // editar/importar/excluir/tirar de venda: só Gestão e TI; liberar o mostruário: também os gerentes da loja. Vendedor só consulta.
   const podeEditarProduto = () => ehGestao() || mySetores().includes("produtos");
   const podeLiberarMostruario = () => podeEditarProduto() || mySetores().includes("gerente_loja");
