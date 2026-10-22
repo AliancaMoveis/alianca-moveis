@@ -1894,3 +1894,9 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .cp-saldo.cong{background:#3f6f8f}.cp-sug i.cong{background:#3f6f8f}
 .cp-total{font-weight:800;font-size:15px;color:var(--primary)}
 .fv-bts .fv-todas{width:auto !important;padding:0 10px !important;font-size:13px;font-weight:700;white-space:nowrap}
+/* checklist: borda para estender o atendimento */
+.ck-estica{position:absolute;left:0;right:0;bottom:0;height:14px;cursor:ns-resize;touch-action:none;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(0,0,0,.18);border-radius:0 0 4px 4px}
+.ck-estica i{display:block;width:26px;height:3px;border-radius:2px;background:rgba(255,255,255,.85);box-shadow:0 4px 0 rgba(255,255,255,.55)}
+.ck-estica span{display:none;font-size:10px;font-weight:700;color:#fff;white-space:nowrap}
+.ck-estica b{font-size:10.5px;color:#fff;white-space:nowrap}
+.ck-estica:hover{background:rgba(0,0,0,.32)}.ck-estica:hover span{display:inline}

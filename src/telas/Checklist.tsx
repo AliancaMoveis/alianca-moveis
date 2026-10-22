@@ -1111,16 +1111,17 @@ function CalendarioDia() {
     if (proj === (k.projetista || "") && slot === String(k.agendadoPara || "").slice(0, 16)) return;
     setModal(<ModalMover c={c} data={slot} proj={proj} dur={durCk(c, cfg)} />);
   }
-  function esticar(e: React.MouseEvent, c: any, ini: number, fim0: number) {
+  // estender (ou encurtar) o atendimento puxando a borda de baixo — mouse, caneta ou dedo
+  function esticar(e: React.PointerEvent, c: any, ini: number, fim0: number) {
     e.preventDefault(); e.stopPropagation();
     const y0 = e.clientY; let fim = fim0;
     const yFim = yOf(fim0);
-    const mv = (ev: MouseEvent) => { fim = Math.max(ini + 30, snap(minOf(yFim + ev.clientY - y0))); setEstica({ id: c.id, fim }); };
+    const mv = (ev: PointerEvent) => { ev.preventDefault(); fim = Math.max(ini + 30, snap(minOf(yFim + ev.clientY - y0))); setEstica({ id: c.id, fim }); };
     const up = () => {
-      window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); setEstica(null);
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); setEstica(null);
       if (fim !== fim0) setModal(<ModalMover c={c} data={String(ck(c).agendadoPara).slice(0, 16)} proj={ck(c).projetista || ""} dur={fim - ini} />);
     };
-    window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up);
+    window.addEventListener("pointermove", mv, { passive: false }); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
   }
   // pula só os dias sem atendimento: dia fora da configuração (ex.: sábado) aparece quando tem cliente marcado
   const diasComCliente = new Set<string>(st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).flatMap((c: any) => {
@@ -1234,8 +1235,8 @@ function CalendarioDia() {
                       <div>Venda {x.c.pedido}</div>
                       {x.tipo === "ag" ? <div><b>Presença:</b> {conf === "confirmada" ? "Confirmada ✅" : conf === "enviada" ? "Aguardando" : "A confirmar"}</div>
                         : <div style={{ fontWeight: 700 }}>{x.venc ? "⚠️ Prazo vencido — liberar ou renovar" : "Aguardando resposta"}</div>}</>)}
-                    {x.tipo === "ag" && (x.extra ?? -1) < 0 && <div title="Arraste para aumentar ou diminuir o tempo" onClick={e => e.stopPropagation()} onMouseDown={e => esticar(e, x.c, x.ini, x.fim)}
-                      style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 7, cursor: "ns-resize", background: "rgba(255,255,255,.35)" }} />}
+                    {x.tipo === "ag" && (x.extra ?? -1) < 0 && <div className="ck-estica" title="Arraste para aumentar ou diminuir o tempo" draggable={false} onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
+                      onClick={e => e.stopPropagation()} onPointerDown={e => esticar(e, x.c, x.ini, x.fim)}><i />{estica && estica.id === x.c.id ? <b>até {hm(x.fim)} · {Math.round((x.fim - x.ini) / 6) / 10}h</b> : <span>⇕ puxe para estender</span>}</div>}
                   </div>);
               })}
             </div>))}
