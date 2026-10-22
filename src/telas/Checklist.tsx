@@ -153,13 +153,27 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
 
   const modoImp = useRef<"agendar" | "agendados">("agendar");
   const escolher = (m: "agendar" | "agendados") => { modoImp.current = m; arq.current?.click(); };
-  async function importar(file: File | undefined) {
-    if (!file) return;
+  // pode subir mais de um arquivo de uma vez (ex.: "aguardando medição" + "aguardando checklist"): junta tudo e confere junto,
+  // assim quem está num arquivo não é tratado como ausente por causa do outro
+  async function importar(arquivos: FileList | File[] | null | undefined) {
+    const fs = Array.from(arquivos || []); if (!fs.length) return;
     setImportando(true);
     try {
-      const linhas = await lerXlsx(file);
-      if (!linhas.length) throw new Error("A planilha está vazia");
-      if (!("Título" in linhas[0]) || !("Contato" in linhas[0])) throw new Error("Não reconheci a planilha: preciso das colunas “Título” (Venda nº) e “Contato”");
+      let linhas: any[] = [];
+      for (const f of fs) {
+        const l = await lerXlsx(f);
+        if (!l.length) throw new Error("A planilha " + f.name + " está vazia");
+        if (!("Título" in l[0]) || !("Contato" in l[0])) throw new Error("Não reconheci a planilha " + f.name + ": preciso das colunas “Título” (Venda nº) e “Contato”");
+        linhas = linhas.concat(l);
+      }
+      // a mesma venda em dois arquivos: fica uma linha só (a que tem data de agendamento, se houver)
+      if (fs.length > 1) {
+        const por = new Map<string, any>();
+        linhas.forEach(l => { const k = String(l["Título"] || "").replace(/\D/g, "") || Math.random().toString(); const a = por.get(k);
+          if (!a || (!a["Data do Agendamento"] && l["Data do Agendamento"])) por.set(k, l); });
+        linhas = [...por.values()];
+        toast(fs.length + " arquivos juntos · " + linhas.length + " vendas");
+      }
       const dados = linhas.map(l => ({
         numero: l["Título"], cliente: l["Contato"], telefone: l["Telefone 1"], telefone2: l["Telefone 2"], vendedor: l["Vendedor"], medidor: l["Medidor"],
         inclusao: dataPlanilha(l["Inclusão"]).slice(0, 10), ...((ds: { data: string; projetista: string }[]) => ({ agendadoPara: ds[0]?.data || "", projetista: ds[0]?.projetista || "", diasExtras: ds.slice(1) }))(agendaPlanilha(l["Data do Agendamento"], l["Agenda"])), agenda: l["Agenda"] || "",
@@ -203,10 +217,10 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
     <section className="view active" id="view-checklist">
       {aba !== "agenda" && <><div className="view-head"><div><h2>{(ABAS[aba] || ABAS.agendar)[0]}</h2>
         <p>{(ABAS[aba] || ABAS.agendar)[1]}</p></div>
-        <div><input ref={arq} type="file" accept=".xlsx" style={{ display: "none" }} onChange={e => importar(e.target.files?.[0])} />
+        <div><input ref={arq} type="file" accept=".xlsx" multiple style={{ display: "none" }} onChange={e => importar(e.target.files)} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}><button className="btn ghost" onClick={() => setModal(<ModalHorarios />)}>⚙ Horários</button><button className="btn" onClick={() => setModal(<ModalIncluir />)}>＋ Incluir cliente</button>
           <button className="btn primary" disabled={importando} onClick={() => escolher("agendar")}>{importando ? "Importando…" : "📥 Importar a agendar"}</button>
-          <button className="btn primary" disabled={importando} onClick={() => escolher("agendados")}>📅 Importar agendados</button></div></div></div>
+          <button className="btn primary" disabled={importando} onClick={() => escolher("agendados")} title="Pode escolher mais de um arquivo de uma vez (ex.: aguardando medição + aguardando checklist) — segure Ctrl e clique nos arquivos">📅 Importar agendados <small style={{ opacity: .8 }}>(1 ou mais arquivos)</small></button></div></div></div>
       <div className="kpis" style={{ marginTop: 6 }}>
         <Kpi n={todos.filter(aFazerHoje).length} l="Para fazer hoje" cls={todos.some(aFazerHoje) ? "alert" : ""} />
         <Kpi n={nG("agendar")} l="A agendar" />
