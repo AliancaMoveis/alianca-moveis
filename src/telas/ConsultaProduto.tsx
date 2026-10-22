@@ -194,9 +194,9 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   }
   async function importar() {
     if (!imp) return; setImportando(true);
-    try { let nv = 0, at = 0, er = 0; const L = 400;
-      for (let i = 0; i < imp.linhas.length; i += L) { setProg(Math.round(i / imp.linhas.length * 100)); const r: any = await A.produtoImportar(imp.linhas.slice(i, i + L)); nv += r?.novos || 0; at += r?.atualizados || 0; er += (r?.erros || []).length; }
-      toast(`${nv} produto(s) novo(s) · ${at} atualizado(s)` + (er ? ` · ${er} com erro` : ""));
+    try { let nv = 0, at = 0, er = 0, pj = 0; const L = 400;
+      for (let i = 0; i < imp.linhas.length; i += L) { setProg(Math.round(i / imp.linhas.length * 100)); const r: any = await A.produtoImportar(imp.linhas.slice(i, i + L)); nv += r?.novos || 0; at += r?.atualizados || 0; er += (r?.erros || []).length; pj += r?.projetado || 0; }
+      toast(`${nv} produto(s) novo(s) · ${at} atualizado(s)` + (er ? ` · ${er} com erro` : "") + (pj ? ` · ${pj} da linha projetado ficaram de fora` : ""));
       setImp(null); carregarLista(q); }
     catch (e: any) { toast(e.message); } finally { setImportando(false); }
   }

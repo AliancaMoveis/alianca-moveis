@@ -180,6 +180,7 @@ export default function Shell() {
             {atual === "atividades" && <Atividades />}
             {atual === "cadastros" && <Cadastros />}
             {atual === "admin" && <Admin />}
+            {atual === "admin_usuarios" && R.podeUsuarios() && <Admin soUsuarios />}
             {atual === "relatorios" && <Relatorios />}
             {(atual === "posvenda" || atual.startsWith("pv_")) && <PosVenda key={atual} aba={atual === "posvenda" ? "clientes" : atual.slice(3)} />}
             {atual === "ck_produtividade" && <ProdutividadeChecklist />}

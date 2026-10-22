@@ -1,4 +1,4 @@
-// ALIANÇA 360 — criação de usuários e redefinição de senha (só Gestão).
+// ALIANÇA 360 — criação de usuários e redefinição de senha (Gestão; o TI com limites).
 // Precisa da service role (disponível só no servidor), por isso roda como Edge Function.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -40,10 +40,19 @@ Deno.serve(async (req) => {
       return json({ token_hash: link.properties.hashed_token });
     }
 
-    // quem chamou precisa ser Gestão (checado no banco com o token dele)
+    // quem chamou precisa ser Gestão — ou o TI (cadastro de usuários com limites), checado no banco com o token dele
     const comoUsuario = createClient(url, anon, { global: { headers: { Authorization: auth } } });
     const { data: ehGestao, error: eG } = await comoUsuario.rpc("eh_gestao");
-    if (eG || ehGestao !== true) return json({ erro: "Acesso restrito à Administração" }, 403);
+    if (eG) return json({ erro: "Acesso restrito à Administração" }, 403);
+    if (ehGestao !== true) {
+      // TI: cria e edita usuários, mas não dá nem mexe em quem tem Gestão/Administração, visão global, valores do marketing ou Proprietário;
+      // "entrar como" continua só da Gestão
+      if (!["criar", "senha", "email"].includes(String(body.acao))) return json({ erro: "Acesso restrito à Gestão" }, 403);
+      const alvo = body.acao === "criar" ? null : String(body.id ?? "");
+      const sets = body.acao === "criar" && Array.isArray(body.setores) ? body.setores.map(String) : null;
+      const { data: pode, error: eP } = await comoUsuario.rpc("usuarios_pode", { p_id: alvo, p_setores: sets });
+      if (eP || pode !== true) return json({ erro: "Sem permissão: só a Gestão pode criar ou alterar usuários com Gestão, Supervisão, Jurídico, Gerente de loja ou Proprietário" }, 403);
+    }
 
     if (body.acao === "criar") {
       const nome = String(body.nome ?? "").trim();

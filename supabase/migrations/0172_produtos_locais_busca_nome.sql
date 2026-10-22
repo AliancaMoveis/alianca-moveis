@@ -15,3 +15,6 @@ create or replace function public.produto_lista(p_q text default '')
 -- App: itens com descrição em letras minúsculas (linha projetado) não são importados.
 -- Setor TI e cadastro de produtos com acesso a Fábricas (fornecedores e telefones dos representantes)
 update public.setores set lib_cadastros = true where id = 'produtos';
+-- Cadastro de usuários para o TI (setor produtos): pode_usuarios(), usuarios_pode(p_id, p_setores), _setor_restrito(setor)
+-- salvar_usuario / desativar_usuario / reativar_usuario: checam usuarios_pode; edge function admin-usuarios v4 idem.
+-- produto_importar: ignora no servidor descrições com letra minúscula (linha projetado) e devolve 'projetado'.

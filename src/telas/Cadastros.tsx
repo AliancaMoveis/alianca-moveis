@@ -59,9 +59,9 @@ function EditRep({ id }: { id: string | null }) {
 }
 
 // ================= Administração =================
-export function Admin() {
+export function Admin({ soUsuarios = false }: { soUsuarios?: boolean }) {
   const { R, st, executar, setModal, toast } = useApp();
-  const [sub, setSub] = useState("usuarios");
+  const [sub0, setSub] = useState("usuarios"); const sub = soUsuarios ? "usuarios" : sub0;
   const [pct, setPct] = useState(String(st.config.comissaoPct)); const [pag, setPag] = useState(String(st.config.pagamentoVisita)); const [vmk, setVmk] = useState(String((st.config as any).valorVendaMkt ?? 10));
   const ativos = st.usuarios.filter(u => u.ativo), inativos = st.usuarios.filter(u => !u.ativo);
   const [buscaU, setBuscaU] = useState("");
@@ -73,7 +73,7 @@ export function Admin() {
       <div><div className="fn">{u.nome} {u.id === R.currentUserId && <span style={{ color: "var(--ink-faint)", fontWeight: 400 }}>(logado)</span>}{!u.ativo && <span className="pill" style={{ marginLeft: 6 }}>desativado</span>}</div>
         <div className="fc">{(u.setores || []).length ? u.setores.map((id: string) => <span key={id} className="perfil-tag" style={{ marginRight: 4 }}>{R.setorNome(id)}</span>) : "sem setor"}{u.somenteAtribuidos && <span className="pill" style={{ marginLeft: 4 }}>consultor externo</span>}{u.email ? <span style={{ marginLeft: 6 }}>{u.email}</span> : null}{u.nomeCompleto || u.telefone ? <span style={{ marginLeft: 6 }}>· {[u.nomeCompleto, u.telefone ? fmtTel(u.telefone) : ""].filter(Boolean).join(" · ")}</span> : null}</div></div>
       <div className="sp">
-        {u.ativo ? <>
+        {!R.podeMexerUsuario(u) ? <span className="hint" title="Só a Gestão altera usuários com Gestão, Supervisão, Jurídico, Gerente de loja ou Proprietário">🔒 só a Gestão</span> : u.ativo ? <>
           <button className="btn ghost sm" onClick={() => setModal(<EditUser id={u.id} />)}>Editar</button>
           <button className="btn danger sm" onClick={() => { if (confirm("Remover o acesso de " + u.nome + "? O histórico dele continua no sistema.")) executar(() => A.desativarUsuario(u.id), "Usuário removido"); }}>Remover</button>
         </> : <button className="btn sm" onClick={() => executar(() => A.reativarUsuario(u.id), "Usuário reativado")}>Reativar</button>}
@@ -81,8 +81,8 @@ export function Admin() {
   );
   return (
     <section className="view active" id="view-admin">
-      <div className="view-head"><div><h2>Administração</h2><p>Usuários, setores e roteamento. Acesso restrito a quem tem a liberação de Administração.</p></div></div>
-      <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"], ["agendaloja", "Agenda da loja (tela aberta)"], ["notif", "🔔 Notificações ativadas"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>
+      <div className="view-head"><div><h2>{soUsuarios ? "Usuários" : "Administração"}</h2><p>{soUsuarios ? "Cadastre e edite usuários, troque e-mail e senha. Usuários com Gestão, Supervisão, Jurídico, Gerente de loja ou Proprietário só a Gestão altera." : "Usuários, setores e roteamento. Acesso restrito a quem tem a liberação de Administração."}</p></div></div>
+      {!soUsuarios && <div className="subnav" id="subnavAdm">{[["usuarios", "Usuários"], ["setores", "Setores e liberações"], ["rotas", "Roteamento"], ["comissoes", "Comissões e testes"], ["agendaloja", "Agenda da loja (tela aberta)"], ["notif", "🔔 Notificações ativadas"]].map(([k, l]) => <button key={k} className={sub === k ? "on" : ""} onClick={() => setSub(k)}>{l}</button>)}</div>}
       {sub === "notif" && <StatusNotif />}
       {sub === "usuarios" && <div id="subUsuarios"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditUser id={null} />)}>Adicionar usuário</button></div>
         <div style={{ marginBottom: 14, maxWidth: 420 }}><input type="search" placeholder="🔍 Buscar por nome, e-mail ou setor" value={buscaU} onChange={e => setBuscaU(e.target.value)} /></div>
@@ -116,7 +116,7 @@ export function Admin() {
 }
 
 function EditUser({ id }: { id: string | null }) {
-  const { st, executar, setModal, toast } = useApp();
+  const { R, st, executar, setModal, toast } = useApp();
   const u: any = id ? st.usuarios.find(x => x.id === id) : { nome: "", setores: [], somenteAtribuidos: false, email: "" };
   const [nome, setNome] = useState(u.nome); const [setores, setSetores] = useState<string[]>(u.setores || []); const [ext, setExt] = useState(!!u.somenteAtribuidos);
   const [email, setEmail] = useState(u.email || ""); const [senha, setSenha] = useState("");
@@ -145,7 +145,7 @@ function EditUser({ id }: { id: string | null }) {
       <div className="field" style={{ marginBottom: 14 }}><label>E-mail de acesso {!id && <span className="req-star">*</span>}</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nome@aliancamoveis.com.br" /></div>
       <div className="field" style={{ marginBottom: 14 }}><label>{id ? <>Nova senha <span className="hint">(deixe vazio para não mudar)</span></> : <>Senha inicial <span className="req-star">*</span> <span className="hint">(mín. 8 caracteres — a pessoa pode trocar depois)</span></>}</label><Senha value={senha} onChange={e => setSenha(e.target.value)} autoComplete="new-password" /></div>
       <div className="field" style={{ marginBottom: 14 }}><label>Setores <span className="req-star">*</span> <span className="hint">(pode marcar mais de um)</span></label>
-        <div id="uSetores">{st.setores.map(s => <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--line-soft)" }}><input type="checkbox" checked={setores.includes(s.id)} onChange={() => toggle(s.id)} style={{ width: "auto" }} /> {s.nome}</label>)}</div></div>
+        <div id="uSetores">{st.setores.filter(s => R.ehGestao() || !R.setorRestrito(s.id)).map(s => <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--line-soft)" }}><input type="checkbox" checked={setores.includes(s.id)} onChange={() => toggle(s.id)} style={{ width: "auto" }} /> {s.nome}</label>)}</div></div>
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}><input type="checkbox" checked={ext} onChange={e => setExt(e.target.checked)} style={{ width: "auto" }} /> É consultor externo <span className="hint">(vê e trata apenas o que for atribuído a ele mesmo, mesmo dentro do setor)</span></label>
       <button className="btn primary" onClick={salvar}>Salvar</button>
     </Modal>
