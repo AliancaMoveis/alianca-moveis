@@ -8,6 +8,7 @@ import { DataCalendario } from "../comp/DataCalendario";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
+import { baixarTodasFotos } from "../comp/Fotos";
 import { numsVenda, EM_ATENDIMENTO, STATUS, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, temCancelamento } from "../lib/regras";
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
@@ -518,6 +519,7 @@ function Anexar({ c }: any) {
       {qtd > 0 && <div className="mv-anx-g">{anexos.map((a: any) => <div key={a.id} className="mv-anx-i">
         {a.tipo === "img" ? <img src={a.url} alt="" onClick={() => openImg(imgs.map((x: any) => x.url), imgs.indexOf(a))} /> : <a className="arq" href={a.url} target="_blank" rel="noopener">{a.tipo === "pdf" ? "📄" : a.tipo === "video" ? "🎬" : "🔗"}</a>}
         {R.podeRemoverAnexo(a) && <button className="mv-anx-del" title="Apagar" onClick={() => apagar(a)}>🗑</button>}</div>)}</div>}
+      {imgs.length > 1 && <button type="button" className="mv-grande" style={{ margin: "8px 0" }} disabled={!!status} onClick={async () => { setStatus("Preparando " + imgs.length + " fotos…"); try { const m = await baixarTodasFotos(imgs, c.cliente); if (m) toast(m); } finally { setStatus(""); } }}>⬇ Baixar todas as fotos ({imgs.length})</button>}
       {status ? <div className="mv-status">{status}</div> : pend.length ? <PreviaEnvio movel itens={pend} aceita={ACEITA_ANEXO} remover={i => setPend(p => p.filter((_, j) => j !== i))} enviar={enviar} cancelar={() => setPend([])} mais={escolher} /> : <div className="mv-2">
         <label className="mv-grande">📷 Tirar foto<input type="file" accept="image/*" capture="environment" hidden onChange={e => { escolher(e.target.files); e.target.value = ""; }} /></label>
         <label className="mv-grande">📎 Foto, vídeo ou PDF<input type="file" accept={ACEITA_ANEXO} multiple hidden onChange={e => { escolher(e.target.files); e.target.value = ""; }} /></label>

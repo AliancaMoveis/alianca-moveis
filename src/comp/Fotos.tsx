@@ -3,9 +3,24 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { urlAnexo } from "../lib/dados";
-import { blobDe, salvarBlob } from "./Overlays";
+import { baixarFotosZip, blobDe, salvarBlob } from "./Overlays";
 
 export type Foto = { url: string; nome?: string; path?: string; storage_path?: string; legenda?: string };
+
+/** ⬇ todas as fotos de uma vez: no celular abre o "compartilhar" com todas (salvar na galeria / enviar); no computador baixa um .zip */
+export async function baixarTodasFotos(fotos: Foto[], nome = "fotos"): Promise<string> {
+  const lista = fotos.map((x, k) => ({ ...x, path: x.path || x.storage_path, nome: x.nome || "foto-" + (k + 1) + ".jpg" }));
+  try {
+    const nav: any = navigator; const celular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (celular && nav.canShare) {
+      const arqs: File[] = [];
+      for (const x of lista) { try { const b = await blobDe(x); arqs.push(new File([b], /\.\w{2,4}$/.test(x.nome) ? x.nome : x.nome + ".jpg", { type: b.type || "image/jpeg" })); } catch { /* pula */ } }
+      if (arqs.length && nav.canShare({ files: arqs })) { await nav.share({ files: arqs, title: "Fotos" }); return arqs.length + " foto(s)"; }
+    }
+    const r = await baixarFotosZip(nome, [{ pasta: "fotos", anexos: lista }]);
+    return r.n + " foto(s) no .zip" + (r.falhas.length ? " · " + r.falhas.length + " não baixaram" : "");
+  } catch (e: any) { return e?.name === "AbortError" ? "" : "Não consegui baixar todas"; }
+}
 
 export function FotoViewer({ fotos, inicio = 0, onFechar, acoes }: { fotos: Foto[]; inicio?: number; onFechar: () => void; acoes?: ReactNode }) {
   const [i, setI] = useState(Math.min(Math.max(0, inicio), Math.max(0, fotos.length - 1)));
@@ -52,10 +67,12 @@ export function FotoViewer({ fotos, inicio = 0, onFechar, acoes }: { fotos: Foto
     if (pts.current.size === 0) ini.current = null;
   };
   const baixar = async () => { try { salvarBlob(await blobDe({ ...f, url: src, path: f.path || f.storage_path }), f.nome || "foto-" + (i + 1) + ".jpg"); } catch { /* sem rede */ } };
+  const [todas, setTodas] = useState(false); const [msgT, setMsgT] = useState("");
+  const baixarTodas = async () => { setTodas(true); setMsgT(""); try { setMsgT(await baixarTodasFotos(fotos)); } finally { setTodas(false); } };
   if (!fotos.length) return null;
   return createPortal(<div className="fv" role="dialog" aria-label="Fotos">
     <div className="fv-top">
-      <span className="fv-cont">{i + 1} / {fotos.length}{f.legenda ? " · " + f.legenda : ""}</span>
+      <span className="fv-cont">{i + 1} / {fotos.length}{f.legenda ? " · " + f.legenda : ""}{msgT ? " · " + msgT : ""}</span>
       <span className="fv-bts">
         <button type="button" onClick={() => zoom(1 / 1.4)} aria-label="Diminuir zoom" title="Diminuir (−)">−</button>
         <b className="fv-pct">{Math.round(z.s * 100)}%</b>
@@ -63,6 +80,7 @@ export function FotoViewer({ fotos, inicio = 0, onFechar, acoes }: { fotos: Foto
         <button type="button" onClick={reset} title="Tamanho normal (0)">⤢</button>
         <button type="button" onClick={() => setZ(v => ({ ...v, r: (v.r + 90) % 360 }))} title="Girar">↻</button>
         <button type="button" onClick={baixar} title="Baixar esta foto">⬇</button>
+        {fotos.length > 1 && <button type="button" className="fv-todas" onClick={baixarTodas} disabled={todas} title="Baixar todas as fotos de uma vez">{todas ? "…" : "⬇ Todas (" + fotos.length + ")"}</button>}
         <button type="button" className="fv-x" onClick={onFechar} aria-label="Fechar" title="Fechar (Esc)">✕</button>
       </span>
     </div>

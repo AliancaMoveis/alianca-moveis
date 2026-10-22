@@ -82,7 +82,7 @@ export function estadoMock(): Estado {
       resposta: c.rw != null ? { previsao: c.rp || "", quem: c.rq, texto: c.rt, quando: H(c.rw).toISOString() } : null,
       venda: c.v ? { numero: c.v.n, valor: fmtValor(c.v.val), valorNum: c.v.val, dataVenda: c.v.d, vendedor: c.v.vd, atendenteNome: c.v.an, quando: H(c.v.q).toISOString(), status: c.v.s } : null,
       transferencia: c.t ? { de: c.t.de, para: c.t.para, solicitadoPor: c.t.por, quando: H(c.t.q).toISOString(), status: "pendente" } : null,
-      anexos: ["ALM-0023", "ALM-0026", "ALM-0037"].includes(c.id) ? [{ id: "a" + c.id, tipo: "img", nome: "planta.svg", url: svg }] : [],
+      anexos: ["ALM-0023", "ALM-0026", "ALM-0037"].includes(c.id) ? [{ id: "a" + c.id, tipo: "img", nome: "planta.svg", url: svg }, ...(c.id === "ALM-0023" ? [{ id: "b" + c.id, tipo: "img", nome: "foto2.svg", url: svg }] : [])] : [],
       historico: c.h.map((h: any) => ({ quando: H(h[0]).toISOString(), quem: h[1], texto: h[2] })),
       posvenda: c.pv || null,
     })).sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm)),

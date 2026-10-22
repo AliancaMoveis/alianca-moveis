@@ -1893,3 +1893,4 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .cp-sugs-cab label input{width:auto !important;min-height:0 !important;height:16px;margin:0;padding:0}
 .cp-saldo.cong{background:#3f6f8f}.cp-sug i.cong{background:#3f6f8f}
 .cp-total{font-weight:800;font-size:15px;color:var(--primary)}
+.fv-bts .fv-todas{width:auto !important;padding:0 10px !important;font-size:13px;font-weight:700;white-space:nowrap}
