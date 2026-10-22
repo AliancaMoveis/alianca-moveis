@@ -1,0 +1,6 @@
+-- 🏷 Consulta de produto (aplicada direto no banco)
+-- tabela public.produtos (codigo pk = número do código de barras da etiqueta do Tático, Code 128; nome, modulo, grupo, cor, tamanho,
+--   especificacoes, estoque, preco, imagem_url, obs, ref, fabricante, altura, profundidade, largura, cod_etiqueta) — RLS sem políticas, só via RPC
+-- pode_produtos() = eh_gestao() (teste: o menu aparece só para o Bruno)
+-- produto_buscar(codigo) → produto + variacoes (mesmo grupo, ou mesmo nome) · produto_lista(q) · produto_salvar(p jsonb)
+-- cadastrados os 2 produtos das etiquetas de exemplo: 1875840 (Módulo closet Dalla Costa TW401) e 1974993 (Roupeiro Dalla Costa W203)

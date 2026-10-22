@@ -36,6 +36,7 @@ import { RESGATAR, corCliente } from "../lib/corCliente";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
+import ConsultaProduto from "../telas/ConsultaProduto";
 import AgendaVendedores from "../telas/AgendaVendedores";
 import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados } from "./Medidas";
 
@@ -97,6 +98,8 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ...(gerAnuncios ? [] : [["time", "Time", "🎯"]] as [string, string, string][]), ["equipe", "Equipe", "👥"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : podeDistribuir(R) ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["eu", "Mais", "☰"]];
+  // 🏷 Consulta de produto (teste, só o Bruno): aba antes da última
+  if (R.podeConsultaProduto() && !abas.some(x => x[0] === "produto")) abas.splice(Math.max(0, abas.length - 1), 0, ["produto", "Produto", "🏷"]);
   const [aba, setAba] = useState(abas[0][0]);
   const [nPorta, setNPorta] = useState(0); // tocar de novo em "＋ Porta" reabre o formulário
   const [aberto, setAberto] = useState<string | null>(null);
@@ -123,6 +126,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "consultor" && aba === "clientes" && <ConsClientes abrir={setAberto} />}
         {perfil === "dono" && aba === "painel" && <PainelDono />}
         {aba === "atend_vend" && <AgendaVendedores movel />}
+        {aba === "produto" && <ConsultaProduto movel />}
         {aba === "status" && <StatusGeral abrir={setAberto} />}
         {aba === "presenca" && <div className="mv-anun"><div className="mv-sec">✅ Confirmação de presença</div><Presenca movel /></div>}
         {aba === "porta" && <div className="mv-anun"><div className="mv-sec">🚪 Novo cliente porta</div><Presenca movel novoPorta key={"porta" + nPorta} /></div>}

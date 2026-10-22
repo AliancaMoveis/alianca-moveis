@@ -467,6 +467,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const ehMedidor = () => mySetores().includes("medidas") && !!me()?.somenteAtribuidos;
   // Encontrar vendas (Exact × Minha Visita): por enquanto só o Bruno
   const podeEncontrarVendas = () => ["00000000-0000-4000-a000-000000000007"].includes(currentUserId);
+  // 🏷 Consulta de produto: por enquanto só o Bruno (teste)
+  const podeConsultaProduto = () => ["00000000-0000-4000-a000-000000000007"].includes(currentUserId);
   const ehSupMedidas = () => ehGestao() || mySetores().includes("medidas_supervisao");
   const etapaMedida = (c: Chamado) => (c.tratativa && c.tratativa.medida && c.tratativa.medida.etapa) || (c.status === "concluida" ? "liberada" : "validar");
   const quemMede = () => ({
@@ -918,6 +920,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     else if (false) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
     // Montagem: só acompanhamento dos agendamentos do Exact (agendadoras e montadores) — só a Gestão
     if (mySetores().includes("gestao")) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Montagem", ic: "🔧", itens: [["montagem_agend", "Agendamentos (Exact)"], ["montagem_pag", "Montagens efetivadas e pagamento"]] });
+    if (podeConsultaProduto()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Produtos", ic: "🏷", itens: [["consulta_produto", "Consulta de produto"]] });
     if (podeEncontrarVendas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Encontrar vendas", ic: "🔎", itens: [["confirmacao_vendas", "✅ Confirmação de vendas"], ["encontrar_vendas360", "Encontrar vendas do 360"], ["encontrar_vendas", "Encontrar vendas da Minha Visita"]] });
     if (ehJuridico() || ehGestao()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Jurídico", ic: "⚖", itens: [["jur_novo", "Novo caso"], ["jur_andamento", "Casos em andamento"], ["jur_prazos", "Prazos (próx. 15 dias)"], ["jur_encerrados", "Encerrados"]] });
     if (!veCC && consultaNoSetor && (ehJuridico() || podeChecklist() || ehSupMedidas() || ehPosvenda())) {
@@ -935,7 +938,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, podeConsultaProduto, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,

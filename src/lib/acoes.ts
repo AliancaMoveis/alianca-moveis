@@ -208,6 +208,10 @@ export const A = {
   vendaConfEnviar: (linhas: any[]) => rpc<number>("venda_conf_enviar", { p: linhas }),
   vendaConfExcluir: (numeros: string[]) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(numeros.length) : rpc<number>("venda_conf_excluir", { p_numeros: numeros }),
   vendaConfPromissoria: (numero: string, total: number, entrada: number) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve("ok") : rpc<string>("venda_conf_promissoria", { p_numero: numero, p_total: total, p_entrada: entrada }),
+  // 🏷 Consulta de produto (etiqueta do Tático)
+  produtoBuscar: (codigo: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(((window as any).__prodMock || []).find((x: any) => x.codigo === codigo) ? { ...((window as any).__prodMock || []).find((x: any) => x.codigo === codigo), variacoes: [] } : null) : rpc<any>("produto_buscar", { p_codigo: codigo }),
+  produtoLista: (q = "") => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((window as any).__prodMock || []) : rpc<any[]>("produto_lista", { p_q: q }),
+  produtoSalvar: (p: Record<string, any>) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(p.codigo) : rpc<string>("produto_salvar", { p }),
   vendaConfLista: () => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(((window as any).__confMock || []) as any[]) : rpc<any[]>("venda_conf_lista", {}),
   vendaConfEditar: (numero: string, p: Record<string, any>) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(null) : rpc("venda_conf_editar", { p_numero: numero, p }),
   vendaConfDecidir: (numero: string, acao: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(acao) : rpc<string>("venda_conf_decidir", { p_numero: numero, p_acao: acao }),
