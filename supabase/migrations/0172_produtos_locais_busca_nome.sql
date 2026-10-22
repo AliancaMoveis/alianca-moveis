@@ -22,3 +22,4 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- produtos: congelado/_em/_por/_motivo (tirar de venda), mostruario_liberado/_em/_por.
 -- RPCs: produto_excluir, produto_venda(cod, liberar, motivo), produto_mostruario(cod, liberar), produto_total().
 -- Consulta para vendedor (teste: Lucas 573aa574…): pode_produtos() inclui o uid; produto_lista exige 2+ letras para quem não edita.
+-- pode_produtos(): todos os vendedores (setor atendente_cliente) passam a consultar.
