@@ -26,7 +26,7 @@ const COLS: [keyof Produto, string, string[]][] = [
   ["reservas", "Reservas", ["Reservas", "Reserva", "Reservado"]],
   ["expedicao", "Em expedição", ["Em Expedição", "Expedição", "Em expedicao"]],
   ["saldo", "Saldo para venda", ["Saldo para Venda", "Saldo p/ venda", "Saldo para vendas", "Disponível", "Disponivel", "Saldo"]],
-  ["deposito", "Local (Matriz = loja · Estoque 1 = depósito · Estofados)", ["Estoque", "Depósito", "Deposito", "Local"]],
+  ["deposito", "Local (Matriz = loja · Estoque 1 / Estofados = depósito)", ["Estoque", "Depósito", "Deposito", "Local"]],
   ["preco", "Preço", ["Preço", "Preco", "Valor", "Preço venda", "Preço de venda"]],
   ["especificacoes", "Especificações técnicas", ["Especificações", "Especificacoes", "Especificações técnicas", "Descrição técnica", "Detalhes"]],
   ["imagem_url", "Imagem (link)", ["Imagem", "Foto", "URL da imagem", "Link da imagem"]],
@@ -68,8 +68,8 @@ type Produto = { congelado?: boolean; congelado_motivo?: string; mostruario_libe
   imagem_url: string; obs: string; ref: string; fabricante: string; altura: number | null; profundidade: number | null; largura: number | null; cod_etiqueta: string; atualizado_em?: string; variacoes?: Produto[] };
 /** Locais do Tático: MATRIZ = Loja; ESTOQUE 1 / LINHA PRONTA = Depósito; ESTOFADOS = Estoque Estofados. Na MATRIZ (loja), saldo 1 é o MOSTRUÁRIO: não está disponível para venda. */
 const MATRIZ = /matriz/i;
-// MATRIZ = Loja · ESTOQUE 1 (ou LINHA PRONTA) = Depósito · ESTOFADOS/PROMOB 10 = Estoque Estofados
-export const nomeLocal = (d: string) => MATRIZ.test(d || "") ? "Loja (Matriz)" : /estofad/i.test(d || "") ? "Estoque Estofados" : /linha\s*pronta|estoque\s*0*1(?!\d)/i.test(d || "") ? "Depósito" : (d || "");
+// Para o vendedor são só 2 lugares: MATRIZ = Loja; ESTOQUE 1 / LINHA PRONTA / ESTOFADOS (PROMOB 10) = Depósito (os códigos internos ficam todos no depósito)
+export const nomeLocal = (d: string) => MATRIZ.test(d || "") ? "Loja (Matriz)" : /estofad|linha\s*pronta|estoque\s*0*1(?!\d)/i.test(d || "") ? "Depósito" : (d || "");
 type Local = { local: string; estoque?: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null };
 const ehMostr = (l: Local) => MATRIZ.test(l.local || "") && Number(l.saldo) === 1;
 const saldoDe = (p: any) => p.saldo != null ? Number(p.saldo) : p.estoque != null ? Number(p.estoque) - Number(p.reservas || 0) - Number(p.expedicao || 0) : null;
@@ -78,7 +78,13 @@ export function vendavel(p: any) {
   const ls: Local[] = Array.isArray(p.locais) && p.locais.length ? p.locais : p.deposito || p.saldo != null || p.estoque != null ? [{ local: p.deposito || "", estoque: p.estoque, reservas: p.reservas, expedicao: p.expedicao, saldo: p.saldo }] : [];
   // mostruário liberado (gerente/TI/Gestão): a peça única da loja pode ser vendida
   const lib = !!p.mostruario_liberado;
-  const locais = ls.map(l => { const sd = saldoDe(l), mostr = ehMostr(l); return { ...l, disp: mostr && !lib ? 0 : sd, mostr }; });
+  // junta os estoques do mesmo lugar (Estoque 1 + Estofados = Depósito), somando as quantidades
+  const porLugar = new Map<string, Local>();
+  ls.forEach(l => { const k = nomeLocal(l.local) || l.local || ""; const a = porLugar.get(k);
+    if (!a) { porLugar.set(k, { ...l, local: MATRIZ.test(l.local || "") ? l.local : k }); return; }
+    (["estoque", "reservas", "expedicao", "saldo"] as const).forEach(c => { if (l[c] != null) a[c] = Number(a[c] || 0) + Number(l[c]); }); });
+  const locais = [...porLugar.values()].map(l => { const sd = saldoDe(l), mostr = ehMostr(l); return { ...l, disp: mostr && !lib ? 0 : sd, mostr }; })
+    .sort((a, b) => (MATRIZ.test(a.local || "") ? 0 : 1) - (MATRIZ.test(b.local || "") ? 0 : 1));
   const comNum = locais.filter(l => l.disp != null);
   const soma = comNum.length ? comNum.reduce((t, l) => t + Number(l.disp), 0) : null;
   // tirado de venda (congelado): continua cadastrado, mas não aparece como disponível
@@ -265,7 +271,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       <div className="cp-tags">
         <span className="cp-tag cod">Cód. {prod.codigo}</span>
         {prod.ref && <span className="cp-tag">REF {prod.ref}</span>}
-        {prod.deposito && <span className="cp-tag">{String(prod.deposito).split(" + ").map(nomeLocal).join(" + ")}</span>}
+        {prod.deposito && <span className="cp-tag">{[...new Set(String(prod.deposito).split(" + ").map(nomeLocal))].sort((x, y) => (x.startsWith("Loja") ? 0 : 1) - (y.startsWith("Loja") ? 0 : 1)).join(" + ")}</span>}
       </div>
       {/* estoque é a informação principal: o saldo para venda é o que realmente dá para vender */}
       {(prod.saldo != null || prod.estoque != null || prod.reservas != null || prod.expedicao != null) && <div className="cp-estoque">
@@ -329,7 +335,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         {campo("reservas", "Reservado", { num: true })}
         {campo("expedicao", "Em expedição", { num: true })}
         {campo("saldo", "Saldo para venda", { num: true })}
-        {campo("deposito", "Local (Matriz = loja · Estoque 1 = depósito · Estofados)")}
+        {campo("deposito", "Local (Matriz = loja · Estoque 1 / Estofados = depósito)")}
         <label className="cp-f">Código de preço da etiqueta (88…)<input value={form.cod_etiqueta ?? ""} placeholder="ex.: 881496,820688" onChange={e => { const v = e.target.value; const pr = precoEtiqueta(v); setForm({ ...(form as Produto), cod_etiqueta: v, ...(pr != null ? { preco: pr as any } : {}) }); }} />
           {precoEtiqueta(form.cod_etiqueta) != null && <small style={{ color: "var(--st-concluida)", fontWeight: 700 }}>= {fmtMoeda(precoEtiqueta(form.cod_etiqueta) as number)}</small>}</label>
         {campo("preco", "Preço bruto (R$)", { num: true })}
