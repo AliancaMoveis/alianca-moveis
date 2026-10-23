@@ -178,7 +178,26 @@ export const parseData = (v: any): Date => {
 // folga da semana — que só vale na semana (seg–dom) em que ele trabalha o domingo
 const diasEntre = (a: string, b: string) => Math.round((Date.parse(a + "T12:00:00Z") - Date.parse(b + "T12:00:00Z")) / 864e5);
 const somaDias = (iso: string, n: number) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-export const domingoDeFolga = (u: any, dom: string, dias?: Record<string, string>) => { const ex = dias && dias[dom]; if (ex) return ex === "folga"; return !!u.domingoRef && ((diasEntre(dom, u.domingoRef) % 21) + 21) % 21 === 0; };
+// Escala ABC de domingos: o gerente define o primeiro domingo/grupo, os domingos com a loja FECHADA e trocas pontuais;
+// o 360 monta a sequência A → B → C (domingo fechado não gasta a vez de ninguém). mapa = { "AAAA-MM-DD": "A" | "B" | "C" | "fechada" }
+export type EscalaDom = { inicio?: { data: string; letra: string }; fechados?: string[]; manual?: Record<string, string>; mapa?: Record<string, string> };
+let _mapaDom: Record<string, string> = {};
+export const definirMapaDomingos = (m: Record<string, string> | undefined | null) => { _mapaDom = m || {}; };
+export function calcMapaDomingos(e: EscalaDom, semanas = 52): Record<string, string> {
+  const out: Record<string, string> = {}; if (!e.inicio?.data || !e.inicio?.letra) return out;
+  const L = ["A", "B", "C"]; let k = L.indexOf(e.inicio.letra); if (k < 0) return out;
+  const fe = new Set(e.fechados || []), man = e.manual || {};
+  for (let i = 0, d = e.inicio.data; i < semanas; i++, d = somaDias(d, 7)) {
+    if (fe.has(d)) { out[d] = "fechada"; continue; }
+    if (man[d] && L.includes(man[d])) k = L.indexOf(man[d]);
+    out[d] = L[k]; k = (k + 1) % 3;
+  }
+  return out;
+}
+export const domingoDeFolga = (u: any, dom: string, dias?: Record<string, string>) => { const ex = dias && dias[dom]; if (ex) return ex === "folga";
+  const m = _mapaDom[dom]; if (m === "fechada") return true; // loja fechada: ninguém trabalha
+  if (u.escalaDom && m) return m === u.escalaDom;
+  return !!u.domingoRef && ((diasEntre(dom, u.domingoRef) % 21) + 21) % 21 === 0; };
 export function folgaEm(u: any, dia: string, dias?: Record<string, string>): boolean {
   if (!u) return false;
   const ex = dias && dias[dia]; if (ex) return ex === "folga";
@@ -246,6 +265,7 @@ export const enderecoSemTelefone = (e: string) => String(e || "")
   .replace(/(?:\+?55\s*)?\(?\b\d{2}\)?[\s.-]*9?\s?\d{4}[\s.-]?\d{4}\b/g, " ")
   .replace(/\s*[-–,;|/]\s*(?=[-–,;|/])/g, "").replace(/^[\s,;|/–-]+|[\s,;|/–-]+$/g, "").replace(/\s{2,}/g, " ").trim();
 export function criarRegras(state: Estado, currentUserId: string) {
+  definirMapaDomingos(((state.config as any)?.escalaDomingos || {}).mapa);
   const TIPOS = state.tipos;
   const getSetor = (id: string) => (state.setores || []).find(x => x.id === id) || null;
   const setorNome = (id: string) => { const s = getSetor(id); return s ? s.nome : (id || "—"); };

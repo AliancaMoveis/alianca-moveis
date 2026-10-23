@@ -11,7 +11,7 @@ export function SelVendedor({ value, onChange, quando, c, lista, placeholder = "
   const vs = lista || R.vendAgenda();
   const fr = vs.filter((u: any) => u.freelancer), loja = vs.filter((u: any) => !u.freelancer);
   const proj = loja.filter((u: any) => u.fazProjeto !== false), so = loja.filter((u: any) => u.fazProjeto === false);
-  const opt = (u: any) => { const m = R.dispVendedor(u.id, quando, c); return <option key={u.id} value={u.id}>{(m.length ? "⛔ " : "") + (u.freelancer ? "🔵 " : "") + u.nome + (u.freelancer ? " · FREELANCER" : "") + (extra ? extra(u) : "") + (m.length ? " — " + m.join(" · ") : "")}</option>; };
+  const opt = (u: any) => { const m = R.dispVendedor(u.id, quando, c); return <option key={u.id} value={u.id}>{(m.length ? "⛔ " : "") + (u.freelancer ? "🔵 " : "") + u.nome + (u.freelancer ? " · FREELANCER" + (u.fazProjeto === false ? " · só vendedor" : " · projetista") : "") + (extra ? extra(u) : "") + (m.length ? " — " + m.join(" · ") : "")}</option>; };
   const mot = value ? R.dispVendedor(value, quando, c) : [];
   return <>
     <select value={value} onChange={e => onChange(e.target.value)}>

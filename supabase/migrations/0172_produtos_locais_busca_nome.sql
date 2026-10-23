@@ -30,3 +30,4 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- Pré-pedido do vendedor (teste: só Lucas): tabela pre_pedidos (RLS sem acesso direto) + pode_pre_pedido, pre_pedido_lista/salvar/status/excluir.
 -- Escala ABC de domingos: usuarios.escala_dom, config.escala_domingos, escala_domingos_salvar, vendedor_escala_abc.
 -- Vendedor de outro setor (freelance, ex.: Sônia): _eh_projetista_valido sem exigir somente_atribuidos; pode_ver_chamado_ctx: setor atendente_cliente só vê os clientes atribuídos.
+-- Escala ABC v2: config.escala_domingos {inicio, fechados, manual, mapa}; _vend_folga_em usa o mapa (loja fechada = folga de todos).
