@@ -28,3 +28,4 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- Checklist: Wagner na agenda (inicioProjetista 2026-10-26, trabalhaFeriado); salvar_checklist_agenda preserva essas chaves.
 -- checklist_agendados_planilha(+p_liberar): acrescenta dias futuros, readequa outra data (p_corrigir), tira quem saiu da planilha (p_liberar).
 -- Pré-pedido do vendedor (teste: só Lucas): tabela pre_pedidos (RLS sem acesso direto) + pode_pre_pedido, pre_pedido_lista/salvar/status/excluir.
+-- Escala ABC de domingos: usuarios.escala_dom, config.escala_domingos, escala_domingos_salvar, vendedor_escala_abc.

@@ -36,6 +36,7 @@ export default function ControleVendedores({ movel }: { movel?: boolean }) {
       <div className="cv-info">🗓 <b>Sábado e domingo:</b> todos entram às 9:00 e saem às 18:00, com 1h de almoço em qualquer horário. <b>Folga no domingo</b> = trabalha a semana toda; <b>trabalhou o domingo</b> = tem a folga do dia da semana.</div>
       <div className="cv-doms">{doms.map(d => { const f = todos.filter((u: any) => u.naAgenda !== false && folgaEm(u, d, dias[u.id])); return (
         <div key={d} className="cv-dom"><b>Domingo {fmtDate(d).slice(0, 5)}</b><span>{f.length ? f.map((u: any) => nomeCurto(u.nome)).join(", ") : "ninguém de folga"}</span><small>{f.length} de folga</small></div>); })}</div>
+      <EscalaABC todos={todos} pode={pode} />
       {podeCadastrarVendedores(R) && (novo ? <NovoVendedor fechar={() => setNovo(false)} /> : <div className="cv-bts" style={{ margin: "0 0 10px" }}><button className="btn primary" onClick={() => setNovo(true)}>＋ Cadastrar vendedor</button>
         <span className="cv-dica" style={{ margin: 0 }}>Gera o acesso ao 360 só com a função de vendedor.</span></div>)}
       <input className={movel ? "mv-busca" : "cv-busca"} type="search" placeholder="🔎 Buscar vendedor" value={q} onChange={e => setQ(e.target.value)} />
@@ -62,8 +63,12 @@ function Linha({ u, dias, aberto, abrir, pode, doms }: any) {
   const [t, setT] = useState(u.turno || "");
   const [dm, setDm] = useState(u.domingoRef ? (doms.find((d: string) => domingoDeFolga(u, d, {})) || "") : "");
   const [ag, setAg] = useState(u.naAgenda !== false);
+  const [esc, setEsc] = useState<string>(u.escalaDom || "");
+  const grupos: Record<string, string> = (R.state.config || {}).escalaDomingos || {};
+  const domGrupo = (l: string) => grupos[l] ? proxDoGrupo(grupos[l]) : "";
   const salvar = () => ex(async () => {
-    await A.vendedorEscalaV2(u.id, fr ? true : fp, fo === "" ? null : Number(fo), t, dm || null, ag);
+    if (esc !== (u.escalaDom || "")) await A.vendedorEscalaAbc(u.id, esc);
+    await A.vendedorEscalaV2(u.id, fr ? true : fp, fo === "" ? null : Number(fo), t, (esc && domGrupo(esc)) || dm || null, ag);
     if (fr !== !!u.freelancer) await A.vendedorFreelancer(u.id, fr);
   }, "Escala de " + nomeCurto(u.nome) + " salva");
   const h = hojeISO(); const cal = Array.from({ length: 21 }, (_, i) => somaDias(h, i));
@@ -93,7 +98,9 @@ function Linha({ u, dias, aberto, abrir, pode, doms }: any) {
               {fr && <small className="hint">Não entra na sugestão automática de agendamento. Fica disponível para o gerente colocar como atendente ou projetista quando precisar.</small>}</label>
             <label>Folga da semana<select value={fo} onChange={e => setFo(e.target.value)}><option value="">Sem folga na semana</option>{DIAS_SEMANA.map((d, i) => i > 0 ? <option key={i} value={i}>{d}</option> : null)}</select></label>
             <label>Horário (seg–sex)<select value={t} onChange={e => setT(e.target.value)}><option value="">Não informado</option>{Object.entries(TURNOS).map(([k, x]) => <option key={k} value={k}>{x.rot}</option>)}</select></label>
-            <label>Próximo domingo de folga<select value={dm} onChange={e => setDm(e.target.value)}><option value="">Sem rodízio de domingo</option>{doms.map((d: string) => <option key={d} value={d}>{fmtDate(d)} (e a cada 3 domingos)</option>)}</select></label>
+            <label>Escala de domingo<select value={esc} onChange={e => setEsc(e.target.value)}><option value="">Sem escala ABC (definir à mão)</option>{["A", "B", "C"].map(l => <option key={l} value={l}>Escala {l}{grupos[l] ? " — folga " + fmtDate(domGrupo(l)).slice(0, 5) + " e a cada 3 domingos" : " (data ainda não definida)"}</option>)}</select></label>
+            {esc ? <label>Próximo domingo de folga<div className="cv-escfix">{domGrupo(esc) ? fmtDate(domGrupo(esc)) + " · escala " + esc : "defina o domingo da escala " + esc + " acima"}</div></label>
+              : <label>Próximo domingo de folga<select value={dm} onChange={e => setDm(e.target.value)}><option value="">Sem rodízio de domingo</option>{doms.map((d: string) => <option key={d} value={d}>{fmtDate(d)} (e a cada 3 domingos)</option>)}</select></label>}
             <label>Agenda<select value={ag ? "1" : "0"} onChange={e => setAg(e.target.value === "1")}><option value="1">Entra na agenda (definir vendedor e fila)</option><option value="0">Fora da agenda (ex.: freelance)</option></select></label>
           </div>
           <div className="cv-bts"><button className="btn primary sm" onClick={salvar}>Salvar escala</button><button className="btn sm" onClick={() => setModal(<ModalFerias u={u} />)}>🏖 {fer ? "Alterar férias" : "Marcar férias"}</button>
@@ -133,4 +140,35 @@ function ReativarLinha({ u }: any) {
   const { executar: ex } = useApp() as any;
   return <div className="cv-inat-l"><span>{nomeCurto(u.nome)}{u.freelancer ? " · Freelancer" : ""} <small>{u.email}</small></span>
     <button className="btn sm" onClick={() => { if (confirm("Reativar " + nomeCurto(u.nome) + "? O acesso ao 360 volta a funcionar.")) ex(() => A.vendedorReativar(u.id), nomeCurto(u.nome) + " reativado(a)"); }}>Reativar</button></div>;
+}
+
+/** próximo domingo (de hoje em diante) do grupo: a data base + múltiplos de 3 semanas */
+function proxDoGrupo(base: string) {
+  const h = hojeISO(); let d = base;
+  for (let i = 0; i < 60 && d < h; i++) d = somaDias(d, 21);
+  return d;
+}
+/** Escala ABC de domingos: cada grupo folga num domingo, a cada 3 semanas. O gerente define o próximo domingo de cada grupo. */
+function EscalaABC({ todos, pode }: { todos: any[]; pode: boolean }) {
+  const { R, executar: ex } = useApp() as any;
+  const g0: Record<string, string> = (R.state.config || {}).escalaDomingos || {};
+  const [g, setG] = useState<Record<string, string>>({ A: g0.A ? proxDoGrupo(g0.A) : "", B: g0.B ? proxDoGrupo(g0.B) : "", C: g0.C ? proxDoGrupo(g0.C) : "" });
+  const [aberto, setAberto] = useState(false);
+  const doms = proxDomingos(9);
+  const membros = (l: string) => todos.filter((u: any) => u.escalaDom === l);
+  return <div className="cv-abc">
+    <div className="cv-abc-cab" onClick={() => setAberto(!aberto)}><b>🗓 Escala ABC de domingos</b>
+      <span>{["A", "B", "C"].map(l => <i key={l}>{l}: {g0[l] ? fmtDate(proxDoGrupo(g0[l])).slice(0, 5) : "—"} · {membros(l).length}</i>)}</span><small>{aberto ? "▾" : "▸"}</small></div>
+    {aberto && <div className="cv-abc-corpo">
+      <p className="cv-dica" style={{ margin: "0 0 8px" }}>Cada grupo folga num domingo e depois a cada 3 domingos (trabalha 2, folga 1). Escolha o próximo domingo de folga de cada escala; o vendedor entra no grupo pelo campo <b>Escala de domingo</b> na linha dele.</p>
+      {["A", "B", "C"].map(l => <div key={l} className="cv-abc-l"><b>Escala {l}</b>
+        <select value={g[l]} disabled={!pode} onChange={e => setG({ ...g, [l]: e.target.value })}><option value="">— sem data —</option>{[...new Set([g[l], ...doms].filter(Boolean))].sort().map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}</select>
+        <span>{membros(l).length ? membros(l).map((u: any) => nomeCurto(u.nome)).join(", ") : "ninguém nesta escala"}</span></div>)}
+      {pode && <button className="btn primary sm" onClick={() => {
+        const ds = ["A", "B", "C"].map(l => g[l]).filter(Boolean); const mod = ds.map(d => Math.round((+new Date(d + "T12:00") / 864e5) / 7) % 3);
+        if (new Set(mod).size < mod.length && !confirm("Duas escalas caem no mesmo domingo do rodízio. Salvar mesmo assim?")) return;
+        ex(() => A.escalaDomingosSalvar(g), "Escala ABC salva — os vendedores de cada grupo foram atualizados");
+      }}>Salvar escala ABC</button>}
+    </div>}
+  </div>;
 }

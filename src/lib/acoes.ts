@@ -197,6 +197,8 @@ export const A = {
   vendedorCadastrar: (nome: string, email: string, senha: string, freelancer: boolean, fazProjeto: boolean) => rpc<string>("vendedor_cadastrar", { p_nome: nome, p_email: email, p_senha: senha, p_freelancer: freelancer, p_faz_projeto: fazProjeto }),
   vendedorDescadastrar: (id: string) => rpc<number>("vendedor_descadastrar", { p_id: id }),
   vendedorReativar: (id: string) => rpc("vendedor_reativar", { p_id: id }),
+  escalaDomingosSalvar: (p: Record<string, string>) => rpc("escala_domingos_salvar", { p }),
+  vendedorEscalaAbc: (id: string, letra: string) => rpc("vendedor_escala_abc", { p_id: id, p_letra: letra }),
   vendedorFreelancer: (id: string, sim: boolean) => rpc("vendedor_freelancer", { p_id: id, p_sim: sim }),
   vendedorEscalaV2: (id: string, fazProjeto: boolean, folga: number | null, turno: string, domingo: string | null, naAgenda: boolean) => rpc("vendedor_escala_v2", { p_id: id, p_faz_projeto: fazProjeto, p_folga: folga, p_turno: turno, p_domingo: domingo, p_na_agenda: naAgenda }),
   vendedorDia: (id: string, dia: string, tipo: string, obs = "") => rpc("vendedor_dia", { p_id: id, p_dia: dia, p_tipo: tipo, p_obs: obs }),
