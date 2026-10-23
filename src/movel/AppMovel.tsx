@@ -163,7 +163,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "posvenda" && aba === "pv" && <PvMovel aba="lista" />}
         {perfil === "posvenda" && aba === "pvnova" && <PvMovel aba="nova" />}
         {aba === "loja" && <div className="mv-agenda">{perfil === "marketing" && <button className="mv-voltar" onClick={() => setAba("hoje")}>‹ Voltar</button>}<Agenda /></div>}
-        {aba === "eu" && <Eu perfil={perfil} completa={completa} irTime={gereMkt && !abas.some(x => x[0] === "time") ? () => setAba("time") : undefined} />}
+        {aba === "eu" && <Eu perfil={perfil} completa={completa} irTime={gereMkt && !abas.some(x => x[0] === "time") ? () => setAba("time") : undefined} irVend={perfil === "gerente" && podeGerirVendedores(R) ? () => setAba("vendedores") : undefined} />}
       </main>
       {perfil === "gestor" && podeRegistrar && aba === "resumo" && <button className="mv-fab" onClick={() => setAba("novo")}>＋ Cliente</button>}
       <nav className="mv-tabs">
@@ -654,7 +654,7 @@ function StatusGeral({ abrir }: any) {
   </>;
 }
 
-function Eu({ perfil, completa, irTime }: any) {
+function Eu({ perfil, completa, irTime, irVend }: any) {
   const { R, st, setModal } = useApp() as any;
   const u = R.me();
   const hoje = hojeISO(), de = hoje.slice(0, 8) + "01";
@@ -663,6 +663,7 @@ function Eu({ perfil, completa, irTime }: any) {
     <TrocarUsuario />
     <div className="mv-perfil"><div className="av">{(u?.nome || "?").replace(/^.*—\s*/, "").slice(0, 1)}</div><div><b>{u?.nome}</b><span>{R.setoresLabel(u)}</span></div></div>
     {irTime && <><div className="mv-sec">Marketing</div><button className="mv-linha" onClick={irTime}><b>🎯 Metas e pagamento do time de marketing</b><span>Meta do dia, bônus, produtividade e aprovação</span></button></>}
+    {irVend && <><div className="mv-sec">Vendedores</div><button className="mv-linha" onClick={irVend}><b>👔 Controle dos vendedores</b><span>Horário que atende, almoço, folga da semana, domingos e férias</span></button></>}
     <div className="mv-sec">Aplicativo</div>
     <Instalar />
     <div className="mv-sec">Minha conta</div>
