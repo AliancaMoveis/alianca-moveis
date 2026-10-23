@@ -37,7 +37,8 @@ export function sugestaoVendedor(R: any, chamados: any[], c: any, vendedores: an
   if (!c || !c.dataLoja) return null;
   const dia = String(c.dataLoja).slice(0, 10);
   const d7 = new Date(dia + "T12:00"); d7.setDate(d7.getDate() - 7); const ini = d7.toISOString().slice(0, 10);
-  const livres = vendedores.filter((a: any) => !R.dispVendedor(a.id, c.dataLoja, c).length);
+  // freelance não entra na sugestão automática (o gerente escolhe à mão quando precisar)
+  const livres = vendedores.filter((a: any) => !a.freelancer && !R.dispVendedor(a.id, c.dataLoja, c).length);
   if (!livres.length) return null;
   const cnt: Record<string, { dia: number; sem: number }> = {};
   livres.forEach((a: any) => (cnt[a.id] = { dia: 0, sem: 0 }));

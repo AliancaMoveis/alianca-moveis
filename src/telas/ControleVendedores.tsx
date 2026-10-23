@@ -54,11 +54,17 @@ function Linha({ u, dias, aberto, abrir, pode, doms }: any) {
   const resumo = [u.fazProjeto !== false ? "📐 projetista" : "só vendedor", u.folga != null ? "folga " + DIAS_SEMANA[u.folga] : "sem folga na semana",
     u.domingoRef ? "domingo de folga: " + (domFolga ? fmtDate(domFolga).slice(0, 5) : "—") : "sem rodízio de domingo", tu ? (u.turno === "manha" ? "manhã" : "tarde") : ""].filter(Boolean).join(" · ");
   const [fp, setFp] = useState(u.fazProjeto !== false);
+  // Tipo: projetista · só vendedor · freelance (freelance não entra na sugestão automática; o gerente escolhe à mão quando precisar)
+  const [fr, setFr] = useState(!!u.freelancer);
+  const podeCat = podeCadastrarVendedores(R);
   const [fo, setFo] = useState(u.folga == null ? "" : String(u.folga));
   const [t, setT] = useState(u.turno || "");
   const [dm, setDm] = useState(u.domingoRef ? (doms.find((d: string) => domingoDeFolga(u, d, {})) || "") : "");
   const [ag, setAg] = useState(u.naAgenda !== false);
-  const salvar = () => ex(() => A.vendedorEscalaV2(u.id, fp, fo === "" ? null : Number(fo), t, dm || null, ag), "Escala de " + nomeCurto(u.nome) + " salva");
+  const salvar = () => ex(async () => {
+    await A.vendedorEscalaV2(u.id, fr ? true : fp, fo === "" ? null : Number(fo), t, dm || null, ag);
+    if (fr !== !!u.freelancer) await A.vendedorFreelancer(u.id, fr);
+  }, "Escala de " + nomeCurto(u.nome) + " salva");
   const h = hojeISO(); const cal = Array.from({ length: 21 }, (_, i) => somaDias(h, i));
   const trocar = (d: string) => {
     if (!pode) return;
@@ -80,14 +86,16 @@ function Linha({ u, dias, aberto, abrir, pode, doms }: any) {
         {pode && <div className="cv-dica">Toque num dia para trocar a folga (folga ⇄ trabalha). Dias com borda tracejada são trocas.</div>}
         {pode ? <>
           <div className="cv-form">
-            <label>Tipo<select value={fp ? "1" : "0"} onChange={e => setFp(e.target.value === "1")}><option value="1">📐 Projetista (faz projeto)</option><option value="0">Só vendedor (não faz projeto)</option></select></label>
+            <label>Tipo<select value={fr ? "fr" : fp ? "1" : "0"} onChange={e => { const v = e.target.value; if (v === "fr") { setFr(true); setFp(true); } else { setFr(false); setFp(v === "1"); } }}>
+              <option value="1">📐 Projetista (faz projeto)</option><option value="0">Só vendedor (não faz projeto)</option>
+              {(podeCat || fr) && <option value="fr" disabled={!podeCat}>🧢 Freelance (fora da sugestão — o gerente escolhe à mão)</option>}</select>
+              {fr && <small className="hint">Não entra na sugestão automática de agendamento. Fica disponível para o gerente colocar como atendente ou projetista quando precisar.</small>}</label>
             <label>Folga da semana<select value={fo} onChange={e => setFo(e.target.value)}><option value="">Sem folga na semana</option>{DIAS_SEMANA.map((d, i) => i > 0 ? <option key={i} value={i}>{d}</option> : null)}</select></label>
             <label>Horário (seg–sex)<select value={t} onChange={e => setT(e.target.value)}><option value="">Não informado</option>{Object.entries(TURNOS).map(([k, x]) => <option key={k} value={k}>{x.rot}</option>)}</select></label>
             <label>Próximo domingo de folga<select value={dm} onChange={e => setDm(e.target.value)}><option value="">Sem rodízio de domingo</option>{doms.map((d: string) => <option key={d} value={d}>{fmtDate(d)} (e a cada 3 domingos)</option>)}</select></label>
             <label>Agenda<select value={ag ? "1" : "0"} onChange={e => setAg(e.target.value === "1")}><option value="1">Entra na agenda (definir vendedor e fila)</option><option value="0">Fora da agenda (ex.: freelance)</option></select></label>
           </div>
           <div className="cv-bts"><button className="btn primary sm" onClick={salvar}>Salvar escala</button><button className="btn sm" onClick={() => setModal(<ModalFerias u={u} />)}>🏖 {fer ? "Alterar férias" : "Marcar férias"}</button>
-            {podeCadastrarVendedores(R) && <button className="btn sm" onClick={() => { if (confirm(u.freelancer ? "Tirar " + nomeCurto(u.nome) + " da categoria Freelancer?" : "Marcar " + nomeCurto(u.nome) + " como Freelancer?")) ex(() => A.vendedorFreelancer(u.id, !u.freelancer), u.freelancer ? "Agora é vendedor da loja" : "Marcado como Freelancer"); }}>{u.freelancer ? "Tirar de Freelancer" : "Marcar como Freelancer"}</button>}
             {podeCadastrarVendedores(R) && (u.setores || []).length === 1 && <button className="btn sm danger" onClick={async () => {
               if (!confirm("Descadastrar " + nomeCurto(u.nome) + "?\n\nO acesso ao 360 é bloqueado e os clientes agendados de hoje em diante (sem venda) voltam para a fila sem vendedor.")) return;
               await ex(() => A.vendedorDescadastrar(u.id), nomeCurto(u.nome) + " descadastrado(a)"); }}>🚫 Descadastrar</button>}</div>
