@@ -1927,3 +1927,9 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .pill.pp-ok{background:var(--st-concluida);color:#fff}
 .pp-mini{display:flex;gap:4px}.pp-mini button{border:1px solid var(--line,#ddd);background:var(--surface-2,#f5f5f5);border-radius:8px;width:34px;height:32px;cursor:pointer;padding:0}
 .cp-movel .pp-barra{bottom:74px}
+.pp-preco{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
+.pp-preco label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;opacity:.9}.pp-preco input{width:110px;padding:6px 8px !important;font-size:14px !important}
+.pp-preco span{font-size:13px}.pp-preco small{opacity:.7}
+.pp-total{display:flex;justify-content:space-between;align-items:center;padding:10px 0 4px;font-weight:700}.pp-total b{font-size:18px;color:var(--st-concluida)}
+.pp-soma{margin-top:4px;padding:9px 10px;border-radius:8px;background:var(--surface-2,#f4f4f4);font-size:15px;font-weight:800;text-transform:none;letter-spacing:0}
+.pp-preco label{white-space:nowrap}.pp-preco span{white-space:nowrap}
