@@ -52,7 +52,8 @@ export function perfilMovel(R: any): Perfil | null {
   if (R.ehGestao() || R.temMarketing() || R.verTudo() || s.includes("suporte_consultores")) return "gestor";
   if (s.includes("consultor_externo")) return "consultor";
   if (s.includes("medidas") && R.me()?.somenteAtribuidos) return "medidor";
-  if (s.includes("atendente_cliente")) return "vendedor";
+  // só vendedor: app do vendedor; quem é de outro setor e também vende (freelance) fica com a tela completa
+  if (s.includes("atendente_cliente") && s.every((x: string) => ["atendente_cliente", "presenca"].includes(x))) return "vendedor";
   if (s.includes("marketing_operadora")) return "marketing";
   return null;
 }

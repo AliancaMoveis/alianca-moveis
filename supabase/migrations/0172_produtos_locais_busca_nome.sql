@@ -29,3 +29,4 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- checklist_agendados_planilha(+p_liberar): acrescenta dias futuros, readequa outra data (p_corrigir), tira quem saiu da planilha (p_liberar).
 -- Pré-pedido do vendedor (teste: só Lucas): tabela pre_pedidos (RLS sem acesso direto) + pode_pre_pedido, pre_pedido_lista/salvar/status/excluir.
 -- Escala ABC de domingos: usuarios.escala_dom, config.escala_domingos, escala_domingos_salvar, vendedor_escala_abc.
+-- Vendedor de outro setor (freelance, ex.: Sônia): _eh_projetista_valido sem exigir somente_atribuidos; pode_ver_chamado_ctx: setor atendente_cliente só vê os clientes atribuídos.

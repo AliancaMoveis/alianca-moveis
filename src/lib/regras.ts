@@ -437,7 +437,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const cancelouSemCiente = (c: Chamado) => statusClienteDe(c) === "visita_cancelada" && !alguemCiente(c, "visita_cancelada");
   const vendAgenda = () => projetistas().filter((u: any) => u.naAgenda !== false);
   const folgaDia = (uid: string, dia: string) => folgaEm(getUser(uid), dia, (state.vendedorDias || {})[uid]);
-  const projetistas = () => state.usuarios.filter(u => u.ativo && u.somenteAtribuidos && (u.setores || []).includes("atendente_cliente")).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  // todos com a função de vendedor — inclusive quem é de outro setor e faz freelance (ex.: Sônia da assistência)
+  const projetistas = () => state.usuarios.filter(u => u.ativo && (u.setores || []).includes("atendente_cliente")).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   /** Disponibilidade do vendedor para atender um cliente na loja num horário (folga, turno, almoço e outro cliente a menos de 2h) */
   const dispVendedor = (uid: string, quando: string | null | undefined, exceto?: Chamado | null): string[] => {
     const u: any = getUser(uid); if (!u || !quando) return [];
