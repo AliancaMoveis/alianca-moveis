@@ -32,3 +32,4 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- Vendedor de outro setor (freelance, ex.: Sônia): _eh_projetista_valido sem exigir somente_atribuidos; pode_ver_chamado_ctx: setor atendente_cliente só vê os clientes atribuídos.
 -- Escala ABC v2: config.escala_domingos {inicio, fechados, manual, mapa}; _vend_folga_em usa o mapa (loja fechada = folga de todos).
 -- Pré-pedido liberado para vendedores, gerentes e Gestão; status 'arquivado'.
+-- Negociação: pre_pedidos.neg_*; pode_negociacao, pre_pedido_negociar, negociacao_lista, negociacao_salvar. Itens Promob (itens[].promob).

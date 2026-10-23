@@ -496,9 +496,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeConsultaProduto = () => ["00000000-0000-4000-a000-000000000007", "412d3e57-c869-493e-b298-28916054ed72",
     // também vendem (só consulta): Salete, Francyne, Francilene, Sônia (assistência)
     "00000000-0000-4000-a000-000000000006", "77248fc5-ae30-4e94-9cdd-528d02ce66d6", "89bf0975-5c78-4de2-bf17-fe0b6986a638", "3b2766ca-cd6f-4377-a65e-e33d9c7082cc"].includes(currentUserId)
-    || ["produtos", "gerente_loja", "atendente_cliente", "callcenter"].some(x => mySetores().includes(x)); // vendedores e call center: só consulta
+    || ["produtos", "gerente_loja", "atendente_cliente", "callcenter", "proprietario"].some(x => mySetores().includes(x)); // vendedores e call center: só consulta
   // editar/importar/excluir/tirar de venda: só Gestão e TI; liberar o mostruário: também os gerentes da loja. Vendedor só consulta.
   // 🧾 pré-pedido: todos os vendedores e gerentes da loja (e a Gestão)
+  // 🤝 negociação do pré-pedido: gerentes da loja, proprietários e Gestão
+  const podeNegociacao = () => ehGestao() || ["gerente_loja", "proprietario"].some(x => mySetores().includes(x));
   const podePrePedido = () => ehGestao() || ["atendente_cliente", "gerente_loja"].some(x => mySetores().includes(x));
   const podeEditarProduto = () => ehGestao() || mySetores().includes("produtos");
   const podeLiberarMostruario = () => podeEditarProduto() || mySetores().includes("gerente_loja");
@@ -953,7 +955,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     else if (false) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
     // Montagem: só acompanhamento dos agendamentos do Exact (agendadoras e montadores) — só a Gestão
     if (mySetores().includes("gestao")) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Montagem", ic: "🔧", itens: [["montagem_agend", "Agendamentos (Exact)"], ["montagem_pag", "Montagens efetivadas e pagamento"]] });
-    if (podeConsultaProduto()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Produtos", ic: "🏷", itens: [["consulta_produto", "Consulta de produto"]] });
+    if (podeConsultaProduto()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Produtos", ic: "🏷", itens: [["consulta_produto", "Consulta de produto"], ...(podeNegociacao() ? [["negociacao", "🤝 Negociação"]] : [])] });
     if (podeEncontrarVendas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Encontrar vendas", ic: "🔎", itens: [["confirmacao_vendas", "✅ Confirmação de vendas"], ["encontrar_vendas360", "Encontrar vendas do 360"], ["encontrar_vendas", "Encontrar vendas da Minha Visita"]] });
     if (ehJuridico() || ehGestao()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Jurídico", ic: "⚖", itens: [["jur_novo", "Novo caso"], ["jur_andamento", "Casos em andamento"], ["jur_prazos", "Prazos (próx. 15 dias)"], ["jur_encerrados", "Encerrados"]] });
     if (!veCC && consultaNoSetor && (ehJuridico() || podeChecklist() || ehSupMedidas() || ehPosvenda())) {
@@ -972,7 +974,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, podeConsultaProduto, podePrePedido, podeEditarProduto, podeLiberarMostruario, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, podeConsultaProduto, podePrePedido, podeNegociacao, podeEditarProduto, podeLiberarMostruario, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,

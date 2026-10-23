@@ -5,6 +5,7 @@ import EncontrarVendas360 from "./EncontrarVendas360";
 import VendasConsultores from "./VendasConsultores";
 import ConfirmacaoVendas from "./ConfirmacaoVendas";
 import ConsultaProduto from "./ConsultaProduto";
+import Negociacao from "./Negociacao";
 import MontagemAgend from "./MontagemAgend";
 import Presenca from "./Presenca";
 import Anuncios from "./Anuncios";
@@ -201,6 +202,7 @@ export default function Shell() {
             {atual === "encontrar_vendas360" && R.podeEncontrarVendas() && <EncontrarVendas360 />}
             {atual === "confirmacao_vendas" && R.podeEncontrarVendas() && <ConfirmacaoVendas />}
             {atual === "consulta_produto" && R.podeConsultaProduto() && <ConsultaProduto />}
+            {atual === "negociacao" && R.podeNegociacao() && <section className="view active cp"><Negociacao /></section>}
             {atual === "treino" && <Treino />}
             {atual.startsWith("st_") && (() => { const m = atual.match(/^st_(.+)_([a-z]+)$/); return m ? <SetorFila key={atual} setor={m[1]} aba={m[2]} /> : null; })()}
             {atual.startsWith("jur_") && <Juridico key={atual} aba={atual.slice(4)} />}

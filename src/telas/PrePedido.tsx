@@ -6,8 +6,8 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { fmtMoeda, linkWhats } from "../lib/regras";
 
-export type ItemPP = { codigo: string; nome: string; cor?: string; ref?: string; tamanho?: string; qtd: number; obs?: string; preco?: string };
-export type PP = { id?: string; numero?: number; cliente_nome: string; telefone: string; endereco: string; itens: ItemPP[]; valor_bruto?: any; valor_negociado?: any; pagamento?: string; obs?: string; status?: string; numero_venda?: string; criado_em?: string; atualizado_em?: string };
+export type ItemPP = { codigo: string; nome: string; cor?: string; ref?: string; tamanho?: string; qtd: number; obs?: string; preco?: string; promob?: boolean };
+export type PP = { id?: string; numero?: number; cliente_nome: string; telefone: string; endereco: string; itens: ItemPP[]; valor_bruto?: any; valor_negociado?: any; pagamento?: string; obs?: string; status?: string; numero_venda?: string; criado_em?: string; atualizado_em?: string; neg_status?: string; neg_enviado_em?: string; neg_valor?: any; neg_desconto?: any; neg_pagamento?: string; neg_obs?: string };
 
 // ---------- vários clientes ao mesmo tempo ----------
 // Cada pré-pedido fica salvo no 360 desde o primeiro produto (status "aberto"). O vendedor pode atender vários clientes:
@@ -83,7 +83,7 @@ export function BarraPP({ abrir }: { abrir: (id: string) => void }) {
   const ab = abertos(lista);
   if (!ab.length) return null;
   return <div className="pp-barras">{ab.slice(0, 12).map(p => <div key={p.id} className={"pp-barra" + (p.id === alvo ? " ativo" : "")} role="button" tabIndex={0} onClick={() => abrir(p.id!)}>
-    <span>🧾 {p.cliente_nome || "Cliente sem nome"}<small>{numPP(p)} · {p.itens.length} produto{p.itens.length > 1 ? "s" : ""} · {totalUn(p)} un.{p.id === alvo ? " · recebendo os próximos produtos" : ""}</small></span>
+    <span>🧾 {p.cliente_nome || "Cliente sem nome"}<small>{numPP(p)} · {p.itens.length} produto{p.itens.length > 1 ? "s" : ""} · {totalUn(p)} un.{p.id === alvo ? " · recebendo os próximos produtos" : ""}{p.neg_status ? " · 🤝 " + (p.neg_status === "fechado" ? "negociação fechada" : p.neg_status === "negociando" ? "gerente negociando" : "na negociação") : ""}</small></span>
     <span className="pp-barra-bts"><button type="button" className="pp-arq" title="Arquivar (tira da barra)" onClick={e => { e.stopPropagation(); if (confirm("Arquivar o pré-pedido de " + (p.cliente_nome || numPP(p)) + "? Ele sai daqui e fica em Meus pré-pedidos → Arquivados.")) arquivarPP(p.id!); }}>📦</button><b>Abrir ›</b></span></div>)}</div>;
 }
 
@@ -151,7 +151,7 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
         <div className="pp-tit">Produtos <small>· {numPP(pp)}{sujo ? " · salvando…" : " · salvo"}</small></div>
         {!pp.itens.length && <div className="hint" style={{ padding: "8px 0" }}>Nenhum produto. Volte para a consulta e encaminhe.</div>}
         {pp.itens.map((i, k) => <div key={i.codigo + k} className="pp-it">
-          <div><b>{i.nome}</b><small>Cód. {i.codigo}{i.ref ? " · REF " + i.ref : ""}{i.cor ? " · " + i.cor : ""}</small>
+          <div><b>{i.nome}</b><small>{i.promob ? "📐 Promob (projeto, escrito à mão)" : "Cód. " + i.codigo + (i.ref ? " · REF " + i.ref : "") + (i.cor ? " · " + i.cor : "")}</small>
             <div className="pp-preco"><label>R$<input inputMode="decimal" placeholder="preço un." value={i.preco || ""} onChange={e => setItem(k, { preco: e.target.value })} /></label>
               {numBR(i.preco) > 0 && <span>= <b>{fmtMoeda(numBR(i.preco) * i.qtd)}</b>{i.qtd > 1 ? <small> ({i.qtd} × {fmtMoeda(numBR(i.preco))})</small> : null}</span>}</div>
             <input className="pp-obs" placeholder="observação do item (opcional)" value={i.obs || ""} onChange={e => setItem(k, { obs: e.target.value })} /></div>
@@ -160,6 +160,7 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
         </div>)}
         {temPreco(pp) && <div className="pp-total"><span>Total dos produtos</span><b>{fmtMoeda(somaPP(pp))}</b></div>}
         <button type="button" className="pp-link" onClick={() => { if (pp.id) gravarAlvo(pp.id); onVoltar(); }}>＋ adicionar produto a este cliente</button>
+        <ItemPromob add={(nome, preco) => mudar({ itens: [...pp.itens, { codigo: "PROMOB", nome: "PROMOB — " + nome, qtd: 1, preco, promob: true }] })} />
       </div>
       <div className="cp-card">
         <div className="pp-tit">Cliente</div>
@@ -177,6 +178,7 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
         <label className="pp-f">Formas de pagamento<input value={pp.pagamento || ""} onChange={e => set("pagamento", e.target.value)} placeholder="ex.: entrada no Pix + 10x cartão" /></label>
         <label className="pp-f">Observações<input value={pp.obs || ""} onChange={e => set("obs", e.target.value)} /></label>
       </div>
+      <BlocoNegociacao pp={pp} salvarAntes={async () => { const r = await salvarPP(pp); setSujo(false); setPP(x => x ? { ...x, id: r.id, numero: r.numero } : x); return r; }} marcar={st => setPP(x => x ? { ...x, neg_status: st } : x)} />
       <div className="pp-acoes"><button type="button" className="btn primary pp-salvar" disabled={salvando} onClick={() => salvar(true)}>{salvando ? "Salvando…" : "💾 Salvar e fechar"}</button>
         <button type="button" className="btn" onClick={() => zap(pp)}>💬 WhatsApp</button>
         <button type="button" className="btn ghost" onClick={() => { if (pp.id) gravarAlvo(pp.id); onVoltar(); }}>＋ Adicionar produtos a este cliente</button>
@@ -206,5 +208,37 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
         </div>)}
       <div className="hint" style={{ marginTop: 8 }}>Valores só para consulta — não contam como venda.</div>
     </div>}
+  </div>;
+}
+
+/** ＋ item Promob: descrição escrita à mão + valor cheio (bruto) do projeto */
+function ItemPromob({ add }: { add: (nome: string, preco: string) => void }) {
+  const [ab, setAb] = useState(false); const [n, setN] = useState(""); const [v, setV] = useState("");
+  if (!ab) return <button type="button" className="pp-link" onClick={() => setAb(true)}>＋ item Promob (projeto)</button>;
+  return <div className="pp-promob"><b>📐 Item Promob</b>
+    <input placeholder="descrição (ex.: cozinha planejada, dormitório casal…)" value={n} onChange={e => setN(e.target.value)} />
+    <label>Valor cheio (bruto) R$<input inputMode="decimal" placeholder="0,00" value={v} onChange={e => setV(e.target.value)} /></label>
+    <div style={{ display: "flex", gap: 6 }}><button type="button" className="btn sm primary" disabled={!n.trim() || !numBR(v)} onClick={() => { add(n.trim(), v); setN(""); setV(""); setAb(false); }}>Adicionar</button><button type="button" className="btn sm ghost" onClick={() => setAb(false)}>Cancelar</button></div>
+  </div>;
+}
+
+/** enviar para a negociação (gerentes/proprietários) e ver a proposta deles */
+function BlocoNegociacao({ pp, salvarAntes, marcar }: { pp: PP; salvarAntes: () => Promise<PP>; marcar: (st: string) => void }) {
+  const { toast } = useApp() as any;
+  const [ocupado, setOcupado] = useState(false);
+  const st = pp.neg_status || "";
+  const enviar = async (sim: boolean) => {
+    if (sim && !pp.cliente_nome.trim()) { toast("Informe o nome do cliente antes de enviar"); return; }
+    setOcupado(true);
+    try { const r = await salvarAntes(); await A.prePedidoNegociar(r.id!, sim); marcar(sim ? "enviado" : ""); await carregarPP(true); avisar(); toast(sim ? "Enviado para a negociação — os gerentes já veem" : "Retirado da negociação"); }
+    catch (e: any) { toast(e.message || "Não consegui enviar"); } finally { setOcupado(false); }
+  };
+  return <div className={"cp-card pp-neg " + st}>
+    <div className="pp-tit">🤝 Negociação {st === "enviado" ? <small>· enviado, aguardando o gerente</small> : st === "negociando" ? <small>· gerente negociando</small> : st === "fechado" ? <small>· fechada</small> : null}</div>
+    {(numBR(pp.neg_valor) > 0 || pp.neg_pagamento || pp.neg_obs) && <div className="pp-neg-prop"><span>Proposta do gerente</span><b>{numBR(pp.neg_valor) ? fmtMoeda(numBR(pp.neg_valor)) : "—"}</b>
+      {numBR(pp.neg_desconto) > 0 && <small>{String(numBR(pp.neg_desconto)).replace(".", ",")}% de desconto</small>}{pp.neg_pagamento && <small>{pp.neg_pagamento}</small>}{pp.neg_obs && <small>{pp.neg_obs}</small>}</div>}
+    {!st ? <button type="button" className="btn primary" disabled={ocupado || !pp.itens.length} onClick={() => enviar(true)}>🤝 Enviar para a negociação</button>
+      : st !== "fechado" && <button type="button" className="btn ghost sm" disabled={ocupado} onClick={() => enviar(false)}>Retirar da negociação</button>}
+    {!st && <div className="hint">Os gerentes e proprietários abrem na hora com o cliente, veem os preços cheios e simulam o desconto.</div>}
   </div>;
 }
