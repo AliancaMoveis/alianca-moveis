@@ -27,3 +27,4 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- produto_importar_fim(locais, codigos): o que tinha o estoque do arquivo e não veio nele fica zerado nesse estoque (Tático omite itens zerados).
 -- Checklist: Wagner na agenda (inicioProjetista 2026-10-26, trabalhaFeriado); salvar_checklist_agenda preserva essas chaves.
 -- checklist_agendados_planilha(+p_liberar): acrescenta dias futuros, readequa outra data (p_corrigir), tira quem saiu da planilha (p_liberar).
+-- Pré-pedido do vendedor (teste: só Lucas): tabela pre_pedidos (RLS sem acesso direto) + pode_pre_pedido, pre_pedido_lista/salvar/status/excluir.

@@ -8,6 +8,7 @@ import { A } from "../lib/acoes";
 import { fmtMoeda } from "../lib/regras";
 import { col, lerArquivo } from "./Medidas";
 import { baixarXlsx } from "../lib/planilha";
+import PrePedidos, { BarraPP, EncaminharPP } from "./PrePedido";
 
 // planilha de produtos: aceita os nomes de coluna mais comuns (Tático, Excel feito à mão)
 const COLS: [keyof Produto, string, string[]][] = [
@@ -162,6 +163,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   async function acao(f: () => Promise<any>, msg: string, recarregar = true) {
     try { await f(); toast(msg); if (recarregar && prod) await buscar(prod.codigo); if (lista) carregarLista(); } catch (e: any) { toast(e.message || "Não consegui salvar"); }
   }
+  const pp = R.podePrePedido(); const [verPP, setVerPP] = useState<"" | "editar" | "lista">("");
   const [cam, setCam] = useState(false); const [precoCam, setPrecoCam] = useState<number | null>(null);
   const [cod, setCod] = useState(""); const [busy, setBusy] = useState(false);
   const [prod, setProd] = useState<Produto | null>(null); const [naoAchou, setNaoAchou] = useState("");
@@ -258,6 +260,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
     {extra.area ? <textarea rows={4} value={(form as any)[k] ?? ""} onChange={e => setForm({ ...(form as Produto), [k]: e.target.value })} />
       : <input value={(form as any)[k] ?? ""} inputMode={extra.num ? "decimal" : undefined} onChange={e => setForm({ ...(form as Produto), [k]: e.target.value })} />}</label>;
 
+  if (pp && verPP) return <section className={movel ? "cp cp-movel" : "view active cp"}><PrePedidos inicio={verPP} onVoltar={() => setVerPP("")} /></section>;
   return <section className={movel ? "cp cp-movel" : "view active cp"}>
     {!movel && <div className="view-head"><div><h2>🏷 Consulta de produto</h2><p>Leia o código de barras da etiqueta (câmera do celular ou leitor) ou digite o número ou o nome do produto. Mostra o produto, as medidas, o acabamento, o estoque e as outras opções do mesmo produto.</p></div></div>}
     {movel && <div className="mv-sec">🏷 Consulta de produto</div>}
@@ -269,6 +272,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         <button className="btn" type="submit" disabled={busy}>{busy ? "…" : "Buscar"}</button>
       </form>
     </div>
+    {pp && <div className="pp-topo"><button type="button" className="btn ghost sm" onClick={() => setVerPP("lista")}>🧾 Meus pré-pedidos</button></div>}
     {porNome && <div className="cp-sugs">
       <div className="cp-sugs-cab"><span>{buscandoNome ? "Procurando…" : sugsVis.length ? sugsVis.length + (sugsVis.length === 1 ? " produto" : " produtos") + (soDisp ? " com saldo para venda" : "") : soDisp ? "Nenhum produto com saldo para venda com esse nome" : "Nenhum produto com esse nome"}</span>
         <label><input type="checkbox" checked={soDisp} onChange={e => setSoDisp(e.target.checked)} /> só com saldo para venda</label></div>
@@ -317,6 +321,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {(prod.variacoes || []).length > 0 && <div className="cp-var"><span>Outras opções deste produto</span>
         {(prod.variacoes || []).map(v => <button key={v.codigo} type="button" className="cp-var-it" onClick={() => buscar(v.codigo)}>
           <b>{[v.tamanho, v.cor].filter(Boolean).join(" · ") || v.nome}</b><small>Cód. {v.codigo}{(() => { const d = vendavel(v); return d.disp != null ? " · " + (Number(d.disp) > 0 ? qtd(d.disp) + " disponível" : d.congelado ? "fora de venda" : d.mostruario ? "só mostruário" : "sem saldo") : ""; })()}</small></button>)}</div>}
+      {pp && <EncaminharPP prod={prod} />}
       {(edita || (libMostr && vendavel(prod).mostruario)) && <div className="cp-acoes">
         {edita && <button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod })}>✏️ Editar</button>}
         {edita && <button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod, codigo: "", cor: "", tamanho: "", estoque: null })}>＋ Nova cor/tamanho deste produto</button>}
@@ -387,6 +392,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {lista && !lista.length && <div className="empty" style={{ padding: 20 }}>Nenhum produto cadastrado ainda.</div>}
     </div>}
 
+    {pp && <BarraPP abrir={() => setVerPP("editar")} />}
     {cam && <LeitorCodigo onFechar={() => setCam(false)} onPreco={c => setPrecoCam(precoEtiqueta(c))} onCodigo={c => { setCam(false); buscar(c); }} />}
   </section>;
 }
