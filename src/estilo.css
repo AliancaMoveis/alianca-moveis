@@ -1933,3 +1933,4 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .pp-total{display:flex;justify-content:space-between;align-items:center;padding:10px 0 4px;font-weight:700}.pp-total b{font-size:18px;color:var(--st-concluida)}
 .pp-soma{margin-top:4px;padding:9px 10px;border-radius:8px;background:var(--surface-2,#f4f4f4);font-size:15px;font-weight:800;text-transform:none;letter-spacing:0}
 .pp-preco label{white-space:nowrap}.pp-preco span{white-space:nowrap}
+.cp-card>.pp-enc{margin:4px 0 10px;padding:0 0 10px;border-top:0;border-bottom:1px solid var(--line,#ddd)}

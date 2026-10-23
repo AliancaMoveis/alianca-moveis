@@ -293,6 +293,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         {prod.ref && <span className="cp-tag">REF {prod.ref}</span>}
         {prod.deposito && <span className="cp-tag">{[...new Set(String(prod.deposito).split(" + ").map(nomeLocal))].sort((x, y) => (x.startsWith("Loja") ? 0 : 1) - (y.startsWith("Loja") ? 0 : 1)).join(" + ")}</span>}
       </div>
+      {pp && <EncaminharPP prod={prod} preco={prod.preco != null ? Number(prod.preco) : precoEtiqueta(prod.cod_etiqueta) ?? precoCam} />}
       {/* estoque é a informação principal: o saldo para venda é o que realmente dá para vender */}
       {(prod.saldo != null || prod.estoque != null || prod.reservas != null || prod.expedicao != null) && <div className="cp-estoque">
         {(() => { const v = vendavel(prod); const so = !v.congelado && v.mostruario && !v.mostrLiberado && !Number(v.disp); return <>
@@ -321,7 +322,6 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {(prod.variacoes || []).length > 0 && <div className="cp-var"><span>Outras opções deste produto</span>
         {(prod.variacoes || []).map(v => <button key={v.codigo} type="button" className="cp-var-it" onClick={() => buscar(v.codigo)}>
           <b>{[v.tamanho, v.cor].filter(Boolean).join(" · ") || v.nome}</b><small>Cód. {v.codigo}{(() => { const d = vendavel(v); return d.disp != null ? " · " + (Number(d.disp) > 0 ? qtd(d.disp) + " disponível" : d.congelado ? "fora de venda" : d.mostruario ? "só mostruário" : "sem saldo") : ""; })()}</small></button>)}</div>}
-      {pp && <EncaminharPP prod={prod} preco={prod.preco != null ? Number(prod.preco) : precoEtiqueta(prod.cod_etiqueta) ?? precoCam} />}
       {(edita || (libMostr && vendavel(prod).mostruario)) && <div className="cp-acoes">
         {edita && <button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod })}>✏️ Editar</button>}
         {edita && <button type="button" className="btn ghost sm" onClick={() => setForm({ ...VAZIO, ...prod, codigo: "", cor: "", tamanho: "", estoque: null })}>＋ Nova cor/tamanho deste produto</button>}
