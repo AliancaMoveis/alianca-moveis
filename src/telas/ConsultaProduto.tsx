@@ -163,7 +163,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   async function acao(f: () => Promise<any>, msg: string, recarregar = true) {
     try { await f(); toast(msg); if (recarregar && prod) await buscar(prod.codigo); if (lista) carregarLista(); } catch (e: any) { toast(e.message || "Não consegui salvar"); }
   }
-  const pp = R.podePrePedido(); const [verPP, setVerPP] = useState<"" | "editar" | "lista">("");
+  const pp = R.podePrePedido(); const [verPP, setVerPP] = useState<string>(""); // "" = consulta · "lista" · id do pré-pedido
   const [cam, setCam] = useState(false); const [precoCam, setPrecoCam] = useState<number | null>(null);
   const [cod, setCod] = useState(""); const [busy, setBusy] = useState(false);
   const [prod, setProd] = useState<Produto | null>(null); const [naoAchou, setNaoAchou] = useState("");
@@ -260,7 +260,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
     {extra.area ? <textarea rows={4} value={(form as any)[k] ?? ""} onChange={e => setForm({ ...(form as Produto), [k]: e.target.value })} />
       : <input value={(form as any)[k] ?? ""} inputMode={extra.num ? "decimal" : undefined} onChange={e => setForm({ ...(form as Produto), [k]: e.target.value })} />}</label>;
 
-  if (pp && verPP) return <section className={movel ? "cp cp-movel" : "view active cp"}><PrePedidos inicio={verPP} onVoltar={() => setVerPP("")} /></section>;
+  if (pp && verPP) return <section className={movel ? "cp cp-movel" : "view active cp"}><PrePedidos key={verPP} id={verPP === "lista" ? undefined : verPP} onVoltar={() => setVerPP("")} /></section>;
   return <section className={movel ? "cp cp-movel" : "view active cp"}>
     {!movel && <div className="view-head"><div><h2>🏷 Consulta de produto</h2><p>Leia o código de barras da etiqueta (câmera do celular ou leitor) ou digite o número ou o nome do produto. Mostra o produto, as medidas, o acabamento, o estoque e as outras opções do mesmo produto.</p></div></div>}
     {movel && <div className="mv-sec">🏷 Consulta de produto</div>}
@@ -392,7 +392,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {lista && !lista.length && <div className="empty" style={{ padding: 20 }}>Nenhum produto cadastrado ainda.</div>}
     </div>}
 
-    {pp && <BarraPP abrir={() => setVerPP("editar")} />}
+    {pp && <BarraPP abrir={id => setVerPP(id)} />}
     {cam && <LeitorCodigo onFechar={() => setCam(false)} onPreco={c => setPrecoCam(precoEtiqueta(c))} onCodigo={c => { setCam(false); buscar(c); }} />}
   </section>;
 }

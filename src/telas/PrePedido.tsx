@@ -9,16 +9,33 @@ import { fmtMoeda, linkWhats } from "../lib/regras";
 export type ItemPP = { codigo: string; nome: string; cor?: string; ref?: string; tamanho?: string; qtd: number; obs?: string; preco?: string };
 export type PP = { id?: string; numero?: number; cliente_nome: string; telefone: string; endereco: string; itens: ItemPP[]; valor_bruto?: any; valor_negociado?: any; pagamento?: string; obs?: string; status?: string; numero_venda?: string; criado_em?: string; atualizado_em?: string };
 
-// ---------- rascunho (o pré-pedido em montagem fica neste aparelho até salvar) ----------
-const CHAVE = "pp_rascunho";
+// ---------- vários clientes ao mesmo tempo ----------
+// Cada pré-pedido fica salvo no 360 desde o primeiro produto (status "aberto"). O vendedor pode atender vários clientes:
+// cada um aparece numa barra amarela. "Para quem" vai o próximo produto lido = o pré-pedido ativo; depois de "Salvar e
+// fechar", o próximo produto começa um pré-pedido NOVO (novo cliente).
 const VAZIO: PP = { cliente_nome: "", telefone: "", endereco: "", itens: [], valor_bruto: "", valor_negociado: "", pagamento: "", obs: "" };
-export function lerRascunho(): PP { try { const s = localStorage.getItem(CHAVE); return s ? { ...VAZIO, ...JSON.parse(s) } : { ...VAZIO }; } catch { return { ...VAZIO }; } }
-export function gravarRascunho(p: PP) { try { localStorage.setItem(CHAVE, JSON.stringify(p)); } catch { /* sem armazenamento */ } window.dispatchEvent(new Event("pp-mudou")); }
-export function usarRascunho(): [PP, (p: PP) => void] {
-  const [p, setP] = useState<PP>(lerRascunho);
-  useEffect(() => { const f = () => setP(lerRascunho()); window.addEventListener("pp-mudou", f); return () => window.removeEventListener("pp-mudou", f); }, []);
-  return [p, gravarRascunho];
+const CHAVE_ALVO = "pp_alvo";
+export const lerAlvo = () => { try { return localStorage.getItem(CHAVE_ALVO) || ""; } catch { return ""; } };
+export const gravarAlvo = (id: string) => { try { localStorage.setItem(CHAVE_ALVO, id); } catch { /* sem armazenamento */ } window.dispatchEvent(new Event("pp-mudou")); };
+let _cache: PP[] | null = null; let _busca: Promise<PP[]> | null = null;
+export async function carregarPP(forcar = false): Promise<PP[]> {
+  if (_cache && !forcar) return _cache;
+  if (!_busca) _busca = A.prePedidoLista().then((l: any) => (_cache = (l || []) as PP[])).catch(() => (_cache || [])).finally(() => { _busca = null; });
+  return _busca;
 }
+const avisar = () => window.dispatchEvent(new Event("pp-mudou"));
+export async function salvarPP(p: PP): Promise<PP> {
+  const env = { ...p, valor_bruto: temPreco(p) ? somaPP(p).toFixed(2) : (numBR(p.valor_bruto) ? numBR(p.valor_bruto).toFixed(2) : ""), valor_negociado: numBR(p.valor_negociado) ? numBR(p.valor_negociado).toFixed(2) : "" };
+  const r: PP = await A.prePedidoSalvar(env);
+  _cache = [r, ...((_cache || []).filter(x => x.id !== r.id))]; avisar(); return r;
+}
+/** lista dos pré-pedidos (atualiza sozinha quando algum muda) */
+export function usarPP(): [PP[] | null, string] {
+  const [l, setL] = useState<PP[] | null>(_cache); const [alvo, setAlvo] = useState(lerAlvo());
+  useEffect(() => { let vivo = true; const f = () => { setAlvo(lerAlvo()); carregarPP().then(x => vivo && setL([...x])); }; f(); window.addEventListener("pp-mudou", f); return () => { vivo = false; window.removeEventListener("pp-mudou", f); }; }, []);
+  return [l, alvo];
+}
+const abertos = (l: PP[] | null) => (l || []).filter(p => p.status !== "incluido");
 const unid = (n: number) => n + (n === 1 ? " un." : " un.");
 const totalUn = (p: PP) => p.itens.reduce((s, i) => s + (Number(i.qtd) || 0), 0);
 /** "1.496,82" / "1496.82" / "1496,82" → número */
@@ -28,29 +45,43 @@ export const somaPP = (p: PP) => p.itens.reduce((s, i) => s + numBR(i.preco) * (
 const temPreco = (p: PP) => p.itens.some(i => numBR(i.preco) > 0);
 const numPP = (p: PP) => p.numero ? "PP-" + String(p.numero).padStart(4, "0") : "novo";
 
-/** botão na ficha do produto: escolhe a quantidade e encaminha para o pré-pedido */
+/** botão na ficha do produto: escolhe a quantidade e PARA QUAL CLIENTE vai (pré-pedido ativo ou um novo) */
 export function EncaminharPP({ prod, preco }: { prod: any; preco?: number | null }) {
   const { toast } = useApp() as any;
-  const [pp] = usarRascunho();
-  const ja = pp.itens.find(i => i.codigo === prod.codigo);
-  const [q, setQ] = useState(1);
-  const add = () => {
-    const itens = ja ? pp.itens.map(i => i.codigo === prod.codigo ? { ...i, qtd: i.qtd + q } : i)
-      : [...pp.itens, { codigo: prod.codigo, nome: prod.nome, cor: prod.cor || "", ref: prod.ref || "", tamanho: prod.tamanho || "", qtd: q, preco: preco ? String(preco.toFixed(2)).replace(".", ",") : "" }];
-    gravarRascunho({ ...pp, itens }); toast((ja ? "Quantidade somada" : "Encaminhado para o pré-pedido") + " · " + prod.nome.slice(0, 40)); setQ(1);
+  const [lista, alvo0] = usarPP();
+  const ab = abertos(lista);
+  const alvo = ab.some(p => p.id === alvo0) ? alvo0 : "";
+  const atual = ab.find(p => p.id === alvo) || null;
+  const ja = atual?.itens.find(i => i.codigo === prod.codigo);
+  const [q, setQ] = useState(1); const [ocupado, setOcupado] = useState(false);
+  const add = async () => {
+    setOcupado(true);
+    try {
+      const base: PP = atual || { ...VAZIO };
+      const itens = ja ? base.itens.map(i => i.codigo === prod.codigo ? { ...i, qtd: i.qtd + q } : i)
+        : [...base.itens, { codigo: prod.codigo, nome: prod.nome, cor: prod.cor || "", ref: prod.ref || "", tamanho: prod.tamanho || "", qtd: q, preco: preco ? String(preco.toFixed(2)).replace(".", ",") : "" }];
+      const r = await salvarPP({ ...base, itens }); gravarAlvo(r.id || "");
+      toast((ja ? "Quantidade somada" : "Encaminhado") + " · " + (r.cliente_nome || numPP(r)) + " · " + prod.nome.slice(0, 32)); setQ(1);
+    } catch (e: any) { toast(e.message || "Não consegui encaminhar"); } finally { setOcupado(false); }
   };
   return <div className="pp-enc">
-    {ja && <div className="hint">✓ já está no pré-pedido · {unid(ja.qtd)}</div>}
+    <label className="pp-para">Para<select value={alvo} onChange={e => gravarAlvo(e.target.value)}>
+      <option value="">＋ Novo cliente (novo pré-pedido)</option>
+      {ab.map(p => <option key={p.id} value={p.id}>{(p.cliente_nome || "sem nome") + " · " + numPP(p) + " · " + p.itens.length + " produto(s)"}</option>)}
+    </select></label>
+    {ja && <div className="hint">✓ já está no pré-pedido de {atual?.cliente_nome || numPP(atual!)} · {unid(ja.qtd)}</div>}
     <div className="pp-qtd"><span>Quantidade</span><button type="button" onClick={() => setQ(Math.max(1, q - 1))}>−</button><b>{q}</b><button type="button" onClick={() => setQ(q + 1)}>+</button></div>
-    <button type="button" className="btn primary pp-btn" onClick={add}>🧾 {ja ? "Somar ao pré-pedido" : "Encaminhar para pré-pedido"}</button>
+    <button type="button" className="btn primary pp-btn" disabled={ocupado} onClick={add}>🧾 {ocupado ? "Encaminhando…" : ja ? "Somar ao pré-pedido" : atual ? "Encaminhar para " + (atual.cliente_nome || numPP(atual)) : "Encaminhar para um NOVO pré-pedido"}</button>
   </div>;
 }
 
-/** barra amarela: pré-pedido em montagem */
-export function BarraPP({ abrir }: { abrir: () => void }) {
-  const [pp] = usarRascunho();
-  if (!pp.itens.length) return null;
-  return <button type="button" className="pp-barra" onClick={abrir}><span>🧾 Pré-pedido em aberto{pp.cliente_nome ? " · " + pp.cliente_nome : ""}<small>{pp.itens.length} produto{pp.itens.length > 1 ? "s" : ""} · {totalUn(pp)} unidade{totalUn(pp) > 1 ? "s" : ""}</small></span><b>Abrir ›</b></button>;
+/** barras amarelas: um pré-pedido em aberto por cliente (o ativo fica destacado) */
+export function BarraPP({ abrir }: { abrir: (id: string) => void }) {
+  const [lista, alvo] = usarPP();
+  const ab = abertos(lista);
+  if (!ab.length) return null;
+  return <div className="pp-barras">{ab.slice(0, 12).map(p => <button key={p.id} type="button" className={"pp-barra" + (p.id === alvo ? " ativo" : "")} onClick={() => abrir(p.id!)}>
+    <span>🧾 {p.cliente_nome || "Cliente sem nome"}<small>{numPP(p)} · {p.itens.length} produto{p.itens.length > 1 ? "s" : ""} · {totalUn(p)} un.{p.id === alvo ? " · recebendo os próximos produtos" : ""}</small></span><b>Abrir ›</b></button>)}</div>;
 }
 
 function textoPP(p: PP) {
@@ -76,39 +107,44 @@ function imprimir(p: PP, vendedor: string) {
   w.document.close();
 }
 
-/** tela do pré-pedido: montar/editar (rascunho ou salvo) e a lista "Meus pré-pedidos" */
-export default function PrePedidos({ onVoltar, inicio = "editar" }: { onVoltar: () => void; inicio?: "editar" | "lista" }) {
+/** tela do pré-pedido: editar um cliente (por id) e a lista "Meus pré-pedidos" */
+export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?: string }) {
   const { toast, R } = useApp() as any;
-  const [aba, setAba] = useState<"editar" | "lista">(inicio);
-  const [pp, gravar] = usarRascunho();
-  const [lista, setLista] = useState<PP[] | null>(null);
-  const [salvando, setSalvando] = useState(false);
-  const carregar = async () => { try { setLista(((await A.prePedidoLista()) || []) as PP[]); } catch (e: any) { toast(e.message); setLista([]); } };
-  useEffect(() => { if (aba === "lista") carregar(); }, [aba]);
-  const set = (k: keyof PP, v: any) => gravar({ ...pp, [k]: v });
-  const setItem = (k: number, m: Partial<ItemPP>) => gravar({ ...pp, itens: pp.itens.map((i, j) => j === k ? { ...i, ...m } : i) });
-  const tirar = (k: number) => gravar({ ...pp, itens: pp.itens.filter((_, j) => j !== k) });
-  const novo = () => { if (pp.itens.length && !pp.id && !confirm("Descartar o pré-pedido que está montando?")) return; gravar({ ...VAZIO }); setAba("editar"); onVoltar(); };
-  async function salvar() {
+  const [aba, setAba] = useState<"editar" | "lista">(id ? "editar" : "lista");
+  const [lista] = usarPP();
+  const [pp, setPP] = useState<PP | null>(null);
+  const [salvando, setSalvando] = useState(false); const [sujo, setSujo] = useState(false);
+  const br = (v: any) => v == null || v === "" ? "" : String(Number(v).toFixed(2)).replace(".", ",");
+  const abrirId = (x: string) => { const p = (lista || []).find(y => y.id === x); if (p) { setPP({ ...VAZIO, ...p, valor_bruto: br(p.valor_bruto), valor_negociado: br(p.valor_negociado) }); setSujo(false); setAba("editar"); } };
+  useEffect(() => { if (id && lista && !pp) abrirId(id); }, [lista]);
+  useEffect(() => { carregarPP(true).then(() => avisar()); }, []);
+  // salva sozinho 1,2 s depois de cada alteração (não perde nada se fechar o app)
+  useEffect(() => { if (!pp || !sujo || !pp.itens.length) return; const t = setTimeout(async () => { try { const r = await salvarPP(pp); setPP(x => x ? { ...x, id: r.id, numero: r.numero } : x); setSujo(false); } catch { /* tenta de novo na próxima */ } }, 1200); return () => clearTimeout(t); }, [pp, sujo]);
+  const mudar = (m: Partial<PP>) => { setPP(x => x ? { ...x, ...m } : x); setSujo(true); };
+  const set = (k: keyof PP, v: any) => mudar({ [k]: v } as any);
+  const setItem = (k: number, m: Partial<ItemPP>) => pp && mudar({ itens: pp.itens.map((i, j) => j === k ? { ...i, ...m } : i) });
+  const tirar = (k: number) => pp && mudar({ itens: pp.itens.filter((_, j) => j !== k) });
+  async function salvar(fechar: boolean) {
+    if (!pp) return;
     if (!pp.itens.length) { toast("Adicione pelo menos um produto (pela consulta)"); return; }
     if (!pp.cliente_nome.trim()) { toast("Informe o nome do cliente"); return; }
     setSalvando(true);
-    const env = { ...pp, valor_bruto: temPreco(pp) ? somaPP(pp).toFixed(2) : (numBR(pp.valor_bruto) ? numBR(pp.valor_bruto).toFixed(2) : ""), valor_negociado: numBR(pp.valor_negociado) ? numBR(pp.valor_negociado).toFixed(2) : "" };
-    try { const r: any = await A.prePedidoSalvar(env); gravar({ ...VAZIO }); toast("Pré-pedido " + numPP(r || {}) + " salvo"); setAba("lista"); }
+    try { const r = await salvarPP(pp); setSujo(false); toast("Pré-pedido " + numPP(r) + " de " + r.cliente_nome + " salvo");
+      if (fechar) { if (lerAlvo() === r.id) gravarAlvo(""); onVoltar(); } else setPP(x => x ? { ...x, id: r.id, numero: r.numero } : x); }
     catch (e: any) { toast(e.message || "Não consegui salvar"); } finally { setSalvando(false); }
   }
-  const abrir = (p: PP) => { if (pp.itens.length && !pp.id && !confirm("Você tem um pré-pedido sendo montado. Substituir pela edição deste?")) return; const br = (v: any) => v == null || v === "" ? "" : String(Number(v).toFixed(2)).replace(".", ","); gravar({ ...VAZIO, ...p, valor_bruto: br(p.valor_bruto), valor_negociado: br(p.valor_negociado) }); setAba("editar"); };
   const zap = (p: PP) => { const l = linkWhats(p.telefone, textoPP(p)); if (l) window.open(l, "_blank"); else toast("Informe o telefone do cliente"); };
+  const recarregar = () => carregarPP(true).then(() => avisar());
 
   return <div className="pp">
     <div className="pp-cab"><button type="button" className="btn ghost sm" onClick={onVoltar}>‹ Consulta de produto</button>
-      <div className="subnav" style={{ margin: 0 }}><button className={aba === "editar" ? "on" : ""} onClick={() => setAba("editar")}>🧾 Pré-pedido{pp.itens.length ? " (" + pp.itens.length + ")" : ""}</button><button className={aba === "lista" ? "on" : ""} onClick={() => setAba("lista")}>Meus pré-pedidos</button></div></div>
+      <div className="subnav" style={{ margin: 0 }}>{pp && <button className={aba === "editar" ? "on" : ""} onClick={() => setAba("editar")}>🧾 {pp.cliente_nome || numPP(pp)}</button>}<button className={aba === "lista" ? "on" : ""} onClick={() => setAba("lista")}>Meus pré-pedidos</button></div></div>
     <div className="pp-aviso">Não é pedido: fica salvo só para você consultar e tirar o pedido no sistema. Não entra em venda nem em nenhuma etapa.</div>
 
-    {aba === "editar" && <>
+    {aba === "editar" && pp && <>
       <div className="cp-card">
-        <div className="pp-tit">Produtos {pp.id ? <small>· editando {numPP(pp)}</small> : null}</div>
-        {!pp.itens.length && <div className="hint" style={{ padding: "8px 0" }}>Nenhum produto ainda. Volte para a consulta, leia o código ou busque pelo nome e toque em <b>🧾 Encaminhar para pré-pedido</b>.</div>}
+        <div className="pp-tit">Produtos <small>· {numPP(pp)}{sujo ? " · salvando…" : " · salvo"}</small></div>
+        {!pp.itens.length && <div className="hint" style={{ padding: "8px 0" }}>Nenhum produto. Volte para a consulta e encaminhe.</div>}
         {pp.itens.map((i, k) => <div key={i.codigo + k} className="pp-it">
           <div><b>{i.nome}</b><small>Cód. {i.codigo}{i.ref ? " · REF " + i.ref : ""}{i.cor ? " · " + i.cor : ""}</small>
             <div className="pp-preco"><label>R$<input inputMode="decimal" placeholder="preço un." value={i.preco || ""} onChange={e => setItem(k, { preco: e.target.value })} /></label>
@@ -118,7 +154,7 @@ export default function PrePedidos({ onVoltar, inicio = "editar" }: { onVoltar: 
             <button type="button" className="pp-x" title="Tirar do pré-pedido" onClick={() => tirar(k)}>🗑</button></div>
         </div>)}
         {temPreco(pp) && <div className="pp-total"><span>Total dos produtos</span><b>{fmtMoeda(somaPP(pp))}</b></div>}
-        <button type="button" className="pp-link" onClick={onVoltar}>＋ adicionar produto</button>
+        <button type="button" className="pp-link" onClick={() => { if (pp.id) gravarAlvo(pp.id); onVoltar(); }}>＋ adicionar produto a este cliente</button>
       </div>
       <div className="cp-card">
         <div className="pp-tit">Cliente</div>
@@ -136,25 +172,26 @@ export default function PrePedidos({ onVoltar, inicio = "editar" }: { onVoltar: 
         <label className="pp-f">Formas de pagamento<input value={pp.pagamento || ""} onChange={e => set("pagamento", e.target.value)} placeholder="ex.: entrada no Pix + 10x cartão" /></label>
         <label className="pp-f">Observações<input value={pp.obs || ""} onChange={e => set("obs", e.target.value)} /></label>
       </div>
-      <div className="pp-acoes"><button type="button" className="btn primary pp-salvar" disabled={salvando} onClick={salvar}>{salvando ? "Salvando…" : "💾 Salvar pré-pedido"}</button>
+      <div className="pp-acoes"><button type="button" className="btn primary pp-salvar" disabled={salvando} onClick={() => salvar(true)}>{salvando ? "Salvando…" : "💾 Salvar e fechar"}</button>
         <button type="button" className="btn" onClick={() => zap(pp)}>💬 WhatsApp</button>
-        {(pp.itens.length > 0 || pp.id) && <button type="button" className="btn ghost" onClick={novo}>Descartar / novo</button>}</div>
+        <button type="button" className="btn ghost" onClick={() => { if (pp.id) gravarAlvo(pp.id); onVoltar(); }}>＋ Adicionar produtos a este cliente</button></div>
+      <div className="hint" style={{ marginBottom: 14 }}>Depois de <b>Salvar e fechar</b>, o próximo produto lido começa um pré-pedido <b>novo</b> (outro cliente). Este continua na barra amarela até você marcar "incluído no sistema".</div>
     </>}
 
     {aba === "lista" && <div className="cp-card">
       {lista === null ? <div className="hint">Carregando…</div> : !lista.length ? <div className="hint">Nenhum pré-pedido salvo ainda.</div> :
         lista.map(p => <div key={p.id} className="pp-ln">
-          <div onClick={() => abrir(p)} style={{ cursor: "pointer", flex: 1 }}><b>{p.cliente_nome || "(sem nome)"}</b>
+          <div onClick={() => abrirId(p.id!)} style={{ cursor: "pointer", flex: 1 }}><b>{p.cliente_nome || "(sem nome)"}</b>
             <small>{numPP(p)} · {new Date(p.atualizado_em || "").toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} · {p.itens.length} produto{p.itens.length > 1 ? "s" : ""} · {totalUn(p)} un.{numBR(p.valor_negociado) ? " · negociado " + fmtMoeda(numBR(p.valor_negociado)) : numBR(p.valor_bruto) ? " · " + fmtMoeda(numBR(p.valor_bruto)) : ""}</small></div>
           <span className={"pill" + (p.status === "incluido" ? " pp-ok" : "")}>{p.status === "incluido" ? "incluído · venda " + (p.numero_venda || "—") : "em aberto"}</span>
           <div className="pp-mini">
-            <button type="button" title="Editar" onClick={() => abrir(p)}>✏️</button>
+            <button type="button" title="Editar" onClick={() => abrirId(p.id!)}>✏️</button>
             <button type="button" title="Imprimir / PDF" onClick={() => imprimir(p, R.nomeUser(R.currentUserId))}>🖨</button>
             <button type="button" title="Enviar ao cliente" onClick={() => zap(p)}>💬</button>
             {p.status === "incluido"
-              ? <button type="button" title="Voltar para em aberto" onClick={async () => { await A.prePedidoStatus(p.id!, "aberto"); carregar(); }}>↩</button>
-              : <button type="button" title="Marcar como incluído no sistema" onClick={async () => { const v = prompt("Pedido tirado no sistema — número da venda:", ""); if (v !== null) { try { await A.prePedidoStatus(p.id!, "incluido", v); carregar(); } catch (e: any) { toast(e.message); } } }}>✅</button>}
-            <button type="button" title="Excluir" onClick={async () => { if (confirm("Excluir o pré-pedido " + numPP(p) + " de " + p.cliente_nome + "?")) { try { await A.prePedidoExcluir(p.id!); carregar(); } catch (e: any) { toast(e.message); } } }}>🗑</button>
+              ? <button type="button" title="Voltar para em aberto" onClick={async () => { await A.prePedidoStatus(p.id!, "aberto"); recarregar(); }}>↩</button>
+              : <button type="button" title="Marcar como incluído no sistema" onClick={async () => { const v = prompt("Pedido tirado no sistema — número da venda:", ""); if (v !== null) { try { await A.prePedidoStatus(p.id!, "incluido", v); if (lerAlvo() === p.id) gravarAlvo(""); recarregar(); } catch (e: any) { toast(e.message); } } }}>✅</button>}
+            <button type="button" title="Excluir" onClick={async () => { if (confirm("Excluir o pré-pedido " + numPP(p) + " de " + p.cliente_nome + "?")) { try { await A.prePedidoExcluir(p.id!); if (lerAlvo() === p.id) gravarAlvo(""); if (pp?.id === p.id) setPP(null); recarregar(); } catch (e: any) { toast(e.message); } } }}>🗑</button>
           </div>
         </div>)}
       <div className="hint" style={{ marginTop: 8 }}>Valores só para consulta — não contam como venda.</div>

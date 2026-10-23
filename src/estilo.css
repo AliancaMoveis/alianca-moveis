@@ -1934,3 +1934,8 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .pp-soma{margin-top:4px;padding:9px 10px;border-radius:8px;background:var(--surface-2,#f4f4f4);font-size:15px;font-weight:800;text-transform:none;letter-spacing:0}
 .pp-preco label{white-space:nowrap}.pp-preco span{white-space:nowrap}
 .cp-card>.pp-enc{margin:4px 0 10px;padding:0 0 10px;border-top:0;border-bottom:1px solid var(--line,#ddd)}
+.pp-barras{position:sticky;bottom:10px;z-index:5;display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:42vh;overflow:auto}
+.cp-movel .pp-barras{bottom:74px}
+.pp-barras .pp-barra{position:static;margin-top:0;background:#fde68a;padding:9px 12px;font-size:14px}
+.pp-barras .pp-barra.ativo{background:#f2b705;outline:2px solid #a16207}
+.pp-para{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;margin-bottom:6px}.pp-para select{flex:1;min-width:0;font-size:14px}
