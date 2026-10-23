@@ -7,6 +7,7 @@ import { dataRefCliente, mesAtual, DIAS_SEMANA, TURNOS, STATUS_CLIENTE, VENDA_ST
 import { ScBadge, Ticket } from "../comp/Ticket";
 import { Kpi } from "./Dashboard";
 import { A } from "../lib/acoes";
+import { SeloFreela } from "../comp/SelVendedor";
 
 export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
   const { R, st } = useApp();
@@ -36,7 +37,7 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
           const cor = corDoSetor(setor);
           return (
             <div key={dd.u.id} className={"pcard" + (sel === dd.u.id ? " sel" : "")} onClick={() => setSel(s => s === dd.u.id ? null : dd.u.id)}>
-              <div className="t"><div className="av2" style={{ background: cor }}>{inicial(dd.u.nome.split("— ")[1] || dd.u.nome)}</div><div><div className="nm">{dd.u.nome}{ehVend && textoFerias(dd.u) ? <span style={{ marginLeft: 6, fontSize: 12, color: "var(--warn)", fontWeight: 700 }}>{textoFerias(dd.u)}</span> : null}</div><div className="sb">{ehVend ? <>{dd.u.fazProjeto !== false ? <b style={{ color: "var(--primary)" }}>📐 Projetista</b> : "Só vendedor"}{dd.u.folga !== null && dd.u.folga !== undefined ? " · folga " + DIAS_SEMANA[dd.u.folga] : ""}{dd.u.turno && TURNOS[dd.u.turno] ? " · " + (dd.u.turno === "manha" ? "entra 9:00" : "entra 10:40") : ""}</> : "Consultor externo"}</div></div></div>
+              <div className="t"><div className="av2" style={{ background: cor }}>{inicial(dd.u.nome.split("— ")[1] || dd.u.nome)}</div><div><div className="nm">{dd.u.nome}{ehVend && textoFerias(dd.u) ? <span style={{ marginLeft: 6, fontSize: 12, color: "var(--warn)", fontWeight: 700 }}>{textoFerias(dd.u)}</span> : null}</div><div className="sb">{ehVend ? <>{dd.u.fazProjeto !== false ? <b style={{ color: "var(--primary)" }}>📐 Projetista</b> : "Só vendedor"}<SeloFreela u={dd.u} />{dd.u.folga !== null && dd.u.folga !== undefined ? " · folga " + DIAS_SEMANA[dd.u.folga] : ""}{dd.u.turno && TURNOS[dd.u.turno] ? " · " + (dd.u.turno === "manha" ? "entra 9:00" : "entra 10:40") : ""}</> : "Consultor externo"}</div></div></div>
               <div className="num"><div>Ativos<b>{dd.ativos}</b></div><div>Vendas<b>{dd.vendas}</b></div><div>Vendido<b style={{ fontSize: 14 }}>{fmtMoeda(dd.total)}</b></div><div>Conversão<b>{dd.conv}%</b></div></div>
               <div className="bar"><i style={{ width: dd.total / maxT * 100 + "%", background: cor }}></i></div>
             </div>

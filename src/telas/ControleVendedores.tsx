@@ -7,6 +7,7 @@ import { A } from "../lib/acoes";
 import { DIAS_SEMANA, TURNOS, domingoDeFolga, fmtDate, folgaEm, hojeISO } from "../lib/regras";
 import { ModalFerias, textoFerias } from "../comp/Ferias";
 import Senha from "../comp/Senha";
+import { SeloFreela } from "../comp/SelVendedor";
 
 // cadastrar / descadastrar vendedor (gera o acesso só com a função de vendedor): gerentes e Gestão — o banco confere (_cadastra_vendedores)
 export const podeCadastrarVendedores = (R: any) => R.ehGestao() || R.mySetores().includes("gerente_loja");
@@ -76,7 +77,7 @@ function Linha({ u, dias, aberto, abrir, pode, doms }: any) {
   return (
     <div className={"cv-v" + (aberto ? " on" : "") + (u.naAgenda === false ? " fora" : "")}>
       <button className="cv-h" onClick={abrir}>
-        <b>{nomeCurto(u.nome)}</b>{u.freelancer && <span className="cv-freela">Freelancer</span>}{fer && <span className="cv-fer">{fer}</span>}{u.naAgenda === false && <span className="cv-fora">fora da agenda</span>}
+        <b>{nomeCurto(u.nome)}</b><SeloFreela u={u} />{fer && <span className="cv-fer">{fer}</span>}{u.naAgenda === false && <span className="cv-fora">fora da agenda</span>}
         <small>{resumo}</small>
       </button>
       {aberto && <div className="cv-x">

@@ -2,6 +2,8 @@
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 
+/** selo azul "Freelancer" ao lado do nome do vendedor */
+export function SeloFreela({ u }: { u: any }) { return u && u.freelancer ? <span className="selo-freela" title="Freelancer: fora da sugestão automática">● Freelancer</span> : null; }
 export function rotuloVend(u: any) { return u.nome + (u.fazProjeto === false ? " · só vendedor" : " · projetista"); }
 
 export function SelVendedor({ value, onChange, quando, c, lista, placeholder = "Selecione…", extra }: { value: string; onChange: (v: string) => void; quando?: string | null; c?: any; lista?: any[]; placeholder?: string; extra?: (u: any) => string }) {
@@ -9,14 +11,14 @@ export function SelVendedor({ value, onChange, quando, c, lista, placeholder = "
   const vs = lista || R.vendAgenda();
   const fr = vs.filter((u: any) => u.freelancer), loja = vs.filter((u: any) => !u.freelancer);
   const proj = loja.filter((u: any) => u.fazProjeto !== false), so = loja.filter((u: any) => u.fazProjeto === false);
-  const opt = (u: any) => { const m = R.dispVendedor(u.id, quando, c); return <option key={u.id} value={u.id}>{(m.length ? "⛔ " : "") + u.nome + (extra ? extra(u) : "") + (m.length ? " — " + m.join(" · ") : "")}</option>; };
+  const opt = (u: any) => { const m = R.dispVendedor(u.id, quando, c); return <option key={u.id} value={u.id}>{(m.length ? "⛔ " : "") + (u.freelancer ? "🔵 " : "") + u.nome + (u.freelancer ? " · FREELANCER" : "") + (extra ? extra(u) : "") + (m.length ? " — " + m.join(" · ") : "")}</option>; };
   const mot = value ? R.dispVendedor(value, quando, c) : [];
   return <>
     <select value={value} onChange={e => onChange(e.target.value)}>
       <option value="">{placeholder}</option>
       {proj.length > 0 && <optgroup label="📐 Projetistas">{proj.map(opt)}</optgroup>}
       {so.length > 0 && <optgroup label="Só vendedores (não fazem projeto)">{so.map(opt)}</optgroup>}
-      {fr.length > 0 && <optgroup label="Freelancers">{fr.map(opt)}</optgroup>}
+      {fr.length > 0 && <optgroup label="🔵 Freelancers (fora da sugestão)">{fr.map(opt)}</optgroup>}
     </select>
     {mot.length > 0 && <div className="dv-aviso" style={{ marginTop: 6, color: "var(--danger)", fontWeight: 600, fontSize: 12.5 }}>⛔ {R.nomeUser(value)} indisponível: {mot.join(" · ")}</div>}
   </>;

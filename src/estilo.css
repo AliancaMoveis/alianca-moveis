@@ -1939,3 +1939,5 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .pp-barras .pp-barra{position:static;margin-top:0;background:#fde68a;padding:9px 12px;font-size:14px}
 .pp-barras .pp-barra.ativo{background:#f2b705;outline:2px solid #a16207}
 .pp-para{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;margin-bottom:6px}.pp-para select{flex:1;min-width:0;font-size:14px}
+/* selo azul do freelancer */
+.selo-freela{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:1px 8px;border-radius:99px;background:#1d4ed8;color:#fff;font-size:11px;font-weight:800;white-space:nowrap;vertical-align:middle;letter-spacing:.02em}

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { SeloVinda } from "../comp/Situacao";
 import { useApp } from "../estado";
 import { fmtDate, hojeISO, isoLocal, parseData } from "../lib/regras";
+import { SeloFreela } from "../comp/SelVendedor";
 
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const maisDias = (iso: string, n: number) => { const d = parseData(iso + "T12:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
@@ -38,7 +39,7 @@ export default function AgendaVendedores({ movel = false }: { movel?: boolean })
         <div className="vd-cab"><span>Vendedor</span><span>Hoje</span><span>Próx. dias</span></div>
         <>
           {lista.map(({ v, hoje: h, prox }) => <button key={v.id} type="button" className={"vd-it" + (sel === v.id ? " on" : "")} onClick={() => setSel(v.id)}>
-            <span><b>{v.nome}</b>{v.freelancer ? <small> · freelancer</small> : null}</span><b className={h ? "n" : "n z"}>{h}</b><b className={prox ? "n" : "n z"}>{prox}</b></button>)}
+            <span><b>{v.nome}</b><SeloFreela u={v} /></span><b className={h ? "n" : "n z"}>{h}</b><b className={prox ? "n" : "n z"}>{prox}</b></button>)}
           {sem.length > 0 && <button type="button" className={"vd-it fila" + (sel === "__fila" ? " on" : "")} onClick={() => setSel("__fila")}>
             <span><b>Sem vendedor (fila)</b></span><b className="n">{sem.filter(x => x._dia === hoje).length}</b><b className="n">{sem.filter(x => x._dia !== hoje).length}</b></button>}
         </>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { SelVendedor, confirmarDisp, registrarIndisp, sugestaoVendedor } from "../comp/SelVendedor";
+import { SelVendedor, confirmarDisp, registrarIndisp, sugestaoVendedor , SeloFreela } from "../comp/SelVendedor";
 import { SeloLitoral } from "../comp/Ticket";
 import { DIAS_SEMANA, TURNOS, hojeISO, isoLocal, parseData } from "../lib/regras";
 
@@ -101,7 +101,7 @@ export default function Definir() {
             const prox = ag.slice().sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja))).slice(0, 3);
             return (
               <div key={v.id} className="dv-vend">
-                <div className="dv-vend-top"><b>{v.nome}</b>{v.fazProjeto !== false ? <span className="pill" style={{ background: "var(--primary)", color: "#fff", whiteSpace: "nowrap" }}>📐 projetista</span> : <span className="pill" style={{ whiteSpace: "nowrap" }}>só vendedor</span>}<span className="dv-n" title="Hoje">{h.length} hoje</span><span className="dv-n cinza" title="Próximos 7 dias">{s.length} na semana</span></div>
+                <div className="dv-vend-top"><b>{v.nome}</b>{v.fazProjeto !== false ? <span className="pill" style={{ background: "var(--primary)", color: "#fff", whiteSpace: "nowrap" }}>📐 projetista</span> : <span className="pill" style={{ whiteSpace: "nowrap" }}>só vendedor</span>}<SeloFreela u={v} /><span className="dv-n" title="Hoje">{h.length} hoje</span><span className="dv-n cinza" title="Próximos 7 dias">{s.length} na semana</span></div>
                 {(v.folga !== null && v.folga !== undefined) || v.turno ? <div className="dv-vend-l" style={{ cursor: "default", color: "var(--ink-faint)" }}>{v.folga !== null && v.folga !== undefined ? "Folga " + DIAS_SEMANA[v.folga] : ""}{v.turno && TURNOS[v.turno] ? (v.folga !== null && v.folga !== undefined ? " · " : "") + TURNOS[v.turno].rot : ""}</div> : null}
                 {prox.length ? prox.map((c: any) => <div key={c.id} className="dv-vend-l" onClick={() => abrirDetalhe(c.id)}>{dia(c) === hoje ? "hoje" : rotuloDia(dia(c)).split(",")[1].trim()} {hora(c)} · {c.cliente}</div>)
                   : <div className="dv-vend-l vazio">Sem clientes agendados</div>}
