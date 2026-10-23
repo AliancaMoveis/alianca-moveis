@@ -1957,3 +1957,7 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .cv-abc-dom.gB{border-color:#16a34a;background:rgba(22,163,74,.08)}.cv-abc-dom.gB .cv-abc-v{color:#16a34a}
 .cv-abc-dom.gC{border-color:#d97706;background:rgba(217,119,6,.08)}.cv-abc-dom.gC .cv-abc-v{color:#d97706}
 .cv-abc-dom.fech{border-color:#dc2626;background:repeating-linear-gradient(45deg,rgba(220,38,38,.08) 0 8px,transparent 8px 16px)}.cv-abc-dom.fech .cv-abc-v{color:#dc2626}
+.pp-barras .pp-barra{display:flex;justify-content:space-between;align-items:center;gap:8px;border-radius:14px;cursor:pointer;color:#1a1300;font-weight:800;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.pp-barra-bts{display:flex;align-items:center;gap:10px}
+.pp-arq{border:0;background:rgba(0,0,0,.12);border-radius:8px;width:34px;height:30px;cursor:pointer;font-size:15px;padding:0}
+.pp-arq:hover{background:rgba(0,0,0,.22)}

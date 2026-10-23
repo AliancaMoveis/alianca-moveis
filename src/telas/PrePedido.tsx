@@ -35,7 +35,9 @@ export function usarPP(): [PP[] | null, string] {
   useEffect(() => { let vivo = true; const f = () => { setAlvo(lerAlvo()); carregarPP().then(x => vivo && setL([...x])); }; f(); window.addEventListener("pp-mudou", f); return () => { vivo = false; window.removeEventListener("pp-mudou", f); }; }, []);
   return [l, alvo];
 }
-const abertos = (l: PP[] | null) => (l || []).filter(p => p.status !== "incluido");
+const abertos = (l: PP[] | null) => (l || []).filter(p => p.status !== "incluido" && p.status !== "arquivado");
+/** arquivar: some das barras amarelas e da lista principal (fica em "Arquivados") */
+export async function arquivarPP(id: string, sim = true) { await A.prePedidoStatus(id, sim ? "arquivado" : "aberto"); if (sim && lerAlvo() === id) gravarAlvo(""); await carregarPP(true); avisar(); }
 const unid = (n: number) => n + (n === 1 ? " un." : " un.");
 const totalUn = (p: PP) => p.itens.reduce((s, i) => s + (Number(i.qtd) || 0), 0);
 /** "1.496,82" / "1496.82" / "1496,82" → número */
@@ -80,8 +82,9 @@ export function BarraPP({ abrir }: { abrir: (id: string) => void }) {
   const [lista, alvo] = usarPP();
   const ab = abertos(lista);
   if (!ab.length) return null;
-  return <div className="pp-barras">{ab.slice(0, 12).map(p => <button key={p.id} type="button" className={"pp-barra" + (p.id === alvo ? " ativo" : "")} onClick={() => abrir(p.id!)}>
-    <span>🧾 {p.cliente_nome || "Cliente sem nome"}<small>{numPP(p)} · {p.itens.length} produto{p.itens.length > 1 ? "s" : ""} · {totalUn(p)} un.{p.id === alvo ? " · recebendo os próximos produtos" : ""}</small></span><b>Abrir ›</b></button>)}</div>;
+  return <div className="pp-barras">{ab.slice(0, 12).map(p => <div key={p.id} className={"pp-barra" + (p.id === alvo ? " ativo" : "")} role="button" tabIndex={0} onClick={() => abrir(p.id!)}>
+    <span>🧾 {p.cliente_nome || "Cliente sem nome"}<small>{numPP(p)} · {p.itens.length} produto{p.itens.length > 1 ? "s" : ""} · {totalUn(p)} un.{p.id === alvo ? " · recebendo os próximos produtos" : ""}</small></span>
+    <span className="pp-barra-bts"><button type="button" className="pp-arq" title="Arquivar (tira da barra)" onClick={e => { e.stopPropagation(); if (confirm("Arquivar o pré-pedido de " + (p.cliente_nome || numPP(p)) + "? Ele sai daqui e fica em Meus pré-pedidos → Arquivados.")) arquivarPP(p.id!); }}>📦</button><b>Abrir ›</b></span></div>)}</div>;
 }
 
 function textoPP(p: PP) {
@@ -114,6 +117,8 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
   const [lista] = usarPP();
   const [pp, setPP] = useState<PP | null>(null);
   const [salvando, setSalvando] = useState(false); const [sujo, setSujo] = useState(false);
+  const [verArq, setVerArq] = useState(false);
+  const listaVis = (lista || []).filter(p => (p.status === "arquivado") === verArq);
   const br = (v: any) => v == null || v === "" ? "" : String(Number(v).toFixed(2)).replace(".", ",");
   const abrirId = (x: string) => { const p = (lista || []).find(y => y.id === x); if (p) { setPP({ ...VAZIO, ...p, valor_bruto: br(p.valor_bruto), valor_negociado: br(p.valor_negociado) }); setSujo(false); setAba("editar"); } };
   useEffect(() => { if (id && lista && !pp) abrirId(id); }, [lista]);
@@ -174,16 +179,18 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
       </div>
       <div className="pp-acoes"><button type="button" className="btn primary pp-salvar" disabled={salvando} onClick={() => salvar(true)}>{salvando ? "Salvando…" : "💾 Salvar e fechar"}</button>
         <button type="button" className="btn" onClick={() => zap(pp)}>💬 WhatsApp</button>
-        <button type="button" className="btn ghost" onClick={() => { if (pp.id) gravarAlvo(pp.id); onVoltar(); }}>＋ Adicionar produtos a este cliente</button></div>
+        <button type="button" className="btn ghost" onClick={() => { if (pp.id) gravarAlvo(pp.id); onVoltar(); }}>＋ Adicionar produtos a este cliente</button>
+        {pp.id && <button type="button" className="btn ghost" onClick={async () => { if (!confirm("Arquivar este pré-pedido? Ele sai das barras amarelas e fica em Meus pré-pedidos → Arquivados.")) return; try { await arquivarPP(pp.id!); toast("Pré-pedido arquivado"); onVoltar(); } catch (e: any) { toast(e.message); } }}>📦 Arquivar</button>}</div>
       <div className="hint" style={{ marginBottom: 14 }}>Depois de <b>Salvar e fechar</b>, o próximo produto lido começa um pré-pedido <b>novo</b> (outro cliente). Este continua na barra amarela até você marcar "incluído no sistema".</div>
     </>}
 
     {aba === "lista" && <div className="cp-card">
-      {lista === null ? <div className="hint">Carregando…</div> : !lista.length ? <div className="hint">Nenhum pré-pedido salvo ainda.</div> :
-        lista.map(p => <div key={p.id} className="pp-ln">
+      <div className="chips" style={{ margin: "0 0 6px" }}>{([["ativos", "Em aberto e incluídos"], ["arquivados", "📦 Arquivados"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (verArq === (k === "arquivados") ? " on" : "")} onClick={() => setVerArq(k === "arquivados")}>{l} ({(lista || []).filter(p => (p.status === "arquivado") === (k === "arquivados")).length})</button>)}</div>
+      {lista === null ? <div className="hint">Carregando…</div> : !listaVis.length ? <div className="hint">{verArq ? "Nenhum pré-pedido arquivado." : "Nenhum pré-pedido salvo ainda."}</div> :
+        listaVis.map(p => <div key={p.id} className="pp-ln">
           <div onClick={() => abrirId(p.id!)} style={{ cursor: "pointer", flex: 1 }}><b>{p.cliente_nome || "(sem nome)"}</b>
             <small>{numPP(p)} · {new Date(p.atualizado_em || "").toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} · {p.itens.length} produto{p.itens.length > 1 ? "s" : ""} · {totalUn(p)} un.{numBR(p.valor_negociado) ? " · negociado " + fmtMoeda(numBR(p.valor_negociado)) : numBR(p.valor_bruto) ? " · " + fmtMoeda(numBR(p.valor_bruto)) : ""}</small></div>
-          <span className={"pill" + (p.status === "incluido" ? " pp-ok" : "")}>{p.status === "incluido" ? "incluído · venda " + (p.numero_venda || "—") : "em aberto"}</span>
+          <span className={"pill" + (p.status === "incluido" ? " pp-ok" : "")}>{p.status === "arquivado" ? "📦 arquivado" : p.status === "incluido" ? "incluído · venda " + (p.numero_venda || "—") : "em aberto"}</span>
           <div className="pp-mini">
             <button type="button" title="Editar" onClick={() => abrirId(p.id!)}>✏️</button>
             <button type="button" title="Imprimir / PDF" onClick={() => imprimir(p, R.nomeUser(R.currentUserId))}>🖨</button>
@@ -191,6 +198,9 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
             {p.status === "incluido"
               ? <button type="button" title="Voltar para em aberto" onClick={async () => { await A.prePedidoStatus(p.id!, "aberto"); recarregar(); }}>↩</button>
               : <button type="button" title="Marcar como incluído no sistema" onClick={async () => { const v = prompt("Pedido tirado no sistema — número da venda:", ""); if (v !== null) { try { await A.prePedidoStatus(p.id!, "incluido", v); if (lerAlvo() === p.id) gravarAlvo(""); recarregar(); } catch (e: any) { toast(e.message); } } }}>✅</button>}
+            {p.status === "arquivado"
+              ? <button type="button" title="Desarquivar (volta para em aberto)" onClick={async () => { try { await arquivarPP(p.id!, false); } catch (e: any) { toast(e.message); } }}>📤</button>
+              : <button type="button" title="Arquivar" onClick={async () => { try { await arquivarPP(p.id!); toast("Arquivado"); } catch (e: any) { toast(e.message); } }}>📦</button>}
             <button type="button" title="Excluir" onClick={async () => { if (confirm("Excluir o pré-pedido " + numPP(p) + " de " + p.cliente_nome + "?")) { try { await A.prePedidoExcluir(p.id!); if (lerAlvo() === p.id) gravarAlvo(""); if (pp?.id === p.id) setPP(null); recarregar(); } catch (e: any) { toast(e.message); } } }}>🗑</button>
           </div>
         </div>)}

@@ -498,8 +498,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     "00000000-0000-4000-a000-000000000006", "77248fc5-ae30-4e94-9cdd-528d02ce66d6", "89bf0975-5c78-4de2-bf17-fe0b6986a638", "3b2766ca-cd6f-4377-a65e-e33d9c7082cc"].includes(currentUserId)
     || ["produtos", "gerente_loja", "atendente_cliente", "callcenter"].some(x => mySetores().includes(x)); // vendedores e call center: só consulta
   // editar/importar/excluir/tirar de venda: só Gestão e TI; liberar o mostruário: também os gerentes da loja. Vendedor só consulta.
-  // 🧾 pré-pedido do vendedor — em teste: só o Lucas
-  const podePrePedido = () => currentUserId === "573aa574-2a2b-4faf-a500-bf64e71d06bd";
+  // 🧾 pré-pedido: todos os vendedores e gerentes da loja (e a Gestão)
+  const podePrePedido = () => ehGestao() || ["atendente_cliente", "gerente_loja"].some(x => mySetores().includes(x));
   const podeEditarProduto = () => ehGestao() || mySetores().includes("produtos");
   const podeLiberarMostruario = () => podeEditarProduto() || mySetores().includes("gerente_loja");
   const ehSupMedidas = () => ehGestao() || mySetores().includes("medidas_supervisao");
