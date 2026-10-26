@@ -480,7 +480,7 @@ function Contato({ c, rota = true }: any) {
   const nums: string[] = Array.from(new Set((String(c.telefone || "").match(/(\+?55\s?)?\(?\d{2}\)?\s?9?\s?\d{4}[\s.-]?\d{4}|\d{8,13}/g) || []).map(x => x.trim())));
   const copiar = async (t: string) => { const d = t.replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, ""); try { await navigator.clipboard.writeText(d); toast("Telefone copiado: " + fmtTel(d)); } catch { window.prompt("Copie o telefone:", d); } };
   return (<>
-    {nums.length > 0 && <div className="mv-tels" onClick={e => e.stopPropagation()}>{nums.map((n, i) => <div key={i} className="mv-tel"><a href={"tel:" + n.replace(/\D/g, "")}>📞 <b>{fmtTel(n)}</b></a><button type="button" onClick={() => copiar(n)}>📋 Copiar</button></div>)}</div>}
+    {nums.length > 0 && <div className="mv-tels" onClick={e => e.stopPropagation()}>{nums.map((n, i) => <div key={i} className="mv-tel"><a href={"tel:" + n.replace(/\D/g, "")}>📞 <b>{fmtTel(n)}</b></a><button type="button" onClick={() => copiar(n)}>📋 Copiar</button>{nums.length > 1 && R.waLinkCliente(c, n) ? <a href={R.waLinkCliente(c, n)} target="_blank" rel="noopener" style={{ background: "#075E54", color: "#fff", borderRadius: 8, padding: "4px 10px", fontWeight: 700, textDecoration: "none" }}>💬 WhatsApp</a> : null}</div>)}</div>}
     <div className="mv-contato" onClick={e => e.stopPropagation()}>
       {tel ? <a href={"tel:" + tel} className="mv-bt">📞<span>Ligar</span></a> : <span className="mv-bt off">📞<span>Sem tel.</span></span>}
       {wa ? <a href={wa} target="_blank" rel="noopener" className="mv-bt wa">💬<span>WhatsApp</span></a> : null}

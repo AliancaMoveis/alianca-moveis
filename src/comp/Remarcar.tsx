@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { fmtDateTime } from "../lib/regras";
+import { fmtDateTime, telefonesInvalidos } from "../lib/regras";
+import { CampoTelefones } from "./Whats";
 
 export function RemarcarData({ c, tipo, movel }: { c: any; tipo: "visita" | "loja"; movel?: boolean }) {
   const { R, executar: ex, toast } = useApp() as any;
@@ -41,6 +42,7 @@ export function EditarCliente({ c }: { c: any }) {
   const salvar = () => {
     if (!f.cliente.trim()) { toast("Informe o nome do cliente"); return; }
     if (String(f.telefone).replace(/\D/g, "").length < 10) { toast("Informe o telefone com DDD"); return; }
+    if (telefonesInvalidos(f.telefone).length) { toast("Telefone incompleto: " + telefonesInvalidos(f.telefone)[0]); return; }
     ex(() => A.editarCliente(c.id, f), "Dados do cliente atualizados").then((ok: boolean) => ok && setAberto(false));
   };
   if (!aberto) return <button className="btn sm" onClick={() => { setF(ini()); setAberto(true); }}>✏️ Editar dados do cliente</button>;
@@ -49,7 +51,7 @@ export function EditarCliente({ c }: { c: any }) {
       <div className="grid">
         <div className="field"><label>Nome <span className="req-star">*</span></label><input value={f.cliente} onChange={s("cliente")} /></div>
         <div className="field"><label>CPF / CNPJ</label><input value={f.clienteDoc} onChange={s("clienteDoc")} placeholder="000.000.000-00" /></div>
-        <div className="field"><label>Telefone <span className="req-star">*</span></label><input value={f.telefone} onChange={s("telefone")} inputMode="tel" /></div>
+        <div className="field"><label>Telefone <span className="req-star">*</span></label><CampoTelefones valor={f.telefone} onChange={v => setF((x: any) => ({ ...x, telefone: v }))} onAviso={toast} /></div>
         <div className="field"><label>E-mail</label><input value={f.email} onChange={s("email")} /></div>
         <div className="field full"><label>Endereço</label><input value={f.endereco} onChange={s("endereco")} /></div>
       </div>

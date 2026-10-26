@@ -97,7 +97,17 @@ export const semEmoji = (t: string) => String(t || "").replace(/[\u{1F000}-\u{1F
 /** link do WhatsApp com o texto já pronto (sem emojis) */
 export const waTexto = (numero: string, texto = "") => "https://wa.me/" + numero + (texto ? "?text=" + encodeURIComponent(semEmoji(texto)) : "");
 /** link do WhatsApp: número com DDD (sem 55 → acrescenta) */
-export const linkWhats = (tel: string, texto = "") => { let d = String(tel || "").replace(/\D/g, ""); if (d.length < 10) return ""; if (!d.startsWith("55") || d.length <= 11) d = "55" + d; return waTexto(d, texto); };
+/** Separa os telefones de um campo ("(41) 99999-9999 / 41 3333-4444"). Um número por item; sem número completo, devolve o texto como está. */
+export function telefonesDe(t: string): string[] {
+  const achados = String(t || "").match(/(\+?55[\s.-]*)?\(?\d{2}\)?[\s.-]*\d{4,5}[\s.-]?\d{4,5}/g) || [];
+  const vistos = new Set<string>(); const out: string[] = [];
+  for (const a of achados) { const d = a.replace(/\D/g, ""); if (d.length >= 10 && d.length <= 13 && !vistos.has(d)) { vistos.add(d); out.push(a.trim()); } }
+  if (!out.length && String(t || "").replace(/\D/g, "").length >= 10) out.push(String(t).trim());
+  return out;
+}
+/** Telefones digitados que estão incompletos (menos de 10 dígitos com DDD) ou grandes demais */
+export const telefonesInvalidos = (t: string) => String(t || "").split(/\s*\/\s*/).map(x => x.trim()).filter(x => x && (x.replace(/\D/g, "").length < 10 || x.replace(/\D/g, "").length > 13));
+export const linkWhats = (tel: string, texto = "") => { let d = String(telefonesDe(tel)[0] || "").replace(/\D/g, ""); if (d.length < 10) return ""; if (!d.startsWith("55") || d.length <= 11) d = "55" + d; return waTexto(d, texto); };
 export const PV_ENCAMINHAR: Record<string, string> = { vistoria: "Solicitar vistoria", assistencia: "Solicitar assistência (peça + montador)", montagem: "Nova montagem / retorno do montador", medidas: "Conferir medidas", checklist: "Revisar projeto (checklist)", prazo_fabrica: "Cobrar fábrica (prazo)" };
 export const corDoSetor = (id: string) => COR_SETOR[id] || "#8b94a3";
 // conta como venda: o que já foi pago e efetivado (100% promissória ainda não pago não conta; entrada + promissória conta a parte paga)
@@ -243,7 +253,7 @@ export function parseMoeda(v: any) { const n = parseFloat((v || "0").toString().
 export function fmtMoeda(n: number) { const v = Number(n) || 0; return "R$ " + (Math.round(v * 100) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ---------- whatsapp ----------
-export function sanitizeWhats(w: string) { let d = (w || "").replace(/\D/g, ""); if (!d) return ""; if (d.length <= 11 && d.slice(0, 2) !== "55") d = "55" + d; return d; }
+export function sanitizeWhats(w: string) { let d = String(telefonesDe(w)[0] || "").replace(/\D/g, ""); if (!d) return ""; if (d.length <= 11 && d.slice(0, 2) !== "55") d = "55" + d; return d; }
 export const primeiroNome = (n: string) => (n || "").trim().split(" ")[0];
 export const nomeNatural = (n: string) => { if (!n) return ""; const p = n.split("—"); return (p.length > 1 ? p[1] : p[0]).trim(); };
 export const inicial = (n: string) => (n || "?").trim().charAt(0).toUpperCase();
@@ -252,7 +262,7 @@ export const soDigitos = (v: any) => (v || "").replace(/\D/g, "");
 export function mesmaPessoa(c: Chamado, dados: any) {
   const doc = soDigitos(dados.clienteDoc), tel = soDigitos(dados.telefone), ped = (dados.pedido || "").trim().toLowerCase();
   if (doc && soDigitos(c.clienteDoc) === doc) return "CPF/CNPJ";
-  if (tel && tel.length >= 10 && soDigitos(c.telefone) === tel) return "telefone";
+  if (tel && tel.length >= 10 && (soDigitos(c.telefone) === tel || telefonesDe(dados.telefone).some(a => telefonesDe(c.telefone).some(b => soDigitos(a).slice(-10) === soDigitos(b).slice(-10))))) return "telefone";
   if (ped && (c.pedido || "").trim().toLowerCase() === ped) return "nº da venda";
   const nome = (dados.cliente || "").trim().toLowerCase();
   if (nome && nome.length > 5 && (c.cliente || "").trim().toLowerCase() === nome) return "nome";
@@ -735,8 +745,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     L.push(""); L.push("Já está tudo encaminhado e será um prazer te atender! Qualquer dúvida, pode me chamar por aqui.");
     return L.join("\n");
   }
-  function waLinkCliente(c: Chamado) {
-    const n = sanitizeWhats(c.telefone); if (!n) return "";
+  // tel: qual dos telefones do cliente (sem informar, o primeiro)
+  function waLinkCliente(c: Chamado, tel?: string) {
+    const n = sanitizeWhats(tel || c.telefone); if (!n) return "";
     const u = me();
     const souProjetista = u && c.atendenteId === u.id, souConsultor = u && c.consultorId === u.id;
     const souSuporte = u && (u.setores || []).includes("suporte_consultores");

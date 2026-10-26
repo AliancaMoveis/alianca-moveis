@@ -1,5 +1,6 @@
 // Botão do WhatsApp (verde escuro) — abre a conversa direto com o número
-import { linkWhats } from "../lib/regras";
+import { useEffect, useRef, useState } from "react";
+import { linkWhats, telefonesDe } from "../lib/regras";
 
 export const VERDE_WHATS = "#075E54";
 export function BotaoWhats({ tel, texto = "", rotulo = "WhatsApp", sm = true }: { tel: string; texto?: string; rotulo?: string; sm?: boolean }) {
@@ -16,11 +17,50 @@ export function BotaoWhats({ tel, texto = "", rotulo = "WhatsApp", sm = true }: 
 }
 
 /** Separa os telefones de um campo livre ("(41) 99999-9999 / 41 3333-4444") */
-export function separarTelefones(t: string): string[] {
-  const achados = String(t || "").match(/\(?\d{2}\)?[\s.-]*\d{4,5}[\s.-]?\d{4,5}/g) || [];
-  const vistos = new Set<string>(); const out: string[] = [];
-  for (const a of achados) { const d = a.replace(/\D/g, ""); if (d.length >= 10 && d.length <= 13 && !vistos.has(d)) { vistos.add(d); out.push(a.trim()); } }
-  return out;
+export const separarTelefones = telefonesDe;
+
+// divide o que foi digitado/colado numa linha em vários números (separador / ; , " e " ou dois números completos)
+function quebrar(v: string): string[] {
+  const partes = String(v || "").split(/\s*[\/;,]\s*|\s+e\s+/);
+  if (partes.length > 1) return partes.map(x => x.trim());
+  const ts = telefonesDe(v);
+  return ts.length > 1 ? ts : [v];
+}
+const listaDe = (v: string) => { const l = String(v || "").split(/\s*\/\s*/).flatMap(x => quebrar(x.trim())).filter(Boolean); return l.length ? l : [""]; };
+
+/** Campo de telefones do cliente: um número por linha, cada um com o botão do WhatsApp; "+ Adicionar telefone" abre outra linha.
+ *  Guarda tudo no mesmo campo, separado por " / " (o resto do sistema já separa por aí). */
+export function CampoTelefones({ valor, onChange, nome = "telefone", movel = false, onAviso }: { valor: string; onChange: (v: string) => void; nome?: string; movel?: boolean; onAviso?: (m: string) => void }) {
+  const [lista, setLista] = useState<string[]>(() => listaDe(valor));
+  const ult = useRef(valor); const foco = useRef<number | null>(null); const refs = useRef<(HTMLInputElement | null)[]>([]);
+  useEffect(() => { if (valor !== ult.current) { ult.current = valor; setLista(listaDe(valor)); } }, [valor]);
+  useEffect(() => { if (foco.current != null) { refs.current[foco.current]?.focus(); foco.current = null; } });
+  const emitir = (l: string[]) => { setLista(l); const s = l.map(x => x.trim()).filter(Boolean).join(" / "); ult.current = s; onChange(s); };
+  const mudar = (i: number, v: string) => {
+    const q = quebrar(v); const l = [...lista];
+    if (q.length > 1) {
+      const novos = q.filter((x, k) => x || k === q.length - 1);
+      l.splice(i, 1, ...novos); foco.current = i + novos.length - 1;
+      onAviso && onAviso("Um telefone por linha — o outro número foi para uma linha nova");
+    } else l[i] = v;
+    emitir(l);
+  };
+  const tirar = (i: number) => { const l = lista.filter((_, k) => k !== i); emitir(l.length ? l : [""]); };
+  const add = () => { if (lista[lista.length - 1].trim() === "") { foco.current = lista.length - 1; setLista([...lista]); return; } foco.current = lista.length; setLista([...lista, ""]); };
+  const ok = (t: string) => { const d = t.replace(/\D/g, "").length; return d >= 10 && d <= 13; };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+      {lista.map((t, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input ref={el => { refs.current[i] = el; }} name={i === 0 ? nome : nome + (i + 1)} type="tel" inputMode="tel" placeholder={i === 0 ? "(00) 00000-0000" : "Outro telefone"} value={t}
+            onChange={e => mudar(i, e.target.value)} style={{ flex: 1, minWidth: 0 }} />
+          {ok(t) && <BotaoWhats tel={t} rotulo={movel ? "" : "WhatsApp"} />}
+          {lista.length > 1 && <button type="button" className="btn ghost sm" title="Remover este telefone" onClick={() => tirar(i)} style={{ padding: "4px 8px" }}>✕</button>}
+        </div>
+      ))}
+      <button type="button" className="btn ghost sm" onClick={add} style={{ alignSelf: "flex-start" }}>📞 + Adicionar telefone</button>
+    </div>
+  );
 }
 const ASSUNTO: Record<string, string> = {
   previsao_frete: "a previsão de entrega do seu pedido", entrega: "a entrega do seu pedido", prazo_fabrica: "o prazo de fábrica do seu pedido",

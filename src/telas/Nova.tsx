@@ -3,9 +3,9 @@ import { SelRespMkt } from "../comp/RespMkt";
 import { BC, docValido, enderecoTxt, fmtTel } from "../lib/baseClientes";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
-import { PV_SITUACAO, PV_TIPOS, fmtDateTime, inicial, mesmaPessoa, soDigitos } from "../lib/regras";
+import { PV_SITUACAO, PV_TIPOS, fmtDateTime, inicial, mesmaPessoa, soDigitos, telefonesInvalidos } from "../lib/regras";
 import { EditFab } from "./Cadastros";
-import { BotaoWhats } from "../comp/Whats";
+import { BotaoWhats, CampoTelefones } from "../comp/Whats";
 import { cfgAgenda } from "./Checklist";
 
 const VAZIO: any = { evVendedor: "", evComprado: "", evLancado: "", rmMontador: "", rmSaiuNome: "", rmAtendente: "", pvSituacao: "", pvProjetista: "", pvProjOutro: false, pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
@@ -115,6 +115,7 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
     if (!f.cliente.trim()) { toast("Informe o nome do cliente"); return; }
     if (presale && direto && !f.querProjeto) { toast("Informe se o cliente quer projeto pronto"); return; }
     if (!ehMkt && !pvMont && soDigitos(f.clienteDoc).length < 11) { toast("Informe o CPF/CNPJ do cliente"); (document.querySelector('input[name="clienteDoc"]') as HTMLInputElement | null)?.focus(); return; }
+    if (telefonesInvalidos(f.telefone).length) { toast("Telefone incompleto: " + telefonesInvalidos(f.telefone)[0] + " — informe com DDD (um número por linha)"); return; }
     if (!pvMont && String(f.telefone || "").replace(/\D/g, "").length < 10) { toast("Informe o telefone do cliente com DDD"); (document.querySelector('input[name="telefone"]') as HTMLInputElement | null)?.focus(); return; }
     setEnviando(true);
     try {
@@ -203,7 +204,7 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
         <div className="grid">
           <div className="field"><label>Nome do cliente <span className="req-star">*</span></label><input name="cliente" required placeholder="Nome completo" value={f.cliente} onChange={set("cliente")} /></div>
           {!ehMkt && <div className="field" id="fieldClienteDoc"><label>CPF / CNPJ do cliente {pvMont ? <span className="hint">(se souber)</span> : <span className="req-star">*</span>}</label><input name="clienteDoc" required={!pvMont} placeholder="000.000.000-00" value={f.clienteDoc} onChange={set("clienteDoc")} /></div>}
-          <div className="field"><label>Telefone {pvMont ? "do cliente " : "/ contato "}{pvMont ? <span className="hint">(se souber)</span> : <span className="req-star">*</span>}</label><input name="telefone" placeholder="(00) 00000-0000" value={f.telefone} onChange={set("telefone")} /></div>
+          <div className="field"><label>Telefone {pvMont ? "do cliente " : "/ contato "}{pvMont ? <span className="hint">(se souber)</span> : <span className="req-star">*</span>}</label><CampoTelefones valor={f.telefone} onChange={v => setF((x: any) => ({ ...x, telefone: v }))} onAviso={toast} /></div>
           {!ehMkt && baseCli && <div className="field full"><div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--st-concluida-bg, rgba(15,138,95,.08))", border: "1px solid var(--st-concluida, #0f8a5f)", fontSize: 13.5 }}>
             📇 Cliente na base{baseCli.compras ? <> — já comprou <b>{baseCli.compras} {baseCli.compras === 1 ? "vez" : "vezes"}</b>{baseCli.ultimaCompra ? <>, última compra em <b>{new Date(baseCli.ultimaCompra).toLocaleDateString("pt-BR")}</b></> : null}</> : null}. Nome, telefone e endereço preenchidos pelo cadastro — confira com o cliente.</div></div>}
           {!ehMkt && (baseCli || f.endereco) && <div className="field full"><label>Endereço do cliente</label><input name="endereco" value={f.endereco} onChange={set("endereco")} placeholder="Rua, número, bairro, cidade" /></div>}

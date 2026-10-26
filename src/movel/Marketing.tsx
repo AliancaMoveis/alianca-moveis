@@ -3,9 +3,10 @@ import { SelRespMkt } from "../comp/RespMkt";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
-import { STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, mesmaPessoa, parseData, soDigitos , numsVenda } from "../lib/regras";
+import { STATUS_CLIENTE, fmtDate, fmtMoeda, hojeISO, isoLocal, mesmaPessoa, parseData, soDigitos, telefonesInvalidos, numsVenda } from "../lib/regras";
 import { useTimeMkt } from "./Gestor";
 import { SeloLitoral } from "../comp/Ticket";
+import { CampoTelefones } from "../comp/Whats";
 import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -165,6 +166,7 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
     if (!tipo) { toast("Escolha o tipo de agendamento"); return; }
     if (!f.cliente.trim()) { toast("Informe o nome do cliente"); return; }
     if (soDigitos(f.telefone).length < 10) { toast("Informe o telefone com DDD"); return; }
+    if (telefonesInvalidos(f.telefone).length) { toast("Telefone incompleto: " + telefonesInvalidos(f.telefone)[0]); return; }
     if (!f.produto.trim()) { toast("Informe o ambiente de interesse"); return; }
     if (direto && !f.dataVisita) { toast("Informe a data e o horário na loja"); return; }
     if (direto && !querProj) { toast("Informe se o cliente quer projeto pronto"); return; }
@@ -201,7 +203,7 @@ export function MktNovo({ pronto }: { pronto: (id: string) => void }) {
     {dups.length > 0 && <div className="mv-aviso">⚠️ Cliente parecido já cadastrado:{dups.map((c: any) => <div key={c.id}><b>{c.cliente}</b> · {c.telefone || "sem telefone"} · {fmtDate(c.criadoEm)}{c.solicitanteId !== R.currentUserId ? " · por " + R.nomeUser(c.solicitanteId) : ""}</div>)}<small>Se for outro assunto, pode registrar — fica ligado ao histórico dele.</small></div>}
     {!souConsultor && <SelRespMkt valor={resp} mudar={setResp} movel />}
     <label className="mv-campo">Nome do cliente *<input value={f.cliente} onChange={set("cliente")} placeholder="Nome completo" autoComplete="off" /></label>
-    <label className="mv-campo">Telefone / WhatsApp *<input type="tel" inputMode="tel" value={f.telefone} onChange={set("telefone")} placeholder="(00) 00000-0000" /></label>
+    <div className="mv-campo">Telefone / WhatsApp *<CampoTelefones valor={f.telefone} movel onChange={v => setF((x: any) => ({ ...x, telefone: v }))} onAviso={toast} /></div>
     <label className="mv-campo">Ambiente de interesse *<input value={f.produto} onChange={set("produto")} placeholder="Ex.: Cozinha planejada" /></label>
     <label className="mv-campo">{direto ? "Data e horário na loja *" : "Data e horário da visita (se já souber)"}<input type="datetime-local" value={f.dataVisita} onChange={set("dataVisita")} /></label>
     {!direto && <label className="mv-campo">Endereço da visita<input value={f.endereco} onChange={set("endereco")} placeholder="Rua, número, bairro, cidade" /></label>}

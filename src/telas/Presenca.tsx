@@ -7,7 +7,7 @@ import { A } from "../lib/acoes";
 import { fmtDate, hojeISO, isoLocal, parseData, STATUS_CLIENTE } from "../lib/regras";
 import { ConfirmarVinda, SeloVinda, vindaConfirmada } from "../comp/Situacao";
 import { SelVendedor, confirmarDisp, registrarIndisp } from "../comp/SelVendedor";
-import { BotaoWhats } from "../comp/Whats";
+import { BotaoWhats, separarTelefones } from "../comp/Whats";
 
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const maisDias = (iso: string, n: number) => { const d = parseData(iso + "T12:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
@@ -93,7 +93,7 @@ function Cartao({ c, porta }: { c: any; porta: boolean }) {
       </div>
       <div className="pres-acoes">
         <button className="btn sm primary" onClick={() => abrirDetalhe(c.id)}>Abrir ficha</button>
-        {c.telefone && <BotaoWhats tel={c.telefone} />}
+        {c.telefone && separarTelefones(c.telefone).map(t => <BotaoWhats key={t} tel={t} rotulo={separarTelefones(c.telefone).length > 1 ? "WhatsApp " + t : "WhatsApp"} />)}
       </div>
     </div>
   );

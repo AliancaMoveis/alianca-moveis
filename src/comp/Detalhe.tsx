@@ -161,7 +161,7 @@ function ClienteCard({ c }: any) {
       <div className="cli-card-sub">{c.clienteDoc ? c.clienteDoc + " · " : ""}{c.id}{R.ehProspeccao(c) ? <span className="pill" style={{ marginLeft: 8, background: "#f3ece2", color: "#7a5324" }}>🧭 Prospecção própria do consultor · sem comissão do marketing</span> : null}</div>
       <div className="cli-card-grid">{itens.map(([k, v]) => <div className="item" key={k}><span className="k">{k}</span><span className="v">{v}</span></div>)}</div>
       <div className="cli-card-acoes">
-        {wa ? <a className="btn wa sm" href={wa} target="_blank" rel="noopener">WhatsApp do cliente</a> : <button className="btn sm" disabled>Sem telefone</button>}
+        {wa ? (() => { const tels = separarTelefones(c.telefone); return tels.length > 1 ? tels.map(t => <a key={t} className="btn wa sm" href={R.waLinkCliente(c, t)} target="_blank" rel="noopener">WhatsApp {t}</a>) : <a className="btn wa sm" href={wa} target="_blank" rel="noopener">WhatsApp do cliente</a>; })() : <button className="btn sm" disabled>Sem telefone</button>}
         {maps && <a className="btn sm" href={maps} target="_blank" rel="noopener">Abrir no Maps</a>}
         {waze && <a className="btn sm" href={waze} target="_blank" rel="noopener">Abrir no Waze</a>}
         {!direto && <RemarcarData c={c} tipo="visita" />}
@@ -1177,7 +1177,7 @@ function FichaPorta({ c }: { c: any }) {
         <div className="mb">
           <div className="ro-note" style={{ marginBottom: 12 }}>Entrou direto na loja — não é do marketing nem de consultor externo. Aparece na agenda da loja, para o vendedor que atendeu e para a Gestão.</div>
           <Row k="Cliente">{c.cliente}</Row>
-          <Row k="Telefone">{c.telefone ? <>{c.telefone} <BotaoWhats tel={c.telefone} /></> : "—"}</Row>
+          <Row k="Telefone">{c.telefone ? <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>{(separarTelefones(c.telefone).length ? separarTelefones(c.telefone) : [c.telefone]).map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{t} <BotaoWhats tel={t} /></span>)}</span> : "—"}</Row>
           <Row k="Chegou na loja">{fmtDateTime(c.dataLoja)}</Row>
           <Row k="Vendedor que atendeu"><b>{c.atendenteId ? R.nomeUser(c.atendenteId) : "—"}</b></Row>
           {c.produto && <Row k="Ambientes">{c.produto}</Row>}
