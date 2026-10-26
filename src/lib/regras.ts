@@ -41,6 +41,18 @@ export function dataRefCliente(c: any): string {
   const v = c && c.venda ? String(c.venda.dataVendaReal || c.venda.dataVenda || c.venda.quando || "").slice(0, 10) : "";
   return v || String((c && (c.dataLoja || c.dataVisita || c.criadoEm)) || "").slice(0, 10);
 }
+/** datas de cada venda lançada no cliente (cada nº conta no seu mês: a 2ª venda de outro mês aparece naquele mês) */
+export function datasVendaCliente(c: any): string[] {
+  const v = c && c.venda; if (!v) return [];
+  if (!Array.isArray(v.itens)) return [String(v.dataVendaReal || v.dataVenda || v.quando || "").slice(0, 10)].filter(Boolean);
+  return v.itens.filter((i: any) => i.status !== "cancelada").map((i: any) => competenciaItem(i.dataVenda, i.decididoEm, i.registradoEm)).filter(Boolean);
+}
+/** o cliente entra no período pela data de referência OU por qualquer venda lançada naquele período */
+export function clienteNoPeriodo(c: any, de?: string, ate?: string): boolean {
+  if (!de && !ate) return true;
+  const ok = (x: string) => !!x && (!de || x >= de) && (!ate || x <= String(ate).slice(0, 10));
+  return ok(dataRefCliente(c)) || datasVendaCliente(c).some(ok);
+}
 /** primeiro e último dia do mês atual (padrão dos filtros de período) */
 export function mesAtual(): { de: string; ate: string } {
   const h = new Date(); const p = (n: number) => String(n).padStart(2, "0");
@@ -869,9 +881,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const meus = state.chamados.filter(c => domMarketing(c) && (ehVend ? c.atendenteId === uid : c.consultorId === uid));
     const ativos = meus.filter(c => ["aguardando_consultor", "direcionado_consultor", "visita_realizada", "agendado_loja", ...EM_ATENDIMENTO].includes(statusClienteDe(c))).length;
     // período (vendas, total e conversão): pela data da venda ou, sem venda, da loja / visita / cadastro
-    const inP = (c: Chamado) => { if (!de && !ate) return true; const d = dataRefCliente(c); return !!d && (!de || d >= de) && (!ate || d <= ate); };
-    const vend = meus.filter(c => vendaContaVolume(c.venda) && inP(c));
-    const total = vend.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
+    const inP = (c: Chamado) => clienteNoPeriodo(c, de, ate);
+    // cada venda conta no mês dela (2ª venda do mesmo cliente em outro mês entra naquele mês)
+    const temPer = !!(de || ate);
+    const vend = meus.filter(c => vendaContaVolume(c.venda) && (temPer ? pagamentosNoPeriodo(c.venda, de || "", ate || "").length > 0 : true));
+    const total = vend.reduce((s, c) => s + (temPer ? valorVendaPeriodo(c.venda, de || "", ate || "") : parseMoeda(c.venda.valor)), 0);
     // conversão: vendas ÷ clientes já decididos (vendidos + os que não compraram)
     const fechados = meus.filter(c => inP(c) && (vendaContaVolume(c.venda) || ["nao_compareceu", "venda_cancelada", "reprovado", "atendido"].includes(statusClienteDe(c)))).length;
     const conv = fechados ? Math.round(vend.length / fechados * 100) : 0;

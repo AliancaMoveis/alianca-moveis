@@ -3,7 +3,7 @@ import { baixarXlsx } from "../lib/planilha";
 import { ModalFerias, podeMarcarFerias, textoFerias } from "../comp/Ferias";
 import { useState } from "react";
 import { useApp } from "../estado";
-import { dataRefCliente, mesAtual, DIAS_SEMANA, TURNOS, STATUS_CLIENTE, VENDA_STATUS, corDoSetor, fmtDate, fmtMoeda, inicial, numsVenda, parseMoeda, temCancelamento, temPendenteGestao, valorPendente, vendaContaComissao, vendaContaVolume } from "../lib/regras";
+import { clienteNoPeriodo, mesAtual, DIAS_SEMANA, TURNOS, STATUS_CLIENTE, VENDA_STATUS, corDoSetor, fmtDate, fmtMoeda, inicial, numsVenda, parseMoeda, temCancelamento, temPendenteGestao, valorPendente, vendaContaComissao, vendaContaVolume } from "../lib/regras";
 import { ScBadge, Ticket } from "../comp/Ticket";
 import { Kpi } from "./Dashboard";
 import { A } from "../lib/acoes";
@@ -23,7 +23,7 @@ export function Pessoas({ qual }: { qual: "vendedores" | "consultores" }) {
   const maxT = Math.max(1, ...dados.map(d => d.total));
   const d = sel ? dados.find(x => x.u.id === sel) : null;
   // clientes do período (pela data da venda / loja / visita) + os que seguem em aberto
-  const arr = d ? R.ordenar(d.meus.filter((c: any) => { const x = dataRefCliente(c); return R.emAberto(c) || (!!x && x >= pde && x <= pate); })) : [];
+  const arr = d ? R.ordenar(d.meus.filter((c: any) => R.emAberto(c) || clienteNoPeriodo(c, pde, pate))) : [];
   return (
     <section className="view active" id={"view-" + qual}>
       <div className="view-head"><div><h2 id={"pesTitulo" + sufixo}>{ehVend ? "Vendedores" : "Consultores externos"}</h2><p id={"pesSub" + sufixo}>{(ehVend ? "Carteira de cada vendedor da loja." : "Carteira de cada consultor externo.") + " Clique num card para ver os clientes."}</p></div></div>
@@ -93,7 +93,7 @@ export function Carteira() {
   };
   // período (padrão: mês atual) vale para o histórico — vendidos, cancelamentos, não comprou e todos; o que está em aberto aparece sempre
   const PEND = ["andamento", "criticos", "semparecer", "semanexo", "aconfirmar", "promissoria"];
-  const noPerC = (c: any) => { const x = dataRefCliente(c); return (!de || x >= de) && (!ate || x <= ate); };
+  const noPerC = (c: any) => clienteNoPeriodo(c, de, ate);
   const t = q.trim().toLowerCase(), dg = t.replace(/\D/g, "");
   const bate = (c: any) => !t || (c.cliente + " " + (c.produto || "") + " " + (c.endereco || "") + " " + c.id + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg));
   const base = d.meus.filter((c: any) => bate(c) && (!stF || sc(c) === stF));
@@ -137,7 +137,7 @@ export function Clientes() {
   const periodo = (k: string) => { const h = iso(hojeS); if (k === "hoje") { setDe(h); setAte(h); } else if (k === "7") { const d = new Date(); d.setDate(d.getDate() - 6); setDe(iso(d)); setAte(h); }
     else if (k === "ant") { setDe(iso(new Date(hojeS.getFullYear(), hojeS.getMonth() - 1, 1))); setAte(iso(new Date(hojeS.getFullYear(), hojeS.getMonth(), 0))); } };
   const base = st.chamados.filter(c => R.domMarketing(c) && R.podeVer(c) && (!orig || R.origemLoja(c) === orig) && (!fVend || (fVend === "__sem" ? !c.atendenteId : c.atendenteId === fVend)) && (!fCons || (fCons === "__sem" ? !c.consultorId : c.consultorId === fCons)))
-    .filter(c => { const x = dataRefCliente(c); return (!de || x >= de) && (!ate || x <= ate); });
+    .filter(c => clienteNoPeriodo(c, de, ate));
   const cont: Record<string, number> = { todos: base.length };
   Object.keys(STATUS_CLIENTE).forEach(k => (cont[k] = base.filter(c => R.statusClienteDe(c) === k).length));
   cont.cancelamentos = base.filter(temCancelamento).length;

@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, comprimir, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import {
-  LITORAL_TXT, litoralDe, EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, PV_DESFECHO, PV_ENCAMINHAR, PV_ORIGEM, PV_REEMB, PV_SITUACAO, pvPrazo, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
+  LITORAL_TXT, litoralDe, EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, competenciaItem, PV_DESFECHO, PV_ENCAMINHAR, PV_ORIGEM, PV_REEMB, PV_SITUACAO, pvPrazo, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
@@ -422,7 +422,7 @@ function Venda({ c }: any) {
         : "Informe cada nº de venda com o valor. Se parte ficou em promissória, lance a promissória com o nº e o valor pendente. A Gestão analisa e confirma."}</div>
       <LinhasVenda linhas={linhas} setLinhas={setLinhas} />
       <div className="grid" style={{ marginTop: 10 }}>
-        <div className="field"><label>Data da venda</label><input type="date" value={f.data || ""} onChange={s("data")} /></div>
+        <div className="field"><label>Data da venda{modo === "adicionar" ? <span className="hint"> (desta nova venda — conta no mês dela)</span> : null}</label><input type="date" value={f.data || ""} onChange={s("data")} /></div>
         <div className="field"><label>Vendedor na loja</label><input placeholder="Nome de quem vendeu" value={f.vendedor || ""} onChange={s("vendedor")} /></div>
         <div className="field"><label>Gerente que negociou <span className="req-star">*</span></label><select id="tVendaGerente" value={f.gerente || ""} onChange={s("gerente")}><option value="">Selecione…</option>{R.gerentesVenda().map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
       </div>
@@ -440,14 +440,16 @@ function Venda({ c }: any) {
       <div className="resp-box" style={{ borderColor: cor }}><h4>Vendas do cliente <span className="badge" style={{ background: cor, color: "#fff" }}>{VENDA_STATUS[vs] || vs}</span></h4>
         <RowSb k={nums.length > 1 ? "Nºs da venda" : "Nº da venda"} pb="5px 0">{nums.join(" · ") || v.numero || "—"}</RowSb>
         {vejaVal && !Array.isArray(v.itens) && <RowSb k="Valor" pb="5px 0" bold>{v.valor ? "R$ " + v.valor : "—"}</RowSb>}
-        <RowSb k="Data da venda" pb="5px 0">{v.dataVendaReal ? fmtDate(v.dataVendaReal) : v.dataVenda ? fmtDate(v.dataVenda) : "—"}{v.dataVendaReal && v.dataVendaReal !== v.dataVenda ? <span className="pill" style={{ marginLeft: 6 }}>aprovada depois · conta em {fmtDate(v.dataVenda).slice(3)}</span> : null}</RowSb>
+        {Array.isArray(v.itens) && new Set(itensVenda(v).filter((i: any) => i.tipo !== "pagamento" && i.status !== "cancelada").map((i: any) => i.dataVenda)).size > 1
+          ? <RowSb k="Data de cada venda" pb="5px 0"><span style={{ display: "flex", flexDirection: "column", gap: 2 }}>{itensVenda(v).filter((i: any) => i.tipo !== "pagamento" && i.status !== "cancelada").map((i: any) => { const cp = competenciaItem(i.dataVenda, i.decididoEm, i.registradoEm); return <span key={i.numero}>nº {i.numero} · {i.dataVenda ? fmtDate(i.dataVenda) : "—"}{cp && i.dataVenda && cp.slice(0, 7) !== String(i.dataVenda).slice(0, 7) ? <span className="pill" style={{ marginLeft: 6 }}>conta em {fmtDate(cp).slice(3)}</span> : null}{i.status === "registrada" ? <span className="hint"> · aguardando Gestão</span> : null}</span>; })}</span></RowSb>
+          : <RowSb k="Data da venda" pb="5px 0">{v.dataVendaReal ? fmtDate(v.dataVendaReal) : v.dataVenda ? fmtDate(v.dataVenda) : "—"}{v.dataVendaReal && v.dataVendaReal !== v.dataVenda ? <span className="pill" style={{ marginLeft: 6 }}>aprovada depois · conta em {fmtDate(v.dataVenda).slice(3)}</span> : null}</RowSb>}
         <RowSb k="Vendedor na loja" pb="5px 0">{v.vendedor || v.atendenteNome || "—"}</RowSb>
         <RowSb k="Gerente que negociou" pb="5px 0">{v.gerenteNome || "—"}</RowSb>
         {vejaVal && <Promissorias c={c} />}
         {nota}
         {R.ehGestao() && pendG > 0 && <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--primary)" }}><h4>Validar lançamentos</h4><ValidarVenda c={c} /></div>}
         {podeRegistrar && <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn sm" onClick={() => { setLinhas(linhasDoTipo("")); setModo("adicionar"); }}>＋ Adicionar venda / promissória</button>
+          <button className="btn sm" onClick={() => { setLinhas(linhasDoTipo("")); setF((x: any) => ({ ...x, data: hojeISO() })); setModo("adicionar"); }}>＋ Adicionar venda / promissória</button>
           {tudoPendente && <button className="btn ghost sm" onClick={() => { setLinhas(itensAtuais()); setModo("corrigir"); }}>Corrigir dados da venda</button>}
         </div>}
         {R.ehGestao() && nums.length === 1 && (

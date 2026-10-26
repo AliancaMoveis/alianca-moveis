@@ -1,7 +1,7 @@
 // Filtro de período das listas de clientes do app (consultor, vendedor, marketing):
 // vendidos, resultados e "todos" deixam de misturar meses — padrão: este mês.
 import { useState } from "react";
-import { dataRefCliente, hojeISO, isoLocal, parseData } from "../lib/regras";
+import { clienteNoPeriodo, dataRefCliente, hojeISO, isoLocal, parseData } from "../lib/regras";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 export type Periodo = { tipo: "mes" | "ant" | "datas" | "tudo"; de: string; ate: string };
@@ -19,7 +19,7 @@ export function usePeriodo() {
 }
 
 export const dataRef = dataRefCliente;
-export const noPeriodo = (p: Periodo, c: any) => { if (p.tipo === "tudo") return true; const d = dataRef(c); return !!d && d >= p.de && d <= p.ate; };
+export const noPeriodo = (p: Periodo, c: any) => p.tipo === "tudo" || clienteNoPeriodo(c, p.de, p.ate);
 
 export function FiltroPeriodo({ p, setP }: { p: Periodo; setP: (p: Periodo) => void }) {
   const m0 = mes(0), m1 = mes(1);
