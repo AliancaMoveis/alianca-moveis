@@ -319,7 +319,13 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const doCC = (c: Chamado) => !domMarketing(c) && !TIPOS_FORA_CC.includes(c.tipo);
 
   function normalizarStatusCliente(c: Chamado) {
-    if (c.venda && c.venda.status) return VENDA_TO_CLIENTE[c.venda.status] || c.statusCliente;
+    if (c.venda && c.venda.status) {
+      // venda em análise da Gestão, mas informada como promissória: mostra 100% promissória / entrada + promissória (não "a confirmar")
+      const ti = (c.venda as any).tipoInformado, sc = String(c.statusCliente || "");
+      if (c.venda.status === "registrada" && (ti === "promissoria" || ti === "entrada" || sc === "vendido_promissoria" || sc === "vendido_entrada"))
+        return ti === "entrada" || (ti !== "promissoria" && sc === "vendido_entrada") ? "vendido_entrada" : "vendido_promissoria";
+      return VENDA_TO_CLIENTE[c.venda.status] || c.statusCliente;
+    }
     if (c.statusCliente === "nao_compareceu") return "nao_compareceu";
     if (c.setorDestino === "marketing_supervisao") return c.statusCliente === "visita_cancelada" ? "visita_cancelada" : "aguardando_consultor";
     if (c.setorDestino === "consultor_externo") return SITUACOES_CONSULTOR.includes(c.statusCliente) ? c.statusCliente : (c.tratativa && c.tratativa.realizada) ? "visita_realizada" : "direcionado_consultor";

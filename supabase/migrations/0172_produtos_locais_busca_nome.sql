@@ -33,3 +33,7 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- Escala ABC v2: config.escala_domingos {inicio, fechados, manual, mapa}; _vend_folga_em usa o mapa (loja fechada = folga de todos).
 -- Pré-pedido liberado para vendedores, gerentes e Gestão; status 'arquivado'.
 -- Negociação: pre_pedidos.neg_*; pode_negociacao, pre_pedido_negociar, negociacao_lista, negociacao_salvar. Itens Promob (itens[].promob).
+
+-- Status do cliente com venda em análise informada como promissória: status_cliente_de devolve vendido_promissoria / vendido_entrada
+-- (pelo tipo_informado da venda ou pelo status escolhido) em vez de vendido_revisao; alterar_status_cliente grava o tipo escolhido
+-- em vendas.tipo_informado enquanto a venda está registrada. Dados: ALM-3252 (Jocélia) corrigida para tipo_informado = promissoria.
