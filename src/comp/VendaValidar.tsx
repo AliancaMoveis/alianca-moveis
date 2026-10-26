@@ -27,7 +27,10 @@ export function conferirLinhas(linhas: Linha[]): { itens?: any[]; erro?: string 
 }
 
 // editor de linhas: nºs pagos (+ outro nº) e promissórias (+ promissória)
-export function LinhasVenda({ linhas, setLinhas }: { linhas: Linha[]; setLinhas: (f: (l: Linha[]) => Linha[]) => void }) {
+// pedirTipo: ao lançar outra venda no cliente, escolhe primeiro o que é (venda paga, promissória ou entrada + promissória)
+export function LinhasVenda({ linhas, setLinhas, pedirTipo }: { linhas: Linha[]; setLinhas: (f: (l: Linha[]) => Linha[]) => void; pedirTipo?: boolean }) {
+  const [esc, setEsc] = useState<string>(pedirTipo ? "" : "livre");
+  const escolher = (t: string) => { setEsc(t); setLinhas(() => linhasDoTipo(t === "pago" ? "" : t)); };
   const set = (i: number, k: keyof Linha, v: string) => setLinhas(l => l.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   const tira = (i: number) => setLinhas(l => l.filter((_, j) => j !== i));
   const pago = linhas.filter(l => l.tipo === "pago").reduce((s, l) => s + parseMoeda(l.valor), 0);
@@ -45,9 +48,15 @@ export function LinhasVenda({ linhas, setLinhas }: { linhas: Linha[]; setLinhas:
       <button type="button" className="btn ghost sm" onClick={() => setLinhas(l => [...l, linhaVazia(tipo)])}>{tipo === "pago" ? "＋ outro nº de venda" : "＋ promissória"}</button>
     </div>;
   };
+  const OPS: [string, string, string][] = [["pago", "💵 Venda paga", "à vista / pago"], ["promissoria", "📄 Promissória", "valor que falta pagar"], ["entrada", "💵 + 📄 Entrada + promissória", "parte paga, parte pendente"]];
   return <div className="lv">
-    {bloco("pago")}
-    {bloco("promissoria")}
+    {pedirTipo && <div style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>O que você vai lançar? <span className="req-star">*</span></div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{OPS.map(([k, l, d]) => <button key={k} type="button" className={"btn sm" + (esc === k ? " primary" : " ghost")} onClick={() => escolher(k)} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.2 }}><b>{l}</b><small style={{ fontWeight: 400, opacity: .8 }}>{d}</small></button>)}</div>
+    </div>}
+    {pedirTipo && !esc ? <div className="hint" style={{ fontSize: 12.5 }}>Escolha acima se é venda paga ou promissória.</div> : <>
+    {esc !== "promissoria" && bloco("pago")}
+    {esc !== "pago" && bloco("promissoria")}</>}
     <div className="lv-tot">Pago <b>{fmtMoeda(pago)}</b> · Promissória <b>{fmtMoeda(prom)}</b> · Total <b>{fmtMoeda(pago + prom)}</b></div>
   </div>;
 }

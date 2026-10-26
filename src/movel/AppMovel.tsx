@@ -574,7 +574,7 @@ function AcoesVendedor({ c }: any) {
     <div className="mv-ok">✓ Venda registrada <SeloVenda c={c} /></div>
     {!add ? <button className="btn sm" onClick={() => { setLinhas(linhasDoTipo("")); setAdd(true); }}>＋ Adicionar venda / promissória</button> : <>
       <div className="mv-bloco-t" style={{ marginTop: 8 }}>Outro nº de venda deste cliente</div>
-      <LinhasVenda linhas={linhas} setLinhas={setLinhas} />{selGer}
+      <LinhasVenda linhas={linhas} setLinhas={setLinhas} pedirTipo />{selGer}
       <div className="mv-2"><button className="mv-principal" onClick={() => lancar(false)}>Lançar venda</button><button className="mv-op" onClick={() => setAdd(false)}>Cancelar</button></div>
     </>}
   </div>;

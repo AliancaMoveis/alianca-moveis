@@ -420,7 +420,7 @@ function Venda({ c }: any) {
       <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 12 }}>{modo === "adicionar"
         ? "Lance aqui outro nº de venda deste mesmo cliente (nova compra, novo pagamento ou promissória). A Gestão analisa e confirma."
         : "Informe cada nº de venda com o valor. Se parte ficou em promissória, lance a promissória com o nº e o valor pendente. A Gestão analisa e confirma."}</div>
-      <LinhasVenda linhas={linhas} setLinhas={setLinhas} />
+      <LinhasVenda key={modo} linhas={linhas} setLinhas={setLinhas} pedirTipo={modo === "adicionar"} />
       <div className="grid" style={{ marginTop: 10 }}>
         <div className="field"><label>Data da venda{modo === "adicionar" ? <span className="hint"> (desta nova venda — conta no mês dela)</span> : null}</label><input type="date" value={f.data || ""} onChange={s("data")} /></div>
         <div className="field"><label>Vendedor na loja</label><input placeholder="Nome de quem vendeu" value={f.vendedor || ""} onChange={s("vendedor")} /></div>
