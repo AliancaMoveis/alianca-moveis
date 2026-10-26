@@ -81,7 +81,7 @@ export function ValidarVenda({ c, onFeito }: { c: any; onFeito?: () => void }) {
           </span>
         </div>)}
       </div>
-      <div style={{ fontSize: 12, color: "var(--ink-soft)", margin: "8px 0" }}><b>Venda paga</b>: ao efetivar, conta como venda e gera comissão no mês da aprovação. <b>Promissória</b>: ao confirmar, fica como <b>valor pendente</b> — não conta como venda nem gera comissão. Quando o cliente pagar, use "💰 Registrar pagamento" na promissória: o valor pago vira venda efetivada.</div>
+      <div style={{ fontSize: 12, color: "var(--ink-soft)", margin: "8px 0" }}><b>Venda paga</b>: ao efetivar, conta como venda e gera comissão no mês da aprovação. <b>Promissória</b>: ao confirmar, fica como <b>valor pendente</b> — não conta como venda nem gera comissão. Depois de confirmada, use "✅ Efetivar promissória" (dá como paga inteira, hoje) ou "💰 Registrar pagamento" (parcial, outro nº ou outra data): o valor pago vira venda efetivada.</div>
       {pend.length > 1 && <button className="btn primary sm" onClick={() => decidir(pend.map((i: any) => ({ id: i.id, status: "efetivada" })), pend.length + " nº(s) efetivado(s)")}>✅ Efetivar todos ({pend.length})</button>}
     </div>
   );
@@ -107,6 +107,11 @@ export function Promissorias({ c }: { c: any }) {
     if (val <= 0 || val > saldo + 0.001) { toast("Valor inválido (até " + fmtMoeda(saldo) + ")"); return; }
     if (!pg.numero.trim()) { toast("Informe o nº da venda do pagamento"); return; }
     if (await ex(() => A.quitarPromissoria(p.id, val, pg.numero.trim(), pg.data), val < saldo - 0.001 ? "Pagamento registrado — ainda pendente " + fmtMoeda(saldo - val) : "Promissória quitada")) setPagando("");
+  };
+  // efetivar de uma vez: quita o saldo inteiro hoje, com o próprio nº da promissória → vira venda efetivada (conta no mês de hoje)
+  const efetivarProm = (p: any, saldo: number) => {
+    if (!confirm("EFETIVAR a promissória nº " + p.numero + " (" + fmtMoeda(saldo) + ")?\nEla passa a contar como venda efetivada hoje e gera a comissão.")) return;
+    ex(() => A.quitarPromissoria(p.id, saldo, p.numero, hoje), "Promissória " + p.numero + " efetivada");
   };
   const salvarCorr = async (i: any) => {
     if (!cf.numero.trim() || parseMoeda(cf.valor) <= 0) { toast("Informe nº e valor"); return; }
@@ -143,6 +148,7 @@ export function Promissorias({ c }: { c: any }) {
             <small>{i.status === "registrada" ? "⏳ a confirmar pela Gestão" : i.status === "cancelada" ? "cancelada"
               : i.tipo === "promissoria" ? (aberta ? "pendente " + fmtMoeda(saldo) + (i.valorPago > 0 ? " · pago " + fmtMoeda(i.valorPago) : "") + (i.vencimento ? (vencida ? " · ⚠️ venceu " : " · vence ") + fmtDate(i.vencimento) : "") : "✓ quitada")
               : "✓ paga" + (i.dataVenda ? " · " + fmtDate(i.dataVenda) : "")}</small>
+            {aberta && G && pagando !== i.id && <button className="btn primary sm" title="Dá a promissória como paga (saldo inteiro, hoje) e ela vira venda efetivada neste mês" onClick={() => efetivarProm(i, saldo)}>✅ Efetivar promissória</button>}
             {aberta && G && pagando !== i.id && <button className="btn sm" onClick={() => { setPagando(i.id); setPg({ valor: fmt(saldo), numero: "", data: hoje }); }}>💰 Registrar pagamento</button>}
             {acoesG(i)}
           </div>

@@ -37,3 +37,6 @@ update public.setores set lib_cadastros = true where id = 'produtos';
 -- Status do cliente com venda em análise informada como promissória: status_cliente_de devolve vendido_promissoria / vendido_entrada
 -- (pelo tipo_informado da venda ou pelo status escolhido) em vez de vendido_revisao; alterar_status_cliente grava o tipo escolhido
 -- em vendas.tipo_informado enquanto a venda está registrada. Dados: ALM-3252 (Jocélia) corrigida para tipo_informado = promissoria.
+-- "✅ Efetivar promissória" (Gestão): quitar_promissoria com o saldo inteiro, o próprio nº e a data de hoje.
+-- alterar_status_cliente → vendido_promissoria com tudo ainda em análise: itens "pago" registrados viram "promissoria".
+-- Dados: ALM-3252 nº 1315884 convertido para promissória.
