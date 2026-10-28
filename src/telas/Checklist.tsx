@@ -196,9 +196,9 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
         return;
       }
       // planilha de agendados: mostra antes quem é novo, quem tem mais de um dia e quem já está no 360
-      // checklist já feito (realizado, desistiu ou agendado com todos os dias no passado) fica como está; um novo agendamento da mesma venda entra como novo
-      const ultima = (c: any) => [ck(c).agendadoPara, ...((ck(c).diasExtras || []) as any[]).map((e: any) => e.data)].filter(Boolean).map((x: string) => String(x).slice(0, 10)).sort().pop() || "";
-      const feito = (c: any) => c.status === "concluida" || ["realizado", "desistiu"].includes(etapaCk(c)) || (etapaCk(c) === "agendado" && ultima(c) < hj);
+      // checklist encerrado (concluído, realizado ou desistiu) fica como está; um novo agendamento da mesma venda entra como novo.
+      // agendado com data passada e não realizado NÃO conta como feito: a planilha só corrige a data dele (nunca cria outro checklist)
+      const feito = (c: any) => c.status === "concluida" || ["realizado", "desistiu"].includes(etapaCk(c));
       const doCk = st.chamados.filter((c: any) => c.tipo === "checklist");
       const jaTem = new Set(doCk.filter((c: any) => !feito(c)).map((c: any) => String(c.pedido)));
       const refeitos = new Set(doCk.filter(feito).map((c: any) => String(c.pedido)));
@@ -207,7 +207,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       const agendados = dados.filter(d => d.agendadoPara);
       const futuros = agendados.filter(d => !passados.includes(d));
       const dias = await A.checklistAgendadosPlanilha(agendados, false, true, true);
-      setModal(<ModalAgendados dados={agendados} futuros={futuros} passados={passados.length} semData={dados.length - agendados.length} prev={dias} novos={futuros.filter(d => !jaTem.has(String(d.numero || "").replace(/\D/g, ""))).map(d => ({ ...d, refeito: refeitos.has(String(d.numero || "").replace(/\D/g, "")) }))} />);
+      setModal(<ModalAgendados dados={agendados} futuros={futuros} passados={passados.length} semData={dados.length - agendados.length} prev={dias} novos={futuros.filter(d => !jaTem.has(String(d.numero || "").replace(/\D/g, "")) && !(dias.listaDuplicados || []).some((x: string) => x.includes(" · venda " + String(d.numero || "").replace(/\D/g, "") + " "))).map(d => ({ ...d, refeito: refeitos.has(String(d.numero || "").replace(/\D/g, "")) }))} />);
     } catch (e: any) { toast(e.message || "Não foi possível importar"); }
     finally { setImportando(false); if (arq.current) arq.current.value = ""; }
   }
@@ -293,6 +293,9 @@ function CartaoCk({ c, aba }: any) {
             {querEnc(c) && <button type="button" className="pill" onClick={() => setModal(<ModalQuerEncaixe c={c} />)} title={"Pedido em " + fmtDate(querEnc(c).em) + (querEnc(c).por ? " por " + querEnc(c).por : "") + (querEnc(c).obs ? "\n" + querEnc(c).obs : "") + "\nClique para encerrar"}
               style={{ background: "var(--danger)", color: "#fff", fontWeight: 800, border: 0, cursor: "pointer" }}>❗ SOLICITA ENCAIXE · desde {fmtDate(querEnc(c).em)}{diasDesde(querEnc(c).em) ? " (há " + diasDesde(querEnc(c).em) + "d)" : ""}{querEnc(c).obs ? " · " + String(querEnc(c).obs).slice(0, 40) : ""}</button>}
             {(g === "agendar" || e === "aguardando") && (() => { const sg = durSugeridaCk(c); return <span className="pill" style={{ fontWeight: 700 }} title={sg.cupom ? "Cupom " + fmtBRL(sg.cupom) + " → sugerido " + fmtDur(sg.min) : "Sem valor de cupom na planilha"}>⏱ {fmtDur(Number(k.duracaoMin) || sg.min)}{k.duracaoMin ? "" : sg.cupom ? " sugerido" : " (sem cupom)"}{Array.isArray(k.propostaDiasExtras) && k.propostaDiasExtras.length ? " · " + (k.propostaDiasExtras.length + 1) + " dias" : ""}</span>; })()}
+            {c.status !== "concluida" && (k.foraPlanilhaAgendados || k.foraPlanilhaAgendar || k.restauradoConferir) && <span className="pill" style={{ background: "var(--warn)", color: "#fff", fontWeight: 800 }}
+              title={(k.foraPlanilhaAgendados ? "Não veio na planilha de agendados (" + fmtDate(k.foraPlanilhaAgendados) + ") — continua agendado.\n" : "") + (k.foraPlanilhaAgendar ? "Não veio na planilha a agendar (" + fmtDate(k.foraPlanilhaAgendar) + ") — mantido porque já foi trabalhado.\n" : "") + (k.restauradoConferir ? "Tinha saído da agenda pela planilha e foi devolvido" + (k.agendaAnterior ? " (estava para " + fmtDateTime(k.agendaAnterior) + ")" : "") + ".\n" : "") + "Confira com o cliente. Veja o histórico."}>🔎 CONFERIR</span>}
+            {Array.isArray(k.outrasVendas) && k.outrasVendas.length > 0 && <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 800 }} title="A planilha trouxe outra venda deste mesmo cliente — não foi criado outro checklist. Se for duplicidade, nada a fazer; se for venda nova, faça o checklist junto.">👥 outra venda: {k.outrasVendas.join(", ")}</span>}
             {e === "aguardando" && <span>oferecido {fmtDateTime(k.proposta)} · {k.contatos || 1}º contato · há {diasDesde(k.ultimoContato)}d</span>}
             {venc && <span className="pill" style={{ background: "#9a3412", color: "#fff", fontWeight: 800 }} title={"O cliente tinha " + segura + " dia(s) para responder. O horário continua reservado até alguém liberar ou renovar."}>⚠️ Prazo vencido{atrasoV > 0 ? " há " + atrasoV + " dia" + (atrasoV > 1 ? "s" : "") : ""}</span>}
             {g === "agendado" && Array.isArray(k.diasExtras) && k.diasExtras.length > 0 && <span className="pill" title={k.diasExtras.map((e: any) => fmtDateTime(e.data) + " · " + e.projetista).join("\n")}>📆 {k.diasExtras.length + 1} dias</span>}
@@ -809,8 +812,8 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
   const { setModal, toast, recarregar } = useApp() as any;
   const [sal, setSal] = useState(false); const [ver, setVer] = useState("");
   const [trocar, setTrocar] = useState(true);
-  // quem saiu da planilha de agendados cancelou: sai da agenda (volta para a agendar). Se parecer planilha incompleta (mais da metade sumiu), vem desmarcado.
-  const [liberar, setLiberar] = useState(!prev.alertaLiberar);
+  // quem não veio na planilha de agendados NUNCA sai da agenda por aqui: só fica marcado para conferir (cancelamento é feito na ficha)
+  const [liberar, setLiberar] = useState(true);
   // a planilha é a agenda oficial: quem está em outra data no 360 é readequado (padrão: sim)
   const [corrigir, setCorrigir] = useState(true);
   const fechar = () => setModal(null);
@@ -824,7 +827,7 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
       const r = await A.checklistImportar(futuros);
       const d = await A.checklistAgendadosPlanilha(dados, true, trocar, corrigir, liberar);
       await recarregar(); fechar();
-      toast(`${r.novos} novo(s) · ${d.agendar} passaram para agendado · ${d.projetista} com projetista atualizado` + (liberar && d.liberar ? ` · ${d.liberar} saíram da agenda (não estão na planilha)` : ""));
+      toast(`${r.novos} novo(s) · ${d.agendar} passaram para agendado · ${d.projetista} com projetista atualizado` + (d.liberar ? ` · ${d.liberar} continuam agendados, marcados para conferir` : "") + (r.duplicados ? ` · ${r.duplicados} possível(is) duplicidade(s) não subiram` : ""));
     } catch (x: any) { toast(x.message); setSal(false); }
   }
   const L = ({ n, t, cor, lista, id }: any) => <>
@@ -843,7 +846,8 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
       <L id="p" n={prev.projetista} t="já agendados com projetista diferente (ou sem) da coluna Agenda → atualiza só o projetista" cor="var(--primary)" lista={prev.listaProjetista} />
       <L id="m" n={prev.maisDias} t="já agendados que ganham DIA(S) NOVO(S) da planilha (ex.: continua em outra data)" cor="var(--st-respondida)" lista={prev.listaMaisDias} />
       <L id="d" n={prev.diferentes} t={corrigir ? "agendados no 360 em OUTRA DATA → passam para a data da planilha" : "já agendados no 360 em outra data — não mudam (só para conferir)"} cor="var(--warn)" lista={prev.listaDiferentes} />
-      <L id="l" n={prev.liberar} t={liberar ? "agendados no 360 que NÃO estão mais na planilha (cancelaram) → SAEM DA AGENDA e voltam para a agendar" : "agendados no 360 que não estão na planilha — ficam na agenda (só para conferir)"} cor={liberar ? "var(--danger)" : "var(--ink-soft)"} lista={prev.listaLiberar} />
+      <L id="dup" n={(prev.listaDuplicados || []).length} t={<><b>MESMO CLIENTE</b> (nome ou telefone) já tem checklist aberto com <b>outra venda</b> → <b>NÃO sobem</b>. Se for duplicidade, não faça nada; se for venda nova, o checklist normalmente é feito junto — confira na ficha do cliente</>} cor="var(--danger)" lista={prev.listaDuplicados} />
+      <L id="l" n={prev.liberar} t="agendados no 360 que não vieram na planilha → CONTINUAM NA AGENDA e ficam marcados “conferir” (se o cliente cancelou, desmarque na ficha)" cor="var(--warn)" lista={prev.listaLiberar} />
       <L id="v" n={varios.length} t={<>linhas com <b>mais de um dia</b> (cada data = um dia, cada nome da Agenda = um dia)</>} lista={varios.map(d => `${d.cliente} · venda ${d.numero} — ${dias(d)}`)} />
       {(prev.desconhecidos || []).length > 0 && <div className="hint" style={{ color: "var(--warn)", marginTop: 8 }}>⚠️ Nomes na coluna Agenda que não são projetistas da agenda (ficam sem projetista): <b>{prev.desconhecidos.join(", ")}</b></div>}
       {passados > 0 && <div className="hint" style={{ marginTop: 8, fontWeight: 600 }}>⏭ {passados} linha(s) com data <b>passada</b> ficaram de fora — só entram agendamentos de hoje em diante (não criam cliente nem mudam nada no 360).</div>}
@@ -852,9 +856,8 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
       <div style={{ marginTop: 10, padding: 10, background: "var(--surface-2)", borderRadius: 10 }}>
         <Chk v={trocar} set={setTrocar}>Atualizar o <b>projetista</b> dos já agendados conforme a coluna <b>Agenda</b></Chk>
         {prev.diferentes > 0 && <Chk v={corrigir} set={setCorrigir}>Readequar no 360 os <b>{prev.diferentes}</b> agendados em <b>outra data</b> conforme a planilha</Chk>}
-        {prev.liberar > 0 && <Chk v={liberar} set={setLiberar}>Tirar da agenda os <b>{prev.liberar}</b> que <b>não estão na planilha</b> (cancelaram) — voltam para "a agendar"</Chk>}
-        {prev.liberar > 0 && prev.alertaLiberar && <div className="hint" style={{ color: "var(--danger)", fontWeight: 700 }}>⚠️ Mais da metade dos agendados não está nesta planilha — confira se ela está completa antes de tirar da agenda.</div>}
-        <div className="hint" style={{ marginTop: 8 }}>A planilha é a <b>agenda oficial</b>: entra quem é novo, os já agendados ganham os <b>dias novos</b> da planilha, quem está em <b>outra data</b> é readequado e quem <b>saiu da planilha</b> sai da agenda (você pode desmarcar acima). Checklist <b>já realizado</b> nunca é substituído: se a venda voltar com data nova, entra um agendamento novo e o anterior fica.</div>
+        {prev.liberar > 0 && <Chk v={liberar} set={setLiberar}>Marcar para <b>conferir</b> os <b>{prev.liberar}</b> agendados que não vieram na planilha (eles <b>não saem</b> da agenda)</Chk>}
+        <div className="hint" style={{ marginTop: 8 }}>A planilha é a <b>agenda oficial</b>: entra quem é novo, os já agendados ganham os <b>dias novos</b> da planilha, quem está em <b>outra data</b> é readequado e quem <b>não veio na planilha continua agendado</b>, só marcado para conferir. Venda que já está no checklist (mesmo com data passada) nunca gera outro checklist. Checklist <b>já realizado</b> nunca é substituído: se a venda voltar com data nova, entra um agendamento novo e o anterior fica.</div>
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
         <button className="btn" onClick={fechar}>Cancelar</button>
@@ -873,7 +876,7 @@ function ModalSincronizar({ dados, prev }: { dados: any[]; prev: any }) {
     try {
       const r = await A.checklistSincronizar(dados, true, forcar);
       await recarregar(); fechar();
-      toast(`Base atualizada: ${r.novos} novo(s) · ${r.agendar} passaram para agendado · ${r.excluir} excluído(s)`);
+      toast(`Base atualizada: ${r.novos} novo(s) · ${r.agendar} passaram para agendado · ${r.excluir} excluído(s)` + (r.conferir ? ` · ${r.conferir} mantidos para conferir` : "") + (r.duplicados ? ` · ${r.duplicados} possível(is) duplicidade(s) não subiram` : ""));
     } catch (x: any) { toast(x.message); setSal(false); }
   }
   const L = ({ n, t, cor }: any) => <div style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "6px 0", borderBottom: "1px solid var(--line-soft)" }}><b style={{ fontSize: 20, minWidth: 48, textAlign: "right", color: cor }}>{n}</b><span>{t}</span></div>;
@@ -882,11 +885,15 @@ function ModalSincronizar({ dados, prev }: { dados: any[]; prev: any }) {
       <L n={prev.novos} t="clientes novos vão entrar" cor="var(--st-concluida)" />
       <L n={prev.mantidos} t="já estão no 360 — ficam como estão (obras, anotações e contatos são mantidos)" />
       <L n={prev.agendar} t="não estão mais na planilha, mas já tinham data oferecida → passam para AGENDADO" cor="var(--st-respondida)" />
-      <L n={prev.excluir} t="não estão mais na planilha e não foram agendados (venda cancelada / saiu do checklist) → serão EXCLUÍDOS" cor="var(--danger)" />
+      {(prev.duplicados || 0) > 0 && <L n={prev.duplicados} t={<><b>MESMO CLIENTE</b> (nome ou telefone) já tem checklist aberto com <b>outra venda</b> → <b>NÃO sobem</b> (duplicidade ou venda nova que faz checklist junto — confira)</>} cor="var(--danger)" />}
+      <L n={prev.excluir} t="não estão mais na planilha e NUNCA foram trabalhados (sem contato, nota ou retorno) → serão EXCLUÍDOS" cor="var(--danger)" />
+      {(prev.conferir || 0) > 0 && <L n={prev.conferir} t="não estão mais na planilha, mas já tiveram contato / estão esperando resposta → FICAM e são marcados “conferir”" cor="var(--warn)" />}
       {prev.comMedida > 0 && <L n={prev.comMedida} t="também saíram da planilha, mas têm medida em andamento — ficam até a medida ser concluída" />}
-      {(prev.excluir > 0 || prev.agendar > 0) && <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => setVer(v => !v)}>{ver ? "Esconder nomes" : "Ver nomes"}</button>}
+      {(prev.excluir > 0 || prev.agendar > 0 || prev.conferir > 0 || prev.duplicados > 0) && <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => setVer(v => !v)}>{ver ? "Esconder nomes" : "Ver nomes"}</button>}
       {ver && <div style={{ maxHeight: 220, overflow: "auto", fontSize: 12.5, marginTop: 6, padding: 8, background: "var(--surface-2)", borderRadius: 8 }}>
         {prev.listaAgendar.length > 0 && <><b>Passam para agendado:</b><ul style={{ margin: "4px 0 8px", paddingLeft: 18 }}>{prev.listaAgendar.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
+        {(prev.listaDuplicados || []).length > 0 && <><b style={{ color: "var(--danger)" }}>Mesmo cliente — não sobem:</b><ul style={{ margin: "4px 0 8px", paddingLeft: 18 }}>{prev.listaDuplicados.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
+        {(prev.listaConferir || []).length > 0 && <><b style={{ color: "var(--warn)" }}>Ficam (já trabalhados) — conferir:</b><ul style={{ margin: "4px 0 8px", paddingLeft: 18 }}>{prev.listaConferir.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
         {prev.listaExcluir.length > 0 && <><b style={{ color: "var(--danger)" }}>Serão excluídos:</b><ul style={{ margin: "4px 0", paddingLeft: 18 }}>{prev.listaExcluir.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
       </div>}
       <div className="hint" style={{ marginTop: 8 }}>Clientes já agendados, realizados ou encerrados não são alterados.</div>
