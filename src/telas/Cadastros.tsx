@@ -11,17 +11,20 @@ import Senha from "../comp/Senha";
 export function Cadastros() {
   const { st, executar, setModal } = useApp();
   const [sub, setSub] = useState("fabricas");
+  // sempre em ordem alfabética (ignora acento, maiúscula e espaço no começo); "não informado" vai para o fim
+  const alfa = (a: any, b: any) => (/n[aã]o informad/i.test(a.nome) ? 1 : 0) - (/n[aã]o informad/i.test(b.nome) ? 1 : 0) || String(a.nome || "").trim().localeCompare(String(b.nome || "").trim(), "pt-BR", { sensitivity: "base", numeric: true });
+  const fabricas = [...st.fabricas].sort(alfa), representantes = [...st.representantes].sort(alfa);
   return (
     <section className="view active" id="view-cadastros">
       <div className="view-head"><div><h2>Fábricas</h2><p>Fábricas e representantes. O representante pode atender várias fábricas e é dele que sai o botão de WhatsApp no chamado. Visível apenas para Supervisão e Gestão.</p></div></div>
       <div className="subnav" id="subnav"><button className={sub === "fabricas" ? "on" : ""} onClick={() => setSub("fabricas")}>Fábricas</button><button className={sub === "reps" ? "on" : ""} onClick={() => setSub("reps")}>Representantes</button></div>
       {sub === "fabricas" && <div id="subFabricas"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditFab id={null} />)}>Adicionar fábrica</button></div>
-        <div id="listaFab">{st.fabricas.length ? st.fabricas.map(f => { const r = st.representantes.find(x => x.id === f.repId); return (
+        <div id="listaFab">{fabricas.length ? fabricas.map(f => { const r = st.representantes.find(x => x.id === f.repId); return (
           <div className="fab" key={f.id}><div className="fi">{inicial(f.nome)}</div><div><div className="fn">{f.nome}</div><div className="fc">{f.emails || "sem e-mail"} · Rep.: {r ? r.nome : "—"}</div></div>
             <div className="sp"><button className="btn ghost sm" onClick={() => setModal(<EditFab id={f.id} />)}>Editar</button><button className="btn danger sm" onClick={() => executar(() => A.removerFabrica(f.id), "Fábrica removida")}>Remover</button></div></div>); })
           : <div className="empty">Nenhuma fábrica.</div>}</div></div>}
       {sub === "reps" && <div id="subReps"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditRep id={null} />)}>Adicionar representante</button></div>
-        <div id="listaRep">{st.representantes.length ? st.representantes.map(r => { const nf = st.fabricas.filter(f => f.repId === r.id).length; return (
+        <div id="listaRep">{representantes.length ? representantes.map(r => { const nf = st.fabricas.filter(f => f.repId === r.id).length; return (
           <div className="fab" key={r.id}><div className="fi">{inicial(r.nome)}</div><div><div className="fn">{r.nome}</div><div className="fc">{r.whats ? "WhatsApp " + r.whats : "sem WhatsApp"}{r.email ? " · " + r.email : ""} · {nf} fábrica(s)</div></div>
             <div className="sp"><button className="btn ghost sm" onClick={() => setModal(<EditRep id={r.id} />)}>Editar</button><button className="btn danger sm" onClick={() => executar(() => A.removerRepresentante(r.id), "Representante removido")}>Remover</button></div></div>); })
           : <div className="empty">Nenhum representante.</div>}</div></div>}
@@ -38,7 +41,7 @@ export function EditFab({ id }: { id: string | null }) {
     <Modal titulo={id ? "Editar fábrica" : "Nova fábrica"} onFechar={fechar}>
       <div className="field" style={{ marginBottom: 14 }}><label>Nome <span className="req-star">*</span></label><input value={nome} onChange={e => setNome(e.target.value)} /></div>
       <div className="field" style={{ marginBottom: 14 }}><label>E-mails <span className="hint">(vírgula)</span></label><input value={emails} onChange={e => setEmails(e.target.value)} /></div>
-      <div className="field" style={{ marginBottom: 20 }}><label>Representante</label><select value={rep} onChange={e => setRep(e.target.value)}><option value="">Sem representante</option>{st.representantes.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}</select></div>
+      <div className="field" style={{ marginBottom: 20 }}><label>Representante</label><select value={rep} onChange={e => setRep(e.target.value)}><option value="">Sem representante</option>{[...st.representantes].sort((a, b) => String(a.nome || "").trim().localeCompare(String(b.nome || "").trim(), "pt-BR", { sensitivity: "base" })).map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}</select></div>
       <button className="btn primary" onClick={async () => { if (!nome.trim()) { toast("Informe o nome"); return; } if (await executar(() => A.salvarFabrica(id, nome, emails, rep), "Fábrica salva")) fechar(); }}>Salvar</button>
     </Modal>
   );
