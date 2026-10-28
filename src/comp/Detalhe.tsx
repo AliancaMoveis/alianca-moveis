@@ -97,16 +97,16 @@ export default function Detalhe({ id }: { id: string }) {
             {/* quem pagou a venda (Exact/Tático) quando é outra pessoa: o cliente atendido continua o mesmo */}
             {Object.entries((c.tratativa || {}).pagadores || {}).map(([v, p]: any) => <Row key={v} k={"Cliente comprador"}><b>{p.nome}</b> <span className="hint">venda {v}{p.telefone1 ? " · " + p.telefone1 : ""}{p.endereco ? " · " + p.endereco : ""}</span></Row>)}
             <Row k="CPF">{c.clienteDoc || "—"}</Row>
-            <Row k="Contato">{(() => { const tels = separarTelefones(c.telefone); const eu = R.nomeUser(R.currentUserId); const msg = c.tipo === "medidas" ? R.msgWhatsMedida(c) : msgWhatsCliente(c, eu ? eu.split(" ")[0] : "");
-              return tels.length ? <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>{tels.map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b><BotaoWhats tel={t} texto={msg} /></span>)}</span> : (c.telefone || "—"); })()}</Row>
+            {!ehFab && <Row k="Contato">{(() => { const tels = separarTelefones(c.telefone); const eu = R.nomeUser(R.currentUserId); const msg = c.tipo === "medidas" ? R.msgWhatsMedida(c) : msgWhatsCliente(c, eu ? eu.split(" ")[0] : "");
+              return tels.length ? <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>{tels.map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b><BotaoWhats tel={t} texto={msg} /></span>)}</span> : (c.telefone || "—"); })()}</Row>}
             {c.endereco ? <Row k="Endereço">{c.endereco}</Row> : null}
             <Row k="Pedido venda">{c.pedido}{c.dataVenda ? " · " + fmtDate(c.dataVenda) : ""}</Row>
             <Row k="Produto">{c.produto}</Row>
             {ehFab && <>
               <Row k="Pedido fábrica">{c.pedidoFabrica || "—"}</Row>
               <Row k="Fábrica">{tratar ? <DefinirFabrica c={c} atual={fab} /> : fab ? fab.nome : "—"}{fab && fab.emails ? " · " + fab.emails : ""}</Row>
-              <Row k="Representante">{rep ? rep.nome : "—"}{rep && rep.whats ? " · " + rep.whats : ""}</Row>
             </>}
+            {ehFab && <CobrancaFabrica c={c} />}
             {(ehFab || c.tipo === "entrega") && c.prazoTatico && <Row k="Prazo Tático">{fmtDate(c.prazoTatico)}</Row>}
           </>}
           {presale && <Row k="Motivo do contato">{R.tipoNome(c.tipo)}</Row>}
@@ -117,10 +117,10 @@ export default function Detalhe({ id }: { id: string }) {
           {c.status === "informar" && <div className="alerta" style={{ background: "var(--st-informar-bg)", borderColor: "var(--st-informar)" }}><b style={{ color: "var(--st-informar)" }}>Informar o cliente.</b> O setor {R.setorNome(c.setorDestino)} registrou a solução{c.resposta && c.resposta.previsao ? " (previsão " + fmtDate(c.resposta.previsao) + ")" : ""}. O call center avisa o cliente e conclui.</div>}
           {tratar && late && semResp && (prazoSit === "critico" ? (
             <div className="alerta" style={{ background: "var(--critico-bg)", borderColor: "var(--critico)" }}><b style={{ color: "var(--critico)" }}>Crítico — mais de 24h sem resposta.</b> O sistema já escalou este chamado automaticamente. Cobre agora.
-              {link && <div className="row"><a className="btn wa sm" href={link} target="_blank" rel="noopener">Cobrar no WhatsApp</a></div>}</div>
+              {link && <div className="row"><a className="btn wa sm" href={link} target="_blank" rel="noopener">📣 Cobrar representante no WhatsApp</a></div>}</div>
           ) : (
             <div className="alerta"><b>Atrasado — escalado automaticamente para urgente.</b> {ehFab ? "Cobre o representante ou trate agora." : "Trate agora."}
-              <div className="row">{link && <a className="btn wa sm" href={link} target="_blank" rel="noopener">Cobrar no WhatsApp</a>}
+              <div className="row">{link && <a className="btn wa sm" href={link} target="_blank" rel="noopener">📣 Cobrar representante no WhatsApp</a>}
                 <button className="btn sm" onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button></div></div>
           ))}
           {c.tipo === "medidas" && <MedidaBloco c={c} />}
@@ -716,7 +716,6 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
   const podeEncaminhar = R.verTudo() || (R.podeTratar(c) && c.setorDestino === "callcenter");
   return <>
     <div style={{ margin: "16px 0 6px", display: "flex", gap: 9, flexWrap: "wrap" }}>
-      {link && <a className="btn wa" href={link} target="_blank" rel="noopener">WhatsApp do representante</a>}
       <button className={"btn " + (c.urgente ? "danger" : "")} onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button>
     </div>
     {!presale && <><div className="sec-label" style={{ marginTop: 16 }}>Etapa do atendimento <span className="hint" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>— para encerrar, use “✓ Finalizar atendimento” abaixo</span></div>
@@ -908,7 +907,6 @@ function AcompanhamentoCC({ c, link, notaRef, foco }: any) {
       <div className="hint">Depois de avisar o cliente, use <b>✓ Finalizar atendimento</b> abaixo.</div></div>
     : <div className="ro-note" style={{ marginTop: 12 }}>Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>{R.viaCC(c.setorDestino) ? <>. Quando ele registrar o retorno, o chamado volta para o call center em <b>Informar cliente</b>.</> : <>, que fala direto com o cliente e conclui.</>} Pelo call center você pode registrar um novo contato do cliente e marcar urgente.</div>}
     <div style={{ margin: "12px 0 6px", display: "flex", gap: 9, flexWrap: "wrap" }}>
-      {link && <a className="btn wa" href={link} target="_blank" rel="noopener">WhatsApp do representante</a>}
       <button className={"btn " + (c.urgente ? "danger" : "")} onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button>
     </div>
     <div className="resp-box"><h4>Anotação interna</h4><div className="inline-2"><div className="field"><input ref={notaRef} placeholder={foco === "nota" ? "Cliente ligou de novo — descreva o que ele pediu agora" : "Ex.: Cliente ligou perguntando da previsão."} value={nota} onChange={e => setNota(e.target.value)} /></div>
@@ -1197,6 +1195,38 @@ function FichaPorta({ c }: { c: any }) {
             <button className="btn sm" onClick={async () => { if (!nota.trim()) { toast("Escreva a anotação"); return; } if (await ex(() => A.adicionarNota(c.id, nota.trim()), "Anotação registrada")) setNota(""); }}>Salvar</button></div></div>}
           <div className="hist"><h4>Histórico</h4>{c.historico.slice().reverse().map((x: any, i: number) => <div className="h" key={i}><b>{fmtDateTime(x.quando)}</b> · {x.quem} — {x.texto}</div>)}</div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Solicitação Fábrica: cobrança separada em dois quadros — REPRESENTANTE da fábrica (cobrar prazo) × CLIENTE (dar retorno)
+function CobrancaFabrica({ c }: any) {
+  const { R, executar: ex } = useApp();
+  const rep = R.getRep(c), fab = R.getFab(c), link = R.waLink(c);
+  const pode = R.podeTratar(c) || R.podeAcompanhar(c);
+  const eu = R.nomeUser(R.currentUserId);
+  const tels = separarTelefones(c.telefone);
+  const cobrados = (c.historico || []).filter((h: any) => /^📣 Cobrou o representante/.test(h.texto || ""));
+  const ult = cobrados.length ? cobrados[cobrados.length - 1] : null;
+  const registrar = () => { if (pode) ex(() => A.adicionarNota(c.id, "📣 Cobrou o representante" + (rep ? " " + rep.nome : "") + (fab ? " (" + fab.nome + ")" : "") + " pelo WhatsApp"), "Cobrança registrada no histórico"); };
+  const caixa = (cor: string): any => ({ flex: "1 1 260px", border: "2px solid " + cor, borderRadius: 12, padding: "10px 12px", background: "var(--surface)" });
+  return (
+    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "12px 0" }}>
+      <div style={caixa("#b8802a")}>
+        <div style={{ fontWeight: 800, color: "#b8802a", marginBottom: 4 }}>🏭 REPRESENTANTE DA FÁBRICA — cobrar o prazo</div>
+        <div style={{ fontSize: 13.5 }}><b>{rep ? rep.nome : "Sem representante cadastrado"}</b>{fab ? " · " + fab.nome : ""}</div>
+        <div style={{ fontSize: 13, color: "var(--ink-soft)", marginBottom: 8 }}>{rep && rep.whats ? "WhatsApp " + rep.whats : rep ? "Representante sem WhatsApp cadastrado" : "Defina a fábrica / cadastre o representante em Fábricas"}</div>
+        {link ? <a className="btn" href={link} target="_blank" rel="noopener" onClick={registrar}
+            style={{ background: "#b8802a", borderColor: "#b8802a", color: "#fff", fontWeight: 700, textDecoration: "none" }}>📣 Cobrar representante no WhatsApp</a>
+          : <span className="hint">Sem WhatsApp do representante para cobrar.</span>}
+        {ult && <div className="hint" style={{ marginTop: 6 }}>Última cobrança: {fmtDateTime(ult.quando)} · {ult.quem} ({cobrados.length}x)</div>}
+      </div>
+      <div style={caixa("#25a244")}>
+        <div style={{ fontWeight: 800, color: "#1b7f35", marginBottom: 4 }}>👤 CLIENTE — dar retorno ao cliente</div>
+        <div style={{ fontSize: 13.5, marginBottom: 8 }}><b>{c.cliente}</b></div>
+        {tels.length ? <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{tels.map((t: string) => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b><BotaoWhats tel={t} texto={msgWhatsCliente(c, eu ? eu.split(" ")[0] : "")} rotulo="WhatsApp do cliente" /></span>)}</div>
+          : <span className="hint">Cliente sem telefone cadastrado.</span>}
       </div>
     </div>
   );
