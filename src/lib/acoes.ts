@@ -193,6 +193,7 @@ export const A = {
   checklistSincronizar: (linhas: any[], aplicar: boolean, forcar = false) => rpc<any>("checklist_sincronizar", { p: linhas, p_aplicar: aplicar, p_forcar: forcar }),
   checklistAgendadosPlanilha: (linhas: any[], aplicar: boolean, trocarProj: boolean, corrigir: boolean, liberar = false) => rpc<any>("checklist_agendados_planilha", { p: linhas, p_aplicar: aplicar, p_trocar_proj: trocarProj, p_corrigir: corrigir, p_liberar: liberar }),
   checklistDiasPlanilha: (linhas: any[], aplicar: boolean) => rpc<any>("checklist_dias_planilha", { p: linhas, p_aplicar: aplicar }),
+  checklistRegistrarPlanilha: (tipo: "agendados" | "agendar", linhas: any[]) => rpc<any>("checklist_registrar_planilha", { p_tipo: tipo, p: linhas }),
   checklistImportar: (linhas: any[]) => rpc<{ novos: number; ignorados: number; agendados?: number; duplicados?: number; listaDuplicados?: string[] }>("checklist_importar", { p: linhas }),
   vendedorCadastrar: (nome: string, email: string, senha: string, freelancer: boolean, fazProjeto: boolean) => rpc<string>("vendedor_cadastrar", { p_nome: nome, p_email: email, p_senha: senha, p_freelancer: freelancer, p_faz_projeto: fazProjeto }),
   vendedorDescadastrar: (id: string) => rpc<number>("vendedor_descadastrar", { p_id: id }),

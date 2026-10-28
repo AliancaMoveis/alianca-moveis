@@ -192,7 +192,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
         const semPassados = dados.filter(d => !passados.includes(d));
         if (passados.length) toast(`${passados.length} linha(s) com data passada ficaram de fora`);
         const prev = await A.checklistSincronizar(semPassados, false);
-        setModal(<ModalSincronizar dados={semPassados} prev={prev} />);
+        setModal(<ModalSincronizar dados={semPassados} todos={dados} prev={prev} />);
         return;
       }
       // planilha de agendados: mostra antes quem é novo, quem tem mais de um dia e quem já está no 360
@@ -207,7 +207,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       const agendados = dados.filter(d => d.agendadoPara);
       const futuros = agendados.filter(d => !passados.includes(d));
       const dias = await A.checklistAgendadosPlanilha(agendados, false, true, true);
-      setModal(<ModalAgendados dados={agendados} futuros={futuros} passados={passados.length} semData={dados.length - agendados.length} prev={dias} novos={futuros.filter(d => !jaTem.has(String(d.numero || "").replace(/\D/g, "")) && !(dias.listaDuplicados || []).some((x: string) => x.includes(" · venda " + String(d.numero || "").replace(/\D/g, "") + " "))).map(d => ({ ...d, refeito: refeitos.has(String(d.numero || "").replace(/\D/g, "")) }))} />);
+      setModal(<ModalAgendados dados={agendados} todos={dados} futuros={futuros} passados={passados.length} semData={dados.length - agendados.length} prev={dias} novos={futuros.filter(d => !jaTem.has(String(d.numero || "").replace(/\D/g, "")) && !(dias.listaDuplicados || []).some((x: string) => x.includes(" · venda " + String(d.numero || "").replace(/\D/g, "") + " "))).map(d => ({ ...d, refeito: refeitos.has(String(d.numero || "").replace(/\D/g, "")) }))} />);
     } catch (e: any) { toast(e.message || "Não foi possível importar"); }
     finally { setImportando(false); if (arq.current) arq.current.value = ""; }
   }
@@ -806,9 +806,19 @@ export function ModalNaoPodeVir({ c }: any) {
     </Modal>
   );
 }
+/** com as duas planilhas do Exact importadas (agendados + a agendar), o 360 segue o Exact:
+ *  agendado que no Exact está "a agendar" sem data volta para a agendar; venda que não está em nenhuma das duas sai do checklist (cancelada) */
+function avisoReconciliacao(rc: any, toast: (m: string) => void) {
+  if (!rc) return;
+  if (!rc.feito) { setTimeout(() => toast("ℹ️ Suba também a outra planilha (agendados / a agendar) para o 360 tirar os cancelados"), 2500); return; }
+  const partes: string[] = [];
+  if (rc.voltaram) partes.push(`${rc.voltaram} voltaram para a agendar (Exact sem data): ${rc.listaVoltaram.join("; ")}`);
+  if (rc.cancelados) partes.push(`${rc.cancelados} saíram do checklist (não estão em nenhuma planilha — cancelados): ${rc.listaCancelados.join("; ")}`);
+  if (partes.length) setTimeout(() => alert("Conferência com o Exact\n\n" + partes.join("\n\n")), 300);
+}
 /** prévia da planilha "a agendar": novos, mantidos, que viram agendados e que serão excluídos */
 /** prévia da planilha de AGENDADOS: novos, clientes com mais de um dia (identificados na coluna Data do Agendamento) e quem já está no 360 */
-function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0 }: { dados: any[]; futuros: any[]; passados?: number; prev: any; novos: any[]; semData?: number }) {
+function ModalAgendados({ dados, todos, futuros, passados = 0, prev, novos, semData = 0 }: { dados: any[]; todos: any[]; futuros: any[]; passados?: number; prev: any; novos: any[]; semData?: number }) {
   const { setModal, toast, recarregar } = useApp() as any;
   const [sal, setSal] = useState(false); const [ver, setVer] = useState("");
   const [trocar, setTrocar] = useState(true);
@@ -826,7 +836,9 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
     try {
       const r = await A.checklistImportar(futuros);
       const d = await A.checklistAgendadosPlanilha(dados, true, trocar, corrigir, liberar);
+      const rc = await A.checklistRegistrarPlanilha("agendados", todos).catch(() => null);
       await recarregar(); fechar();
+      avisoReconciliacao(rc, toast);
       toast(`${r.novos} novo(s) · ${d.agendar} passaram para agendado · ${d.projetista} com projetista atualizado` + (d.liberar ? ` · ${d.liberar} continuam agendados, marcados para conferir` : "") + (r.duplicados ? ` · ${r.duplicados} possível(is) duplicidade(s) não subiram` : ""));
     } catch (x: any) { toast(x.message); setSal(false); }
   }
@@ -847,7 +859,7 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
       <L id="m" n={prev.maisDias} t="já agendados que ganham DIA(S) NOVO(S) da planilha (ex.: continua em outra data)" cor="var(--st-respondida)" lista={prev.listaMaisDias} />
       <L id="d" n={prev.diferentes} t={corrigir ? "agendados no 360 em OUTRA DATA → passam para a data da planilha" : "já agendados no 360 em outra data — não mudam (só para conferir)"} cor="var(--warn)" lista={prev.listaDiferentes} />
       <L id="dup" n={(prev.listaDuplicados || []).length} t={<><b>MESMO CLIENTE</b> (nome ou telefone) já tem checklist aberto com <b>outra venda</b> → <b>NÃO sobem</b>. Se for duplicidade, não faça nada; se for venda nova, o checklist normalmente é feito junto — confira na ficha do cliente</>} cor="var(--danger)" lista={prev.listaDuplicados} />
-      <L id="l" n={prev.liberar} t="agendados no 360 que não vieram na planilha → CONTINUAM NA AGENDA e ficam marcados “conferir” (se o cliente cancelou, desmarque na ficha)" cor="var(--warn)" lista={prev.listaLiberar} />
+      <L id="l" n={prev.liberar} t="agendados no 360 que não vieram nesta planilha → o 360 confere com a planilha “a agendar”: se lá estiverem sem data, voltam para a agendar; se não estiverem em nenhuma das duas, saem do checklist (cancelados). Até subir as duas, ficam marcados “conferir”" cor="var(--warn)" lista={prev.listaLiberar} />
       <L id="v" n={varios.length} t={<>linhas com <b>mais de um dia</b> (cada data = um dia, cada nome da Agenda = um dia)</>} lista={varios.map(d => `${d.cliente} · venda ${d.numero} — ${dias(d)}`)} />
       {(prev.desconhecidos || []).length > 0 && <div className="hint" style={{ color: "var(--warn)", marginTop: 8 }}>⚠️ Nomes na coluna Agenda que não são projetistas da agenda (ficam sem projetista): <b>{prev.desconhecidos.join(", ")}</b></div>}
       {passados > 0 && <div className="hint" style={{ marginTop: 8, fontWeight: 600 }}>⏭ {passados} linha(s) com data <b>passada</b> ficaram de fora — só entram agendamentos de hoje em diante (não criam cliente nem mudam nada no 360).</div>}
@@ -866,7 +878,7 @@ function ModalAgendados({ dados, futuros, passados = 0, prev, novos, semData = 0
     </Modal>
   );
 }
-function ModalSincronizar({ dados, prev }: { dados: any[]; prev: any }) {
+function ModalSincronizar({ dados, todos, prev }: { dados: any[]; todos: any[]; prev: any }) {
   const { setModal, toast, recarregar } = useApp() as any;
   const [forcar, setForcar] = useState(false); const [sal, setSal] = useState(false); const [ver, setVer] = useState(false);
   const fechar = () => setModal(null);
@@ -875,7 +887,9 @@ function ModalSincronizar({ dados, prev }: { dados: any[]; prev: any }) {
     setSal(true);
     try {
       const r = await A.checklistSincronizar(dados, true, forcar);
+      const rc = await A.checklistRegistrarPlanilha("agendar", todos).catch(() => null);
       await recarregar(); fechar();
+      avisoReconciliacao(rc, toast);
       toast(`Base atualizada: ${r.novos} novo(s) · ${r.agendar} passaram para agendado · ${r.excluir} excluído(s)` + (r.conferir ? ` · ${r.conferir} mantidos para conferir` : "") + (r.duplicados ? ` · ${r.duplicados} possível(is) duplicidade(s) não subiram` : ""));
     } catch (x: any) { toast(x.message); setSal(false); }
   }
