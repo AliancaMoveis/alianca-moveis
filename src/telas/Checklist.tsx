@@ -282,7 +282,8 @@ function CartaoCk({ c, aba }: any) {
             <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: "var(--surface-2)", border: "1px solid var(--line)" }}>Venda {c.pedido}</span>
             <Selo360 c={c} />
             <span title="Cidade do cliente (base de clientes)" style={{ fontWeight: 800, fontSize: 13, padding: "1px 9px", borderRadius: 6, background: cidadeCk(c) ? "#0f5f8a" : "var(--surface-2)", color: cidadeCk(c) ? "#fff" : "var(--ink-faint)", border: cidadeCk(c) ? 0 : "1px dashed var(--line)" }}>📍 {cidadeCk(c) || "cidade não encontrada"}</span>
-            {g !== "agendado" && k.projetista && <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: corProj(k.projetista), color: "#fff" }}>👤 {k.projetista}</span>}</div>
+            {g !== "agendado" && (e === "aguardando" && k.proposta ? (k.propostaProjetista || k.projetista) && <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: corProj(k.propostaProjetista || k.projetista), color: "#fff" }}>👤 {k.propostaProjetista || k.projetista}</span>
+              : k.projetista && <span style={{ fontSize: 12, color: "var(--ink-faint)" }} title="Projetista de um agendamento que foi desmarcado — o cliente NÃO está agendado">agendamento anterior{k.agendaAnterior ? " " + fmtDateTime(k.agendaAnterior) : ""} com {k.projetista}</span>)}</div>
           <DadosCk c={c} />
           {g === "aguardando" && <div style={{ marginTop: 7, padding: "7px 10px", borderRadius: 8, background: "var(--st-tratativa-bg)", border: "1px solid var(--st-tratativa)", fontSize: 13.5 }}>
             <b>⏸ Motivo:</b> {motivoCk(c) || "—"}
