@@ -28,7 +28,7 @@ export default function Fretes() {
   );
 }
 
-function CartaoRomaneio({ r, ent, rec }: { r: Romaneio; ent: Entrega[]; rec: () => any }) {
+export function CartaoRomaneio({ r, ent, rec }: { r: Romaneio; ent: Entrega[]; rec: () => any }) {
   const { toast } = useApp() as any;
   const s = resumo(r, ent);
   const [cs, cc] = corSt[r.status] || corSt.conferido;

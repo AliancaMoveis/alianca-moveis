@@ -17,7 +17,9 @@ export default function Freteiro() {
   const [erro, setErro] = useState("");
   const [romId, setRomId] = useState<number | null>(null);
   const [tela, setTela] = useState<string>("lista");
-  const recarregar = () => carregarFretes().then(d => { setDados(d); if (romId == null && d.rom.length) setRomId(d.rom[0].id); }).catch(e => setErro(e.message));
+  // simulação: o freteiro é o José Elias; abre primeiro o romaneio que ainda está com ele (liberado, em rota ou devolvido)
+  const meus = (d: { rom: Romaneio[] }) => d.rom.filter(r => r.freteiro === "José Elias da Silva");
+  const recarregar = () => carregarFretes().then(d => { setDados(d); if (romId == null) { const m = meus(d); const a = m.find(r => ["conferido", "em_rota", "devolvido"].includes(r.status)) || m[0] || d.rom[0]; if (a) setRomId(a.id); } }).catch(e => setErro(e.message));
   useEffect(() => { recarregar(); }, []);
   const sair = () => { location.href = "/"; };
 
@@ -48,6 +50,8 @@ export default function Freteiro() {
   return pagina(<>
     {topo("Romaneio " + r.numero, "🧪 SIMULAÇÃO · " + r.freteiro + " · " + r.placa)}
     <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+      {meus(dados).length > 1 && <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>{meus(dados).slice().sort((a, b) => a.data.localeCompare(b.data)).map(x =>
+        <button key={x.id} onClick={() => setRomId(x.id)} style={{ flexShrink: 0, minHeight: 40, padding: "0 12px", borderRadius: 999, fontSize: 13, fontWeight: 700, border: x.id === r.id ? "2px solid #1F3864" : "1px solid #C9D1DE", background: x.id === r.id ? "#E8EEF8" : "#fff", color: "#1B2333" }}>{new Date(x.data + "T12:00").toLocaleDateString("pt-BR").slice(0, 5)} · {x.numero}</button>)}</div>}
       {r.status === "devolvido" && <div style={{ ...card, background: "#FDECEC", borderColor: "#F1B5B5", color: "#8A1C1C" }}><b>Devolvido pelo escritório:</b> {r.devolvido_motivo || "—"}. Corrija e envie de novo.</div>}
       {r.status === "enviado" && <div style={{ ...card, background: "#FFF4DC", borderColor: "#F0CF86", color: "#7A4F00" }}><b>Enviado para aprovação.</b> Aguarde o escritório.</div>}
       {r.status === "aprovado" && <div style={{ ...card, background: "#E8F3EC", borderColor: "#9FD3AE", color: VD }}><b>Romaneio aprovado</b> · {moeda(s.total)}</div>}
