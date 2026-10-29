@@ -15,7 +15,7 @@ import { ciclo } from "./MontagemMeus";
 
 type Ag = { chave: string; os: string; lider: string; montador: string; status: string; indisponivel: boolean; data_inclusao: string; data_montagem: string; data_finalizacao: string | null; tipos: string; total: number; bruto?: any[] | null };
 
-export const podeMontagemAgend = (R: any) => R.mySetores().includes("gestao");
+export const podeMontagemAgend = (R: any) => R.mySetores().includes("gestao") || R.mySetores().includes("financeiro");
 
 const iso = (s: string) => { const m = String(s || "").match(/(\d{2})[-\/](\d{2})[-\/](\d{4})/); return m ? m[3] + "-" + m[2] + "-" + m[1] : ""; };
 const num = (s: string) => { const n = Number(String(s || "0").replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
@@ -144,7 +144,8 @@ export default function MontagemAgend() {
   const [enviando, setEnviando] = useState(""); const inp = useRef<HTMLInputElement>(null);
   const recarregar = () => carregar().then(setDados).catch(e => setErro(e.message));
   useEffect(() => { recarregar(); }, []);
-  if (!podeMontagemAgend(R)) return <section className="view active"><div className="empty">Só a Gestão vê esta tela.</div></section>;
+  if (!podeMontagemAgend(R)) return <section className="view active"><div className="empty">Só a Gestão e o Financeiro veem esta tela.</div></section>;
+  const soLeitura = !R.mySetores().includes("gestao"); // Financeiro: vê tudo e baixa relatórios, mas não importa, não muda valores e não fecha o mês
   const abasTela = <div className="subnav" style={{ margin: "0 0 14px" }}><button className={tela === "periodo" ? "on" : ""} onClick={() => setTela("periodo")}>📋 Agendamentos</button><button className={tela === "hist" ? "on" : ""} onClick={() => setTela("hist")}>📚 Histórico de pagamentos das agendadoras</button></div>;
   if (tela === "hist") return <section className="view active"><div className="view-head"><div><h2>🔧 Montagem · Histórico das agendadoras</h2><p>Cada fechamento guarda os valores pagos e todas as O.S. de cada agendadora daquele mês. Se o mês for fechado de novo, o anterior fica como “substituído” — nada se perde.</p></div></div>{abasTela}<HistoricoAg /></section>;
 
@@ -186,10 +187,10 @@ export default function MontagemAgend() {
 
   return (
     <section className="view active">
-      <div className="view-head"><div><h2>🔧 Montagem · Agendamentos</h2><p>Acompanhamento dos agendamentos feitos no Exact — só para a Gestão. Envie o relatório exportado e filtre o período: quantos cada agendadora fez (para o pagamento) e quantos cada montador recebeu.</p></div></div>
+      <div className="view-head"><div><h2>🔧 Montagem · Agendamentos</h2><p>Acompanhamento dos agendamentos feitos no Exact — Gestão e Financeiro. Envie o relatório exportado e filtre o período: quantos cada agendadora fez (para o pagamento) e quantos cada montador recebeu.</p></div></div>
       {abasTela}
       <div className="card ma-topo">
-        <div className="ma-envio">
+        <div className="ma-envio" style={soLeitura ? { display: "none" } : undefined}>
           <input ref={inp} type="file" accept=".csv,.xlsx" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) subir(f); }} />
           <button className="btn primary" disabled={!!enviando} onClick={() => inp.current?.click()}>{enviando || "📤 Enviar relatório do Exact (CSV ou Excel)"}</button>
           <span className="hint">{dados ? dados.length + " agendamentos guardados" + (ultimaData ? " · último agendado em " + br(ultimaData) : "") + ". Pode enviar o mesmo período de novo: não duplica, só atualiza o status." : erro || "Carregando…"}</span>
@@ -230,11 +231,12 @@ export default function MontagemAgend() {
       <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
         <div className="ma-cab">
           <b>{aba === "agend" ? "Agendamentos por agendadora" : "Agendamentos por montador"} · {br(de)} a {br(ate)}</b>
-          {aba === "agend" && <label className="ma-valor">R$ por agendamento <input value={valor} onChange={e => setValor(e.target.value)} onBlur={() => salvarCfg("valor_agendamento", num(valor)).then(() => toast("Valor por agendamento salvo"), (e: any) => toast(e.message))} inputMode="decimal" /></label>}
+          {aba === "agend" && soLeitura && <span className="pill">R$ {valor} por agendamento</span>}
+          {aba === "agend" && !soLeitura && <label className="ma-valor">R$ por agendamento <input value={valor} onChange={e => setValor(e.target.value)} onBlur={() => salvarCfg("valor_agendamento", num(valor)).then(() => toast("Valor por agendamento salvo"), (e: any) => toast(e.message))} inputMode="decimal" /></label>}
           {aba === "agend" ? <>
-            <button className="btn sm" onClick={() => setModal(<ModalPagas todas={todasLideres} pagas={pagas} salvar={async (l: string[]) => { await salvarCfg("agendadoras_pagas", l); setPagas(l); }} />)}>⚙ Quem recebe</button>
+            {!soLeitura && <button className="btn sm" onClick={() => setModal(<ModalPagas todas={todasLideres} pagas={pagas} salvar={async (l: string[]) => { await salvarCfg("agendadoras_pagas", l); setPagas(l); }} />)}>⚙ Quem recebe</button>}
             <button className="btn primary sm" disabled={!g.length} onClick={() => arquivoAgendadoras("pagamento_agendadoras_" + de + "_a_" + ate + ".xlsx", br(de) + " a " + br(ate), gAg.map(x => ({ lider: x.nome, qtd: x.n, montagem: x.mont, assistencia: x.assist, valor: x.n * vU })), vU, lAg.filter(a => ehPaga(a.lider, pagas) && !fora(a)))}>⬇ Relatório para o financeiro</button>
-            <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!g.length} onClick={() => setModal(<ModalFecharAg de={de} ate={ate} qtd={tot} valor={vU} fechar={(p: any) => fecharAg(p, dados || [], pagas, vU)} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento do mês</button>
+            {!soLeitura && <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!g.length} onClick={() => setModal(<ModalFecharAg de={de} ate={ate} qtd={tot} valor={vU} fechar={(p: any) => fecharAg(p, dados || [], pagas, vU)} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento do mês</button>}
           </> : <button className="btn sm" onClick={exportar} disabled={!g.length}>⬇ Excel</button>}
         </div>
         {!g.length ? <div className="empty" style={{ padding: 24 }}>{dados && dados.length ? "Nenhum agendamento neste período." : "Envie o relatório do Exact para começar."}</div> :
