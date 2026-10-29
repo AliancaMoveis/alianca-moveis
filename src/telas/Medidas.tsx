@@ -218,6 +218,8 @@ function ListaMedidas({ aba }: { aba: string }) {
   // aprovar direto da lista (quando a análise foi feita em outro sistema)
   const aprovar = (c: any) => { if (!confirm("Aprovar a medida de " + c.cliente + " (venda " + (c.pedido || "—") + ") como medida oficial?")) return; ex(() => A.medidaLiberar(c.id, "Aprovada pela lista"), "Medida aprovada — medida oficial"); };
   const [q, setQ] = useState("");
+  // filtros da Supervisão: quem mede, data da medição e data do checklist
+  const [fQuem, setFQuem] = useState(""); const [dDe, setDDe] = useState(""); const [dAte, setDAte] = useState(""); const [cDe, setCDe] = useState(""); const [cAte, setCAte] = useState("");
   const [t, d] = ABAS_MD[aba] || ABAS_MD.pendentes;
   const eu = R.currentUserId;
   const ckPorVenda: Record<string, any> = {};
@@ -234,6 +236,15 @@ function ListaMedidas({ aba }: { aba: string }) {
   const [ckMeu, setCkMeu] = useState<Record<string, string>>({});
   useEffect(() => { if (aba === "minhas" || aba === "minhasfeitas") A.minhasMedidasChecklist().then(setCkMeu).catch(() => setCkMeu({})); }, [aba]);
   const diaCk = (c: any) => { const k = ckPorVenda[c.pedido]; return k && k.tratativa?.checklist?.etapa === "agendado" ? String(k.tratativa.checklist.agendadoPara || "").slice(0, 16) : String(ckMeu[c.pedido] || "").slice(0, 16); };
+  const quemMede = (c: any) => { const m = c.tratativa?.medida || {}; return c.medidorId ? R.nomeUser(c.medidorId) : m.consultorNome ? m.consultorNome + " (consultor)" : "Sem medidor"; };
+  // data da medição: agendada → dia marcado; feita → quando foi medida; aprovada → quando foi aprovada; pendente → quando entrou
+  const dataMed = (c: any) => { const m = c.tratativa?.medida || {}, e = R.etapaMedida(c);
+    return String((e === "agendada" ? c.dataMedida : e === "liberada" ? (m.liberadaEm || m.realizadaEm || c.dataMedida) : ["realizada", "validar"].includes(e) ? (m.realizadaEm || c.dataMedida) : null) || c.criadoEm || "").slice(0, 10); };
+  const opQuem = Array.from(new Set(lista.map(quemMede))).sort((a: any, b: any) => (a === "Sem medidor" ? 1 : 0) - (b === "Sem medidor" ? 1 : 0) || String(a).localeCompare(String(b), "pt-BR"));
+  if (fQuem) lista = lista.filter((c: any) => quemMede(c) === fQuem);
+  if (dDe || dAte) lista = lista.filter((c: any) => { const x = dataMed(c); return !!x && (!dDe || x >= dDe) && (!dAte || x <= dAte); });
+  if (cDe || cAte) lista = lista.filter((c: any) => { const x = diaCk(c).slice(0, 10); return !!x && (!cDe || x >= cDe) && (!cAte || x <= cAte); });
+  const temFiltro = !!(fQuem || dDe || dAte || cDe || cAte);
   // "para fazer": o checklist mais próximo vem primeiro (urgência), depois a data marcada da medição
   const ord = (c: any) => aba === "minhas" ? (diaCk(c) || "9") + String(c.dataMedida || "9") : aba === "agendadas" ? String(c.dataMedida || "9") : aba === "minhasfeitas" ? "9" : diaCk(c) || "9" + String(c.criadoEm);
   lista = lista.slice().sort((a: any, b: any) => ord(a).localeCompare(ord(b)));
@@ -248,6 +259,14 @@ function ListaMedidas({ aba }: { aba: string }) {
         {aba !== "minhas" && aba !== "minhasfeitas" && R.ehSupMedidas() && <ImportarExact />}
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, venda, telefone ou quem mede" style={{ marginLeft: "auto", maxWidth: 320 }} />
       </div>
+      {aba !== "minhas" && aba !== "minhasfeitas" && <div className="md-filtros" style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", margin: "0 0 12px" }}>
+        <div className="field" style={{ margin: 0 }}><label>Quem mede</label><select value={fQuem} onChange={e => setFQuem(e.target.value)} style={{ minWidth: 190 }}><option value="">Todos</option>{opQuem.map((x: any) => <option key={x} value={x}>{x}</option>)}</select></div>
+        <div className="field" style={{ margin: 0 }}><label>{aba === "agendadas" ? "Data da medição" : aba === "aprovados" ? "Data da aprovação" : aba === "analise" ? "Data em que mediu" : "Data de entrada"} — de</label><input type="date" value={dDe} onChange={e => setDDe(e.target.value)} /></div>
+        <div className="field" style={{ margin: 0 }}><label>até</label><input type="date" value={dAte} onChange={e => setDAte(e.target.value)} /></div>
+        <div className="field" style={{ margin: 0 }}><label>Data do checklist — de</label><input type="date" value={cDe} onChange={e => setCDe(e.target.value)} /></div>
+        <div className="field" style={{ margin: 0 }}><label>até</label><input type="date" value={cAte} onChange={e => setCAte(e.target.value)} /></div>
+        {temFiltro && <button className="btn sm" onClick={() => { setFQuem(""); setDDe(""); setDAte(""); setCDe(""); setCAte(""); }}>Limpar filtros</button>}
+      </div>}
       {!lista.length ? <div className="card" style={{ padding: 20, textAlign: "center", color: "var(--ink-faint)" }}>Nenhum cliente aqui.</div> :
         <div className="card" style={{ padding: 0 }}>{lista.map((c: any) => {
           const m = (c.tratativa && c.tratativa.medida) || {}, dck = diaCk(c), alerta = aba !== "aprovados" && dck && em3(dck);
