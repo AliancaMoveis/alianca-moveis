@@ -7,6 +7,7 @@ import ConfirmacaoVendas from "./ConfirmacaoVendas";
 import ConsultaProduto from "./ConsultaProduto";
 import Negociacao from "./Negociacao";
 import MontagemAgend from "./MontagemAgend";
+import RhPonto from "./RhPonto";
 import Presenca from "./Presenca";
 import Anuncios from "./Anuncios";
 import Qualidade from "./Qualidade";
@@ -193,6 +194,7 @@ export default function Shell() {
             {atual.startsWith("md_") && <Medidas key={atual} aba={atual.slice(3)} />}
             {atual === "encontrar_vendas" && R.podeEncontrarVendas() && <EncontrarVendas />}
             {atual === "montagem_agend" && <MontagemAgend />}
+            {atual === "rh_ponto" && <RhPonto />}
             {atual === "ce_agenda" && <AgendaConsultores />}
             {(atual === "presenca" || atual === "presenca_porta") && R.temPresenca() && <Presenca key={atual} novoPorta={atual === "presenca_porta"} />}
             {atual === "qualidade" && R.veQualidade() && <Qualidade />}
