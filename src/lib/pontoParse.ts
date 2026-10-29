@@ -101,3 +101,55 @@ export function parseCartao(paginas: Item[][], arquivo = ""): Cartao {
   return c;
 }
 
+
+// ---------- Ponto Diário (relatório geral de um dia, todos os funcionários) ----------
+export type LinhaDia = { folha: string; nome: string; batidas: string[]; marcador: string; adian: number; faltas: number; extras: number; carga: number };
+export type Diario = { data: string; linhas: LinhaDia[] };
+
+/** Lê o relatório "PONTO DIÁRIO" do Secullum (um dia, todo mundo). */
+export function parseDiario(paginas: Item[][], arquivo = ""): Diario {
+  const d: Diario = { data: "", linhas: [] };
+  for (const pg of paginas) {
+    const ls: { y: number; it: Item[] }[] = [];
+    for (const i of pg) { if (!i.str.trim()) continue; const l = ls.find(l => Math.abs(l.y - i.y) < 3); if (l) l.it.push(i); else ls.push({ y: i.y, it: [i] }); }
+    ls.sort((a, b) => b.y - a.y);
+    let xAdian = 0, xFaltas = 0, xExtras = 0, xCarga = 0, xEnt1 = 0;
+    for (const l of ls) for (const i of l.it) {
+      const s = i.str.trim();
+      if (s === "ADIAN.") xAdian = i.x; if (s === "FALTAS") xFaltas = i.x; if (s === "EXTRAS") xExtras = i.x; if (s === "CARGA") xCarga = i.x;
+      if (s === "ENT. 1" || s === "ENT.1") xEnt1 = i.x;
+    }
+    for (const l of ls) {
+      const linha = l.it.sort((a, b) => a.x - b.x);
+      const t = linha.map(i => i.str).join(" ").replace(/\s+/g, " ").trim();
+      const dia = t.match(/Dia:\s*(\d{2})\/(\d{2})\/(\d{4})/); if (dia) { d.data = dia[3] + "-" + dia[2] + "-" + dia[1]; continue; }
+      if (!/^\d{1,6}\s/.test(t) || !xEnt1) continue; // linha de funcionário começa com o nº da folha
+      const r: LinhaDia = { folha: linha[0].str.trim(), nome: "", batidas: [], marcador: "", adian: 0, faltas: 0, extras: 0, carga: 0 };
+      for (let k = 1; k < linha.length; k++) {
+        const s = linha[k].str.trim(); if (!s) continue;
+        const x = linha[k].x;
+        if (x < xEnt1 - 8) { r.nome = (r.nome + " " + s).trim(); continue; }
+        const hh = s.match(/^\d{1,3}:\d{2}/);
+        if (hh) {
+          const v = minutos(hh[0]);
+          if (xCarga && x >= xCarga - 6) r.carga += v;
+          else if (xExtras && x >= xExtras - 6) r.extras += v;
+          else if (xFaltas && x >= xFaltas - 6) r.faltas += v;
+          else if (xAdian && x >= xAdian - 6) r.adian += v;
+          else r.batidas.push(hh[0]);
+        } else if (/^(ferias|férias|folga|atest|inss|afast|licen|dsr|feriado)/i.test(s)) {
+          const m = s.replace(/\.+$/, "");
+          if (!r.marcador) r.marcador = /^atest/i.test(m) ? "Atestado" : /^ferias|^férias/i.test(m) ? "Férias" : /^inss/i.test(m) ? "INSS" : m.charAt(0).toUpperCase() + m.slice(1).toLowerCase();
+        }
+      }
+      if (r.nome) d.linhas.push(r);
+    }
+  }
+  // o mesmo funcionário pode repetir na quebra de página
+  const vist = new Map<string, LinhaDia>();
+  for (const r of d.linhas) { const k = r.folha + "¦" + r.nome; if (!vist.has(k)) vist.set(k, r); }
+  d.linhas = Array.from(vist.values());
+  if (!d.data) throw new Error((arquivo ? arquivo + ": " : "") + 'não encontrei a data — é o relatório "Ponto Diário" do Secullum?');
+  if (!d.linhas.length) throw new Error((arquivo ? arquivo + ": " : "") + "não encontrei os funcionários — o PDF pode estar escaneado (imagem).");
+  return d;
+}

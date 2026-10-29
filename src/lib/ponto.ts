@@ -45,3 +45,22 @@ export async function guardarCartao(c: Cartao, arquivo: string, uid: string): Pr
   return ex.data ? "atualizado" : "novo";
 }
 export async function apagarCartao(id: number) { const r = await sb.from("rh_ponto_cartoes").delete().eq("id", id); if (r.error) throw new Error(r.error.message); }
+
+// ---------- Consulta do dia (relatório "Ponto Diário" — todo mundo num dia) ----------
+export { parseDiario, type Diario, type LinhaDia } from "./pontoParse";
+import type { Diario, LinhaDia } from "./pontoParse";
+export type DiaGeral = LinhaDia & { id: number; data: string };
+export async function listarDiasGeral(): Promise<DiaGeral[]> {
+  const out: any[] = [];
+  for (let i = 0; ; i += 1000) {
+    const r = await sb.from("rh_dia_geral").select("*").order("data", { ascending: false }).order("nome").range(i, i + 999);
+    if (r.error) throw new Error(r.error.message);
+    out.push(...(r.data || [])); if (!r.data || r.data.length < 1000) break;
+  }
+  return out;
+}
+export async function guardarDiario(d: Diario, uid: string) {
+  const del = await sb.from("rh_dia_geral").delete().eq("data", d.data); if (del.error) throw new Error(del.error.message);
+  const linhas = d.linhas.map(l => ({ data: d.data, folha: l.folha, nome: l.nome, batidas: l.batidas, marcador: l.marcador, adian: l.adian, faltas: l.faltas, extras: l.extras, carga: l.carga, criado_por: uid }));
+  for (let i = 0; i < linhas.length; i += 500) { const r = await sb.from("rh_dia_geral").insert(linhas.slice(i, i + 500)); if (r.error) throw new Error(r.error.message); }
+}
