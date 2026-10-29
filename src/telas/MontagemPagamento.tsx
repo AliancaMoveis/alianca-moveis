@@ -145,7 +145,10 @@ export default function MontagemPagamento() {
   const { R, st, toast } = useApp() as any;
   const [dados, setDados] = useState<{ ef: Ef[]; vinc: Record<string, string | null> } | null>(null); const [erro, setErro] = useState("");
   const h = hoje();
-  const [de, setDe] = useState(() => quinzenaDe(h).de); const [ate, setAte] = useState(() => quinzenaDe(h).ate);
+  // quinzenas: "futura" = a que está correndo (contém hoje) · "atual" = a anterior, que vamos pagar agora · "passada" = a de antes
+  // ex.: em 29/10 → futura 25/10–09/11 · atual (a pagar) 10/10–24/10 · passada 25/09–09/10
+  const qPagar = quinzenaAntes(quinzenaDe(h));
+  const [de, setDe] = useState(() => qPagar.de); const [ate, setAte] = useState(() => qPagar.ate);
   const [pelo, setPelo] = useState<"fin" | "mont">("fin");
   const [fs, setFs] = useState<"todos" | "aprov" | "agu">("todos");
   const [q, setQ] = useState(""); const [aberto, setAberto] = useState("");
@@ -251,11 +254,11 @@ export default function MontagemPagamento() {
           <div className="field"><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
           <div className="field"><label>Pela data de</label><select value={pelo} onChange={e => setPelo(e.target.value as any)}><option value="fin">Finalização</option><option value="mont">Montagem</option></select></div>
           <div className="chips" style={{ margin: 0 }}>
-            {(() => { const qa = quinzenaDe(h), qp = quinzenaAntes(qa); const lista = [qa]; for (let k = 0; k < 11; k++) lista.push(quinzenaAntes(lista[lista.length - 1]));
+            {(() => { const qf = quinzenaDe(h), qa = quinzenaAntes(qf), qp = quinzenaAntes(qa); const lista = [qf]; for (let k = 0; k < 11; k++) lista.push(quinzenaAntes(lista[lista.length - 1]));
               const atual = lista.find(q => q.de === de && q.ate === ate);
               return <>
-                <button className={"chip" + (de === qa.de && ate === qa.ate ? " on" : "")} onClick={() => periodo(qa.de, qa.ate)} title={nomeMes(qa.ref)}>Quinzena atual</button>
-                <button className={"chip" + (de === qp.de && ate === qp.ate ? " on" : "")} onClick={() => periodo(qp.de, qp.ate)} title={nomeMes(qp.ref)}>Quinzena passada</button>
+                {([[qp, "Quinzena passada"], [qa, "Quinzena atual · a pagar"], [qf, "Quinzena futura · em andamento"]] as [any, string][]).map(([q, l]) =>
+                  <button key={l} className={"chip" + (de === q.de && ate === q.ate ? " on" : "")} onClick={() => periodo(q.de, q.ate)} title={nomeMes(q.ref)}>{l} ({br(q.de).slice(0, 5)} a {br(q.ate).slice(0, 5)})</button>)}
                 <select className="ma-quinz" value={atual ? atual.ref : ""} onChange={e => { const q = lista.find(x => x.ref === e.target.value); if (q) periodo(q.de, q.ate); }}>
                   <option value="">📅 Escolher quinzena…</option>{lista.map(q => <option key={q.ref} value={q.ref}>{nomeMes(q.ref)}</option>)}</select>
               </>; })()}
