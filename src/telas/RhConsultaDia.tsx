@@ -13,9 +13,14 @@ export default function RhConsultaDia() {
   const { R, toast } = useApp() as any;
   const [tudo, setTudo] = useState<DiaGeral[] | null>(null);
   const [erro, setErro] = useState(""); const [enviando, setEnviando] = useState("");
+  const [modo, setModo] = useState<"dia" | "periodo">("dia");
   const [dia, setDia] = useState(""); const [busca, setBusca] = useState(""); const [verTodos, setVerTodos] = useState(false);
+  const [de, setDe] = useState(""); const [ate, setAte] = useState("");
   const inp = useRef<HTMLInputElement>(null);
-  const rec = () => listarDiasGeral().then(d => { setTudo(d); if (d.length && !dia) setDia(d[0].data); }).catch(e => setErro(e.message));
+  const rec = () => listarDiasGeral().then(d => {
+    setTudo(d);
+    if (d.length) { const ds = Array.from(new Set(d.map(x => x.data))).sort(); if (!dia) setDia(ds[ds.length - 1]); if (!de) setDe(ds[0]); if (!ate) setAte(ds[ds.length - 1]); }
+  }).catch(e => setErro(e.message));
   useEffect(() => { rec(); }, []);
   if (!podeRh(R.currentUserId)) return <section className="view active"><div className="empty">Só o Bruno e a Patrícia (RH) veem esta tela.</div></section>;
 
@@ -38,6 +43,23 @@ export default function RhConsultaDia() {
   const trab = doDia.filter(x => (x.batidas || []).length).filter(x => !busca.trim() || x.nome.toLowerCase().includes(busca.toLowerCase()));
   const resto = doDia.filter(x => !(x.batidas || []).length);
   const marc = resto.filter(x => x.marcador);
+  const noPer = useMemo(() => (tudo || []).filter(x => x.data >= de && x.data <= ate && (x.batidas || []).length), [tudo, de, ate]);
+  const porPessoa = useMemo(() => {
+    const m = new Map<string, { folha: string; nome: string; dias: DiaGeral[]; extras: number; faltas: number }>();
+    for (const x of noPer) {
+      const k = x.folha + "¦" + x.nome;
+      const g = m.get(k) || { folha: x.folha, nome: x.nome, dias: [], extras: 0, faltas: 0 };
+      g.dias.push(x); g.extras += x.extras || 0; g.faltas += x.faltas || 0; m.set(k, g);
+    }
+    return Array.from(m.values()).filter(g => !busca.trim() || g.nome.toLowerCase().includes(busca.toLowerCase()))
+      .sort((a, b) => b.dias.length - a.dias.length || a.nome.localeCompare(b.nome));
+  }, [noPer, busca]);
+  const datasPer = useMemo(() => Array.from(new Set((tudo || []).filter(x => x.data >= de && x.data <= ate).map(x => x.data))).sort(), [tudo, de, ate]);
+  const exportarPer = () => baixarXlsx("trabalharam_" + de + "_a_" + ate + ".xlsx",
+    ["Nº folha", "Nome", "Dias trabalhados", "Quais dias", "Domingos", "Extras no período", "Faltas no período"],
+    porPessoa.map(g => [g.folha, g.nome, g.dias.length, g.dias.map(d => br(d.data).slice(0, 5)).join(", "),
+      g.dias.filter(d => new Date(d.data + "T12:00").getDay() === 0).length, g.extras ? hm(g.extras) : "", g.faltas ? hm(g.faltas) : ""]),
+    br(de) + " a " + br(ate));
   const exportar = () => baixarXlsx("trabalharam_" + dia + ".xlsx",
     ["Nº folha", "Nome", "Batidas", "Extras", "Faltas", "Dia"],
     trab.map(x => [x.folha, x.nome, (x.batidas || []).join(" "), x.extras ? hm(x.extras) : "", x.faltas ? hm(x.faltas) : "", br(dia) + " (" + diaSem(dia) + ")"]),
@@ -53,11 +75,35 @@ export default function RhConsultaDia() {
           <span className="hint">{tudo ? datas.length + " dia(s) registrado(s)" : erro || "Carregando…"}{dia ? " · reenviar o mesmo dia atualiza" : ""}</span>
         </div>
         <div className="ma-filtros">
-          <div className="field"><label>Dia</label><select value={dia} onChange={e => setDia(e.target.value)}>{!datas.length && <option value="">—</option>}{datas.map(d => <option key={d} value={d}>{br(d)} · {diaSem(d)}</option>)}</select></div>
+          <div className="field"><label>Consulta</label><div className="subnav" style={{ margin: 0 }}><button className={modo === "dia" ? "on" : ""} onClick={() => setModo("dia")}>Um dia</button><button className={modo === "periodo" ? "on" : ""} onClick={() => setModo("periodo")}>Período</button></div></div>
+          {modo === "dia" ? <div className="field"><label>Dia</label><select value={dia} onChange={e => setDia(e.target.value)}>{!datas.length && <option value="">—</option>}{datas.map(d => <option key={d} value={d}>{br(d)} · {diaSem(d)}</option>)}</select></div>
+            : <><div className="field"><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
+              <div className="field"><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div></>}
           <div className="field" style={{ flex: "1 1 180px" }}><label>Buscar nome</label><input value={busca} onChange={e => setBusca(e.target.value)} /></div>
         </div>
       </div>
-      {!dia ? <div className="empty" style={{ padding: 24 }}>Envie um Ponto Diário para começar.</div> : <>
+      {modo === "periodo" ? (!datasPer.length ? <div className="empty" style={{ padding: 24 }}>Nenhum dia registrado entre {br(de)} e {br(ate)} — envie os Pontos Diários desses dias.</div> : <>
+        <div className="kpis" style={{ marginTop: 14 }}>
+          <div className="card" style={{ padding: "12px 14px", flex: "1 1 160px" }}><div style={{ fontSize: 22, fontWeight: 800 }}>{porPessoa.length}</div><div className="hint">pessoas trabalharam no período</div></div>
+          <div className="card" style={{ padding: "12px 14px", flex: "1 1 160px" }}><div style={{ fontSize: 22, fontWeight: 800 }}>{datasPer.length}</div><div className="hint">dias registrados de {br(de)} a {br(ate)}</div></div>
+          <div className="card" style={{ padding: "12px 14px", flex: "1 1 160px" }}><div style={{ fontSize: 22, fontWeight: 800 }}>{hm(porPessoa.reduce((s2, g) => s2 + g.extras, 0))}</div><div className="hint">extras no período (total)</div></div>
+        </div>
+        {datasPer.length < Math.round((+new Date(ate) - +new Date(de)) / 86400000) + 1 && <p className="hint" style={{ marginTop: 8 }}>⚠ O período tem {Math.round((+new Date(ate) - +new Date(de)) / 86400000) + 1} dias, mas só {datasPer.length} foram enviados ({datasPer.map(d => br(d).slice(0, 5)).join(", ")}) — a consulta conta só o que foi enviado.</p>}
+        <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
+          <div className="ma-cab"><b>✅ Quem trabalhou de {br(de)} a {br(ate)}</b><button className="btn primary sm" disabled={!porPessoa.length} onClick={exportarPer}>⬇ Excel</button></div>
+          {!porPessoa.length ? <div className="empty" style={{ padding: 24 }}>Ninguém com batida{busca ? " com essa busca" : ""}.</div> :
+            <table className="ma-tab" style={{ minWidth: 820 }}>
+              <thead><tr><th>Nº folha</th><th>Nome</th><th className="n">Dias trab.</th><th className="n">Domingos</th><th>Quais dias</th><th className="n">Extras</th><th className="n">Faltas</th></tr></thead>
+              <tbody>{porPessoa.map(g => <tr key={g.folha + g.nome}>
+                <td>{g.folha}</td><td><b>{g.nome}</b></td>
+                <td className="n"><b>{g.dias.length}</b></td>
+                <td className="n">{(() => { const n = g.dias.filter(d => new Date(d.data + "T12:00").getDay() === 0).length; return n ? <b style={{ color: "var(--warn)" }}>{n}</b> : "–"; })()}</td>
+                <td style={{ maxWidth: 360 }}>{g.dias.map(d => br(d.data).slice(0, 5)).join(", ")}</td>
+                <td className="n">{g.extras ? <b>{hm(g.extras)}</b> : "–"}</td><td className="n">{g.faltas ? hm(g.faltas) : "–"}</td>
+              </tr>)}</tbody>
+            </table>}
+        </div>
+      </>) : !dia ? <div className="empty" style={{ padding: 24 }}>Envie um Ponto Diário para começar.</div> : <>
         <div className="kpis" style={{ marginTop: 14 }}>
           <div className="card" style={{ padding: "12px 14px", flex: "1 1 160px" }}><div style={{ fontSize: 22, fontWeight: 800 }}>{doDia.filter(x => (x.batidas || []).length).length}</div><div className="hint">trabalharam em {br(dia)} ({diaSem(dia)})</div></div>
           <div className="card" style={{ padding: "12px 14px", flex: "1 1 160px" }}><div style={{ fontSize: 22, fontWeight: 800 }}>{hm(doDia.reduce((s, x) => s + (x.extras || 0), 0))}</div><div className="hint">extras no dia (total)</div></div>
