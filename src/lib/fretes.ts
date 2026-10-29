@@ -86,3 +86,26 @@ export function rotaMaps(ents: Entrega[]) {
   const dest = pend[pend.length - 1], meio = pend.slice(0, -1).slice(0, 9);
   return "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=" + enc(dest) + (meio.length ? "&waypoints=" + meio.map(enc).join("%7C") : "");
 }
+
+// ---------- lançamento manual pelo escritório (sem o freteiro usar nada) ----------
+export type Lanc = { id: number; freteiro: string; data: string; romaneio: string; valor: number; tipo: "romaneio" | "total"; obs: string;
+  lancado_por: string; status: string; devolvido_motivo: string; enviado_em: string | null; aprovado_em: string | null; aprovado_por: string | null };
+let ml: Lanc[] = [{ id: 1, freteiro: "José Elias da Silva", data: "2026-10-13", romaneio: "104997", valor: 1159, tipo: "romaneio", obs: "", lancado_por: "Exemplo", status: "lancado", devolvido_motivo: "", enviado_em: null, aprovado_em: null, aprovado_por: null }];
+export async function listarLanc(): Promise<Lanc[]> {
+  if (MOCK) return ml.map(x => ({ ...x }));
+  const { data, error } = await sb.from("frete_lancamentos").select("*").order("data").order("id");
+  if (error) throw new Error(error.message);
+  return (data || []).map((x: any) => ({ ...x, valor: Number(x.valor) }));
+}
+export async function criarLanc(p: Partial<Lanc>) {
+  if (MOCK) { ml.push({ id: Date.now(), freteiro: "", data: "", romaneio: "", valor: 0, tipo: "romaneio", obs: "", lancado_por: "você", status: "lancado", devolvido_motivo: "", enviado_em: null, aprovado_em: null, aprovado_por: null, ...p } as Lanc); return; }
+  const { error } = await sb.from("frete_lancamentos").insert(p); if (error) throw new Error(error.message);
+}
+export async function mudarLanc(ids: number[], p: Partial<Lanc>) {
+  if (MOCK) { ml = ml.map(x => ids.includes(x.id) ? { ...x, ...p } : x); return; }
+  const { error } = await sb.from("frete_lancamentos").update(p).in("id", ids); if (error) throw new Error(error.message);
+}
+export async function apagarLanc(id: number) {
+  if (MOCK) { ml = ml.filter(x => x.id !== id); return; }
+  const { error } = await sb.from("frete_lancamentos").delete().eq("id", id); if (error) throw new Error(error.message);
+}

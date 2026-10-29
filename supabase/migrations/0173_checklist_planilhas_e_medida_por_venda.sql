@@ -22,3 +22,5 @@
 --  * montadores.telefone preenchido com o WhatsApp da lista enviada
 -- FRETES (simulação, 29/10/2026): frete_romaneios + frete_entregas (RLS: só o usuário do Bruno) e frete_sim_reiniciar()
 --  que recria o romaneio 104997 (José Elias, 13/10) com as 11 entregas. Telas: menu Fretes (escritório) e /frete (modo freteiro).
+-- FRETES lançamento pelo escritório (simulação, 29/10/2026): frete_lancamentos (RLS só o Bruno) — as meninas lançam
+--  freteiro + nº do romaneio + valor (um a um) ou só o total conferido; enviado → aprovado por freteiro; tela fretes_lanc.
