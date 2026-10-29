@@ -8,7 +8,8 @@ import { useApp } from "../estado";
 import { sb } from "../lib/supabase";
 import { MOCK } from "../lib/chat";
 import { baixarXlsx } from "../lib/planilha";
-import { fmtMoeda } from "../lib/regras";
+import { fmtMoeda, linkWhats } from "../lib/regras";
+import { pdfFinanceiro } from "../lib/pdfFinanceiro";
 import { col, lerArquivo } from "./Medidas";
 import { Kpi } from "./Dashboard";
 import { podeMontagemAgend } from "./MontagemAgend";
@@ -118,6 +119,21 @@ const nomeMes = (ref: string) => {
   return (ref.endsWith("-1") ? "1ª" : "2ª") + " quinzena de " + MES3[Number(ref.slice(5, 7)) - 1] + "/" + ref.slice(2, 4) + " (" + br(q.de).slice(0, 5) + " a " + br(q.ate).slice(0, 5) + ")";
 };
 const CAB_FIN = ["Montador", "Nome no Exact", "Titular da conta", "CPF/CNPJ", "Banco", "Agência", "Conta", "Tipo de conta", "PIX (tipo)", "PIX (chave)", "Montagens", "Total produtos", "Adicionais", "TOTAL A PAGAR", "Aprovado p/ pagamento", "Aguardando aprovação", "Período", "Obs."];
+// nota fiscal do montador por período: pedido pelo WhatsApp (Gestão/Financeiro) e "nota recebida" (Financeiro)
+type Nf = { chave: string; de: string; ate: string; valor: number; solicitada_em: string | null; solicitada_por: string | null; recebida_em: string | null; recebida_por: string | null };
+let mockNf: Nf[] = [];
+async function listaNf(): Promise<Nf[]> {
+  if (MOCK) return mockNf;
+  const { data, error } = await sb.from("montagem_nf").select("chave,de,ate,valor,solicitada_em,solicitada_por,recebida_em,recebida_por"); if (error) throw new Error(error.message); return (data || []) as Nf[];
+}
+async function nfAcao(acao: "pedir" | "recebida" | "desfazer", p: { chave: string; id: string | null; nome: string; de: string; ate: string; valor: number }) {
+  if (MOCK) { const i = mockNf.findIndex(x => x.chave === p.chave && x.de === p.de && x.ate === p.ate); const a: Nf = i >= 0 ? mockNf[i] : { chave: p.chave, de: p.de, ate: p.ate, valor: p.valor, solicitada_em: null, solicitada_por: null, recebida_em: null, recebida_por: null };
+    if (acao === "pedir") { a.solicitada_em = new Date().toISOString(); a.solicitada_por = "você"; } else if (acao === "recebida") { a.recebida_em = new Date().toISOString(); a.recebida_por = "você"; } else { a.recebida_em = null; a.recebida_por = null; }
+    if (i < 0) mockNf.push(a); return; }
+  const base = { p_chave: p.chave, p_montador_id: p.id, p_montador: p.nome, p_de: p.de, p_ate: p.ate, p_valor: p.valor };
+  const { error } = acao === "pedir" ? await sb.rpc("montagem_nf_solicitar", base) : await sb.rpc("montagem_nf_recebida", { ...base, p_desfazer: acao === "desfazer" });
+  if (error) throw new Error(error.message);
+}
 async function vincular(nome: string, id: string | null) {
   if (MOCK) { mockVinc[nome] = id; return; }
   const { error } = await sb.rpc("montagem_vincular", { p_nome: nome, p_montador: id }); if (error) throw new Error(error.message);
@@ -139,7 +155,9 @@ export default function MontagemPagamento() {
   const [sel, setSel] = useState<Set<string>>(new Set()); const [aprovando, setAprovando] = useState(false);
   const { setModal } = useApp() as any;
   const recarregar = () => carregar().then(setDados).catch(e => setErro(e.message));
-  useEffect(() => { recarregar(); }, []);
+  const [nfs, setNfs] = useState<Nf[]>([]);
+  const recNf = () => listaNf().then(setNfs).catch(() => setNfs([]));
+  useEffect(() => { recarregar(); recNf(); }, []);
 
   const cadastro = (st.montadores || []).filter((m: any) => m.ativo !== false);
   const porNorm = useMemo(() => { const m: Record<string, any> = {}; cadastro.forEach((x: any) => { m[norm(x.nome)] = x; }); return m; }, [st.montadores]);
@@ -149,7 +167,8 @@ export default function MontagemPagamento() {
     return porNorm[norm(nome)] || null;
   };
 
-  if (!podeMontagemAgend(R)) return <section className="view active"><div className="empty">Só a Gestão vê esta tela.</div></section>;
+  const gest = podeMontagemAgend(R), fin = R.mySetores().includes("financeiro");
+  if (!gest && !fin) return <section className="view active"><div className="empty">Só a Gestão e o Financeiro veem esta tela.</div></section>;
   const abas = <div className="subnav" style={{ margin: "0 0 14px" }}><button className={tela === "periodo" ? "on" : ""} onClick={() => setTela("periodo")}>📋 Montagens e pagamento</button><button className={tela === "hist" ? "on" : ""} onClick={() => setTela("hist")}>📚 Histórico de pagamentos (fechamentos)</button></div>;
   if (tela === "hist") return <section className="view active"><div className="view-head"><div><h2>💰 Montagem · Histórico de pagamentos</h2><p>Cada fechamento guarda o que foi gerado para o financeiro naquele mês (valores, contas e as O.S.). Se um mês for fechado de novo, o anterior fica guardado como “substituído” — nada se perde.</p></div></div>{abas}<Historico /></section>;
 
@@ -207,10 +226,9 @@ export default function MontagemPagamento() {
   const stTxt = fs === "aprov" ? "só aprovados para pagamento" : fs === "agu" ? "só aguardando aprovação" : "aprovados + aguardando aprovação";
 
   const relFinanceiro = () => {
-    const cab = CAB_FIN;
-    const linhas = grupos.slice().sort(cmp).map(g => { const k = g.cad?.conta || {}; return [g.cad?.nome || g.nome, g.nome, k.titular || "", k.docTitular || "", k.banco || "", k.agencia || "", k.conta || "", k.tipoConta || "", k.pixTipo || "", k.pixChave || "", g.n, r2(g.prod), r2(g.adic), r2(g.total), r2(g.aprov), r2(g.agu), per, temConta(g) ? "" : "SEM CONTA CADASTRADA"]; });
-    linhas.push(["TOTAL", "", "", "", "", "", "", "", "", "", soma(g => g.n), soma(g => g.prod), soma(g => g.adic), soma(g => g.total), soma(g => g.aprov), soma(g => g.agu), per, ""]);
-    baixarXlsx("pagamento_montadores_" + de + "_a_" + ate + ".xlsx", cab, linhas, "Pagamento montadores");
+    const qz = quinzenaDe(de), ehQ = qz.de === de && qz.ate === ate;
+    const linhas = grupos.slice().sort(cmp).map(g => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipoConta: k.tipoConta, pixTipo: k.pixTipo, pixChave: k.pixChave, total: r2(g.total) }; });
+    pdfFinanceiro("pagamento_montadores_" + de + "_a_" + ate + ".pdf", ehQ ? nomeMes(qz.ref) : "Período personalizado", per + " · " + stTxt, linhas).catch(e => toast("Não foi possível gerar o PDF: " + e.message));
   };
   const relDetalhado = () => {
     const cab = ["Montador", "O.S.", "Status", "Data montagem", "Data finalização", "Total produtos", "Adicionais", "Total O.S."];
@@ -225,7 +243,7 @@ export default function MontagemPagamento() {
       <div className="card ma-topo">
         <div className="ma-envio">
           <input ref={inp} type="file" accept=".csv,.xlsx" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) subir(f); }} />
-          <button className="btn primary" disabled={!!enviando} onClick={() => inp.current?.click()}>{enviando || "📤 Enviar relatório de montagens efetivadas (CSV ou Excel)"}</button>
+          {gest && <button className="btn primary" disabled={!!enviando} onClick={() => inp.current?.click()}>{enviando || "📤 Enviar relatório de montagens efetivadas (CSV ou Excel)"}</button>}
           <span className="hint">{dados ? dados.ef.length + " montagens guardadas. Pode enviar o mesmo período de novo: não duplica, só atualiza status e valores." : erro || "Carregando…"}</span>
         </div>
         <div className="ma-filtros">
@@ -270,19 +288,20 @@ export default function MontagemPagamento() {
         <div className="ma-cab">
           <b>Por montador · {per} · pela data de {pelo === "fin" ? "finalização" : "montagem"}</b>
           <input type="search" placeholder="🔎 Buscar montador" value={q} onChange={e => setQ(e.target.value)} style={{ maxWidth: 220 }} />
-          <button className="btn primary sm" onClick={relFinanceiro} disabled={!grupos.length}>⬇ Relatório para o financeiro</button>
+          <button className="btn primary sm" onClick={relFinanceiro} disabled={!grupos.length}>⬇ Relatório para o financeiro (PDF)</button>
           <button className="btn sm" onClick={relDetalhado} disabled={!grupos.length}>⬇ Detalhado por O.S.</button>
-          <button className="btn sm" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={de} ate={ate} />)}>＋ Ordem avulsa</button>
-          {aguTodas.length > 0 && <button className="btn sm" onClick={() => setSel(sel.size === aguTodas.length ? new Set() : new Set(aguTodas.map(e => e.chave)))}>{sel.size === aguTodas.length ? "Limpar seleção" : "☑ Selecionar todas aguardando (" + aguTodas.length + ")"}</button>}
-          <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} mapa={Object.fromEntries(grupos.flatMap(g => Array.from(new Set([g.nome, ...g.itens.map(e => e.montador)])).map(n => [n, g.cad?.id || ""])))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento da quinzena</button>
+          {gest && <button className="btn sm" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={de} ate={ate} />)}>＋ Ordem avulsa</button>}
+          {gest && aguTodas.length > 0 && <button className="btn sm" onClick={() => setSel(sel.size === aguTodas.length ? new Set() : new Set(aguTodas.map(e => e.chave)))}>{sel.size === aguTodas.length ? "Limpar seleção" : "☑ Selecionar todas aguardando (" + aguTodas.length + ")"}</button>}
+          {gest && <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} mapa={Object.fromEntries(grupos.flatMap(g => Array.from(new Set([g.nome, ...g.itens.map(e => e.montador)])).map(n => [n, g.cad?.id || ""])))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento da quinzena</button>}
         </div>
         {selItens.length > 0 && <div className="ma-aprovar">
           <span><b>{selItens.length} O.S. selecionada(s)</b> · {fmtMoeda(r2(selItens.reduce((s, e) => s + e.total, 0)))} · {new Set(selItens.map(e => e.montador)).size} montador(es)</span>
           <button className="btn primary" disabled={aprovando} onClick={aprovarSel}>{aprovando ? "Aprovando…" : "✅ Aprovar para pagamento"}</button>
           <button className="btn ghost sm" onClick={() => setSel(new Set())}>Limpar</button></div>}
         {!vis.length ? <div className="empty" style={{ padding: 24 }}>{dados && dados.ef.length ? "Nenhuma montagem efetivada neste período." : "Envie o relatório do Exact para começar."}</div> :
-          <table className="ma-tab"><thead><tr><th style={{ width: 28 }}></th><Th k="nome" l="Montador" /><Th k="n" l="Montagens" n /><Th k="prod" l="Produtos" n /><Th k="adic" l="Adicionais" n /><Th k="total" l="Total a pagar" n /><Th k="aprov" l="✅ Aprovado" n /><Th k="agu" l="⏳ Aguardando" n /><th>Conta para pagamento</th></tr></thead>
+          <table className="ma-tab"><thead><tr><th style={{ width: 28 }}></th><Th k="nome" l="Montador" /><Th k="n" l="Montagens" n /><Th k="prod" l="Produtos" n /><Th k="adic" l="Adicionais" n /><Th k="total" l="Total a pagar" n /><Th k="aprov" l="✅ Aprovado" n /><Th k="agu" l="⏳ Aguardando" n /><th>Conta para pagamento</th><th>Nota fiscal</th></tr></thead>
             <tbody>{vis.map(g => <Linha key={g.nome} g={g} recarregar={recarregar} sel={sel} alternar={alternar} aberto={aberto === g.nome} abrir={() => setAberto(aberto === g.nome ? "" : g.nome)} cadastro={cadastro} temConta={temConta(g)}
+              gest={gest} nf={nfs.find(x => x.chave === chaveNf(g) && x.de === de && x.ate === ate) || null} de={de} ate={ate} recNf={recNf}
               vincular={async (id: string | null) => { try { await vincular(g.nome, id); await recarregar(); toast("Vínculo salvo"); } catch (e: any) { toast(e.message); } }} dataDe={dataDe} />)}</tbody>
             <tfoot><tr><td></td><td>Total</td><td className="n">{soma(g => g.n)}</td><td className="n">{fmtMoeda(soma(g => g.prod))}</td><td className="n">{fmtMoeda(soma(g => g.adic))}</td><td className="n">{fmtMoeda(soma(g => g.total))}</td><td className="n">{fmtMoeda(soma(g => g.aprov))}</td><td className="n">{fmtMoeda(soma(g => g.agu))}</td><td></td></tr></tfoot>
           </table>}
@@ -292,7 +311,14 @@ export default function MontagemPagamento() {
   );
 }
 
-function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarregar, sel, alternar }: any) {
+const chaveNf = (g: G) => g.cad ? "id:" + g.cad.id : "nome:" + g.nome;
+function msgNf(nome: string, de: string, ate: string, valor: number) {
+  const qz = quinzenaDe(de), ehQ = qz.de === de && qz.ate === ate;
+  const prim = String(nome || "").replace(/\s*\(.*\)\s*/g, " ").replace(/[._]/g, " ").trim().split(/\s+/)[0] || "";
+  const pn = prim ? prim.charAt(0).toUpperCase() + prim.slice(1).toLowerCase() : "";
+  return `Olá${pn ? ", " + pn : ""}! Tudo bem?\n\nO fechamento da ${ehQ ? nomeMes(qz.ref) : "período de " + br(de) + " a " + br(ate)} está pronto e precisamos da *nota fiscal* para enviar ao financeiro.\n\n*Valor total da nota: ${fmtMoeda(valor)}*\n\nPor favor, emita a nota só com o valor total (sem discriminar produtos ou adicionais) e envie para o e-mail da empresa.\n\nObrigado!\nAliança Móveis`;
+}
+function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarregar, sel, alternar, gest, nf, de, ate, recNf }: any) {
   const agu: Ef[] = g.itens.filter((e: Ef) => aguardando(e));
   const nSel = agu.filter(e => sel.has(e.chave)).length;
   const desfazerAprov = async (e: Ef) => { if (!confirm("Desfazer a aprovação no 360 da " + (e.origem === "avulsa" ? "ordem avulsa" : e.os) + "? Ela volta para ⏳ Aguardando.")) return; try { await aprovarOS([e.chave], true); toast("Aprovação desfeita"); await recarregar(); } catch (x: any) { toast(x.message); } };
@@ -304,23 +330,24 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
   const editar = (e: Ef) => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} inicial={{ chave: e.chave, montador: e.montador, tipo: e.tipo || "outro", descricao: e.descricao || "", de: e.data_montagem, ate: e.data_finalizacao || e.data_montagem, prod: String(e.produtos).replace(".", ","), adic: e.adicionais ? String(e.adicionais).replace(".", ",") : "", status: aprovado(e) ? "aprovado" : "aguardando" }} />);
   return <>
     <tr className={"ma-lin" + (aberto ? " on" : "")} onClick={abrir}>
-      <td onClick={e => e.stopPropagation()}>{agu.length > 0 && <input type="checkbox" title={"Selecionar as " + agu.length + " O.S. aguardando deste montador"} checked={nSel === agu.length} ref={el => { if (el) el.indeterminate = nSel > 0 && nSel < agu.length; }} onChange={e => alternar(agu.map(x => x.chave), e.target.checked)} />}</td>
+      <td onClick={e => e.stopPropagation()}>{gest && agu.length > 0 && <input type="checkbox" title={"Selecionar as " + agu.length + " O.S. aguardando deste montador"} checked={nSel === agu.length} ref={el => { if (el) el.indeterminate = nSel > 0 && nSel < agu.length; }} onChange={e => alternar(agu.map(x => x.chave), e.target.checked)} />}</td>
       <td><b>{g.cad?.nome || g.nome}</b>{g.cad && g.cad.nome !== g.nome ? <small className="hint"> · Exact: {g.nome}</small> : null}</td>
       <td className="n">{g.n}</td><td className="n">{fmtMoeda(g.prod)}</td><td className="n">{fmtMoeda(g.adic)}</td>
       <td className="n"><b>{fmtMoeda(g.total)}</b></td>
       <td className="n">{g.aprovN ? fmtMoeda(g.aprov) : "—"}</td>
       <td className="n">{g.aguN ? fmtMoeda(g.agu) : "—"}</td>
       <td onClick={e => e.stopPropagation()} style={{ minWidth: 220 }}>
-        {(!g.cad || trocar) ? <select defaultValue={g.cad?.id || ""} onChange={e => { vincular(e.target.value || null); setTrocar(false); }} style={{ fontSize: 12.5 }}>
+        {gest && (!g.cad || trocar) ? <select defaultValue={g.cad?.id || ""} onChange={e => { vincular(e.target.value || null); setTrocar(false); }} style={{ fontSize: 12.5 }}>
           <option value="">{g.cad ? "— sem vínculo —" : "⚠️ Vincular ao cadastro…"}</option>
           {cadastro.map((m: any) => <option key={m.id} value={m.id}>{m.nome}</option>)}</select>
           : temConta ? <span className="ma-conta" title={[k.titular, k.docTitular].filter(Boolean).join(" · ")}>✔ {k.banco ? k.banco + " · ag " + (k.agencia || "—") + " · cc " + (k.conta || "—") : "PIX " + (k.pixChave || "")} <a href="#" onClick={e => { e.preventDefault(); setTrocar(true); }}>trocar</a></span>
           : <span style={{ color: "var(--warn)", fontWeight: 700, fontSize: 12.5 }}>⚠️ {g.cad.nome}: sem conta cadastrada <a href="#" onClick={e => { e.preventDefault(); setTrocar(true); }}>trocar</a></span>}
       </td>
+      <td onClick={e => e.stopPropagation()} style={{ minWidth: 190 }}><NfCelula g={g} nf={nf} de={de} ate={ate} recNf={recNf} /></td>
     </tr>
-    {aberto && <tr className="ma-dias"><td colSpan={9}>
+    {aberto && <tr className="ma-dias"><td colSpan={10}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "2px 0 8px" }}>
-        <button className="btn sm primary" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={dataDe(g.itens[0]) || hoje()} ate={hoje()} inicial={{ montador: nomeAv }} />)}>＋ Incluir ordem avulsa</button>
+        {gest && <button className="btn sm primary" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={dataDe(g.itens[0]) || hoje()} ate={hoje()} inicial={{ montador: nomeAv }} />)}>＋ Incluir ordem avulsa</button>}
         <span className="hint">Serviço dentro da loja, frete ou outro pagamento manual — entra no total deste montador.</span>
       </div>
       <table className="ma-os"><thead><tr><th style={{ width: 26 }}>{agu.length > 0 && <input type="checkbox" title="Selecionar todas aguardando" checked={nSel === agu.length} onChange={e => alternar(agu.map(x => x.chave), e.target.checked)} />}</th><th>O.S.</th><th>Montagem</th><th>Finalização</th><th>Status</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th></tr></thead>
@@ -364,7 +391,11 @@ function Historico() {
   if (!l.length) return <div className="empty" style={{ padding: 24 }}>Nenhum pagamento fechado ainda. Na aba “Montagens e pagamento”, filtre a quinzena e clique em “🔒 Fechar pagamento da quinzena”.</div>;
   const f = l.find(x => x.id === ab);
   const per = (x: any) => br(x.de) + " a " + br(x.ate);
-  const baixarFin = () => { if (!f) return; const linhas = itens.map(x => [x.montador, x.nome_exact, x.titular || "", x.doc || "", x.banco || "", x.agencia || "", x.conta || "", x.tipo_conta || "", x.pix_tipo || "", x.pix_chave || "", x.montagens, Number(x.produtos), Number(x.adicionais), Number(x.total), Number(x.aprovado), Number(x.aguardando), per(f), (x.conta || x.pix_chave) ? "" : "SEM CONTA CADASTRADA"]);
+  const baixarFin = () => { if (!f) return;
+    pdfFinanceiro("pagamento_montadores_" + f.referencia + (f.ativo ? "" : "_substituido_" + f.id) + ".pdf", nomeMes(f.referencia), per(f),
+      itens.map(x => ({ montador: x.montador, titular: x.titular, doc: x.doc, banco: x.banco, agencia: x.agencia, conta: x.conta, tipoConta: x.tipo_conta, pixTipo: x.pix_tipo, pixChave: x.pix_chave, total: Number(x.total) })),
+      f.ativo ? "" : "FECHAMENTO SUBSTITUÍDO — não usar para pagamento").catch(e => alert("Não foi possível gerar o PDF: " + e.message)); };
+  const baixarFinXls = () => { if (!f) return; const linhas = itens.map(x => [x.montador, x.nome_exact, x.titular || "", x.doc || "", x.banco || "", x.agencia || "", x.conta || "", x.tipo_conta || "", x.pix_tipo || "", x.pix_chave || "", x.montagens, Number(x.produtos), Number(x.adicionais), Number(x.total), Number(x.aprovado), Number(x.aguardando), per(f), (x.conta || x.pix_chave) ? "" : "SEM CONTA CADASTRADA"]);
     linhas.push(["TOTAL", "", "", "", "", "", "", "", "", "", f.n_os, "", "", Number(f.total), Number(f.aprovado), Number(f.aguardando), per(f), f.ativo ? "" : "FECHAMENTO SUBSTITUÍDO"]);
     baixarXlsx("pagamento_montadores_" + f.referencia + (f.ativo ? "" : "_substituido_" + f.id) + ".xlsx", CAB_FIN, linhas, "Pagamento " + f.referencia); };
   const baixarDet = () => { if (!f) return; const linhas = itens.flatMap(x => (x.ordens || []).map((o: any) => [x.montador, o.origem === "avulsa" ? "Avulsa · " + (TIPOS_AV[o.tipo || "outro"] || "").replace(/^\S+ /, "") + (o.desc ? ": " + o.desc : "") : o.os, /efetuado/i.test(o.status) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(o.mont), br(o.fin), Number(o.prod), Number(o.adic), Number(o.total)]));
@@ -377,7 +408,7 @@ function Historico() {
           <td><small>{x.criado_por || ""} · {new Date(x.criado_em).toLocaleString("pt-BR").slice(0, 16)}{x.obs ? " · " + x.obs : ""}{x.substituido_em ? " · substituído em " + new Date(x.substituido_em).toLocaleDateString("pt-BR") : ""}</small></td><td className="g">ver ›</td></tr>)}</tbody></table>
     </div>
     {f && <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
-      <div className="ma-cab"><b>{nomeMes(f.referencia)}{f.ativo ? "" : " (substituído)"} · {per(f)}</b><button className="btn primary sm" onClick={baixarFin}>⬇ Relatório para o financeiro</button><button className="btn sm" onClick={baixarDet}>⬇ Detalhado por O.S.</button></div>
+      <div className="ma-cab"><b>{nomeMes(f.referencia)}{f.ativo ? "" : " (substituído)"} · {per(f)}</b><button className="btn primary sm" onClick={baixarFin}>⬇ Relatório para o financeiro (PDF)</button><button className="btn sm" onClick={baixarDet}>⬇ Detalhado por O.S.</button></div>
       <table className="ma-tab"><thead><tr><th>Montador</th><th>Conta</th><th className="n">Montagens</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th></tr></thead>
         <tbody>{itens.map(x => <tr key={x.id || x.nome_exact}><td><b>{x.montador}</b></td><td><small>{x.conta || x.pix_chave ? [x.banco, x.agencia && "ag " + x.agencia, x.conta && "cc " + x.conta, x.pix_chave && "PIX " + x.pix_chave].filter(Boolean).join(" · ") : <span style={{ color: "var(--warn)" }}>sem conta</span>}</small></td><td className="n">{x.montagens}</td><td className="n">{fmtMoeda(Number(x.produtos))}</td><td className="n">{fmtMoeda(Number(x.adicionais))}</td><td className="n"><b>{fmtMoeda(Number(x.total))}</b></td></tr>)}</tbody></table>
     </div>}
@@ -411,4 +442,21 @@ function ModalAvulsa({ cadastro, pronto, de, ate, inicial }: any) {
     <p className="hint" style={{ margin: "6px 0 0" }}>Entra no relatório de pagamento do montador, somada ao total. No filtro do relatório conta pela data final do período.</p>
     <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" disabled={sal} onClick={ir}>{sal ? "Salvando…" : "Salvar"}</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
   </Modal>;
+}
+
+function NfCelula({ g, nf, de, ate, recNf }: any) {
+  const { toast } = useApp() as any;
+  const nome = g.cad?.nome || g.nome, tel = g.cad?.telefone || "";
+  const p = { chave: chaveNf(g), id: g.cad?.id || null, nome, de, ate, valor: r2(g.total) };
+  const href = tel ? linkWhats(tel, msgNf(nome, de, ate, r2(g.total))) : "";
+  const quando = (s: string | null) => s ? new Date(s).toLocaleString("pt-BR").slice(0, 5) : "";
+  const ac = async (a: "pedir" | "recebida" | "desfazer") => { try { await nfAcao(a, p); await recNf(); if (a !== "pedir") toast(a === "recebida" ? "Nota recebida ✅" : "Recebimento desfeito"); } catch (e: any) { toast(e.message); } };
+  return <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5 }}>
+    {href ? <a className="btn sm" href={href} target="_blank" rel="noopener" onClick={() => ac("pedir")} title={"WhatsApp " + tel}
+        style={{ background: "#25a244", borderColor: "#25a244", color: "#fff", fontWeight: 700, textDecoration: "none", alignSelf: "flex-start" }}>📲 {nf?.solicitada_em ? "Pedir NF de novo" : "Pedir nota fiscal"}</a>
+      : <span className="hint">sem WhatsApp no cadastro</span>}
+    {nf?.solicitada_em && <span style={{ color: "#8a5a00" }}>📨 NF solicitada {quando(nf.solicitada_em)}{nf.solicitada_por ? " · " + nf.solicitada_por : ""}{Number(nf.valor) !== r2(g.total) ? " (valor era " + fmtMoeda(Number(nf.valor)) + ")" : ""}</span>}
+    {nf?.recebida_em ? <span style={{ color: "var(--st-concluida)", fontWeight: 700 }}>✅ Nota recebida {quando(nf.recebida_em)}{nf.recebida_por ? " · " + nf.recebida_por : ""} <a href="#" style={{ fontWeight: 400 }} onClick={e => { e.preventDefault(); if (confirm("Desfazer o recebimento da nota de " + nome + "?")) ac("desfazer"); }}>desfazer</a></span>
+      : <button className="btn sm" style={{ alignSelf: "flex-start", borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} onClick={() => ac("recebida")}>✅ Nota recebida</button>}
+  </div>;
 }

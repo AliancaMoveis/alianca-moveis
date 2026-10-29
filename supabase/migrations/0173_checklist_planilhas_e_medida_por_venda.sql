@@ -14,3 +14,9 @@
 --    fotos/medidas; liberada/origem outro_sistema quando o Exact já está "aguardando checklist") ou sobe pendente → validar
 --  * triggers trg_ck_garante_medida (chamados, checklist novo) e trg_item_garante_medida (venda_itens de visita_consultor)
 --  * pode_ver_chamado_ctx: Supervisão de Medidas lê os checklists
+-- FINANCEIRO / montadores (29/10/2026)
+--  * setor 'financeiro' (usuários salete.financeiro@ e patricia.rh@alianca360.com.br)
+--  * _eh_financeiro, _pode_pag_montagem; pode_conta_montador inclui o Financeiro; políticas *_financeiro de leitura em
+--    montagem_efet, montagem_vinculo, montagem_fechamentos, montagem_fech_itens
+--  * montagem_nf (nota fiscal por montador e período) + montagem_nf_solicitar / montagem_nf_recebida
+--  * montadores.telefone preenchido com o WhatsApp da lista enviada
