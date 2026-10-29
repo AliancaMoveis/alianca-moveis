@@ -991,6 +991,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     else if (false) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
     // Montagem: só acompanhamento dos agendamentos do Exact (agendadoras e montadores) — só a Gestão
     if (mySetores().includes("gestao")) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Montagem", ic: "🔧", itens: [["montagem_agend", "Agendamentos (Exact)"], ["montagem_pag", "Montagens efetivadas e pagamento"]] });
+    // Fretes: em SIMULAÇÃO, só no usuário do Bruno
+    if (currentUserId === "00000000-0000-4000-a000-000000000007") G.push({ g: "Fretes", ic: "🚚", itens: [["fretes", "Romaneios (simulação)"]] });
     // Financeiro (Salete, Patrícia): pagamento dos montadores — relatório em PDF e controle das notas fiscais
     else if (mySetores().includes("financeiro")) G.push({ g: "Financeiro", ic: "💰", itens: [["montagem_pag", "Montadores · pagamento e notas fiscais"]] });
     if (podeConsultaProduto()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Produtos", ic: "🏷", itens: [["consulta_produto", "Consulta de produto"], ...(podeNegociacao() ? [["negociacao", "🤝 Negociação"]] : [])] });

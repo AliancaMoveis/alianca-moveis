@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import Shell from "../telas/Shell";
 import AppMovel, { perfilMovel } from "./AppMovel";
+import Freteiro from "./Freteiro";
 import { abrirAviso } from "../comp/Avisos";
 
 const CHAVE = "a360-versao";
@@ -41,6 +42,8 @@ export default function Raiz() {
   const [versao, setVersao] = useState(ler());
   const perfil = perfilMovel(R);
   const trocar = (v: string) => { gravar(v); setVersao(v); window.scrollTo(0, 0); };
+  // /frete = modo freteiro (celular) — simulação dos fretes
+  if (location.pathname.replace(/\/+$/, "") === "/frete" || new URLSearchParams(location.search).has("frete")) return <Freteiro />;
   if (cel && perfil && versao !== "completa") return <AppMovel perfil={perfil} completa={() => trocar("completa")} />;
   return <>
     <Shell />

@@ -20,3 +20,5 @@
 --    montagem_efet, montagem_vinculo, montagem_fechamentos, montagem_fech_itens
 --  * montagem_nf (nota fiscal por montador e período) + montagem_nf_solicitar / montagem_nf_recebida
 --  * montadores.telefone preenchido com o WhatsApp da lista enviada
+-- FRETES (simulação, 29/10/2026): frete_romaneios + frete_entregas (RLS: só o usuário do Bruno) e frete_sim_reiniciar()
+--  que recria o romaneio 104997 (José Elias, 13/10) com as 11 entregas. Telas: menu Fretes (escritório) e /frete (modo freteiro).

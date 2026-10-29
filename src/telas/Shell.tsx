@@ -13,6 +13,7 @@ import Qualidade from "./Qualidade";
 import AgendaConsultores from "./AgendaConsultores";
 import VisitasRealizadas from "./VisitasRealizadas";
 import MontagemPagamento from "./MontagemPagamento";
+import Fretes from "./Fretes";
 import MontagemMeus from "./MontagemMeus";
 import AgendaVendedores from "./AgendaVendedores";
 import ControleVendedores from "./ControleVendedores";
@@ -197,6 +198,7 @@ export default function Shell() {
             {atual === "ce_realizadas" && <VisitasRealizadas />}
             {atual === "ce_vendas" && (R.ehGestao() || R.mySetores().includes("marketing_supervisao")) && <VendasConsultores />}
             {atual === "montagem_pag" && <MontagemPagamento />}
+            {atual === "fretes" && <Fretes />}
             {atual === "montagem_meus" && <MontagemMeus />}
             {atual === "agenda_vendedores" && <AgendaVendedores />}
             {atual === "encontrar_vendas360" && R.podeEncontrarVendas() && <EncontrarVendas360 />}
