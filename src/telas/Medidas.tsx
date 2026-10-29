@@ -236,7 +236,13 @@ function ListaMedidas({ aba }: { aba: string }) {
   const [ckMeu, setCkMeu] = useState<Record<string, string>>({});
   useEffect(() => { if (aba === "minhas" || aba === "minhasfeitas") A.minhasMedidasChecklist().then(setCkMeu).catch(() => setCkMeu({})); }, [aba]);
   const diaCk = (c: any) => { const k = ckPorVenda[c.pedido]; return k && k.tratativa?.checklist?.etapa === "agendado" ? String(k.tratativa.checklist.agendadoPara || "").slice(0, 16) : String(ckMeu[c.pedido] || "").slice(0, 16); };
-  const quemMede = (c: any) => { const m = c.tratativa?.medida || {}; return c.medidorId ? R.nomeUser(c.medidorId) : m.consultorNome ? m.consultorNome + " (consultor)" : "Sem medidor"; };
+  // uma pessoa = uma opção: medidor ou consultor, tudo que é dela junto (pelo usuário; o nome em texto é casado com o usuário)
+  const nk = (x: string) => tira(String(x || "").trim().split(/\s+/)[0]);
+  const quemMede = (c: any) => { const m = c.tratativa?.medida || {};
+    const id = c.medidorId || m.consultorVisita || m.realizadaPor;
+    if (id && R.nomeUser(id) !== "—") return R.nomeUser(id);
+    if (m.consultorNome) { const u = (st.usuarios || []).find((x: any) => x.ativo !== false && nk(x.nome) === nk(m.consultorNome)); return u ? u.nome : m.consultorNome; }
+    return "Sem medidor"; };
   // data da medição: agendada → dia marcado; feita → quando foi medida; aprovada → quando foi aprovada; pendente → quando entrou
   const dataMed = (c: any) => { const m = c.tratativa?.medida || {}, e = R.etapaMedida(c);
     return String((e === "agendada" ? c.dataMedida : e === "liberada" ? (m.liberadaEm || m.realizadaEm || c.dataMedida) : ["realizada", "validar"].includes(e) ? (m.realizadaEm || c.dataMedida) : null) || c.criadoEm || "").slice(0, 10); };
