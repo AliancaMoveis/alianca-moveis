@@ -89,3 +89,26 @@ export async function admissaoSubirDoc(token: string, campo: string, f: File): P
 export async function admissaoEnviar(token: string, dados: any, docs: any[]) {
   const r = await sb.rpc("rh_admissao_enviar", { p_token: token, p_dados: dados, p_docs: docs }); if (r.error) throw new Error(r.error.message);
 }
+
+// ---------- gestão (valores, lançamentos do mês, férias) ----------
+export type Cfg = { va_dia: number; va_atestado: boolean; vt_dia: number; jornada_min: number };
+export const CFG_PADRAO: Cfg = { va_dia: 0, va_atestado: false, vt_dia: 0, jornada_min: 440 };
+export async function lerCfgRh(): Promise<Cfg> {
+  const r = await sb.from("rh_cfg").select("valor").eq("chave", "valores").maybeSingle(); erro(r as any);
+  return { ...CFG_PADRAO, ...((r.data as any)?.valor || {}) };
+}
+export async function salvarCfgRh(c: Cfg, uid: string) {
+  const r = await sb.from("rh_cfg").upsert({ chave: "valores", valor: c, atualizado_em: new Date().toISOString(), atualizado_por: uid }); erro(r);
+}
+export type Lanc = { id: number; funcionario_id: string; competencia: string; tipo: string; descricao: string; valor: number; criado_em: string };
+export const TIPOS_LANC: [string, string, 1 | -1][] = [["desconto", "Desconto", -1], ["adiantamento", "Adiantamento (desconta)", -1], ["bonus", "Bônus / prêmio (soma)", 1], ["reembolso", "Reembolso (soma)", 1]];
+export async function listarLanc(competencia: string): Promise<Lanc[]> {
+  const r = await sb.from("rh_lancamentos").select("*").eq("competencia", competencia).order("criado_em"); erro(r);
+  return (r.data || []).map((x: any) => ({ ...x, valor: Number(x.valor) }));
+}
+export async function criarLancRh(p: Partial<Lanc>, uid: string) { const r = await sb.from("rh_lancamentos").insert({ ...p, criado_por: uid }); erro(r); }
+export async function apagarLancRh(id: number) { const r = await sb.from("rh_lancamentos").delete().eq("id", id); erro(r); }
+export type Ferias = { id: number; funcionario_id: string; de: string; ate: string; obs: string };
+export async function listarFerias(): Promise<Ferias[]> { const r = await sb.from("rh_ferias").select("*").order("de", { ascending: false }); erro(r); return (r.data || []) as any; }
+export async function criarFerias(p: Partial<Ferias>, uid: string) { const r = await sb.from("rh_ferias").insert({ ...p, criado_por: uid }); erro(r); }
+export async function apagarFerias(id: number) { const r = await sb.from("rh_ferias").delete().eq("id", id); erro(r); }
