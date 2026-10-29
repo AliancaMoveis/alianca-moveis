@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { fmtMoeda, linkWhats } from "../lib/regras";
+import { abrirWhats, fmtMoeda, linkWhats } from "../lib/regras";
 
 export type ItemPP = { codigo: string; nome: string; cor?: string; ref?: string; tamanho?: string; qtd: number; obs?: string; preco?: string; promob?: boolean };
 export type PP = { id?: string; numero?: number; cliente_nome: string; telefone: string; endereco: string; itens: ItemPP[]; valor_bruto?: any; valor_negociado?: any; pagamento?: string; obs?: string; status?: string; numero_venda?: string; criado_em?: string; atualizado_em?: string; neg_status?: string; neg_enviado_em?: string; neg_valor?: any; neg_desconto?: any; neg_pagamento?: string; neg_obs?: string };
@@ -138,7 +138,7 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
       if (fechar) { if (lerAlvo() === r.id) gravarAlvo(""); onVoltar(); } else setPP(x => x ? { ...x, id: r.id, numero: r.numero } : x); }
     catch (e: any) { toast(e.message || "Não consegui salvar"); } finally { setSalvando(false); }
   }
-  const zap = (p: PP) => { const l = linkWhats(p.telefone, textoPP(p)); if (l) window.open(l, "_blank"); else toast("Informe o telefone do cliente"); };
+  const zap = (p: PP) => { const l = linkWhats(p.telefone, textoPP(p)); if (l) abrirWhats(l); else toast("Informe o telefone do cliente"); };
   const recarregar = () => carregarPP(true).then(() => avisar());
 
   return <div className="pp">

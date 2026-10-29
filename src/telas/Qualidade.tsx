@@ -4,7 +4,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { fmtDate, fmtDateTime, hojeISO, isoLocal, linkWhats } from "../lib/regras";
+import { abrirWhats, fmtDate, fmtDateTime, hojeISO, isoLocal, linkWhats } from "../lib/regras";
 import { ETAPAS, QUESTIONARIO_PADRAO, calcNps, linkAvaliacao, msgAvaliacao, msgPesquisa, porSecao, type Etapa, type Secao } from "../lib/qualidade";
 import { PERIODOS, periodoDe, type Per } from "./Anuncios";
 
@@ -101,13 +101,13 @@ function Enviar({ recarregar, Q }: { recarregar: () => void; Q: { titulo: string
     } catch (e: any) { toast(e.message || "Não foi possível gerar a pesquisa"); }
     finally { setEnviando(false); }
   };
-  const abrirWhats = () => { if (!gerado) return; const href = linkWhats(gerado.tel, gerado.msg); if (href) window.open(href, "_blank", "noopener");
+  const abrirZap = () => { if (!gerado) return; const href = linkWhats(gerado.tel, gerado.msg); if (href) abrirWhats(href);
     if (!MOCK) A.avaliacaoEnviada(gerado.id).then(recarregar).catch(() => null); };
   const copiar = async () => { try { await navigator.clipboard.writeText(gerado.msg); toast("Mensagem copiada"); } catch { toast("Não consegui copiar"); } };
   if (gerado) return <div className="ql-card ql-ok">
     <h3>✓ Pesquisa pronta para {gerado.cliente}</h3>
     <pre className="ql-msg">{gerado.msg}</pre>
-    <div className="ql-bts"><button className="btn primary" onClick={abrirWhats}>Abrir no WhatsApp e enviar</button><button className="btn" onClick={copiar}>Copiar mensagem</button>
+    <div className="ql-bts"><button className="btn primary" onClick={abrirZap}>Abrir no WhatsApp e enviar</button><button className="btn" onClick={copiar}>Copiar mensagem</button>
       <button className="btn ghost" onClick={() => { setGerado(null); setF({ cliente: "", telefone: "", servicoEm: f.servicoEm, chamadoId: "" }); setPessoas({}); setQ(""); }}>Nova pesquisa</button></div>
   </div>;
   return <div className="ql-card">
@@ -134,7 +134,7 @@ function Enviadas({ lista, recarregar }: any) {
   const [q, setQ] = useState("");
   if (!lista) return <div className="dn-vazio">Carregando…</div>;
   const l = lista.filter((a: any) => !q.trim() || (a.cliente + " " + a.telefone + " " + (a.responsavel || "") + " " + Object.values(a.pessoas || {}).join(" ")).toLowerCase().includes(q.trim().toLowerCase()));
-  const reenviar = (a: any) => { const href = linkWhats(a.telefone, msgDe(a)); if (href) window.open(href, "_blank", "noopener");
+  const reenviar = (a: any) => { const href = linkWhats(a.telefone, msgDe(a)); if (href) abrirWhats(href);
     if (!MOCK) A.avaliacaoEnviada(a.id).then(recarregar).catch(() => null); };
   return <div className="ql-card">
     <input className="cv-busca" type="search" placeholder="🔎 Buscar cliente, telefone, vendedor ou montador" value={q} onChange={e => setQ(e.target.value)} />

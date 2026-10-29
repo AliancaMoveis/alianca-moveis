@@ -114,6 +114,32 @@ export const waTexto = (numero: string, texto = "") => {
   return ehCelular ? "https://wa.me/" + numero + (t ? "?text=" + t : "")
     : "whatsapp://send?phone=" + numero + (t ? "&text=" + t : "");
 };
+/** Abre a conversa: tenta o aplicativo instalado (Beta ou normal, tanto faz) e, se nada abrir em ~2s — máquina sem o app —, abre o WhatsApp Web na mesma conversa. */
+export function abrirWhats(url: string) {
+  if (!url) return;
+  if (!url.startsWith("whatsapp://")) { window.open(url, "_blank", "noopener"); return; }
+  const web = url.replace("whatsapp://send?", "https://web.whatsapp.com/send?");
+  let abriu = false;
+  const marca = () => { abriu = true; };
+  window.addEventListener("blur", marca, { once: true });
+  document.addEventListener("visibilitychange", marca, { once: true });
+  window.location.href = url;
+  setTimeout(() => {
+    window.removeEventListener("blur", marca);
+    document.removeEventListener("visibilitychange", marca);
+    if (!abriu && !document.hidden) window.open(web, "_blank", "noopener");
+  }, 2000);
+}
+/** Intercepta os cliques nos botões de WhatsApp (links whatsapp://) para aplicar o abre-app-ou-Web. */
+export function instalarAberturaWhats() {
+  document.addEventListener("click", (e) => {
+    const alvo = e.target as HTMLElement | null;
+    const a = alvo && alvo.closest ? (alvo.closest('a[href^="whatsapp://"]') as HTMLAnchorElement | null) : null;
+    if (!a) return;
+    e.preventDefault();
+    abrirWhats(a.getAttribute("href") || "");
+  }, true);
+}
 /** link do WhatsApp: número com DDD (sem 55 → acrescenta) */
 /** Separa os telefones de um campo ("(41) 99999-9999 / 41 3333-4444"). Um número por item; sem número completo, devolve o texto como está. */
 export function telefonesDe(t: string): string[] {
