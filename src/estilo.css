@@ -1767,7 +1767,9 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .md-tiras img{height:64px;width:86px;object-fit:cover;border-radius:6px;cursor:zoom-in;flex:none;border:1px solid var(--line)}
 .g360-fotos img{cursor:zoom-in}
 .md-tipo{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.3px;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:1px}
-.md-tipo.cons{background:#7a3fb0;color:#fff}.md-tipo.med{background:#1f7a44;color:#fff}
+.md-tipo.cons{background:#7a3fb0;color:#fff}.md-tipo.med{background:#1f7a44;color:#fff}.md-tipo.pv{background:#c0562b;color:#fff}.md-tipo.fora{background:#5b6472;color:#fff}
+.md-onde{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:1px;border:1px solid var(--line)}
+.md-onde.no360{background:#e6f4ea;color:#1f7a44;border-color:#9fd3ae}.md-onde.visita{background:#f1e8fa;color:#6a2f9e;border-color:#cdb2e8}.md-onde.fora{background:#fff4dc;color:#8a5a00;border-color:#f0cf86}
 .acao.md-comfoto{background:#f1e8fb}.acao.md-comfoto:hover{background:#e7d9f7}
 :root[data-theme="dark"] .acao.md-comfoto{background:#2d2340}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .acao.md-comfoto{background:#2d2340}}

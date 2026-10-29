@@ -14,7 +14,7 @@ import {
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
-import { SeloMedidaVenda } from "../telas/Medidas";
+import { SeloMedidaVenda, ondeMedida, origemMedida } from "../telas/Medidas";
 import { achar360, AprovarMedida, Galeria360 } from "./Visita360";
 import { FotoViewer } from "./Fotos";
 import { baixarFotosZip } from "./Overlays";
@@ -123,6 +123,7 @@ export default function Detalhe({ id }: { id: string }) {
               <div className="row">{link && <a className="btn wa sm" href={link} target="_blank" rel="noopener">📣 Cobrar representante no WhatsApp</a>}
                 <button className="btn sm" onClick={() => ex(() => A.alternarUrgente(c.id), c.urgente ? "Urgência removida" : "Marcado urgente")}>{c.urgente ? "Remover urgência" : "Marcar urgente"}</button></div></div>
           ))}
+          {c.tipo === "medidas" && (() => { const o = origemMedida(R, c), w = ondeMedida(R, st, c); return (o.txt || w.k) ? <Row k="Medida">{o.txt ? <span className={"md-tipo " + o.cls} style={{ marginLeft: 0 }}>{o.txt}</span> : null}{o.quem ? " " + o.quem : ""}{w.k ? <span className={"md-onde " + w.k}>{w.txt}</span> : null}</Row> : null; })()}
           {c.tipo === "medidas" && <MedidaBloco c={c} />}
           {!presale && <Anexos c={c} editavel={anexar} />}
           {!presale && <HistoricoCliente c={c} />}

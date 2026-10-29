@@ -369,6 +369,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (c.tipo === "juridico") return mySetores().includes("juridico"); // caso jurídico: só o Jurídico e a Gestão
     if (c.tipo === "porta") return mySetores().some((x: string) => x === "presenca" || x === "gerente_loja") || c.solicitanteId === currentUserId;
     if (domMarketing(c)) return temMarketing() || mySetores().includes("presenca") || !!(me() as any)?.editaAgenda || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId || (mySetores().includes("medidas_supervisao") && !!c.consultorId);
+    // Supervisão de Medidas consulta o checklist (só leitura) para casar a medida com a venda e ver a data do checklist
+    if (c.tipo === "checklist" && mySetores().includes("medidas_supervisao")) return true;
     if (verTudo()) return true;
     if (mySetores().includes("callcenter")) return true;
     // gerente de loja acompanha todo o call center (menos os setores com módulo próprio)

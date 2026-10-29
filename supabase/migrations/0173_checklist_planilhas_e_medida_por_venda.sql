@@ -1,0 +1,16 @@
+-- Aplicado direto no banco (28–29/10/2026). Registro do que mudou — as definições vivas estão no banco.
+-- CHECKLIST / planilhas do Exact
+--  * _ck_encerrado, _nome_norm, _ck_dup_lista; trigger trg_ck_duplicado (não abre 2º checklist da mesma venda)
+--  * checklist_importar: mesma venda não gera checklist novo enquanto o anterior não estiver realizado/desistiu;
+--    mesmo cliente (nome/telefone) com outra venda aberta não sobe (avisa na ficha: outrasVendas)
+--  * checklist_agendados_planilha: quem não vem na planilha NÃO sai da agenda (marca foraPlanilhaAgendados)
+--  * checklist_sincronizar: só exclui quem nunca foi trabalhado; os demais ficam marcados foraPlanilhaAgendar
+--  * checklist_planilha_import + _ck_registrar_import + _ck_reconciliar + checklist_registrar_planilha:
+--    com as duas planilhas (agendados + a agendar) em até 36h: agendado FUTURO sem data no Exact volta para a agendar;
+--    venda fora das duas planilhas sai do checklist (desistiu / canceladoPeloExact). Data passada nunca sai da agenda.
+-- MEDIDAS: uma medida por venda
+--  * _visita_da_venda(pedido): visita do consultor que tem a venda lançada
+--  * _garantir_medida(pedido): cria a medida da venda do checklist (pendente; validar quando a visita do consultor tem
+--    fotos/medidas; liberada/origem outro_sistema quando o Exact já está "aguardando checklist") ou sobe pendente → validar
+--  * triggers trg_ck_garante_medida (chamados, checklist novo) e trg_item_garante_medida (venda_itens de visita_consultor)
+--  * pode_ver_chamado_ctx: Supervisão de Medidas lê os checklists

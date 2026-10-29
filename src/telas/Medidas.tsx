@@ -9,7 +9,7 @@ import { A } from "../lib/acoes";
 import { lerXlsx } from "../lib/planilha";
 import { linhaMedida } from "../lib/medidasPlanilha";
 import { Modal } from "../comp/Modal";
-import { ETAPA_MEDIDA, fmtDateTime, grupoMedida } from "../lib/regras";
+import { ETAPA_MEDIDA, fmtDateTime, grupoMedida, itensVenda } from "../lib/regras";
 import { tipoPlanilha } from "../lib/cruzarVendas";
 
 type Linha = Record<string, string>;
@@ -112,28 +112,31 @@ export function mesmoNome(a: string, b: string) {
   if (x.length === 1 || y.length === 1) return true;
   return x.slice(1).some(t => y.slice(1).includes(t));
 }
-const COMO_MD: Record<string, string> = { tel: "📞 telefone", doc: "🪪 CPF", nome: "👤 nome" };
+const COMO_MD: Record<string, string> = { venda: "🧾 nº da venda lançado no 360", tel: "📞 telefone", doc: "🪪 CPF", nome: "👤 nome" };
 
 function Visitados360() {
   const { R, st, abrirDetalhe, setModal } = useApp() as any;
   const [q, setQ] = useState(""); const [f, setF] = useState<"todos" | "com" | "sem" | "validar" | "fotos">("todos");
   const nomeK = (s: string) => tira(String(s || "").replace(/\s*[-–(].*$/, ""));
   const idx = useMemo(() => {
-    const tel: Record<string, any[]> = {}, nome: Record<string, any[]> = {}, doc: Record<string, any[]> = {};
+    const tel: Record<string, any[]> = {}, nome: Record<string, any[]> = {}, doc: Record<string, any[]> = {}, ped: Record<string, any[]> = {};
     st.chamados.filter((c: any) => c.tipo === "medidas" || c.tipo === "checklist").forEach((c: any) => {
+      if (c.pedido) (ped[String(c.pedido)] = ped[String(c.pedido)] || []).push(c);
       String(c.telefone || "").split(/[\/,;]/).forEach((t: string) => { const k = chave(t); if (k) (tel[k] = tel[k] || []).push(c); });
       const n = nomeK(c.cliente); if (n.length >= 8) (nome[n] = nome[n] || []).push(c);
       const d = so(c.clienteDoc || ""); if (d.length >= 11) (doc[d] = doc[d] || []).push(c);
     });
-    return { tel, nome, doc };
+    return { tel, nome, doc, ped };
   }, [st.chamados]);
   const linhas = useMemo(() => visitados360(R, st).map((v: any) => {
     const m = new Map<string, { c: any; como: string }>();
     const add = (x: any, como: string) => { if (!m.has(x.id)) m.set(x.id, { c: x, como }); };
+    // primeiro pela venda lançada no 360 (nº igual = mesma compra), depois CPF, telefone e nome
+    itensVenda(v.venda).filter((i: any) => i.status !== "cancelada" && i.numero).forEach((i: any) => (idx.ped[String(i.numero)] || []).forEach((x: any) => add(x, "venda")));
     const d = so(v.clienteDoc || ""); if (d.length >= 11) (idx.doc[d] || []).forEach((x: any) => add(x, "doc"));
     String(v.telefone || "").split(/[\/,;]/).forEach((t: string) => (idx.tel[chave(t)] || []).forEach((x: any) => add(x, "tel")));
     (idx.nome[nomeK(v.cliente)] || []).forEach((x: any) => add(x, "nome"));
-    const achados = Array.from(m.values()).map(a => ({ ...a, igual: mesmoNome(v.cliente, a.c.cliente) }));
+    const achados = Array.from(m.values()).map(a => ({ ...a, igual: a.como === "venda" || mesmoNome(v.cliente, a.c.cliente) }));
     const med = achados.filter(a => a.c.tipo === "medidas"), ck = achados.filter(a => a.c.tipo === "checklist");
     return { v, med, ck, achados, difere: achados.some(a => !a.igual), nImg: (v.anexos || []).filter((a: any) => a.tipo === "img").length };
   }).sort((a: any, b: any) => String(b.v.dataVisita || b.v.criadoEm).localeCompare(String(a.v.dataVisita || a.v.criadoEm))), [st.chamados, idx]);
@@ -167,6 +170,7 @@ function Visitados360() {
                     <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(a.c.id); }}><b>{a.c.cliente}</b></a>
                     <div className="hint">{a.c.tipo === "medidas" ? "📐 medida" : "✓ checklist"} · venda {a.c.pedido || "—"}{a.c.tipo === "medidas" && ETAPA_MEDIDA[R.etapaMedida(a.c)] ? " · " + ETAPA_MEDIDA[R.etapaMedida(a.c)] : ""}{a.c.telefone ? " · " + a.c.telefone : ""}</div>
                     <div className="hint">cruzou pelo {COMO_MD[a.como]}</div>
+                    {a.c.tipo === "medidas" && (() => { const w = ondeMedida(R, st, a.c); return w.k ? <span className={"md-onde " + w.k} style={{ marginLeft: 0 }}>{w.txt}</span> : null; })()}
                   </div>)}
               </td>
               <td style={{ ...td, whiteSpace: "nowrap" }}>
@@ -222,6 +226,9 @@ function ListaMedidas({ aba }: { aba: string }) {
   lista = aba === "minhas" ? lista.filter((c: any) => c.medidorId === eu && ["agendada"].includes(R.etapaMedida(c)))
     : aba === "minhasfeitas" ? lista.filter((c: any) => c.medidorId === eu && ["realizada", "validar", "liberada"].includes(R.etapaMedida(c)))
     : lista.filter((c: any) => grupoMedida(R.etapaMedida(c)) === aba);
+  const [onde, setOnde] = useState<"" | "no360" | "visita" | "fora">("");
+  const contaOnde = aba === "aprovados" ? lista.reduce((acc: any, c: any) => { const k = ondeMedida(R, st, c).k; acc[k] = (acc[k] || 0) + 1; return acc; }, {}) : {};
+  if (aba === "aprovados" && onde) lista = lista.filter((c: any) => ondeMedida(R, st, c).k === onde);
   const busca = tira(q), dig = so(q);
   if (q) lista = lista.filter((c: any) => tira(c.cliente + " " + R.nomeUser(c.medidorId || "")).includes(busca) || (dig.length >= 3 && (String(c.pedido).includes(dig) || so(c.telefone).includes(dig))));
   const [ckMeu, setCkMeu] = useState<Record<string, string>>({});
@@ -236,6 +243,8 @@ function ListaMedidas({ aba }: { aba: string }) {
       <div className="view-head"><div><h2>📐 {t}</h2><p>{d}</p></div></div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
         <span className="pill">{lista.length} cliente(s)</span>
+        {aba === "aprovados" && <div className="chips" style={{ margin: 0 }}>{([["", "Todas"], ["no360", "📎 Medidas no 360"], ["visita", "📷 Fotos da visita do consultor"], ["fora", "🗂 No outro sistema"]] as [any, string][]).map(([k, l]) =>
+          <button key={k} className={"chip" + (onde === k ? " on" : "")} onClick={() => setOnde(k)}>{l}{k ? " (" + (contaOnde[k] || 0) + ")" : ""}</button>)}</div>}
         {aba !== "minhas" && aba !== "minhasfeitas" && R.ehSupMedidas() && <ImportarExact />}
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, venda, telefone ou quem mede" style={{ marginLeft: "auto", maxWidth: 320 }} />
       </div>
@@ -248,9 +257,8 @@ function ListaMedidas({ aba }: { aba: string }) {
             <div key={c.id} className={"acao" + (temFoto ? " md-comfoto" : "")} title={temFoto ? "Tem foto" : undefined} style={{ borderLeftColor: alerta ? "var(--critico)" : temFoto ? "#7a3fb0" : "var(--line)", margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)" }} onClick={() => abrirDetalhe(c.id)}>
               <span><b>{c.cliente}</b> · venda {c.pedido || "—"} <Selo360 c={c} />
                 {/* dois tipos de medida, bem separados: do CONSULTOR (antes da venda) e do MEDIDOR (pedida depois da venda — mesmo que quem foi seja um consultor) */}
-                {c.medidorId ? <> <span className="md-tipo med">📐 MEDIDOR · depois da venda</span> {R.nomeUser(c.medidorId)}</>
-                  : (m.etapa === "validar" || m.origem === "consultor_360" || m.origem === "minha_visita") ? <> <span className="md-tipo cons">📷 CONSULTOR · antes da venda</span> {m.consultorNome || ""}</>
-                  : m.consultorNome ? <> · {m.consultorNome}</> : null}
+                {(() => { const o = origemMedida(R, c); return o.txt ? <> <span className={"md-tipo " + o.cls}>{o.txt}</span> {o.quem}</> : o.quem ? <> · {o.quem}</> : null; })()}
+                {(() => { const w = ondeMedida(R, st, c); return w.k ? <span className={"md-onde " + w.k}>{w.txt}</span> : null; })()}
                 {c.dataMedida && ["agendada"].includes(R.etapaMedida(c)) ? <> · {fmtDateTime(c.dataMedida)}</> : null}
                 {m.origem === "minha_visita" && <span className="pill" style={{ marginLeft: 6 }}>Minha Visita · sem pagamento</span>}
                 {m.etapa === "em_obra" && m.previsaoObra && <span className="pill" style={{ marginLeft: 6 }}>previsão {String(m.previsaoObra).split("-").reverse().join("/")}</span>}
@@ -432,6 +440,27 @@ function Resultados() {
 }
 
 /** situação da medida de uma venda (para o checklist): medida oficial aprovada, em análise, agendada, pendente ou em obra */
+/** onde estão as medidas: anexadas no 360, nas fotos da visita do consultor, ou (aprovada sem anexo) no outro sistema */
+export function ondeMedida(R: any, st: any, c: any): { k: "no360" | "visita" | "fora" | ""; txt: string; n: number } {
+  if (!c) return { k: "", txt: "", n: 0 };
+  const n = (c.anexos || []).length;
+  if (n) return { k: "no360", txt: "📎 Medidas no 360 (" + n + " anexo" + (n > 1 ? "s" : "") + ")", n };
+  const m = c.tratativa?.medida || {};
+  const vis = [m.visita360 && st.chamados.find((x: any) => x.id === m.visita360), ...achar360(R, st, c)].filter(Boolean);
+  const nv = vis.reduce((s: number, v: any) => s + (v.anexos || []).length, 0);
+  if (nv) return { k: "visita", txt: "📷 Fotos da visita do consultor (" + nv + ")", n: nv };
+  if (R.etapaMedida(c) === "liberada") return { k: "fora", txt: "🗂 Medidas no outro sistema (sem anexo no 360)", n: 0 };
+  return { k: "", txt: "", n: 0 };
+}
+/** quem mediu: consultor (antes da venda), medidor (depois da venda), pós-venda ou aprovada fora do 360 */
+export function origemMedida(R: any, c: any): { cls: string; txt: string; quem: string } {
+  const m = c?.tratativa?.medida || {};
+  if (/p[óo]s-?venda/i.test(c?.setor || "")) return { cls: "pv", txt: "🛠 PÓS-VENDA", quem: c.medidorId ? R.nomeUser(c.medidorId) : "" };
+  if (c?.medidorId) return { cls: "med", txt: "📐 MEDIDOR · depois da venda", quem: R.nomeUser(c.medidorId) };
+  if (m.etapa === "validar" || m.origem === "consultor_360" || m.origem === "minha_visita") return { cls: "cons", txt: "📷 CONSULTOR · antes da venda", quem: m.consultorNome || "" };
+  if (m.origem === "outro_sistema") return { cls: "fora", txt: "🗂 OUTRO SISTEMA", quem: "" };
+  return { cls: "", txt: "", quem: m.consultorNome || "" };
+}
 export function medidaDaVenda(st: any, pedido: string) {
   if (!pedido) return null;
   const l = st.chamados.filter((c: any) => c.tipo === "medidas" && c.pedido === pedido);
@@ -449,6 +478,8 @@ export function SeloMedidaVenda({ pedido, peq, comLink }: { pedido: string; peq?
   return <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
     <span className="pill" style={{ background: cor, color: "#fff", fontWeight: 700, fontSize: peq ? 11.5 : 12.5, whiteSpace: "nowrap" }}>{txt}</span>
     {!peq && ["liberada", "realizada", "validar"].includes(e) && quem ? <span className="hint">medido por {quem}</span> : null}
+    {(() => { const o = origemMedida(R, m); return ["liberada", "realizada", "validar"].includes(e) && o.txt ? <span className={"md-tipo " + o.cls} style={{ marginLeft: 0 }}>{o.txt}{peq && o.quem ? " · " + o.quem : ""}</span> : null; })()}
+    {(() => { const w = ondeMedida(R, st, m); return e === "liberada" && w.k ? <span className={"md-onde " + w.k}>{w.txt}</span> : null; })()}
     {comLink && <a href="#" onClick={ev => { ev.preventDefault(); ev.stopPropagation(); abrirDetalhe(m.id); }} style={{ fontSize: 12.5 }}>ver medida e fotos ({(m.anexos || []).length})</a>}
   </span>;
 }
