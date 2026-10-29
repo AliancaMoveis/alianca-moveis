@@ -106,13 +106,13 @@ export const PV_SITUACAO: Record<string, string> = {
 };
 /** texto para o WhatsApp sem emojis: em alguns celulares/computadores o emoji que vai pelo link chega como "�" para o cliente */
 export const semEmoji = (t: string) => String(t || "").replace(/[\u{1F000}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}][\u{FE0F}\u{200D}\u{1F3FB}-\u{1F3FF}]* ?/gu, "").replace(/[\u{FE0F}\u{200D}]/gu, "").replace(/[ \t]+\n/g, "\n").replace(/[ \t]+$/g, "");
-/** No celular o wa.me abre o app direto; no computador ele cai numa página intermediária que em algumas máquinas não abre nada — então no computador vamos direto ao WhatsApp Web, já na conversa. */
+/** No celular o wa.me abre o app direto; no computador usamos o whatsapp:// para abrir o aplicativo instalado (na empresa é o WhatsApp Beta), direto na conversa, sem a página intermediária. */
 const ehCelular = typeof navigator !== "undefined" && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "");
 /** link do WhatsApp com o texto já pronto (sem emojis) */
 export const waTexto = (numero: string, texto = "") => {
   const t = texto ? encodeURIComponent(semEmoji(texto)) : "";
   return ehCelular ? "https://wa.me/" + numero + (t ? "?text=" + t : "")
-    : "https://web.whatsapp.com/send?phone=" + numero + (t ? "&text=" + t : "");
+    : "whatsapp://send?phone=" + numero + (t ? "&text=" + t : "");
 };
 /** link do WhatsApp: número com DDD (sem 55 → acrescenta) */
 /** Separa os telefones de um campo ("(41) 99999-9999 / 41 3333-4444"). Um número por item; sem número completo, devolve o texto como está. */
