@@ -65,14 +65,15 @@ export default function RhPonto() {
       const pres = ds.filter(d => d.batidas.length);
       const doms = pres.filter(d => dow(d.data) === 0), fers = pres.filter(d => d.feriado);
       const faltasDia = ds.filter(d => !d.batidas.length && d.faltas > 0 && !d.folga);
-      return { cpf, ...g, ds, pres, doms, fers, faltasDia,
+      const batidaImpar = ds.filter(d => d.batidas.length % 2 === 1);
+      return { cpf, ...g, ds, pres, doms, fers, faltasDia, batidaImpar,
         trab: ds.reduce((s, d) => s + d.trabalhado, 0), e50: ds.reduce((s, d) => s + d.ex50, 0), e100: ds.reduce((s, d) => s + d.ex100, 0), falt: ds.reduce((s, d) => s + d.faltas, 0) };
     }).filter(x => x.ds.length).sort((a, b) => a.nome.localeCompare(b.nome));
   }, [dados, de, ate]);
 
   const exportar = () => {
-    const cab = ["Funcionário", "CPF", "Departamento", "Função", "Dias com presença", "Domingos trabalhados", "Datas dos domingos", "Feriados trabalhados", "Datas dos feriados", "Horas trabalhadas", "Extra 50%", "Extra 100%", "Faltas (horas)", "Faltas (dias cheios)", "Datas das faltas"];
-    const ls = linhas.map(x => [x.nome, x.cpf, x.departamento, x.funcao, x.pres.length, x.doms.length, x.doms.map(d => br(d.data)).join(", "), x.fers.length, x.fers.map(d => br(d.data)).join(", "), hm(x.trab), hm(x.e50), hm(x.e100), hm(x.falt), x.faltasDia.length, x.faltasDia.map(d => br(d.data)).join(", ")]);
+    const cab = ["Funcionário", "CPF", "Departamento", "Função", "Dias com presença", "Domingos trabalhados", "Datas dos domingos", "Feriados trabalhados", "Datas dos feriados", "Horas trabalhadas", "Extra 50%", "Extra 100%", "Faltas (horas)", "Faltas (dias cheios)", "Datas das faltas", "Dias com batida faltando (corrigir)"];
+    const ls = linhas.map(x => [x.nome, x.cpf, x.departamento, x.funcao, x.pres.length, x.doms.length, x.doms.map(d => br(d.data)).join(", "), x.fers.length, x.fers.map(d => br(d.data)).join(", "), hm(x.trab), hm(x.e50), hm(x.e100), hm(x.falt), x.faltasDia.length, x.faltasDia.map(d => br(d.data)).join(", "), x.batidaImpar.map((d: Dia) => br(d.data)).join(", ")]);
     baixarXlsx("folha_ponto_" + de + "_a_" + ate + ".xlsx", cab, ls, "Folha ponto");
   };
 
@@ -128,7 +129,7 @@ function LinhaFunc({ x, aberto, abrir, rec, toast }: { x: any; aberto: boolean; 
   };
   return <>
     <tr className={"ma-lin" + (aberto ? " on" : "")} onClick={abrir}>
-      <td><b>{x.nome}</b><div className="hint">{[x.departamento, x.funcao].filter(Boolean).join(" · ")}</div></td>
+      <td><b>{x.nome}</b><div className="hint">{[x.departamento, x.funcao].filter(Boolean).join(" · ")}</div>{x.batidaImpar.length > 0 && <div style={{ color: "var(--danger)", fontWeight: 800, fontSize: 12.5 }}>⚠ {x.batidaImpar.length} dia(s) com batida faltando — corrigir</div>}</td>
       <td className="n"><b>{x.pres.length}</b></td>
       <td className="n">{x.doms.length ? <b style={{ color: "var(--warn)" }}>{x.doms.length}</b> : 0}</td>
       <td className="n">{x.fers.length ? <b>{x.fers.length}</b> : 0}</td>
@@ -143,14 +144,16 @@ function LinhaFunc({ x, aberto, abrir, rec, toast }: { x: any; aberto: boolean; 
       {x.doms.length > 0 && <p style={{ margin: "0 0 6px" }}><b>Domingos trabalhados:</b> {x.doms.map((d: Dia) => br(d.data) + " (" + hm(d.trabalhado) + ")").join(" · ")}</p>}
       {x.fers.length > 0 && <p style={{ margin: "0 0 6px" }}><b>Feriados trabalhados:</b> {x.fers.map((d: Dia) => br(d.data) + " (extra 100% " + hm(d.ex100) + ")").join(" · ")}</p>}
       {x.faltasDia.length > 0 && <p style={{ margin: "0 0 10px" }}><b>Faltas de dia cheio:</b> {x.faltasDia.map((d: Dia) => br(d.data)).join(" · ")}</p>}
+      {x.batidaImpar.length > 0 && <p style={{ margin: "0 0 10px", color: "var(--danger)", fontWeight: 700 }}>⚠ Batida faltando (nº ímpar de marcações — as horas do dia ficam erradas, corrigir manualmente): {x.batidaImpar.map((d: Dia) => br(d.data) + " (" + d.batidas.join(" ") + ")").join(" · ")}</p>}
       <div style={{ overflowX: "auto" }}>
         <table className="ma-tab" style={{ minWidth: 760 }}>
           <thead><tr><th>Dia</th><th>Batidas</th><th className="n">Trabalhado</th><th className="n">Extra 50%</th><th className="n">Extra 100%</th><th className="n">Faltas</th></tr></thead>
           <tbody>{x.ds.map((d: Dia) => {
             const dom = dow(d.data) === 0;
-            return <tr key={d.data} style={{ background: dom ? "rgba(214,150,40,.10)" : d.feriado ? "rgba(31,90,214,.07)" : undefined }}>
+            const impar = d.batidas.length % 2 === 1;
+            return <tr key={d.data} style={{ background: impar ? "rgba(214,60,60,.12)" : dom ? "rgba(214,150,40,.10)" : d.feriado ? "rgba(31,90,214,.07)" : undefined }}>
               <td><b>{br(d.data)}</b> · {dom ? "Dom" : d.rotulo}{d.feriado ? " 🎌 feriado" : ""}{d.folga ? " · folga" : ""}</td>
-              <td>{d.batidas.join(" → ") || <span className="hint">—</span>}</td>
+              <td>{d.batidas.join(" → ") || <span className="hint">—</span>}{impar && <b style={{ color: "var(--danger)", marginLeft: 6 }}>⚠ faltou batida</b>}</td>
               <td className="n">{d.trabalhado ? hm(d.trabalhado) : "–"}</td>
               <td className="n">{d.ex50 ? <b>{hm(d.ex50)}</b> : "–"}</td>
               <td className="n">{d.ex100 ? <b>{hm(d.ex100)}</b> : "–"}</td>

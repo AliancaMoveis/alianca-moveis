@@ -8,6 +8,8 @@ import { guardarDiario, hm, listarDiasGeral, parseDiario, pdfParaItens, podeRh, 
 const br = (s: string) => (s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "—");
 const DOW = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const diaSem = (s: string) => DOW[new Date(s + "T12:00:00").getDay()];
+// nº ímpar de batidas = faltou uma marcação (esqueceu ou o relógio falhou) — as horas ficam erradas e precisa de correção manual
+const faltaBatida = (x: { batidas?: string[] }) => (x.batidas || []).length % 2 === 1;
 
 export default function RhConsultaDia() {
   const { R, toast } = useApp() as any;
@@ -56,13 +58,14 @@ export default function RhConsultaDia() {
   }, [noPer, busca]);
   const datasPer = useMemo(() => Array.from(new Set((tudo || []).filter(x => x.data >= de && x.data <= ate).map(x => x.data))).sort(), [tudo, de, ate]);
   const exportarPer = () => baixarXlsx("trabalharam_" + de + "_a_" + ate + ".xlsx",
-    ["Nº folha", "Nome", "Dias trabalhados", "Quais dias", "Domingos", "Extras no período", "Faltas no período"],
+    ["Nº folha", "Nome", "Dias trabalhados", "Quais dias", "Domingos", "Dias com batida faltando (corrigir)", "Extras no período", "Faltas no período"],
     porPessoa.map(g => [g.folha, g.nome, g.dias.length, g.dias.map(d => br(d.data).slice(0, 5)).join(", "),
-      g.dias.filter(d => new Date(d.data + "T12:00").getDay() === 0).length, g.extras ? hm(g.extras) : "", g.faltas ? hm(g.faltas) : ""]),
+      g.dias.filter(d => new Date(d.data + "T12:00").getDay() === 0).length,
+      g.dias.filter(faltaBatida).map(d => br(d.data).slice(0, 5)).join(", "), g.extras ? hm(g.extras) : "", g.faltas ? hm(g.faltas) : ""]),
     br(de) + " a " + br(ate));
   const exportar = () => baixarXlsx("trabalharam_" + dia + ".xlsx",
-    ["Nº folha", "Nome", "Batidas", "Extras", "Faltas", "Dia"],
-    trab.map(x => [x.folha, x.nome, (x.batidas || []).join(" "), x.extras ? hm(x.extras) : "", x.faltas ? hm(x.faltas) : "", br(dia) + " (" + diaSem(dia) + ")"]),
+    ["Nº folha", "Nome", "Batidas", "Falta batida?", "Extras", "Faltas", "Dia"],
+    trab.map(x => [x.folha, x.nome, (x.batidas || []).join(" "), faltaBatida(x) ? "SIM — corrigir manualmente" : "", x.extras ? hm(x.extras) : "", x.faltas ? hm(x.faltas) : "", br(dia) + " (" + diaSem(dia) + ")"]),
     br(dia));
 
   return (
@@ -93,12 +96,13 @@ export default function RhConsultaDia() {
           <div className="ma-cab"><b>✅ Quem trabalhou de {br(de)} a {br(ate)}</b><button className="btn primary sm" disabled={!porPessoa.length} onClick={exportarPer}>⬇ Excel</button></div>
           {!porPessoa.length ? <div className="empty" style={{ padding: 24 }}>Ninguém com batida{busca ? " com essa busca" : ""}.</div> :
             <table className="ma-tab" style={{ minWidth: 820 }}>
-              <thead><tr><th>Nº folha</th><th>Nome</th><th className="n">Dias trab.</th><th className="n">Domingos</th><th>Quais dias</th><th className="n">Extras</th><th className="n">Faltas</th></tr></thead>
-              <tbody>{porPessoa.map(g => <tr key={g.folha + g.nome}>
+              <thead><tr><th>Nº folha</th><th>Nome</th><th className="n">Dias trab.</th><th className="n">Domingos</th><th>Quais dias</th><th>⚠ Batida faltando</th><th className="n">Extras</th><th className="n">Faltas</th></tr></thead>
+              <tbody>{porPessoa.map(g => <tr key={g.folha + g.nome} style={g.dias.some(faltaBatida) ? { background: "rgba(214,60,60,.10)" } : undefined}>
                 <td>{g.folha}</td><td><b>{g.nome}</b></td>
                 <td className="n"><b>{g.dias.length}</b></td>
                 <td className="n">{(() => { const n = g.dias.filter(d => new Date(d.data + "T12:00").getDay() === 0).length; return n ? <b style={{ color: "var(--warn)" }}>{n}</b> : "–"; })()}</td>
                 <td style={{ maxWidth: 360 }}>{g.dias.map(d => br(d.data).slice(0, 5)).join(", ")}</td>
+                <td>{(() => { const f = g.dias.filter(faltaBatida); return f.length ? <b style={{ color: "var(--danger)" }}>{f.map(d => br(d.data).slice(0, 5)).join(", ")} — corrigir</b> : "–"; })()}</td>
                 <td className="n">{g.extras ? <b>{hm(g.extras)}</b> : "–"}</td><td className="n">{g.faltas ? hm(g.faltas) : "–"}</td>
               </tr>)}</tbody>
             </table>}
@@ -109,15 +113,17 @@ export default function RhConsultaDia() {
           <div className="card" style={{ padding: "12px 14px", flex: "1 1 160px" }}><div style={{ fontSize: 22, fontWeight: 800 }}>{hm(doDia.reduce((s, x) => s + (x.extras || 0), 0))}</div><div className="hint">extras no dia (total)</div></div>
           <div className="card" style={{ padding: "12px 14px", flex: "1 1 160px" }}><div style={{ fontSize: 22, fontWeight: 800 }}>{doDia.length}</div><div className="hint">funcionários no relatório</div></div>
           <div className="card" style={{ padding: "12px 14px", flex: "1 1 160px" }}><div style={{ fontSize: 22, fontWeight: 800 }}>{marc.length}</div><div className="hint">férias / atestado / afastados</div></div>
+          {doDia.filter(faltaBatida).length > 0 && <div className="card" style={{ padding: "12px 14px", flex: "1 1 160px", borderLeft: "4px solid var(--danger)" }}><div style={{ fontSize: 22, fontWeight: 800, color: "var(--danger)" }}>{doDia.filter(faltaBatida).length}</div><div className="hint"><b>batida faltando</b> — corrigir manual</div></div>}
         </div>
         <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
           <div className="ma-cab"><b>✅ Trabalharam em {br(dia)} · {diaSem(dia)}</b><button className="btn primary sm" disabled={!trab.length} onClick={exportar}>⬇ Excel</button></div>
           {!trab.length ? <div className="empty" style={{ padding: 24 }}>Ninguém com batida neste dia{busca ? " com essa busca" : ""}.</div> :
             <table className="ma-tab" style={{ minWidth: 720 }}>
               <thead><tr><th>Nº folha</th><th>Nome</th><th>Batidas</th><th className="n">Extras</th><th className="n">Faltas</th></tr></thead>
-              <tbody>{trab.map(x => <tr key={x.id}>
-                <td>{x.folha}</td><td><b>{x.nome}</b></td><td>{(x.batidas || []).join(" → ")}</td>
-                <td className="n">{x.extras ? <b>{hm(x.extras)}</b> : "–"}</td><td className="n">{x.faltas ? hm(x.faltas) : "–"}</td>
+              <tbody>{trab.map(x => <tr key={x.id} style={faltaBatida(x) ? { background: "rgba(214,60,60,.10)" } : undefined}>
+                <td>{x.folha}</td><td><b>{x.nome}</b></td>
+                <td>{(x.batidas || []).join(" → ")}{faltaBatida(x) && <div style={{ color: "var(--danger)", fontWeight: 800, fontSize: 12.5 }}>⚠ FALTOU BATIDA ({(x.batidas || []).length} marcações) — as horas ficam erradas, corrigir manualmente</div>}</td>
+                <td className="n">{x.extras ? <b style={faltaBatida(x) ? { color: "var(--danger)" } : undefined}>{hm(x.extras)}{faltaBatida(x) ? "*" : ""}</b> : "–"}</td><td className="n">{x.faltas ? hm(x.faltas) : "–"}</td>
               </tr>)}</tbody>
             </table>}
         </div>
