@@ -1,0 +1,2 @@
+-- RH: empresa que contratou, nº da folha, nº identificador (ponto) e horário — importado da listagem do Secullum (142 funcionários)
+alter table rh_funcionarios add column if not exists empresa text not null default '', add column if not exists folha text not null default '', add column if not exists identificador text not null default '', add column if not exists horario text not null default '';

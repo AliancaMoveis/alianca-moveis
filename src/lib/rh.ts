@@ -5,10 +5,19 @@ export { PODE_RH, podeRh } from "./ponto";
 export type Funcionario = {
   id: string; nome: string; cpf: string; rg: string; nascimento: string | null; telefone: string; email: string; endereco: string;
   estado_civil: string; escolaridade: string; pis: string; ctps: string; cargo: string; setor: string; admissao: string | null;
+  empresa: string; folha: string; identificador: string; horario: string;
   salario: number | null; recebe_vt: boolean; vt_dia: number; va_dia: number; jornada_min: number;
   banco: string; agencia: string; conta: string; pix: string; emergencia_nome: string; emergencia_tel: string;
   dependentes: { nome: string; nascimento: string }[]; status: string; desligamento: string | null; obs: string; origem: string; criado_em: string;
 };
+/** empresas do grupo (nome como vem no Secullum) → nome curto */
+export const EMPRESAS: [string, string][] = [
+  ["FL_PORTAO_COMERCIO DISTRIBUIDOR DE MOVEIS LTDA", "FL Portão"],
+  ["MTZ_COMERCIO DISTRIBUIDOR DE MOVEIS LTDA", "MTZ Comércio"],
+  ["FL_EBANO_COMERCIO DISTRIBUIDOR DE MOVEIS LTDA", "FL Ébano"],
+  ["MTZ_COMERCIAL PARANAENSE DE MOVEIS LTDA", "MTZ Comercial Paranaense"],
+];
+export const nomeEmpresa = (e: string) => EMPRESAS.find(x => x[0] === e)?.[1] || e || "—";
 export type Doc = { id: number; funcionario_id: string; tipo: string; titulo: string; arquivo: string; data_ref: string | null; criado_em: string };
 export type Link = { token: string; nome: string; cargo: string; setor: string; status: string; expira_em: string; criado_em: string };
 export type Envio = { id: number; token: string; dados: any; docs: { campo: string; nome: string; caminho: string }[]; enviado_em: string; revisado_em: string | null; funcionario_id: string | null };
@@ -58,14 +67,14 @@ export async function criarLink(nome: string, cargo: string, setor: string, uid:
   const r = await sb.from("rh_admissao_links").insert({ nome, cargo, setor, criado_por: uid }).select("*").single(); erro(r as any); return r.data as any;
 }
 export async function mudarLink(token: string, p: Partial<Link>) { const r = await sb.from("rh_admissao_links").update(p).eq("token", token); erro(r); }
-export async function aprovarEnvio(envio: Envio, link: Link | undefined, ajustes: { cargo: string; setor: string; admissao: string | null }, uid: string): Promise<string> {
+export async function aprovarEnvio(envio: Envio, link: Link | undefined, ajustes: { cargo: string; setor: string; admissao: string | null; empresa?: string }, uid: string): Promise<string> {
   const d = envio.dados || {};
   const fid = await salvarFuncionario(null, {
     nome: d.nome || link?.nome || "—", cpf: d.cpf || "", rg: d.rg || "", nascimento: d.nascimento || null, telefone: d.telefone || "", email: d.email || "",
     endereco: d.endereco || "", estado_civil: d.estado_civil || "", escolaridade: d.escolaridade || "", pis: d.pis || "", ctps: d.ctps || "",
     banco: d.banco || "", agencia: d.agencia || "", conta: d.conta || "", pix: d.pix || "",
     emergencia_nome: d.emergencia_nome || "", emergencia_tel: d.emergencia_tel || "", dependentes: d.dependentes || [],
-    cargo: ajustes.cargo, setor: ajustes.setor, admissao: ajustes.admissao, origem: "link", obs: d.obs || "",
+    cargo: ajustes.cargo, setor: ajustes.setor, admissao: ajustes.admissao, empresa: ajustes.empresa || "", origem: "link", obs: d.obs || "",
   } as any, uid);
   for (const doc of envio.docs || []) {
     const r = await sb.from("rh_docs").insert({ funcionario_id: fid, tipo: doc.campo || "outro", titulo: doc.nome || "Documento", arquivo: doc.caminho, criado_por: uid }); erro(r);

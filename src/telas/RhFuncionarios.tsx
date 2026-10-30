@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { podeRh } from "../lib/ponto";
-import { abrirDoc, apagarDoc, apagarFuncionario, aprovarEnvio, criarLink, fmtCpf, listarDocs, listarFuncionarios, listarLinks, mudarLink, salvarFuncionario, subirDoc, urlAdmissao, STATUS_FUNC, TIPOS_DOC, type Doc, type Envio, type Funcionario, type Link } from "../lib/rh";
+import { abrirDoc, apagarDoc, apagarFuncionario, aprovarEnvio, criarLink, fmtCpf, listarDocs, listarFuncionarios, listarLinks, mudarLink, salvarFuncionario, subirDoc, urlAdmissao, STATUS_FUNC, TIPOS_DOC, EMPRESAS, nomeEmpresa, type Doc, type Envio, type Funcionario, type Link } from "../lib/rh";
 
 const br = (s?: string | null) => (s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "—");
 const stCor: Record<string, string> = { ativo: "#1F6B3E", ferias: "#1F3864", afastado: "#7A4F00", desligado: "#8A1C1C" };
@@ -11,14 +11,15 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
   const { R, toast } = useApp() as any;
   const [aba, setAba] = useState(abaInicial);
   const [lista, setLista] = useState<Funcionario[] | null>(null);
-  const [erro, setErro] = useState(""); const [busca, setBusca] = useState(""); const [fSt, setFSt] = useState("ativos");
+  const [erro, setErro] = useState(""); const [busca, setBusca] = useState(""); const [fSt, setFSt] = useState("ativos"); const [fEmp, setFEmp] = useState("");
   const [aberto, setAberto] = useState<string | "novo" | "">("");
   const rec = () => listarFuncionarios().then(setLista).catch(e => setErro(e.message));
   useEffect(() => { rec(); }, []);
   if (!podeRh(R.currentUserId)) return <section className="view active"><div className="empty">Só o Bruno e a Patrícia (RH) veem esta tela.</div></section>;
 
   const l = (lista || []).filter(f => (fSt === "todos" || (fSt === "ativos" ? f.status !== "desligado" : f.status === fSt)))
-    .filter(f => !busca.trim() || (f.nome + " " + f.cpf + " " + f.cargo + " " + f.setor).toLowerCase().includes(busca.toLowerCase()));
+    .filter(f => !fEmp || f.empresa === fEmp)
+    .filter(f => !busca.trim() || (f.nome + " " + f.cpf + " " + f.cargo + " " + f.setor + " " + f.folha + " " + f.pis + " " + nomeEmpresa(f.empresa)).toLowerCase().includes(busca.toLowerCase()));
   return (
     <section className="view active">
       <div className="view-head"><div><h2>👥 RH · Funcionários</h2><p>Cadastro, documentos anexados e admissão por link — só você e a Patrícia têm acesso.</p></div></div>
@@ -29,18 +30,20 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
       {aba === "adm" ? <Admissoes rec={rec} /> : <>
         <div className="card ma-topo">
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
-            <div className="field" style={{ flex: "1 1 220px" }}><label>Buscar</label><input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Nome, CPF, cargo, setor…" /></div>
+            <div className="field" style={{ flex: "1 1 220px" }}><label>Buscar</label><input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Nome, CPF, nº folha, PIS, função, departamento…" /></div>
+            <div className="field"><label>Empresa</label><select value={fEmp} onChange={e => setFEmp(e.target.value)}><option value="">Todas</option>{EMPRESAS.map(([k, n]) => <option key={k} value={k}>{n} ({(lista || []).filter(f => f.empresa === k && f.status !== "desligado").length})</option>)}</select></div>
             <div className="field"><label>Situação</label><select value={fSt} onChange={e => setFSt(e.target.value)}><option value="ativos">Todos menos desligados</option>{STATUS_FUNC.map(([k, n]) => <option key={k} value={k}>{n}</option>)}<option value="todos">Todos</option></select></div>
             <button className="btn primary" onClick={() => setAberto("novo")}>＋ Novo funcionário</button>
           </div>
         </div>
         {erro ? <div className="empty">{erro}</div> : !lista ? <div className="empty">Carregando…</div> : !l.length ? <div className="empty" style={{ padding: 24 }}>Nenhum funcionário. Cadastre pelo botão acima ou mande o link de admissão.</div> :
           <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
-            <table className="ma-tab" style={{ minWidth: 760 }}>
-              <thead><tr><th>Funcionário</th><th>Cargo · setor</th><th>CPF</th><th>Telefone</th><th>Admissão</th><th>Situação</th></tr></thead>
+            <div className="hint" style={{ padding: "8px 12px" }}>{l.length} funcionário{l.length === 1 ? "" : "s"}</div>
+            <table className="ma-tab" style={{ minWidth: 900 }}>
+              <thead><tr><th>Nº folha</th><th>Funcionário</th><th>Função · departamento</th><th>Empresa</th><th>CPF</th><th>PIS</th><th>Horário</th><th>Admissão</th><th>Situação</th></tr></thead>
               <tbody>{l.map(f => <tr key={f.id} className="ma-lin" onClick={() => setAberto(f.id)}>
-                <td><b>{f.nome}</b>{f.origem === "link" ? <span className="pill" style={{ marginLeft: 6 }}>pelo link</span> : null}</td>
-                <td>{[f.cargo, f.setor].filter(Boolean).join(" · ") || "—"}</td><td>{f.cpf || "—"}</td><td>{f.telefone || "—"}</td><td>{br(f.admissao)}</td>
+                <td>{f.folha || "—"}</td><td><b>{f.nome}</b>{f.origem === "link" ? <span className="pill" style={{ marginLeft: 6 }}>pelo link</span> : null}</td>
+                <td>{[f.cargo, f.setor].filter(Boolean).join(" · ") || "—"}</td><td>{nomeEmpresa(f.empresa)}</td><td>{f.cpf || "—"}</td><td>{f.pis || "—"}</td><td style={{ fontSize: 12.5 }}>{f.horario || "—"}</td><td>{br(f.admissao)}</td>
                 <td><b style={{ color: stCor[f.status] || "#333" }}>{(STATUS_FUNC.find(x => x[0] === f.status) || ["", f.status])[1]}</b></td>
               </tr>)}</tbody>
             </table>
@@ -52,7 +55,7 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
 }
 
 function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dados: Funcionario | null; fechar: () => void; rec: () => any; uid: string; toast: (m: string) => void }) {
-  const [f, setF] = useState<any>(dados || { nome: "", cpf: "", rg: "", nascimento: null, telefone: "", email: "", endereco: "", estado_civil: "", escolaridade: "", pis: "", ctps: "", cargo: "", setor: "", admissao: null, salario: null, recebe_vt: false, vt_dia: 0, va_dia: 0, banco: "", agencia: "", conta: "", pix: "", emergencia_nome: "", emergencia_tel: "", dependentes: [], status: "ativo", desligamento: null, obs: "" });
+  const [f, setF] = useState<any>(dados || { nome: "", cpf: "", rg: "", nascimento: null, telefone: "", email: "", endereco: "", estado_civil: "", escolaridade: "", pis: "", ctps: "", cargo: "", setor: "", admissao: null, empresa: "", folha: "", identificador: "", horario: "", salario: null, recebe_vt: false, vt_dia: 0, va_dia: 0, banco: "", agencia: "", conta: "", pix: "", emergencia_nome: "", emergencia_tel: "", dependentes: [], status: "ativo", desligamento: null, obs: "" });
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [salvando, setSalvando] = useState(false);
   const recDocs = () => { if (id) listarDocs(id).then(setDocs).catch(() => setDocs([])); };
@@ -87,7 +90,10 @@ function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dado
       </div>
       <h4 style={{ margin: "14px 0 6px" }}>Contrato</h4>
       <div className="grid3">
+        <div className="field"><label>Empresa (contratado por)</label><select value={f.empresa || ""} onChange={e => setF({ ...f, empresa: e.target.value })}><option value="">—</option>{EMPRESAS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></div>
+        {c("folha", "Nº da folha")}{c("identificador", "Nº identificador (ponto)")}
         {c("cargo", "Cargo / função")}{c("setor", "Setor / departamento")}{c("admissao", "Admissão", { type: "date" })}
+        {c("horario", "Horário")}
         {c("salario", "Salário (R$) — opcional", { inputMode: "decimal", placeholder: "só você e a Patrícia veem" })}
         {c("va_dia", "Vale-refeição/alimentação por dia (R$)", { inputMode: "decimal" })}
         <div className="field"><label>Vale-transporte</label><div style={{ display: "flex", gap: 8, alignItems: "center" }}><label style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={!!f.recebe_vt} onChange={e => setF({ ...f, recebe_vt: e.target.checked })} /> recebe</label><input style={{ width: 110 }} value={f.vt_dia ?? 0} onChange={e => setF({ ...f, vt_dia: e.target.value })} inputMode="decimal" placeholder="R$ por dia" /></div></div>
@@ -188,12 +194,12 @@ function Admissoes({ rec }: { rec: () => any }) {
 
 function Revisao({ envio, link, fechar, depois, uid, toast }: { envio: Envio; link?: Link; fechar: () => void; depois: () => void; uid: string; toast: (m: string) => void }) {
   const d = envio.dados || {};
-  const [cargo, setCargo] = useState(link?.cargo || ""); const [setor, setSetor] = useState(link?.setor || ""); const [admissao, setAdmissao] = useState("");
+  const [cargo, setCargo] = useState(link?.cargo || ""); const [setor, setSetor] = useState(link?.setor || ""); const [admissao, setAdmissao] = useState(""); const [empresa, setEmpresa] = useState("");
   const [ok, setOk] = useState(false);
   const campo = (r: string, v: any) => v ? <div><span className="hint">{r}:</span> <b>{String(v)}</b></div> : null;
   const aprovar = async () => {
     setOk(true);
-    try { await aprovarEnvio(envio, link, { cargo, setor, admissao: admissao || null }, uid); toast("Funcionário cadastrado a partir do envio ✅"); depois(); }
+    try { await aprovarEnvio(envio, link, { cargo, setor, admissao: admissao || null, empresa }, uid); toast("Funcionário cadastrado a partir do envio ✅"); depois(); }
     catch (e: any) { toast(e.message); setOk(false); }
   };
   return (
@@ -216,6 +222,7 @@ function Revisao({ envio, link, fechar, depois, uid, toast }: { envio: Envio; li
         <div className="field"><label>Cargo</label><input value={cargo} onChange={e => setCargo(e.target.value)} /></div>
         <div className="field"><label>Setor</label><input value={setor} onChange={e => setSetor(e.target.value)} /></div>
         <div className="field"><label>Data de admissão</label><input type="date" value={admissao} onChange={e => setAdmissao(e.target.value)} /></div>
+        <div className="field"><label>Empresa</label><select value={empresa} onChange={e => setEmpresa(e.target.value)}><option value="">—</option>{EMPRESAS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></div>
       </div>
       <p className="hint">Ao aprovar, o funcionário entra no cadastro com todos os dados e documentos do envio.</p>
     </div>
