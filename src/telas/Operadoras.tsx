@@ -25,7 +25,7 @@ export default function Operadoras() {
     const cons = l.filter((c: any) => !R.ehDireto(c)), loja = l.filter((c: any) => R.ehDireto(c));
     const f = R.funil(l);
     return { total: l.length, cons: cons.length, loja: loja.length, realizadas: cons.filter(R.visitaFeita).length, agendados: l.filter((c: any) => c.dataLoja).length,
-      vieram: f.vieram, faltaram: f.faltaram, vendas: f.vendas, aConfirmar: f.aConfirmar, valor: f.valor, perdidos: l.filter((c: any) => ["reprovado", "venda_cancelada"].includes(R.statusClienteDe(c))).length };
+      vieram: f.vieram, faltaram: f.faltaram, vendas: f.vendas, aConfirmar: f.aConfirmar, valor: f.valor, perdidos: l.filter((c: any) => ["reprovado", "nao_vai_comprar", "venda_cancelada"].includes(R.statusClienteDe(c))).length };
   };
   const T = resumo(base);
   const porOp: Record<string, any[]> = {}; base.forEach((c: any) => (porOp[c.solicitanteId] = porOp[c.solicitanteId] || []).push(c));

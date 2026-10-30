@@ -46,7 +46,7 @@ export default function PainelDono() {
 
   // loja ao vivo (hoje)
   const lojaHoje = mkt.filter((c: any) => String(c.dataLoja || "").slice(0, 10) === hoje).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
-  const fim = (c: any) => !!c.venda || ["orcamento", "sem_resposta", "reprovado", "nao_compareceu", "venda_cancelada"].includes(R.statusClienteDe(c));
+  const fim = (c: any) => !!c.venda || ["orcamento", "sem_resposta", "reprovado", "nao_vai_comprar", "nao_compareceu", "venda_cancelada"].includes(R.statusClienteDe(c));
   const emAtd = lojaHoje.filter((c: any) => c.tratativa && c.tratativa.emAtendimento && !fim(c));
   const agora = new Date();
   const esperando = lojaHoje.filter((c: any) => !fim(c) && !(c.tratativa && c.tratativa.emAtendimento) && parseData(c.dataLoja) <= agora);

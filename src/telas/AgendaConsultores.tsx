@@ -18,7 +18,7 @@ const iso = (d: Date) => d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2
 const icone = (m: string) => (MOTIVOS.find(x => x[0] === m) || ["", "🔒"])[1];
 const perTxt = (b: any) => b.periodo === "manha" ? "manhã" : b.periodo === "tarde" ? "tarde" : b.periodo === "horario" ? b.ini + "–" + b.fim : "dia todo";
 const primeiro = (n: string) => (n || "").replace(/^(Consultora?)\s+—\s+/, "").split(" ")[0];
-const FORA = ["visita_cancelada", "reprovado"];
+const FORA = ["visita_cancelada", "reprovado", "nao_vai_comprar"];
 
 export const podeVerAgendaGeral = (R: any) => R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
 

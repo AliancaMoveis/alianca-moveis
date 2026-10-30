@@ -13,7 +13,7 @@ const GRUPOS: [string, string, string[], string][] = [
   ["atendimento", "Em atendimento na loja", ["com_vendedor", "orcamento", "sem_resposta", "reagendado", "em_obras", "standby", "em_analise"], "#d4a020"],
   ["vendido", "Vendido", ["vendido", "vendido_promissoria", "vendido_entrada", "vendido_revisao"], "#2f8f5b"],
   ["finalizado", "Atendido — não comprou", ["atendido"], "#8a94a6"],
-  ["perdido", "Não veio / perdido", ["nao_compareceu", "reprovado", "venda_cancelada", "ausente_endereco"], "#c24a4a"],
+  ["perdido", "Não veio / perdido", ["nao_compareceu", "reprovado", "nao_vai_comprar", "venda_cancelada", "ausente_endereco"], "#c24a4a"],
 ];
 
 export default function PainelConsultorVisual({ de, ate }: { de: string; ate: string }) {

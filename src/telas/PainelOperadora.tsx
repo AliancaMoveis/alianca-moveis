@@ -16,7 +16,7 @@ const GRUPOS: [string, string, string[], string][] = [
   ["agendado", "Agendado na loja", ["agendado_loja"], "#7a5cc2"],
   ["atendimento", "Em atendimento na loja", ["com_vendedor", "orcamento", "sem_resposta", "reagendado"], "#d4a020"],
   ["vendido", "Vendido", ["vendido", "vendido_promissoria", "vendido_revisao"], "#2f8f5b"],
-  ["perdido", "Não veio / perdido", ["nao_compareceu", "reprovado", "venda_cancelada"], "#c24a4a"],
+  ["perdido", "Não veio / perdido", ["nao_compareceu", "reprovado", "nao_vai_comprar", "venda_cancelada"], "#c24a4a"],
 ];
 
 export default function PainelOperadora({ de, ate }: { de: string; ate: string }) {

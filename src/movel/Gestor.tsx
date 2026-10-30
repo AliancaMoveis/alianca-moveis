@@ -211,7 +211,7 @@ export function ResMkt({ todos, noPer, P, L }: any) {
   const naLoja = mk.filter((c: any) => noPer(c.dataLoja));
   const vieram = naLoja.filter(R.compareceu), faltaram = naLoja.filter((c: any) => R.statusClienteDe(c) === "nao_compareceu");
   const orc = mk.filter((c: any) => ["orcamento", "sem_resposta", "reagendado"].includes(R.statusClienteDe(c)) && !c.venda);
-  const perdidos = mk.filter((c: any) => ["reprovado", "venda_cancelada"].includes(R.statusClienteDe(c)) && noPer(c.dataLoja || c.criadoEm));
+  const perdidos = mk.filter((c: any) => ["reprovado", "nao_vai_comprar", "venda_cancelada"].includes(R.statusClienteDe(c)) && noPer(c.dataLoja || c.criadoEm));
   // operação agora (não depende do período)
   const lojaHoje = mk.filter((c: any) => dia(c.dataLoja) === hoje), lojaAmanha = mk.filter((c: any) => dia(c.dataLoja) === amanha);
   const semVend = mk.filter((c: any) => c.dataLoja && dia(c.dataLoja) >= hoje && !c.atendenteId && !c.venda);

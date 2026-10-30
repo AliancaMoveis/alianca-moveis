@@ -88,7 +88,7 @@ export function Carteira() {
     vendidos: ["Vendidos", c => vendaContaVolume(c.venda)],
     promissoria: ["Com promissória", c => !!c.venda && c.venda.status !== "cancelada" && valorPendente(c.venda) > 0],
     cancelados: ["❌ Cancelamentos", c => temCancelamento(c)],
-    naocomprou: ["Não comprou", c => ["atendido", "reprovado", "nao_compareceu", "ausente_endereco"].includes(sc(c)) && !c.venda],
+    naocomprou: ["Não comprou", c => ["atendido", "reprovado", "nao_vai_comprar", "nao_compareceu", "ausente_endereco"].includes(sc(c)) && !c.venda],
     todos: ["Todos", () => true],
   };
   // período (padrão: mês atual) vale para o histórico — vendidos, cancelamentos, não comprou e todos; o que está em aberto aparece sempre

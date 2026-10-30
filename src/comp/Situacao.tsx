@@ -75,7 +75,7 @@ export function CancelouLoja({ c, movel }: { c: any; movel?: boolean }) {
 
 /** a confirmação vale para a data agendada: se remarcar, volta a "a confirmar" */
 export const vindaConfirmada = (c: any) => { const k = (c.tratativa || {}).confirmLoja; return !!(k && c.dataLoja && String(k.para || "").slice(0, 16) === String(c.dataLoja).replace(" ", "T").slice(0, 16)); };
-const FECHADOS = ["loja_cancelada", "atendido", "reprovado", "visita_cancelada", "em_obras"];
+const FECHADOS = ["loja_cancelada", "atendido", "reprovado", "nao_vai_comprar", "visita_cancelada", "em_obras"];
 export const precisaConfirmarVinda = (R: any, c: any) => R.domMarketing(c) && !!c.dataLoja && !c.venda && c.status !== "concluida" && !FECHADOS.includes(R.statusClienteDe(c));
 
 /** selo curto para listas e agenda */

@@ -69,7 +69,7 @@ export function PainelLoja({ de, ate }: { de: string; ate: string }) {
     if (c.venda || (c.tratativa && c.tratativa.parecerEm)) r.atend++;
     if (sc === "orcamento") r.orc++;
     if (c.venda && c.venda.status !== "cancelada") r.vend++;
-    if (["reprovado", "nao_compareceu", "venda_cancelada"].includes(sc)) r.perdido++;
+    if (["reprovado", "nao_vai_comprar", "nao_compareceu", "venda_cancelada"].includes(sc)) r.perdido++;
     if (R.semParecer(c)) r.semPar++;
     if (!(c.anexos || []).length) r.semAnexo++;
   });

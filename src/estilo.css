@@ -575,6 +575,7 @@ button.dv-kpi{cursor:pointer}
 .sc-sem_resposta{background:var(--warn-bg);color:var(--warn)}
 .sc-reagendado{background:var(--primary-soft);color:var(--primary)}
 .sc-reprovado{background:var(--danger-bg);color:var(--danger)}
+.sc-nao_vai_comprar{background:var(--danger-bg);color:var(--danger)}
 /* painéis de atendimento na loja (Dashboard) */
 .dl-wrap{margin-bottom:8px}
 .dl-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 10px}

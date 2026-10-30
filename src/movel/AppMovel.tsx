@@ -586,10 +586,10 @@ function AcoesVendedor({ c }: any) {
     </>}
   </div>;
   if (c.setorDestino !== "atendente_cliente" || c.venda) return c.venda ? <div className="mv-ok">✓ Venda nº {c.venda.numero} registrada</div> : null;
-  if (["reprovado", "nao_compareceu"].includes(sc)) return <div className="mv-bloco"><div className="mv-ok" style={{ color: "var(--danger)" }}>{STATUS_CLIENTE[sc]}</div>
-    <button className="btn sm" onClick={() => sc === "reprovado" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>Reabrir atendimento</button></div>;
+  if (["reprovado", "nao_vai_comprar", "atendido", "nao_compareceu"].includes(sc)) return <div className="mv-bloco"><div className="mv-ok" style={{ color: sc === "atendido" ? "var(--ink-soft)" : "var(--danger)" }}>{STATUS_CLIENTE[sc]}</div>{t.parecer ? <div className="hint" style={{ margin: "4px 0 8px" }}>{t.parecer}</div> : null}
+    <button className="btn sm" onClick={() => sc !== "nao_compareceu" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>Reabrir atendimento</button></div>;
   const OPC: [string, string][] = [["orcamento", "Orçamento"], ["sem_resposta", "Sem resposta"], ["reagendado", "Reagendado"], ["reprovado", "Reprovado"], ["nao_compareceu", "Não veio"], ["vendido", "Vendido"]];
-  const MAIS: [string, string][] = [["vendido_entrada", "Vendido — entrada + promissória"], ["vendido_promissoria", "Vendido — 100% promissória"], ["em_obras", "Em obras"], ["standby", "Standby"], ["em_analise", "Em análise"], ["nao_compareceu", "Não compareceu"]];
+  const MAIS: [string, string][] = [["nao_vai_comprar", "Cliente não vai comprar"], ["atendido", "Atendimento finalizado"], ["vendido_entrada", "Vendido — entrada + promissória"], ["vendido_promissoria", "Vendido — 100% promissória"], ["em_obras", "Em obras"], ["standby", "Standby"], ["em_analise", "Em análise"], ["nao_compareceu", "Não compareceu"]];
   const ehVenda = st === "vendido" || st === "vendido_entrada" || st === "vendido_promissoria";
   const tipoDe = (k: string) => k === "vendido_entrada" ? "entrada" : k === "vendido_promissoria" ? "promissoria" : "efetivada";
   const escolher = (k: string) => { setSt(k); if (["vendido", "vendido_entrada", "vendido_promissoria"].includes(k) && !linhas.some(l => l.numero || l.valor)) setLinhas(linhasDoTipo(tipoDe(k))); };
@@ -597,7 +597,7 @@ function AcoesVendedor({ c }: any) {
     if (!st) { toast("Escolha o status"); return; }
     if (ehVenda) { lancar(false); return; }
     if (st === "reagendado" && (!data || data.length < 16)) { toast("Escolha a nova data e horário"); return; }
-    if (["orcamento", "sem_resposta", "reprovado", "em_obras", "standby", "em_analise"].includes(st) && !txt.trim()) { toast("Escreva o parecer"); return; }
+    if (["orcamento", "sem_resposta", "reprovado", "nao_vai_comprar", "atendido", "em_obras", "standby", "em_analise"].includes(st) && !txt.trim()) { toast("Escreva o parecer"); return; }
     ex(() => A.vendedorStatus(c.id, st, st === "reagendado" ? data : "", txt.trim()), "Status salvo").then((ok: boolean) => { if (ok) { setSt(""); setTxt(""); setData(""); } });
   };
   return (
@@ -633,7 +633,7 @@ function StatusGeral({ abrir }: any) {
   const mkt = st.chamados.filter((c: any) => R.domMarketing(c));
   const porSt: Record<string, any[]> = {};
   mkt.forEach((c: any) => { const s = R.statusClienteDe(c); (porSt[s] = porSt[s] || []).push(c); });
-  const FINAIS = ["vendido", "vendido_promissoria", "vendido_entrada", "vendido_revisao", "venda_cancelada", "reprovado", "nao_compareceu", "atendido"];
+  const FINAIS = ["vendido", "vendido_promissoria", "vendido_entrada", "vendido_revisao", "venda_cancelada", "reprovado", "nao_vai_comprar", "nao_compareceu", "atendido"];
   const ordem = Object.keys(STATUS_CLIENTE).filter(k => porSt[k]?.length);
   const doMes = (l: any[]) => l.filter((c: any) => String(c.dataLoja || c.dataVisita || c.criadoEm).slice(0, 7) === mes);
   const abertos = ordem.filter(k => !FINAIS.includes(k)), finais = ordem.filter(k => FINAIS.includes(k));

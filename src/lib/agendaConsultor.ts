@@ -3,7 +3,7 @@
 import { fmtDateTime } from "./regras";
 
 const ms = (v: any) => { const s = String(v || "").replace(" ", "T").slice(0, 16); const d = s.length >= 16 ? new Date(s) : null; return d && !isNaN(+d) ? +d : NaN; };
-const FECHADO = ["visita_cancelada", "loja_cancelada", "reprovado", "vendido", "vendido_revisao"];
+const FECHADO = ["visita_cancelada", "loja_cancelada", "reprovado", "nao_vai_comprar", "vendido", "vendido_revisao"];
 
 /** agenda fechada pelo consultor (viagem, consulta…) que pega este horário */
 export function bloqueioDe(R: any, uid: string, quando: any): any | null {

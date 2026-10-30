@@ -291,18 +291,17 @@ function Tratativa({ c }: any) {
         </div>
       );
     }
-    if (sc === "atendido") return <div className="resp-box"><h4>Atendimento finalizado <ScBadge c={c} /></h4>{infoTop}{t.parecer && <RowSb k="Parecer">{t.parecer}</RowSb>}</div>;
-    if (sc === "nao_compareceu" || sc === "reprovado") return <div className="resp-box"><h4>{sc === "reprovado" ? "Atendimento reprovado" : "Cliente não compareceu"} <ScBadge c={c} /></h4>{infoTop}
+    if (["nao_compareceu", "reprovado", "nao_vai_comprar", "atendido"].includes(sc)) return <div className="resp-box"><h4>{sc === "reprovado" ? "Atendimento reprovado" : sc === "nao_vai_comprar" ? "Cliente não vai comprar" : sc === "atendido" ? "Atendimento finalizado" : "Cliente não compareceu"} <ScBadge c={c} /></h4>{infoTop}
       {t.parecer && <RowSb k="Parecer">{t.parecer}</RowSb>}
-      <button className="btn sm" onClick={() => sc === "reprovado" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>{sc === "reprovado" ? "Reabrir atendimento" : "Cliente veio afinal — reabrir"}</button></div>;
+      {(sc !== "atendido" || c.setorDestino === "atendente_cliente") && <button className="btn sm" onClick={() => sc !== "nao_compareceu" ? ex(() => A.vendedorStatus(c.id, "com_vendedor", "", "Atendimento reaberto"), "Reaberto") : ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto")}>{sc !== "nao_compareceu" ? "Reabrir atendimento" : "Cliente veio afinal — reabrir"}</button>}</div>;
     // status do atendimento do vendedor, com parecer
-    const OPC: [string, string][] = [["orcamento", "Orçamento"], ["sem_resposta", "Sem resposta"], ["reagendado", "Reagendado"], ["reprovado", "Reprovado"], ["nao_compareceu", "Não compareceu"], ["vendido", "Vendido — registrar a venda"], ["com_vendedor", "Em atendimento"],
+    const OPC: [string, string][] = [["orcamento", "Orçamento"], ["sem_resposta", "Sem resposta"], ["reagendado", "Reagendado"], ["reprovado", "Reprovado"], ["nao_vai_comprar", "Cliente não vai comprar"], ["atendido", "Atendimento finalizado"], ["nao_compareceu", "Não compareceu"], ["vendido", "Vendido — registrar a venda"], ["com_vendedor", "Em atendimento"],
       ["em_obras", "Em obras"], ["standby", "Standby"], ["em_analise", "Em análise"], ["vendido_entrada", "Vendido — entrada + promissória"], ["vendido_promissoria", "Vendido — 100% promissória"]];
     const salvarStatus = () => {
       if (!vs) { toast("Escolha o status"); return; }
       if (vs.startsWith("vendido")) { const tp = vs === "vendido_entrada" ? "entrada" : vs === "vendido_promissoria" ? "promissoria" : "efetivada"; window.dispatchEvent(new CustomEvent("tipo-venda", { detail: tp })); const alvo = document.getElementById("tVendaNumero"); if (alvo) { alvo.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => (alvo as HTMLInputElement).focus(), 350); } toast("Registre o nº e o valor da venda no bloco Dados da venda"); return; }
       if (vs === "reagendado" && (!vsData || vsData.length < 16)) { toast("Informe a nova data e horário da vinda à loja"); return; }
-      if (["orcamento", "sem_resposta", "reprovado", "em_obras", "standby", "em_analise"].includes(vs) && !vsTxt.trim()) { toast("Escreva o parecer: o que aconteceu com o cliente"); return; }
+      if (["orcamento", "sem_resposta", "reprovado", "nao_vai_comprar", "atendido", "em_obras", "standby", "em_analise"].includes(vs) && !vsTxt.trim()) { toast("Escreva o parecer: o que aconteceu com o cliente"); return; }
       ex(() => A.vendedorStatus(c.id, vs, vs === "reagendado" ? vsData : "", vsTxt.trim()), "Status atualizado").then(ok => { if (ok) { setVs(""); setVsData(""); setVsTxt(""); } });
     };
     return (
@@ -317,7 +316,7 @@ function Tratativa({ c }: any) {
         <div className="grid">
           <div className="field"><label>Status do atendimento <span className="req-star">*</span></label><select value={vs} onChange={e => setVs(e.target.value)}><option value="">Selecione…</option>{OPC.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
           {vs === "reagendado" && <div className="field"><label>Nova data e horário na loja <span className="req-star">*</span></label><input type="datetime-local" value={vsData} onChange={e => setVsData(e.target.value)} /></div>}
-          {vs && !vs.startsWith("vendido") && <div className="field full"><label>Parecer {["orcamento", "sem_resposta", "reprovado", "em_obras", "standby", "em_analise"].includes(vs) && <span className="req-star">*</span>}</label><textarea value={vsTxt} onChange={e => setVsTxt(e.target.value)} placeholder="O que aconteceu: valor do orçamento, próximo passo, motivo da recusa…" /></div>}
+          {vs && !vs.startsWith("vendido") && <div className="field full"><label>Parecer {["orcamento", "sem_resposta", "reprovado", "nao_vai_comprar", "atendido", "em_obras", "standby", "em_analise"].includes(vs) && <span className="req-star">*</span>}</label><textarea value={vsTxt} onChange={e => setVsTxt(e.target.value)} placeholder="O que aconteceu: valor do orçamento, próximo passo, motivo da recusa…" /></div>}
         </div>
         <div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={salvarStatus}>Salvar status</button></div>
       </div>
@@ -539,6 +538,7 @@ function Destaque({ c, anexar }: any) {
   else if (sc === "visita_realizada") { titulo = "Visita feita — falta agendar a loja"; valor = fmtDT(c.dataVisita); extra = "Próximo passo: combinar a data de ida à loja"; cor = "var(--st-respondida)"; }
   else if (["agendado_loja", ...EM_ATENDIMENTO].includes(sc)) { titulo = "Cliente vem à loja em"; valor = fmtDT(c.dataLoja); extra = c.atendenteId ? "Vendedor: " + R.nomeUser(c.atendenteId) : "Ainda sem vendedor definido"; cor = sc === "agendado_loja" ? "var(--st-aberta)" : "var(--st-respondida)"; }
   else if (sc === "reprovado") { titulo = "Atendimento reprovado"; valor = fmtDT(c.dataLoja); cor = "var(--danger)"; }
+  else if (sc === "nao_vai_comprar") { titulo = "Cliente não vai comprar"; valor = fmtDT(c.dataLoja); cor = "var(--danger)"; }
   else if (VENDA_SC.includes(sc)) { const v = c.venda || {}; titulo = "Venda nº " + (v.numero || "—"); valor = R.podeVerValor(c) && v.valor ? "R$ " + v.valor : (v.dataVenda ? "Vendido em " + fmtDate(v.dataVenda) : "Vendido"); extra = (VENDA_STATUS[v.status] || "") + (v.dataVenda ? " · " + fmtDate(v.dataVenda) : ""); cor = corVenda(v.status); }
   else if (sc === "nao_compareceu") { titulo = "Cliente não compareceu"; valor = fmtDT(c.dataLoja); cor = "var(--danger)"; }
   if (!titulo) return null;

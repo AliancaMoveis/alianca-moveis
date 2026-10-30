@@ -2,7 +2,7 @@
 import { hojeISO } from "./regras";
 import { vindaConfirmada } from "../comp/Situacao";
 
-export const RESGATAR = ["visita_cancelada", "loja_cancelada", "nao_compareceu", "sem_resposta", "reprovado", "ausente_endereco"];
+export const RESGATAR = ["visita_cancelada", "loja_cancelada", "nao_compareceu", "sem_resposta", "reprovado", "nao_vai_comprar", "ausente_endereco"];
 export type CorCli = { k: "canc" | "conf" | "loja" | "real" | "ctt" | "dir"; cor: string; fundo: string; txt: string };
 export const CORES_CLI: Record<CorCli["k"], { cor: string; fundo: string; txt: string }> = {
   canc: { cor: "#c0392b", fundo: "#fdecea", txt: "🔄 Resgatar" },
@@ -15,7 +15,7 @@ export const CORES_CLI: Record<CorCli["k"], { cor: string; fundo: string; txt: s
 /** eu = quem está vendo (vendedor usa "Já estou em contato"); sem eu, vale o contato do consultor */
 export function corCliente(R: any, c: any, eu?: string): CorCli {
   const sc = R.statusClienteDe(c); const t = c.tratativa || {};
-  const futuraLoja = !!c.dataLoja && String(c.dataLoja).slice(0, 10) >= hojeISO() && !c.venda && !["loja_cancelada", "nao_compareceu", "reprovado", "visita_cancelada", "atendido"].includes(sc);
+  const futuraLoja = !!c.dataLoja && String(c.dataLoja).slice(0, 10) >= hojeISO() && !c.venda && !["loja_cancelada", "nao_compareceu", "reprovado", "nao_vai_comprar", "visita_cancelada", "atendido"].includes(sc);
   const ctt = eu && c.atendenteId === eu ? !!t.emContato : !!t.contatoIniciado;
   const k: CorCli["k"] = RESGATAR.includes(sc) && !c.venda ? "canc" : futuraLoja && vindaConfirmada(c) ? "conf" : futuraLoja ? "loja" : t.realizada ? "real" : ctt ? "ctt" : "dir";
   return { k, ...CORES_CLI[k] };
