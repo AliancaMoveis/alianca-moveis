@@ -1057,7 +1057,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // RH · Folha ponto: só o Bruno e a Patrícia (RH)
     if (["00000000-0000-4000-a000-000000000007", "7443a59e-91ae-4428-baa4-aa159f0bdf0b"].includes(currentUserId)) G.push({ g: "RH", ic: "🕐", itens: [["rh_funcionarios", "Funcionários"], ["rh_admissao", "Admissão por link"], ["rh_ponto", "Folha ponto"], ["rh_consulta_dia", "Consulta do dia"], ["rh_gestao", "Gestão (valores e folha)"]] });
     // Fretes: em SIMULAÇÃO, só no usuário do Bruno
-    if (currentUserId === "00000000-0000-4000-a000-000000000007") G.push({ g: "Fretes", ic: "🚚", itens: [["fretes_lanc", "Lançar fretes (escritório)"], ["fretes_gestao", "Gestão de fretes (simulação)"], ["fretes", "Romaneios (simulação)"]] });
+    if (currentUserId === "00000000-0000-4000-a000-000000000007") G.push({ g: "Fretes", ic: "🚚", itens: [["fretes_fech", "Fechamento de fretes (Tático)"], ["fretes_lanc", "Lançar fretes (escritório)"], ["fretes_gestao", "Gestão de fretes (simulação)"], ["fretes", "Romaneios (simulação)"]] });
     // Financeiro (Salete, Patrícia): pagamento dos montadores — relatório em PDF e controle das notas fiscais
     else if (mySetores().includes("financeiro")) G.push({ g: "Financeiro", ic: "💰", itens: [["montagem_pag", "Montadores · pagamento e notas fiscais"], ["montagem_agend", "Agendadoras da montagem · valores"]] });
     if (podeConsultaProduto()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Produtos", ic: "🏷", itens: [["consulta_produto", "Consulta de produto"], ...(podeNegociacao() ? [["negociacao", "🤝 Negociação"]] : [])] });
