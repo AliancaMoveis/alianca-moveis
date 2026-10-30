@@ -5,6 +5,7 @@ import { useApp } from "../estado";
 import { Kpi } from "./Dashboard";
 import { baixarXlsx } from "../lib/planilha";
 import { fmtDate, fmtMoeda, hojeISO, isoLocal, numerosVenda, parseData } from "../lib/regras";
+import RelConferenciaExternos from "./RelConferenciaExternos";
 
 type Per = "hoje" | "7d" | "mes" | "mesp" | "ano" | "outro";
 const PER: [Per, string][] = [["hoje", "Hoje"], ["7d", "Últimos 7 dias"], ["mes", "Este mês"], ["mesp", "Mês passado"], ["ano", "Este ano"], ["outro", "Escolher datas"]];
@@ -29,6 +30,7 @@ export default function VendasConsultores() {
   const [orig, setOrig] = useState<"cons" | "mkt" | "tudo">("cons");
   const [sit, setSit] = useState<"ok" | "pend" | "todas">("ok");
   const [sel, setSel] = useState(""); const [q, setQ] = useState("");
+  const [rel, setRel] = useState(false);
   const [ini, fim] = faixa(per, de, ate);
 
   // todas as vendas (nº a nº) dos clientes do 360, sem canceladas
@@ -63,7 +65,9 @@ export default function VendasConsultores() {
   const escolhido = porCons.find(x => x.k === sel);
   return <section className="view active">
     <div className="view-head"><div><h2>💰 Vendas dos consultores</h2>
-      <p>Só as vendas: quantas, quanto e de quem, no período que você escolher. <b>Aprovadas</b> = já validadas pela Gestão. Clique num consultor para ver as vendas dele.</p></div></div>
+      <p>Só as vendas: quantas, quanto e de quem, no período que você escolher. <b>Aprovadas</b> = já validadas pela Gestão. Clique num consultor para ver as vendas dele.</p></div>
+      <button className="btn primary" onClick={() => setRel(!rel)}>📋 Relatório para conferência (29 a 28)</button></div>
+    {rel && <RelConferenciaExternos fechar={() => setRel(false)} />}
 
     <div className="vc-filtros">
       <div className="chips" style={{ margin: 0 }}>{PER.map(([k, l]) => <button key={k} className={"chip" + (per === k ? " on" : "")} onClick={() => setPer(k)}>{l}</button>)}</div>

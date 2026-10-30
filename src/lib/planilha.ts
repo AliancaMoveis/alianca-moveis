@@ -112,3 +112,48 @@ export async function baixarXlsxAbas(nome: string, abas: AbaXlsx[]) {
   const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const el = document.createElement("a"); el.href = URL.createObjectURL(blob); el.download = nome.endsWith(".xlsx") ? nome : nome + ".xlsx"; el.click(); setTimeout(() => URL.revokeObjectURL(el.href), 3000);
 }
+
+// ---------- planilha formatada (bordas, Arial, R$ e data) — relatórios para conferência/financeiro ----------
+export type ColFmt = { titulo: string; largura: number; tipo?: "texto" | "moeda" | "data"; alinhar?: "left" | "center" | "right" };
+/** Gera e baixa um .xlsx de 1 aba com o visual dos relatórios da gestão: Arial, cabeçalho em negrito, bordas finas,
+ *  valores em R$ e datas dd/mm/aaaa (datas no formato "aaaa-mm-dd"). */
+export async function baixarXlsxFormatado(nome: string, aba: string, cols: ColFmt[], linhas: (string | number | null | undefined)[][]) {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  const letra = (i: number) => { let s = ""; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  const serial = (iso: string) => { const [y, m, d] = iso.slice(0, 10).split("-").map(Number); return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000); };
+  // estilos: 0 padrão · 1 cabeçalho (centro) · 2 cabeçalho (esq.) · por alinhamento: texto / moeda / data
+  const al = (a?: string) => a ? `<alignment horizontal="${a}"/>` : "";
+  const xfs = [`<xf/>`,
+    `<xf fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">${al("center")}</xf>`,
+    `<xf fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">${al("left")}</xf>`];
+  const idx: Record<string, number> = {};
+  const estilo = (tipo: string, a?: string) => {
+    const k = tipo + "|" + (a || ""); if (idx[k] != null) return idx[k];
+    const fmt = tipo === "moeda" ? ' numFmtId="164" applyNumberFormat="1"' : tipo === "data" ? ' numFmtId="165" applyNumberFormat="1"' : "";
+    xfs.push(`<xf fontId="0" fillId="2" borderId="1"${fmt} applyFont="1" applyFill="1" applyBorder="1"${a ? ' applyAlignment="1"' : ""}>${al(a)}</xf>`);
+    return (idx[k] = xfs.length - 1);
+  };
+  const est = cols.map(c => estilo(c.tipo || "texto", c.alinhar));
+  const cab = `<row r="1">${cols.map((c, j) => `<c r="${letra(j)}1" t="inlineStr" s="${c.alinhar === "left" ? 2 : 1}"><is><t xml:space="preserve">${esc(c.titulo)}</t></is></c>`).join("")}</row>`;
+  const corpo = linhas.map((l, i) => {
+    const r = i + 2;
+    return `<row r="${r}">${cols.map((c, j) => {
+      const v = l[j], ref = letra(j) + r, s = est[j];
+      if (v === null || v === undefined || v === "") return `<c r="${ref}" s="${s}"/>`;
+      if (c.tipo === "data" && typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v)) return `<c r="${ref}" s="${s}"><v>${serial(v)}</v></c>`;
+      if (typeof v === "number" && isFinite(v)) return `<c r="${ref}" s="${s}"><v>${v}</v></c>`;
+      return `<c r="${ref}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${esc(String(v))}</t></is></c>`;
+    }).join("")}</row>`;
+  }).join("");
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="[$R$ -416]#,##0.00"/><numFmt numFmtId="165" formatCode="dd/mm/yyyy"/></numFmts><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const nomeAba = (aba || "Planilha").replace(/[\\\/\?\*\[\]:]/g, " ").slice(0, 31);
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`);
+  zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  zip.file("xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${esc(nomeAba)}" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+  zip.file("xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  zip.file("xl/styles.xml", styles);
+  zip.file("xl/worksheets/sheet1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0" tabSelected="1"/></sheetViews><cols>${cols.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.largura}" customWidth="1"/>`).join("")}</cols><sheetData>${cab}${corpo}</sheetData></worksheet>`);
+  const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const el = document.createElement("a"); el.href = URL.createObjectURL(blob); el.download = nome.endsWith(".xlsx") ? nome : nome + ".xlsx"; el.click(); setTimeout(() => URL.revokeObjectURL(el.href), 3000);
+}
