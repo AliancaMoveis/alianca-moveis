@@ -24,7 +24,6 @@ export default function FretesFechamento() {
   const [d, setD] = useState<{ fr: Freteiro[]; rom: RomTat[]; desc: Desconto[]; pagto: string } | null>(null);
   const [erro, setErro] = useState("");
   const [aberto, setAberto] = useState<number | null>(null);
-  const [fFret, setFFret] = useState<number | "todos" | "sem">("todos");
   const [fSit, setFSit] = useState<"todos" | "pend" | "conf">("todos");
   const [busca, setBusca] = useState("");
   const rec = () => carregar(mes).then(x => { setD(x); setErro(""); }).catch(e => setErro(e.message));
@@ -63,7 +62,7 @@ export default function FretesFechamento() {
       </div>
       {erro && <div className="empty" style={{ color: "var(--danger, #b00)" }}>{erro}</div>}
       {!d ? <div className="empty">Carregando…</div> : <>
-        {aba === "rom" && <ListaRomaneios d={d} uid={uid} toast={toast} rec={rec} aberto={aberto} setAberto={setAberto} fFret={fFret} setFFret={setFFret} fSit={fSit} setFSit={setFSit} busca={busca} setBusca={setBusca} />}
+        {aba === "rom" && <ListaRomaneios d={d} uid={uid} toast={toast} rec={rec} aberto={aberto} setAberto={setAberto} fSit={fSit} setFSit={setFSit} busca={busca} setBusca={setBusca} patch={(id: number, p: Partial<RomTat>) => setD(x => x && ({ ...x, rom: x.rom.map(r => r.id === id ? { ...r, ...p } : r) }))} />}
         {aba === "rel" && <Relatorio d={d} mes={mes} toast={toast} rec={rec} />}
         {aba === "fr" && <Freteiros d={d} toast={toast} rec={rec} />}
       </>}
@@ -71,52 +70,96 @@ export default function FretesFechamento() {
   );
 }
 
-// ---------------- lista de romaneios ----------------
-function ListaRomaneios({ d, uid, toast, rec, aberto, setAberto, fFret, setFFret, fSit, setFSit, busca, setBusca }: any) {
+// ---------------- lista de romaneios: um bloco por entregador, todos os romaneios dele na mesma tela ----------------
+function ListaRomaneios({ d, uid, toast, rec, aberto, setAberto, fSit, setFSit, busca, setBusca, patch }: any) {
   const fr: Freteiro[] = d.fr; const rom: RomTat[] = d.rom;
-  const nomeF = (id: number | null) => fr.find(f => f.id === id)?.apelido || "";
-  const vis = rom.filter(r => (fFret === "todos" || (fFret === "sem" ? !r.freteiro_id : r.freteiro_id === fFret))
-    && (fSit === "todos" || (fSit === "conf" ? r.conferido : !r.conferido))
-    && (!busca || r.romaneio.includes(busca) || r.itens.some(i => i.cliente.toLowerCase().includes(busca.toLowerCase()) || i.venda.includes(busca))));
-  const porF = useMemo(() => {
-    const m = new Map<string, { id: number | "sem"; n: number; conf: number; total: number }>();
-    for (const r of rom) { const k = r.freteiro_id ? String(r.freteiro_id) : "sem"; const x = m.get(k) || { id: r.freteiro_id || "sem", n: 0, conf: 0, total: 0 }; x.n++; if (r.conferido) x.conf++; x.total += contaRom(r).total; m.set(k, x); }
-    return Array.from(m.values());
-  }, [rom]);
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const filtra = (r: RomTat) => (fSit === "todos" || (fSit === "conf" ? r.conferido : !r.conferido))
+    && (!busca || r.romaneio.includes(busca) || r.itens.some(i => i.cliente.toLowerCase().includes(busca.toLowerCase()) || i.venda.includes(busca)));
+  const grupos = useMemo(() => {
+    const m = new Map<string, { k: string; nome: string; ordem: number; rs: RomTat[] }>();
+    for (const r of rom) {
+      const f = fr.find(x => x.id === r.freteiro_id); const k = f ? String(f.id) : "sem:" + r.transportadora;
+      const g = m.get(k) || { k, nome: f ? f.apelido : "⚠ " + r.transportadora + " (sem cadastro)", ordem: f ? f.ordem : 999, rs: [] }; g.rs.push(r); m.set(k, g);
+    }
+    for (const g of m.values()) g.rs.sort((a, b) => String(a.data).localeCompare(String(b.data)) || a.romaneio.localeCompare(b.romaneio));
+    return Array.from(m.values()).sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [rom, fr]);
   const conf = rom.filter(r => r.conferido).length;
-  const r = rom.find(x => x.id === aberto);
-  if (!rom.length) return <div className="empty">Nenhum romaneio neste mês. Clique em <b>Importar relatório do Tático</b> e escolha o .csv (pode ser um por freteiro ou todos juntos).</div>;
-  const proximo = () => { const i = vis.findIndex(x => x.id === aberto); const p = vis.slice(i + 1).find(x => !x.conferido) || vis.find(x => !x.conferido && x.id !== aberto); setAberto(p ? p.id : null); };
+  if (!rom.length) return <div className="empty">Nenhum romaneio neste mês. Clique em <b>Importar relatório do Tático</b> e escolha o .csv (pode ser um por entregador ou o geral, com todos).</div>;
+  const alterna = (k: string) => setAbertos(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   return <>
     <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}><b>{conf} de {rom.length} romaneios conferidos</b><span className="hint">faltam {rom.length - conf}</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}><b>{conf} de {rom.length} romaneios conferidos · {grupos.length} entregadores</b><span className="hint">faltam {rom.length - conf}</span></div>
       <div style={{ height: 8, background: "#e8ebf2", borderRadius: 6, marginTop: 6 }}><div style={{ height: 8, width: (100 * conf / rom.length) + "%", background: "var(--ok, #1f8a4c)", borderRadius: 6 }} /></div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-        <button className={"chip" + (fFret === "todos" ? " on" : "")} onClick={() => setFFret("todos")}>Todos</button>
-        {porF.map(x => <button key={String(x.id)} className={"chip" + (fFret === x.id ? " on" : "")} onClick={() => setFFret(x.id)}>
-          {x.id === "sem" ? "⚠ Sem freteiro" : nomeF(x.id as number)} · {x.conf}/{x.n} · {moeda(x.total)}</button>)}
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
         <div className="subnav" style={{ margin: 0 }}>
           <button className={fSit === "todos" ? "on" : ""} onClick={() => setFSit("todos")}>Todos</button>
           <button className={fSit === "pend" ? "on" : ""} onClick={() => setFSit("pend")}>A conferir</button>
           <button className={fSit === "conf" ? "on" : ""} onClick={() => setFSit("conf")}>Conferidos</button>
         </div>
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar nº do romaneio, venda ou cliente" style={{ flex: 1, minWidth: 200 }} />
+        <button className="btn sm" onClick={() => setAbertos(new Set(grupos.map(g => g.k)))}>Abrir todos</button>
+        <button className="btn sm" onClick={() => setAbertos(new Set())}>Fechar todos</button>
       </div>
+      <div className="hint" style={{ marginTop: 6 }}>Digite direto na linha: <b>Km</b> e <b>valor das entregas</b> do romaneio (Enter vai para o próximo campo). Para lançar cliente por cliente, clique em <b>▸ clientes</b>.</div>
     </div>
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 8 }}>
-      {vis.map(x => { const c = contaRom(x); const av = avisosRom(x, rom);
-        const cor = x.conferido ? "#1f8a4c" : c.lancado ? "#c98a00" : "#8a94a6";
-        return <button key={x.id} className="card" onClick={() => setAberto(x.id)} style={{ textAlign: "left", padding: "10px 12px", borderLeft: "4px solid " + cor, cursor: "pointer", background: aberto === x.id ? "#eef3ff" : undefined }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><b style={{ fontSize: 16 }}>{x.romaneio}</b><span className="hint">{br(x.data).slice(0, 5)}</span></div>
-          <div className="hint">{nomeF(x.freteiro_id) || <span style={{ color: "#b00" }}>⚠ {x.transportadora}</span>} · {x.itens.length} entrega{x.itens.length === 1 ? "" : "s"}</div>
-          <div style={{ marginTop: 4 }}>{x.conferido ? <b style={{ color: cor }}>✓ {moeda(c.total)}</b> : c.lancado ? <b style={{ color: cor }}>✏ {moeda(c.total)}</b> : <span className="hint">a lançar</span>}
-            {c.km > 0 && <span className="hint"> · {fmtN(c.km)} km</span>}</div>
-          {av.length > 0 && <div style={{ fontSize: 12, color: "#9a5b00", marginTop: 2 }}>⚠ {av.length} aviso{av.length > 1 ? "s" : ""}</div>}
-        </button>; })}
-    </div>
-    {r && <Romaneio key={r.id} r={r} fr={fr} todos={rom} uid={uid} toast={toast} fechar={() => setAberto(null)} salvo={(ir: boolean) => { rec(); if (ir) proximo(); }} />}
+    {grupos.map(g => {
+      const rs = g.rs.filter(filtra); if (!rs.length && (busca || fSit !== "todos")) return null;
+      const cs = g.rs.map(contaRom); const tot = cs.reduce((s, c) => s + c.total, 0), km = cs.reduce((s, c) => s + c.km, 0);
+      const nConf = g.rs.filter(x => x.conferido).length; const ab = abertos.has(g.k) || !!busca;
+      return <div key={g.k} className="card" style={{ marginBottom: 10, padding: 0, overflow: "hidden" }}>
+        <button onClick={() => alterna(g.k)} style={{ width: "100%", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", background: nConf === g.rs.length ? "#E8F3EC" : "var(--fundo2, #f3f5fa)", border: 0, cursor: "pointer", textAlign: "left" }}>
+          <b style={{ fontSize: 16, minWidth: 190 }}>{ab ? "▾" : "▸"} {g.nome}</b>
+          <span>{nConf}/{g.rs.length} conferidos</span>
+          <span className="hint">{g.rs.reduce((s, x) => s + x.itens.length, 0)} entregas</span>
+          <span className="hint">{fmtN(km)} km</span>
+          <b style={{ marginLeft: "auto" }}>{moeda(tot)}</b>
+        </button>
+        {ab && <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5, margin: 0 }}>
+          <thead><tr><th>Romaneio</th><th>Data</th><th style={{ textAlign: "center" }}>Entregas</th><th>Avisos</th><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Entregas (R$)</th><th style={{ textAlign: "right" }}>Total</th><th style={{ textAlign: "right" }}>Total no papel</th><th style={{ textAlign: "center" }}>Conferido</th><th></th></tr></thead>
+          <tbody>{rs.map(x => <LinhaRom key={x.id} r={x} todos={rom} uid={uid} toast={toast} patch={patch} aberto={aberto === x.id} abrir={() => setAberto(aberto === x.id ? null : x.id)}
+            detalhe={aberto === x.id ? <Romaneio key={x.id} r={x} fr={fr} todos={rom} uid={uid} toast={toast} fechar={() => setAberto(null)} salvo={() => { rec(); setAberto(null); }} /> : null} />)}</tbody>
+        </table></div>}
+      </div>;
+    })}
+  </>;
+}
+
+/** uma linha = um romaneio; km e valores digitados direto, grava ao sair do campo */
+function LinhaRom({ r, todos, uid, toast, patch, aberto, abrir, detalhe }: { r: RomTat; todos: RomTat[]; uid: string; toast: any; patch: (id: number, p: Partial<RomTat>) => void; aberto: boolean; abrir: () => void; detalhe: React.ReactNode }) {
+  const c = contaRom(r); const av = avisosRom(r, todos);
+  const porLinha = r.modo === "linhas" && r.itens.some(i => i.valor != null || i.km != null);
+  const [km, setKm] = useState(porLinha ? fmtN(c.km) : fmtN(r.km)); const [ent, setEnt] = useState(porLinha ? fmtN(c.ent) : fmtN(r.valor_entregas)); const [papel, setPapel] = useState(fmtN(r.total_papel));
+  useEffect(() => { if (porLinha) { setKm(fmtN(c.km)); setEnt(fmtN(c.ent)); } }, [porLinha, c.km, c.ent]);
+  const gravar = async (p: Partial<RomTat>) => { patch(r.id, p); try { await salvarRom(r.id, p, uid); } catch (e: any) { toast?.(e.message); } };
+  const sair = () => {
+    const p: Partial<RomTat> = { total_papel: num(papel) };
+    if (!porLinha) { p.modo = "total"; p.km = num(km); p.valor_entregas = num(ent); }
+    if (p.total_papel === r.total_papel && (porLinha || (p.km === r.km && p.valor_entregas === r.valor_entregas && (r.modo === "total" || (p.km == null && p.valor_entregas == null))))) return;
+    gravar(p);
+  };
+  const enter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return; e.preventDefault();
+    const todosInp = Array.from(document.querySelectorAll<HTMLInputElement>("input.fx:not([disabled])")); const i = todosInp.indexOf(e.currentTarget);
+    const n = todosInp[i + 1]; if (n) { n.focus(); n.select(); }
+  };
+  const inp = { width: 80, textAlign: "right" as const, padding: "3px 6px" };
+  const v = porLinha ? c : contaRom({ ...r, modo: "total", km: num(km), valor_entregas: num(ent), total_papel: num(papel) });
+  const bate = v.difPapel == null ? null : v.difPapel === 0;
+  return <>
+    <tr style={{ background: r.conferido ? "#F2FAF5" : undefined }}>
+      <td><b>{r.romaneio}</b></td><td>{br(r.data).slice(0, 5)}</td><td style={{ textAlign: "center" }}>{r.itens.length}</td>
+      <td style={{ fontSize: 12, color: "#9a5b00", maxWidth: 240 }}>{av.join(" · ")}</td>
+      <td style={{ textAlign: "right" }}><input className="fx" style={inp} inputMode="decimal" value={km} disabled={porLinha} title={porLinha ? "Lançado cliente por cliente" : ""} onChange={e => setKm(e.target.value)} onBlur={sair} onKeyDown={enter} /></td>
+      <td style={{ textAlign: "right" }}><input className="fx" style={inp} inputMode="decimal" value={ent} disabled={porLinha} title={porLinha ? "Lançado cliente por cliente" : ""} onChange={e => setEnt(e.target.value)} onBlur={sair} onKeyDown={enter} /></td>
+      <td style={{ textAlign: "right" }}>{v.lancado && <><b>{moeda(v.total)}</b>{v.km > 0 && <div className="hint">{moeda(v.vKm)} de km</div>}</>}</td>
+      <td style={{ textAlign: "right" }}><input className="fx" style={{ ...inp, borderColor: bate == null ? undefined : bate ? "#1f8a4c" : "#c00" }} inputMode="decimal" value={papel} placeholder="opcional" onChange={e => setPapel(e.target.value)} onBlur={sair} onKeyDown={enter} />
+        {bate === false && <div style={{ color: "#c00", fontSize: 12 }}>dif. {moeda(v.difPapel || 0)}</div>}</td>
+      <td style={{ textAlign: "center" }}><input type="checkbox" style={{ width: 20, height: 20 }} checked={r.conferido} onChange={e => gravar({ conferido: e.target.checked })} /></td>
+      <td><button className="btn sm" style={{ whiteSpace: "nowrap" }} onClick={abrir}>{aberto ? "▾" : "▸"} clientes</button></td>
+    </tr>
+    {detalhe && <tr><td colSpan={10} style={{ padding: "0 6px 8px", background: "#f7f9fd" }}>{detalhe}</td></tr>}
   </>;
 }
 
