@@ -18,7 +18,7 @@ import { SinoAvisos } from "../comp/Avisos";
 import { ChatMovel } from "../comp/Chat";
 import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
-import { CancelouLoja, ConfirmarVinda, SeloVinda, SituacaoConsultor, VisitaRealizada, vindaConfirmada } from "../comp/Situacao";
+import { CancelouLoja, ConfirmarVinda, ReabilitarVisita, SeloVinda, SituacaoConsultor, VisitaRealizada, vindaConfirmada } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
 import { RemarcarData } from "../comp/Remarcar";
 import Agenda from "../telas/Agenda";
@@ -209,7 +209,11 @@ function consDados(R: any, st: any) {
   const atrasadas = aFazer.filter((c: any) => c.dataVisita && dia(c.dataVisita) < hoje);
   const semAnexo = meus.filter((c: any) => R.semAnexo(c));
   const naLoja = meus.filter((c: any) => c.dataLoja && dia(c.dataLoja) >= hoje && !c.venda).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
-  return { meus, aFazer, faltaLoja, deHoje, atrasadas, semAnexo, naLoja };
+  // cancelaram a visita (últimos 60 dias): dá para reabilitar e marcar nova data
+  const lim = new Date(Date.now() - 60 * 86400000).toISOString();
+  const cancelados = meus.filter((c: any) => R.statusClienteDe(c) === "visita_cancelada" && String((c.tratativa || {}).cancelouEm || (c.tratativa || {}).situacaoEm || c.atualizadoEm || "") >= lim)
+    .sort((a: any, b: any) => String((b.tratativa || {}).cancelouEm || "").localeCompare(String((a.tratativa || {}).cancelouEm || "")));
+  return { meus, aFazer, faltaLoja, deHoje, atrasadas, semAnexo, naLoja, cancelados };
 }
 function ConsHoje({ abrir, ir }: any) {
   const { R, st } = useApp() as any;
@@ -234,6 +238,8 @@ function ConsHoje({ abrir, ir }: any) {
       {d.faltaLoja.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: "Toque para agendar a vinda à loja" }} destaque />)}</>}
     {d.deHoje.filter((c: any) => c !== prox).length > 0 && <><div className="mv-sec">Mais visitas hoje</div>
       {d.deHoje.filter((c: any) => c !== prox).map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: "hoje", sub: c.endereco }} />)}</>}
+    {d.cancelados.length > 0 && <><div className="mv-sec">❌ Cancelaram a visita — toque para reabilitar com nova data</div>
+      {d.cancelados.slice(0, 8).map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: "", dia: c.tratativa?.cancelouEm ? diaCurto(c.tratativa.cancelouEm) : "", sub: "♻️ Reabilitar e marcar nova visita" + (c.tratativa?.situacaoObs ? " · " + c.tratativa.situacaoObs : "") }} />)}</>}
     {md.aFazer.length > 0 && <div className="mv-med-sec"><div className="mv-med-t">📐 SOLICITAÇÕES DE MEDIDA <small>pós-venda · não é visita de venda · {R.cfg().pagamentoVisita ? "R$ " + R.cfg().pagamentoVisita + " cada, sem comissão" : ""}</small></div>
       {md.aFazer.map((c: any) => <CartaoMedida key={c.id} c={c} abrir={abrir} />)}</div>}
   </>;
@@ -459,8 +465,9 @@ function Folha({ id, fechar, perfil }: any) {
           {t.obs && <div><span>Obs. do consultor</span><b>{t.obs}</b></div>}
           {t.parecer && <div><span>Parecer do vendedor</span><b>{t.parecer}</b></div>}
         </div>
+        {perfil === "consultor" && <ReabilitarVisita c={c} movel />}
         {(perfil === "consultor" || R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x))) && <VisitaRealizada c={c} movel />}
-        {perfil === "consultor" && <RemarcarData c={c} tipo="visita" movel />}
+        {perfil === "consultor" && R.statusClienteDe(c) !== "visita_cancelada" && <RemarcarData c={c} tipo="visita" movel />}
         {perfil !== "consultor" || c.dataLoja ? <RemarcarData c={c} tipo="loja" movel /> : null}
         <Contato c={c} rota={perfil === "consultor"} />
         {perfil === "consultor" && <SituacaoConsultor c={c} movel />}

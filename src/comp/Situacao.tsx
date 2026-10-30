@@ -128,3 +128,32 @@ export function VisitaRealizada({ c, movel }: { c: any; movel?: boolean }) {
   // não realizada: sem botão grande — o consultor marca no passo "2 · Visita realizada" ou no menu "Mudar status do cliente"
   return null;
 }
+
+/** Cliente cancelou a visita do consultor: o consultor dele (ou a Gestão / Supervisão Marketing) reabilita e marca uma nova data.
+ *  O cliente volta para o consultor ("Direcionado ao consultor") com a nova visita; a supervisão do marketing é avisada. */
+export function ReabilitarVisita({ c, movel }: { c: any; movel?: boolean }) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const [aberto, setAberto] = useState(false); const [dt, setDt] = useState(""); const [obs, setObs] = useState("");
+  if (!R.domMarketing(c) || R.statusClienteDe(c) !== "visita_cancelada" || !c.consultorId) return null;
+  const eu = R.currentUserId;
+  const pode = c.consultorId === eu || R.ehGestao() || R.mySetores().includes("marketing_supervisao");
+  if (!pode) return null;
+  const t = c.tratativa || {};
+  const salvar = () => {
+    if (!dt || dt.length < 16) { toast("Escolha o dia e o horário da nova visita"); return; }
+    ex(() => A.reagendarVisita(c.id, dt, obs.trim() || "cliente pediu nova visita"), "Cliente reabilitado — nova visita marcada ♻️").then((ok: boolean) => { if (ok) { setAberto(false); setDt(""); setObs(""); } });
+  };
+  return (
+    <div className={movel ? "mv-bloco" : "resp-box"} style={{ borderLeft: "4px solid var(--st-concluida)" }}>
+      <div className={movel ? "mv-bloco-t" : ""} style={movel ? undefined : { fontWeight: 700, marginBottom: 6 }}>❌ O cliente cancelou a visita</div>
+      <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>{t.situacaoObs ? "Motivo: " + t.situacaoObs : "Sem motivo registrado"}{t.cancelouEm ? " · " + fmtDateTime(t.cancelouEm) : ""}{t.cancelouConsultor ? " · " + t.cancelouConsultor : ""}</div>
+      {!aberto ? <button className={movel ? "mv-principal" : "btn primary sm"} style={{ marginTop: 10 }} onClick={() => setAberto(true)}>♻️ Reabilitar cliente e marcar nova visita</button> : <>
+        <div style={{ fontWeight: 700, margin: "10px 0 6px" }}>Nova data da visita{c.consultorId !== eu ? " com " + R.nomeUser(c.consultorId) : ""}</div>
+        <input type="datetime-local" value={dt} onChange={e => setDt(e.target.value)} style={{ width: "100%" }} />
+        <input placeholder="Observação (ex.: cliente ligou e pediu para remarcar)" value={obs} onChange={e => setObs(e.target.value)} style={{ width: "100%", marginTop: 8 }} />
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}><button className={movel ? "mv-principal" : "btn primary sm"} onClick={salvar}>Reabilitar e marcar</button><button className="btn ghost sm" onClick={() => setAberto(false)}>Voltar</button></div>
+        <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 6 }}>O cliente volta para {c.consultorId === eu ? "você" : R.nomeUser(c.consultorId)} como “Direcionado ao consultor”, com a nova data. A supervisão do marketing e quem agendou são avisados.</div>
+      </>}
+    </div>
+  );
+}

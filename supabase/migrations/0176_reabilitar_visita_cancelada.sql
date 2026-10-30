@@ -1,0 +1,5 @@
+-- reagendar_visita passa a REABILITAR o cliente que cancelou a visita do consultor (aplicado direto no banco em 30/10/2026).
+-- Quando status_cliente = 'visita_cancelada': o consultor do cliente (ou Gestão / Supervisão Marketing) informa a nova data (futura);
+-- o cliente volta para 'consultor_externo' / 'direcionado_consultor' com a nova data_visita, sai a situação de cancelamento,
+-- fica registrado (♻️ Cliente reabilitado …) e a Supervisão Marketing, quem agendou e o consultor são avisados.
+-- (definição completa aplicada via CREATE OR REPLACE FUNCTION public.reagendar_visita(text, timestamp, text))

@@ -3,7 +3,7 @@ import { jaResolvido } from "../lib/resolvido";
 import { DataCalendario } from "./DataCalendario";
 import { confirmarConsultor, marcaConsultor, sugestaoConsultor, textoConflito } from "../lib/agendaConsultor";
 import { EditarCliente, RemarcarData } from "./Remarcar";
-import { CancelouLoja, ConfirmarVinda, SituacaoConsultor, VisitaRealizada } from "./Situacao";
+import { CancelouLoja, ConfirmarVinda, ReabilitarVisita, SituacaoConsultor, VisitaRealizada } from "./Situacao";
 import { PreviaEnvio, juntarPendentes, separarPendentes, type Pendente } from "./PreviaEnvio";
 import { RespMktFicha } from "./RespMkt";
 import { useEffect, useRef, useState } from "react";
@@ -78,6 +78,7 @@ export default function Detalhe({ id }: { id: string }) {
           {tratar && temTrat && <div className="acao-etapa"><div className="acao-etapa-tit">Ação desta etapa</div>{trat}</div>}
           {presale && <>
             <LitoralBloco c={c} />
+            <ReabilitarVisita c={c} />
             <VisitaRealizada c={c} />
             <TrocarConsultor c={c} />
             <StatusCliente c={c} />
@@ -165,7 +166,7 @@ function ClienteCard({ c }: any) {
         {wa ? (() => { const tels = separarTelefones(c.telefone); return tels.length > 1 ? tels.map(t => <a key={t} className="btn wa sm" href={R.waLinkCliente(c, t)} target="_blank" rel="noopener">WhatsApp {t}</a>) : <a className="btn wa sm" href={wa} target="_blank" rel="noopener">WhatsApp do cliente</a>; })() : <button className="btn sm" disabled>Sem telefone</button>}
         {maps && <a className="btn sm" href={maps} target="_blank" rel="noopener">Abrir no Maps</a>}
         {waze && <a className="btn sm" href={waze} target="_blank" rel="noopener">Abrir no Waze</a>}
-        {!direto && <RemarcarData c={c} tipo="visita" />}
+        {!direto && R.statusClienteDe(c) !== "visita_cancelada" && <RemarcarData c={c} tipo="visita" />}
         <EditarCliente c={c} />
       </div>
     </div>
