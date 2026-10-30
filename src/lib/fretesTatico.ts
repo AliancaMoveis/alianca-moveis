@@ -4,7 +4,7 @@ import { sb } from "./supabase";
 import { MOCK } from "./chat";
 
 export type Freteiro = { id: number; apelido: string; nome_tatico: string; cod_transp: string; favorecido: string; agencia: string; conta: string; valor_km: number; ativo: boolean; ordem: number };
-export type ItemRom = { venda: string; cliente: string; cidade: string; bairro: string; nf: string; data: string; assist: string; transf: string; km: number | null; valor: number | null };
+export type ItemRom = { venda: string; cliente: string; cidade: string; bairro: string; nf: string; data: string; assist: string; transf: string; km: number | null; valor: number | null; tipo?: string };
 export type RomTat = { id: number; mes: string; romaneio: string; cod_transp: string; transportadora: string; freteiro_id: number | null; data: string | null; itens: ItemRom[];
   modo: "linhas" | "total"; km: number | null; valor_entregas: number | null; valor_km: number; total_papel: number | null; obs: string; conferido: boolean };
 export type Desconto = { id: number; mes: string; freteiro_id: number; descricao: string; parcela: string; valor: number };
@@ -77,7 +77,7 @@ export function avisosRom(r: RomTat, todos: RomTat[]): string[] {
   if (r.itens.some(i => i.assist)) a.push("Assistência");
   if (r.itens.some(i => i.transf)) a.push("Transferência p/ loja");
   if (r.itens.some(i => i.data && r.data && i.data !== r.data)) a.push("Linhas com outra data");
-  if (r.itens.length === 1) a.push("Romaneio de 1 entrega");
+  if (r.itens.length === 1 && !ehManual(r)) a.push("Romaneio de 1 entrega");
   return a;
 }
 
@@ -168,4 +168,17 @@ export async function trazerParcelas(mesAnt: string, mes: string): Promise<numbe
 export async function salvarPagto(mes: string, data: string) {
   if (MOCK) { mfe[mes] = data; return; }
   const r = await sb.from("frete_fechamento").upsert({ mes, data_pagamento: data || null, atualizado_em: new Date().toISOString() }); if (r.error) throw new Error(r.error.message);
+}
+
+// ---------- romaneio manual (não vem no relatório do Tático) ----------
+export const TIPOS_MANUAL = ["Entrega", "Recolha", "Retorno"];
+export const ehManual = (r: { cod_transp: string }) => r.cod_transp === "MANUAL";
+export const numRom = (r: RomTat) => ehManual(r) ? r.romaneio.replace(/^M/, "") + " (manual)" : r.romaneio;
+export async function criarManual(fr: Freteiro, numero: string, data: string, linhas: { tipo: string; cliente: string; km: number | null; valor: number | null }[], uid: string) {
+  const romaneio = "M" + numero.trim();
+  const itens: ItemRom[] = linhas.map(l => ({ venda: "", cliente: l.cliente, cidade: "", bairro: "", nf: "", data, assist: "", transf: "", km: l.km, valor: l.valor, tipo: l.tipo }));
+  const novo = { mes: data.slice(0, 7), romaneio, cod_transp: "MANUAL", transportadora: "Romaneio manual", freteiro_id: fr.id, data, itens, modo: "linhas", valor_km: fr.valor_km ?? 3, atualizado_por: uid };
+  if (MOCK) { if (mr.some(r => r.romaneio === romaneio)) throw new Error("O romaneio manual " + numero + " já foi lançado."); mr.push({ id: Date.now(), km: null, valor_entregas: null, total_papel: null, obs: "", conferido: false, ...novo } as any); return; }
+  const r = await sb.from("frete_tat_rom").insert(novo);
+  if (r.error) throw new Error(/duplicate|unique/i.test(r.error.message) ? "O romaneio manual " + numero + " já foi lançado." : r.error.message);
 }

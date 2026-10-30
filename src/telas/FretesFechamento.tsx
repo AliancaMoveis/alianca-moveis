@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { baixarXlsxFormatado } from "../lib/planilha";
 import { podeFretes } from "../lib/fretes";
+import { criarManual, ehManual, numRom, TIPOS_MANUAL } from "../lib/fretesTatico";
 import { apagarDesconto, apagarRom, avisosRom, carregar, contaRom, criarDesconto, importar, lerCsvTatico, salvarFreteiro, salvarPagto, salvarRom, trazerParcelas,
   type Desconto, type Freteiro, type ItemRom, type RomTat } from "../lib/fretesTatico";
 
@@ -62,7 +63,7 @@ export default function FretesFechamento() {
       </div>
       {erro && <div className="empty" style={{ color: "var(--danger, #b00)" }}>{erro}</div>}
       {!d ? <div className="empty">Carregando…</div> : <>
-        {aba === "rom" && <ListaRomaneios d={d} uid={uid} toast={toast} rec={rec} aberto={aberto} setAberto={setAberto} fSit={fSit} setFSit={setFSit} busca={busca} setBusca={setBusca} patch={(id: number, p: Partial<RomTat>) => setD(x => x && ({ ...x, rom: x.rom.map(r => r.id === id ? { ...r, ...p } : r) }))} />}
+        {aba === "rom" && <ListaRomaneios mes={mes} d={d} uid={uid} toast={toast} rec={rec} aberto={aberto} setAberto={setAberto} fSit={fSit} setFSit={setFSit} busca={busca} setBusca={setBusca} patch={(id: number, p: Partial<RomTat>) => setD(x => x && ({ ...x, rom: x.rom.map(r => r.id === id ? { ...r, ...p } : r) }))} />}
         {aba === "rel" && <Relatorio d={d} mes={mes} toast={toast} rec={rec} />}
         {aba === "fr" && <Freteiros d={d} toast={toast} rec={rec} />}
       </>}
@@ -71,9 +72,9 @@ export default function FretesFechamento() {
 }
 
 // ---------------- lista de romaneios: um bloco por entregador, todos os romaneios dele na mesma tela ----------------
-function ListaRomaneios({ d, uid, toast, rec, aberto, setAberto, fSit, setFSit, busca, setBusca, patch }: any) {
+function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setFSit, busca, setBusca, patch }: any) {
   const fr: Freteiro[] = d.fr; const rom: RomTat[] = d.rom;
-  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const [abertos, setAbertos] = useState<Set<string>>(new Set()); const [novoM, setNovoM] = useState<string | null>(null);
   const filtra = (r: RomTat) => (fSit === "todos" || (fSit === "conf" ? r.conferido : !r.conferido))
     && (!busca || r.romaneio.includes(busca) || r.itens.some(i => i.cliente.toLowerCase().includes(busca.toLowerCase()) || i.venda.includes(busca)));
   const grupos = useMemo(() => {
@@ -86,7 +87,7 @@ function ListaRomaneios({ d, uid, toast, rec, aberto, setAberto, fSit, setFSit, 
     return Array.from(m.values()).sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"));
   }, [rom, fr]);
   const conf = rom.filter(r => r.conferido).length;
-  if (!rom.length) return <div className="empty">Nenhum romaneio neste mês. Clique em <b>Importar relatório do Tático</b> e escolha o .csv (pode ser um por entregador ou o geral, com todos).</div>;
+  if (!rom.length) return <><div style={{ marginBottom: 10 }}>{novoM === "topo" ? <FormManual fr={fr} mes={mes} uid={uid} toast={toast} fechar={() => setNovoM(null)} feito={rec} /> : <button className="btn sm" onClick={() => setNovoM("topo")}>➕ Romaneio manual</button>}</div><div className="empty">Nenhum romaneio neste mês. Clique em <b>Importar relatório do Tático</b> e escolha o .csv (pode ser um por entregador ou o geral, com todos).</div></>;
   const alterna = (k: string) => setAbertos(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   return <>
     <div className="card" style={{ padding: 12, marginBottom: 12 }}>
@@ -102,6 +103,8 @@ function ListaRomaneios({ d, uid, toast, rec, aberto, setAberto, fSit, setFSit, 
         <button className="btn sm" onClick={() => setAbertos(new Set(grupos.map(g => g.k)))}>Abrir todos</button>
         <button className="btn sm" onClick={() => setAbertos(new Set())}>Fechar todos</button>
       </div>
+      <div style={{ marginTop: 8 }}>{novoM === "topo" ? <FormManual fr={fr} mes={mes} uid={uid} toast={toast} fechar={() => setNovoM(null)} feito={rec} />
+        : <button className="btn sm" onClick={() => setNovoM("topo")}>➕ Romaneio manual</button>}</div>
       <div className="hint" style={{ marginTop: 6 }}>Digite direto na linha: <b>Km</b> e <b>valor das entregas</b> do romaneio (Enter vai para o próximo campo). Para lançar cliente por cliente, clique em <b>▸ clientes</b>.</div>
     </div>
     {grupos.map(g => {
@@ -120,7 +123,10 @@ function ListaRomaneios({ d, uid, toast, rec, aberto, setAberto, fSit, setFSit, 
           <thead><tr><th>Romaneio</th><th>Data</th><th style={{ textAlign: "center" }}>Entregas</th><th>Avisos</th><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Entregas (R$)</th><th style={{ textAlign: "right" }}>Total</th><th style={{ textAlign: "right" }}>Total no papel</th><th style={{ textAlign: "center" }}>Conferido</th><th></th></tr></thead>
           <tbody>{rs.map(x => <LinhaRom key={x.id} r={x} todos={rom} uid={uid} toast={toast} patch={patch} aberto={aberto === x.id} abrir={() => setAberto(aberto === x.id ? null : x.id)}
             detalhe={aberto === x.id ? <Romaneio key={x.id} r={x} fr={fr} todos={rom} uid={uid} toast={toast} fechar={() => setAberto(null)} salvo={() => { rec(); setAberto(null); }} /> : null} />)}</tbody>
-        </table></div>}
+        </table>
+          <div style={{ padding: "8px 12px" }}>{novoM === g.k ? <FormManual fr={fr} fixo={fr.find(f => String(f.id) === g.k)} mes={mes} uid={uid} toast={toast} fechar={() => setNovoM(null)} feito={rec} />
+            : !g.k.startsWith("sem:") && <button className="btn sm" onClick={() => setNovoM(g.k)}>➕ Romaneio manual de {g.nome}</button>}</div>
+        </div>}
       </div>;
     })}
   </>;
@@ -149,7 +155,7 @@ function LinhaRom({ r, todos, uid, toast, patch, aberto, abrir, detalhe }: { r: 
   const bate = v.difPapel == null ? null : v.difPapel === 0;
   return <>
     <tr style={{ background: r.conferido ? "#F2FAF5" : undefined }}>
-      <td><b>{r.romaneio}</b></td><td>{br(r.data).slice(0, 5)}</td><td style={{ textAlign: "center" }}>{r.itens.length}</td>
+      <td><b>{numRom(r)}</b></td><td>{br(r.data).slice(0, 5)}</td><td style={{ textAlign: "center" }}>{ehManual(r) ? r.itens.map(i => i.tipo).join(", ") : r.itens.length}</td>
       <td style={{ fontSize: 12, color: "#9a5b00", maxWidth: 240 }}>{av.join(" · ")}</td>
       <td style={{ textAlign: "right" }}><input className="fx" style={inp} inputMode="decimal" value={km} disabled={porLinha} title={porLinha ? "Lançado cliente por cliente" : ""} onChange={e => setKm(e.target.value)} onBlur={sair} onKeyDown={enter} /></td>
       <td style={{ textAlign: "right" }}><input className="fx" style={inp} inputMode="decimal" value={ent} disabled={porLinha} title={porLinha ? "Lançado cliente por cliente" : ""} onChange={e => setEnt(e.target.value)} onBlur={sair} onKeyDown={enter} /></td>
@@ -190,7 +196,7 @@ function Romaneio({ r, fr, todos, uid, toast, fechar, salvo }: { r: RomTat; fr: 
   return (
     <div ref={caixa} className="card" style={{ marginTop: 14, padding: 16, borderTop: "4px solid var(--primary)", scrollMarginTop: 70 }}>
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, alignItems: "flex-start" }}>
-        <div><div style={{ fontSize: 20, fontWeight: 700 }}>Romaneio de Entregas - {r.romaneio}</div>
+        <div><div style={{ fontSize: 20, fontWeight: 700 }}>Romaneio de Entregas - {numRom(r)}</div>
           <div>{br(r.data)} - {r.transportadora}</div></div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <select value={fid ?? ""} onChange={e => setFid(e.target.value ? +e.target.value : null)}><option value="">— freteiro —</option>{fr.map(f => <option key={f.id} value={f.id}>{f.apelido}</option>)}</select>
@@ -206,7 +212,7 @@ function Romaneio({ r, fr, todos, uid, toast, fechar, salvo }: { r: RomTat; fr: 
         <table className="ma-tab" style={{ width: "100%", fontSize: 13.5 }}>
           <thead><tr><th>Venda</th><th>Cliente</th><th>Bairro</th><th>Cidade</th><th>NF</th>{modo === "linhas" && <><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Valor (R$)</th></>}</tr></thead>
           <tbody>{r.itens.map((i: ItemRom, k: number) => <tr key={k} style={{ background: i.transf ? "#f3eefc" : i.assist ? "#eef6ff" : undefined }}>
-            <td>{i.venda || (i.transf ? "Transf." : i.assist ? "Assist." : "")}</td><td>{i.cliente}{i.data && i.data !== r.data && <span className="hint"> ({br(i.data).slice(0, 5)})</span>}</td>
+            <td>{i.tipo || i.venda || (i.transf ? "Transf." : i.assist ? "Assist." : "")}</td><td>{i.cliente}{i.data && i.data !== r.data && <span className="hint"> ({br(i.data).slice(0, 5)})</span>}</td>
             <td>{i.bairro}</td><td>{i.cidade}</td><td>{i.nf}</td>
             {modo === "linhas" && <><td style={{ textAlign: "right" }}><input {...ref()} style={inp} inputMode="decimal" value={itens[k].km} onChange={e => setItens(v => v.map((x, j) => j === k ? { ...x, km: e.target.value } : x))} /></td>
               <td style={{ textAlign: "right" }}><input {...ref()} style={inp} inputMode="decimal" value={itens[k].valor} onChange={e => setItens(v => v.map((x, j) => j === k ? { ...x, valor: e.target.value } : x))} /></td></>}
@@ -261,7 +267,7 @@ function Relatorio({ d, mes, toast, rec }: any) {
     [{ aba: "ROMANEIOS", cols: [{ titulo: "FRETEIRO", largura: 16 }, { titulo: "DATA", largura: 12, tipo: "data", alinhar: "center" }, { titulo: "ROMANEIO", largura: 12, alinhar: "center" }, { titulo: "ENTREGAS", largura: 10, alinhar: "center" },
       { titulo: "KM", largura: 8, alinhar: "center" }, { titulo: "KM (R$)", largura: 13, tipo: "moeda" }, { titulo: "ENTREGAS (R$)", largura: 15, tipo: "moeda" }, { titulo: "TOTAL", largura: 14, tipo: "moeda" }, { titulo: "CONFERIDO", largura: 11, alinhar: "center" }],
       linhas: rom.slice().sort((a, b) => (fr.find(f => f.id === a.freteiro_id)?.apelido || "").localeCompare(fr.find(f => f.id === b.freteiro_id)?.apelido || "") || String(a.data).localeCompare(String(b.data)))
-        .map(r => { const c = contaRom(r); return [fr.find(f => f.id === r.freteiro_id)?.apelido || r.transportadora, r.data, r.romaneio, r.itens.length, c.km, c.vKm, c.ent, c.total, r.conferido ? "SIM" : "NÃO"]; }) }]);
+        .map(r => { const c = contaRom(r); return [fr.find(f => f.id === r.freteiro_id)?.apelido || r.transportadora, r.data, numRom(r), r.itens.length, c.km, c.vKm, c.ent, c.total, r.conferido ? "SIM" : "NÃO"]; }) }]);
   const imprimir = () => {
     const td = (s: string, a = "left", b = false) => `<td style="text-align:${a};${b ? "font-weight:bold;" : ""}">${s}</td>`;
     const html = `<html><head><title>FRETE ${nomeMes(mes)}</title><style>body{font-family:Arial;font-size:11px;margin:20px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:4px 6px}th{background:#eee}h2{text-align:center}</style></head><body>
@@ -327,4 +333,45 @@ function Freteiros({ d, toast, rec }: any) {
       <button className="btn primary" onClick={gravar}>Salvar</button><button className="btn" onClick={() => setEd(null)}>Cancelar</button>
     </div> : <button className="btn" style={{ marginTop: 10 }} onClick={() => setEd({ valor_km: 3, ativo: true, ordem: 99 })}>+ Novo freteiro</button>}
   </>;
+}
+
+// ---------------- romaneio manual: nº, data e linhas (entrega / recolha / retorno, cliente, km, valor) ----------------
+function FormManual({ fr, fixo, mes, uid, toast, fechar, feito }: { fr: Freteiro[]; fixo?: Freteiro; mes: string; uid: string; toast: any; fechar: () => void; feito: () => void }) {
+  const hojeIso = new Date().toISOString().slice(0, 10);
+  const [fid, setFid] = useState<string>(fixo ? String(fixo.id) : "");
+  const [numero, setNumero] = useState(""); const [data, setData] = useState(hojeIso.slice(0, 7) === mes ? hojeIso : mes + "-01");
+  const vazia = () => ({ tipo: "Entrega", cliente: "", km: "", valor: "" });
+  const [ls, setLs] = useState([vazia()]);
+  const total = ls.reduce((s, l) => s + (num(l.valor) || 0), 0), km = ls.reduce((s, l) => s + (num(l.km) || 0), 0);
+  const f = fr.find(x => String(x.id) === fid); const vkm = f?.valor_km ?? 3;
+  const gravar = async () => {
+    if (!f) return toast?.("Escolha o entregador"); if (!numero.trim()) return toast?.("Informe o nº do romaneio manual");
+    const linhas = ls.filter(l => l.cliente.trim() || num(l.valor) != null || num(l.km) != null).map(l => ({ tipo: l.tipo, cliente: l.cliente.trim(), km: num(l.km), valor: num(l.valor) }));
+    if (!linhas.length) return toast?.("Inclua ao menos uma linha com valor");
+    try { await criarManual(f, numero, data, linhas, uid); toast?.("Romaneio manual " + numero + " incluído"); fechar(); feito(); } catch (e: any) { toast?.(e.message); }
+  };
+  const set = (k: number, c: string, v: string) => setLs(x => x.map((l, j) => j === k ? { ...l, [c]: v } : l));
+  return <div className="card" style={{ padding: 12, border: "2px dashed var(--primary)" }}>
+    <b>➕ Romaneio manual</b> <span className="hint">(o que não vem no relatório do Tático)</span>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
+      <div className="field" style={{ margin: 0 }}><label>Entregador</label><select value={fid} disabled={!!fixo} onChange={e => setFid(e.target.value)}><option value="">—</option>{fr.filter(x => x.ativo).map(x => <option key={x.id} value={x.id}>{x.apelido}</option>)}</select></div>
+      <div className="field" style={{ margin: 0, width: 140 }}><label>Nº do romaneio manual</label><input value={numero} onChange={e => setNumero(e.target.value)} placeholder="ex.: 2345" /></div>
+      <div className="field" style={{ margin: 0 }}><label>Data</label><input type="date" value={data} onChange={e => setData(e.target.value)} /></div>
+    </div>
+    <table className="ma-tab" style={{ width: "100%", fontSize: 13.5, marginTop: 8 }}>
+      <thead><tr><th>Tipo</th><th>Cliente / observação</th><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Valor (R$)</th><th></th></tr></thead>
+      <tbody>{ls.map((l, k) => <tr key={k}>
+        <td><select value={l.tipo} onChange={e => set(k, "tipo", e.target.value)}>{TIPOS_MANUAL.map(t => <option key={t}>{t}</option>)}</select></td>
+        <td><input value={l.cliente} onChange={e => set(k, "cliente", e.target.value)} placeholder="nome do cliente" style={{ width: "100%" }} /></td>
+        <td style={{ textAlign: "right" }}><input value={l.km} inputMode="decimal" onChange={e => set(k, "km", e.target.value)} style={{ width: 70, textAlign: "right" }} /></td>
+        <td style={{ textAlign: "right" }}><input value={l.valor} inputMode="decimal" onChange={e => set(k, "valor", e.target.value)} onKeyDown={e => { if (e.key === "Enter" && k === ls.length - 1) setLs(x => [...x, vazia()]); }} style={{ width: 90, textAlign: "right" }} /></td>
+        <td>{ls.length > 1 && <button className="btn sm" onClick={() => setLs(x => x.filter((_, j) => j !== k))}>✕</button>}</td>
+      </tr>)}</tbody>
+    </table>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+      <button className="btn sm" onClick={() => setLs(x => [...x, vazia()])}>+ linha</button>
+      <span style={{ marginLeft: "auto" }}>Km {fmtN(km) || 0} × {moeda(vkm)} = {moeda(km * vkm)} + {moeda(total)} = <b>{moeda(total + km * vkm)}</b></span>
+      <button className="btn primary" onClick={gravar}>Incluir</button><button className="btn" onClick={fechar}>Cancelar</button>
+    </div>
+  </div>;
 }
