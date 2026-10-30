@@ -7,18 +7,8 @@ import { useApp } from "../estado";
 import { baixarXlsxFormatado } from "../lib/planilha";
 import { competenciaItem, fmtDate, fmtMoeda, hojeISO, itensVenda } from "../lib/regras";
 
-/** ciclo que termina no dia 28 do mês "aaaa-mm" (começa no dia seguinte ao 28 do mês anterior) */
-export function cicloDoMes(ym: string): [string, string] {
-  const [y, m] = ym.split("-").map(Number);
-  const fim = new Date(Date.UTC(y, m - 1, 28));
-  const ini = new Date(Date.UTC(y, m - 2, 28)); ini.setUTCDate(ini.getUTCDate() + 1);
-  return [ini.toISOString().slice(0, 10), fim.toISOString().slice(0, 10)];
-}
-/** mês (aaaa-mm) do último ciclo já FECHADO na data de hoje */
-const ultimoFechado = (h: string) => { const [y, m, d] = h.split("-").map(Number); const dt = new Date(Date.UTC(y, m - 1, 1)); if (d < 29) dt.setUTCMonth(dt.getUTCMonth() - 1); return dt.toISOString().slice(0, 7); };
-const somaMes = (ym: string, n: number) => { const [y, m] = ym.split("-").map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
-const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-const nomeMes = (ym: string) => MESES[Number(ym.slice(5, 7)) - 1] + "/" + ym.slice(0, 4);
+import { cicloDoMes, nomeCiclo as nomeMes, somaMes, ultimoFechado } from "../lib/ciclo";
+export { cicloDoMes };
 
 type L = { cliente: string; valor: number; data: string; venda: string; consultor: string; alm: string };
 

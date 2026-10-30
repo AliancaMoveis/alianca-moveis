@@ -6,6 +6,61 @@ import { Kpi } from "./Dashboard";
 import { PromissoriasAbertas } from "../comp/VendaValidar";
 import { FechamentoGestao, FechamentoMeu } from "../comp/Fechamento";
 import { hojeISO } from "../lib/regras";
+import { brCurto, cicloDe, cicloDoMes, diasAte, nomeCiclo, somaMes, ultimoFechado } from "../lib/ciclo";
+
+// Ciclo de pagamento dos externos: dia 29 de um mês ao dia 28 do seguinte
+const cicloAtual = () => cicloDoMes(cicloDe(hojeISO()));
+const cicloFechado = () => cicloDoMes(ultimoFechado(hojeISO()));
+function PeriodosCiclo({ de, ate, setDe, setAte }: any) {
+  const [a1, a2] = cicloAtual(), [f1, f2] = cicloFechado(), [m1, m2] = mesAtual();
+  const on = (x: string, y: string) => de === x && ate === y;
+  const b = (l: string, x: string, y: string, forte?: boolean) => <button className={"chip" + (on(x, y) ? " on" : "")} style={forte ? { fontWeight: 700 } : undefined} onClick={() => { setDe(x); setAte(y); }}>{l}</button>;
+  return <div className="chips" style={{ marginBottom: 10 }}>
+    {b("📅 Ciclo atual · " + brCurto(a1) + " a " + brCurto(a2), a1, a2, true)}
+    {b("✅ Último ciclo fechado · " + brCurto(f1) + " a " + brCurto(f2), f1, f2, true)}
+    {b("Mês atual (calendário)", m1, m2)}{b("Tudo", "", "")}
+  </div>;
+}
+/** faixa explicando o ciclo de comissão */
+function AvisoCiclo({ de, ate }: { de: string; ate: string }) {
+  const h = hojeISO(); const [a1, a2] = cicloAtual(); const ym = cicloDe(h);
+  const ehCiclo = !!de && !!ate && cicloDoMes(cicloDe(ate))[0] === de && cicloDoMes(cicloDe(ate))[1] === ate;
+  const falta = diasAte(h, a2);
+  return <div className="aviso-anexo" style={{ marginBottom: 14, background: "var(--primary-soft)", borderColor: "var(--primary)", color: "var(--ink)" }}>
+    <div style={{ fontSize: 15 }}><b>📅 A comissão dos consultores externos é paga por CICLO: do dia 29 de um mês até o dia 28 do mês seguinte.</b></div>
+    <div style={{ marginTop: 4 }}>Ciclo atual: <b>{nomeCiclo(ym)} — {brCurto(a1)} a {brCurto(a2)}</b> · {falta > 0 ? <>fecha em <b>{falta} dia{falta === 1 ? "" : "s"}</b> (dia 28)</> : <b>fecha hoje</b>}. Tudo o que for registrado e aprovado até o dia 28 entra neste ciclo; a partir do dia 29 já conta para o próximo.</div>
+    {!ehCiclo && (de || ate) ? <div style={{ marginTop: 4, color: "var(--warn)", fontWeight: 700 }}>⚠ O período filtrado ({de ? fmtDate(de) : "início"} a {ate ? fmtDate(ate) : "hoje"}) não é um ciclo completo de pagamento — use os botões de ciclo para conferir o pagamento.</div> : null}
+  </div>;
+}
+/** Previsão por ciclo: último fechado, atual e os 3 próximos. Comissão das vendas já lançadas no ciclo + promissórias que vencem no ciclo. */
+function PrevisaoCiclos({ ids }: { ids: string[] }) {
+  const { R, st } = useApp() as any;
+  const h = hojeISO(); const atual = cicloDe(h); const pct = Number(R.cfg().comissaoPct) || 0;
+  const meses = [somaMes(atual, -1), atual, somaMes(atual, 1), somaMes(atual, 2), somaMes(atual, 3)];
+  const proms = (st.chamados || []).filter((c: any) => c.venda && ids.includes(c.consultorId) && !["cancelada", "registrada"].includes(c.venda.status))
+    .flatMap((c: any) => promAbertas(c.venda).map((p: any) => ({ c, p, saldo: p.saldo != null ? p.saldo : p.valor })));
+  const semVenc = proms.filter((x: any) => !x.p.vencimento);
+  const linhas = meses.map(ym => {
+    const [d1, d2] = cicloDoMes(ym);
+    const ext = ym <= atual ? ids.reduce((s, id) => s + (R.extratoConsultor(id, d1, d2).comissao || 0), 0) : 0;
+    const pr = proms.filter((x: any) => x.p.vencimento && cicloDe(x.p.vencimento) === ym);
+    const prV = pr.reduce((s: number, x: any) => s + x.saldo, 0) * pct / 100;
+    const sit = ym < atual ? "fechado" : ym === atual ? "em andamento" : "futuro";
+    return { ym, d1, d2, ext, prN: pr.length, prV, sit };
+  });
+  const cor: Record<string, string> = { fechado: "var(--st-concluida)", "em andamento": "var(--primary)", futuro: "var(--ink-faint)" };
+  return <div className="panel" style={{ marginBottom: 14 }}>
+    <h3>🗓 Previsão de comissão por ciclo <span className="hint" style={{ marginLeft: 6 }}>{pct}% · ciclo = dia 29 ao dia 28</span></h3>
+    <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Ciclo</th><th>Período</th><th>Situação</th><th>Comissão das vendas lançadas</th><th>Promissórias que vencem no ciclo</th><th>Previsão do ciclo</th></tr></thead>
+      <tbody>{linhas.map(l => <tr key={l.ym} style={l.sit === "em andamento" ? { background: "var(--primary-soft)" } : undefined}>
+        <td><b>{nomeCiclo(l.ym)}</b></td><td>{fmtDate(l.d1)} a {fmtDate(l.d2)}</td>
+        <td><b style={{ color: cor[l.sit] }}>{l.sit === "em andamento" ? "em andamento · fecha " + brCurto(l.d2) : l.sit}</b></td>
+        <td>{l.sit === "futuro" ? "—" : fmtMoeda(l.ext)}</td>
+        <td>{l.prN ? fmtMoeda(l.prV) + " (" + l.prN + ")" : "—"}</td>
+        <td><b>{fmtMoeda(l.ext + l.prV)}</b></td></tr>)}</tbody></table></div>
+    <div className="hint" style={{ marginTop: 6 }}>Ciclos fechados e em andamento mostram a comissão das vendas e pagamentos de promissória já aprovados. Ciclos futuros mostram só as promissórias com vencimento naquele ciclo (comissão entra quando forem pagas).{semVenc.length ? " " + semVenc.length + " promissória(s) em aberto sem data de vencimento (" + fmtMoeda(semVenc.reduce((s: number, x: any) => s + x.saldo, 0) * pct / 100) + " de comissão) — entram no ciclo em que forem pagas." : ""}</div>
+  </div>;
+}
 
 // períodos rápidos: mês atual, mês passado, tudo (ou datas livres)
 const mesAtual = () => { const h = hojeISO(); return [h.slice(0, 8) + "01", h]; };
@@ -68,8 +123,10 @@ function VendasVendedores() {
 
 function FinConsultor() {
   const { R, st } = useApp();
-  const [de, setDe] = useState(mesAtual()[0]); const [ate, setAte] = useState(mesAtual()[1]); const [cons, setCons] = useState("");
   const souGestor = R.ehGestao();
+  // Gestão abre no último ciclo fechado (o que vai pagar); o consultor abre no ciclo atual (o que está juntando)
+  const ini = souGestor ? cicloFechado() : cicloAtual();
+  const [de, setDe] = useState(ini[0]); const [ate, setAte] = useState(ini[1]); const [cons, setCons] = useState("");
   const consultores = st.usuarios.filter(u => u.somenteAtribuidos && ((u.setores || []).includes("consultor_externo") || (u.setores || []).includes("medidas")));
   const { pagamentoVisita, comissaoPct: pct } = R.cfg();
   const alvo = souGestor ? cons : R.currentUserId;
@@ -78,14 +135,15 @@ function FinConsultor() {
     <>
       <div className="view-head"><div><h2 id="finTitulo">{souGestor ? "Financeiro — Consultores e medidores" : "Financeiro"}</h2><p id="finSub">{souGestor && alvo ? "Extrato de " + R.nomeUser(alvo) + ". Filtre por período." : sub}</p></div></div>
       <div className="card" style={{ padding: "16px 18px", marginBottom: 16 }}>
-        <Periodos de={de} ate={ate} setDe={setDe} setAte={setAte} />
+        <PeriodosCiclo de={de} ate={ate} setDe={setDe} setAte={setAte} />
         <div className="grid">
           <div className="field"><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
           <div className="field"><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
           {souGestor && <div className="field" id="finConsultorField"><label>Consultor / medidor</label><select value={cons} onChange={e => setCons(e.target.value)}><option value="">Todos</option>{consultores.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>}
         </div>
-        <div style={{ marginTop: 12 }}><button className="btn ghost sm" onClick={() => { setDe(mesAtual()[0]); setAte(mesAtual()[1]); setCons(""); }}>Limpar filtros</button></div>
+        <div style={{ marginTop: 12 }}><button className="btn ghost sm" onClick={() => { setDe(ini[0]); setAte(ini[1]); setCons(""); }}>Limpar filtros</button></div>
       </div>
+      <AvisoCiclo de={de} ate={ate} />
     </>
   );
 
@@ -99,6 +157,7 @@ function FinConsultor() {
     return (
       <section className="view active" id="view-financeiro">{cab}
         <div className="kpis" id="finKpis"><Kpi n={totVisitas} l="Visitas pagas" /><Kpi n={totMed} l="Medidas feitas" /><Kpi n={totVendas} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(totVendido)} l="Valor vendido" /><Kpi fs={22} n={fmtMoeda(totComissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(totReemb)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(totAux)} l="Auxílio fixo (dia 15)" /><Kpi fs={22} n={fmtMoeda(totGeral)} l="Total a receber" cor="var(--st-concluida)" /></div>
+        <PrevisaoCiclos ids={consultores.filter(u => (u.setores || []).includes("consultor_externo")).map(u => u.id)} />
         <FechamentoGestao />
         <PromissoriasAbertas titulo="Promissórias em aberto (comissão futura)" />
         <div id="finResumoTodos" className="panel"><h3>Por consultor <span className="hint" style={{ marginLeft: 6 }}>clique para ver o extrato</span></h3>
@@ -107,7 +166,7 @@ function FinConsultor() {
               <tr key={u.id} onClick={() => setCons(u.id)} style={{ cursor: "pointer" }}><td><b>{u.nome}</b>{(u.setores || []).includes("medidas") ? <span className="pill" style={{ marginLeft: 6 }}>medidor</span> : null}</td><td>{r.visitas.length}</td><td>{r.medidas.length}</td><td>{r.vendas.length}</td><td style={{ fontWeight: 700 }}>{fmtMoeda(r.totalVendido)}</td><td>{fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)}</td><td>{fmtMoeda(r.comissao)}</td><td>{fmtMoeda(r.totalReembolsos)}</td><td>{fmtMoeda(r.auxilio)}</td><td style={{ fontWeight: 800, color: "var(--st-concluida)" }}>{fmtMoeda(r.total)}</td></tr>))}</tbody>
             <tfoot><tr><td><b>Total</b></td><td><b>{totVisitas}</b></td><td><b>{totMed}</b></td><td><b>{totVendas}</b></td><td><b>{fmtMoeda(totVendido)}</b></td><td><b>{fmtMoeda(totVisitasR + totMedR)}</b></td><td><b>{fmtMoeda(totComissao)}</b></td><td><b>{fmtMoeda(totReemb)}</b></td><td><b>{fmtMoeda(totAux)}</b></td><td style={{ fontWeight: 800, color: "var(--st-concluida)" }}>{fmtMoeda(totGeral)}</td></tr></tfoot></table></div>
             : <div className="empty">Nenhum consultor cadastrado.</div>}
-          <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Previsão = visitas realizadas e medidas feitas (R$ {pagamentoVisita} cada) + comissão de {pct}% sobre as vendas efetivadas (medida não gera comissão) + reembolsos aprovados + auxílio fixo de {fmtMoeda(R.cfg().auxilioFixo ?? 1500)} (pago todo dia {R.cfg().diaAuxilio || 15}, quando o dia cai no período). Vendas a confirmar e promissórias não entram.</div>
+          <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>Previsão = visitas realizadas e medidas feitas (R$ {pagamentoVisita} cada) + comissão de {pct}% sobre as vendas efetivadas (medida não gera comissão) + reembolsos aprovados + auxílio fixo de {fmtMoeda(R.cfg().auxilioFixo ?? 1500)} (pago todo dia {R.cfg().diaAuxilio || 15}, quando o dia cai no período). Vendas a confirmar e promissórias não entram. <b>Pagamento por ciclo: dia 29 ao dia 28.</b></div>
         </div>
       </section>
     );
@@ -130,7 +189,8 @@ function FinConsultor() {
           <div style={{ fontSize: 26, fontWeight: 800, color: "var(--st-concluida)" }}>{fmtMoeda(r.total)}</div>
           <div className="hint">externos + medidas + reembolsos {fmtMoeda(r.totalReembolsos)}{r.auxilio > 0 ? " + auxílio " + fmtMoeda(r.auxilio) : ""}</div></div>
       </div>
-      <div className="kpis" id="finKpis"><Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={r.medidas.length} l="Medidas feitas" /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas com pagamento" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" />{r.auxilio > 0 && <Kpi fs={22} n={fmtMoeda(r.auxilio)} l={"Auxílio fixo · pago dia " + r.datasAuxilio.map((d: string) => d.slice(8) + "/" + d.slice(5, 7)).join(", ")} />}<Kpi fs={22} n={fmtMoeda(r.total)} l="Previsão a receber (a confirmar)" cor="var(--st-concluida)" /><Kpi fs={22} n={fmtMoeda(r.comissaoFutura)} l={`Comissão futura (${r.pendentes.length} em promissória)`} cor="var(--warn)" /></div>
+      <div className="kpis" id="finKpis"><Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={r.medidas.length} l="Medidas feitas" /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas com pagamento" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" />{r.auxilio > 0 && <Kpi fs={22} n={fmtMoeda(r.auxilio)} l={"Auxílio fixo · pago dia " + r.datasAuxilio.map((d: string) => d.slice(8) + "/" + d.slice(5, 7)).join(", ")} />}<Kpi fs={22} n={fmtMoeda(r.total)} l={"Previsão a receber no período (a confirmar)"} cor="var(--st-concluida)" /><Kpi fs={22} n={fmtMoeda(r.comissaoFutura)} l={`Comissão futura (${r.pendentes.length} em promissória)`} cor="var(--warn)" /></div>
+      <PrevisaoCiclos ids={[alvo]} />
       <FechamentoMeu uid={alvo} />
       <div id="finDetalheWrap"><div className="panel-grid">
         <div className="panel"><h3>Pagamento por visitas <span className="pill" style={{ marginLeft: 8 }}>R$ {pagamentoVisita} por visita</span></h3><div id="finVisitas">
