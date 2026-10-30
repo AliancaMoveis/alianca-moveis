@@ -630,7 +630,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const comissao = totalVendido * (pct / 100);
     // medidas feitas (R$ por visita, sem comissão) e reembolsos aprovados
     const medidas = medidasDe(consultorId).filter(c => c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && !c.tratativa.medida.semPagamento && (dentroPeriodo(c.tratativa.medida.realizadaEm, de, ate) || (!de && !ate)));
-    const qtdMedidas = oficial && oficial.papel === "medidor" ? oficial.visitas : medidas.length;
+    // nº oficial do consultor já soma as medidas que ele fez (a Gestão lança tudo junto) → não paga medida à parte
+    const qtdMedidas = oficial ? (oficial.papel === "medidor" ? oficial.visitas : 0) : medidas.length;
     const pagamentoMedidas = qtdMedidas * pagamentoVisita;
     const reembolsos = reembolsosDe(consultorId).filter(r => r.status === "aprovado" && (dentroPeriodo(r.data, de, ate) || (!de && !ate)));
     const totalReembolsos = reembolsos.reduce((s, r) => s + r.valor, 0);
