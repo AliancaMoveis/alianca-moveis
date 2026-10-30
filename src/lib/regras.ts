@@ -586,15 +586,27 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ate && d > new Date(ate + "T23:59:59")) return false;
     return true;
   }
+  /** nº oficial de visitas do ciclo (lançado pela Gestão), quando o período é exatamente um ciclo 29 → 28 */
+  function visitasOficiais(uid: string, de: string, ate: string): { ciclo: string; visitas: number; papel: string } | null {
+    if (!de || !ate) return null;
+    const [y, m, d] = ate.slice(0, 10).split("-").map(Number); if (d !== 28) return null;
+    const ym = ate.slice(0, 7); const ini = new Date(Date.UTC(y, m - 2, 28)); ini.setUTCDate(ini.getUTCDate() + 1);
+    if (de.slice(0, 10) !== ini.toISOString().slice(0, 10)) return null;
+    const v = (state.visitasCiclo || []).find(x => x.ciclo === ym && x.usuarioId === uid);
+    return v ? { ciclo: ym, visitas: v.visitas, papel: v.papel } : null;
+  }
   function extratoConsultor(consultorId: string, de: string, ate: string) {
     // visita paga no mês em que foi feita (data da visita); sem data da visita, vale a data na loja
     const visitas = visitasPagas(consultorId).filter(c => dentroPeriodo(c.dataVisita || c.dataLoja, de, ate) || (!de && !ate));
+    const oficial = visitasOficiais(consultorId, de, ate);
     // comissão pelos pagamentos: entrada na data da venda, promissórias na data em que foram pagas
     const meusVend = state.chamados.filter(c => c.consultorId === consultorId && c.venda);
     const pagamentos = meusVend.flatMap(c => pagamentosVenda(c.venda).map(p => ({ ...p, c }))).filter(p => dentroPeriodo(p.data, de, ate) || (!de && !ate));
     const vendas = meusVend.filter(c => pagamentos.some(p => p.c === c));
     const { pagamentoVisita, comissaoPct: pct } = cfg();
-    const pagamentoVisitas = visitas.length * pagamentoVisita;
+    // ciclo com nº oficial lançado pela Gestão: o pagamento das visitas usa esse nº (consultor → visitas; medidor → medidas)
+    const qtdVisitas = oficial && oficial.papel !== "medidor" ? oficial.visitas : visitas.length;
+    const pagamentoVisitas = qtdVisitas * pagamentoVisita;
     const totalVendido = pagamentos.reduce((s, p) => s + p.valor, 0);
     // comissão futura: promissórias ainda em aberto dos clientes deste consultor
     const pendentes = meusVend.filter(c => !["cancelada", "registrada"].includes(c.venda.status) && valorPendente(c.venda) > 0);
@@ -602,7 +614,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const comissao = totalVendido * (pct / 100);
     // medidas feitas (R$ por visita, sem comissão) e reembolsos aprovados
     const medidas = medidasDe(consultorId).filter(c => c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && !c.tratativa.medida.semPagamento && (dentroPeriodo(c.tratativa.medida.realizadaEm, de, ate) || (!de && !ate)));
-    const pagamentoMedidas = medidas.length * pagamentoVisita;
+    const qtdMedidas = oficial && oficial.papel === "medidor" ? oficial.visitas : medidas.length;
+    const pagamentoMedidas = qtdMedidas * pagamentoVisita;
     const reembolsos = reembolsosDe(consultorId).filter(r => r.status === "aprovado" && (dentroPeriodo(r.data, de, ate) || (!de && !ate)));
     const totalReembolsos = reembolsos.reduce((s, r) => s + r.valor, 0);
     // auxílio fixo (consultor e medidor): um por mês, pago no dia 15 — conta quando o dia 15 cai dentro do período
@@ -619,6 +632,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     }
     const auxilio = datasAux.length * valAux;
     return { visitas, vendas, pagamentos, pendentes, comissaoFutura, pagamentoVisitas, totalVendido, comissao, medidas, pagamentoMedidas, reembolsos, totalReembolsos,
+      qtdVisitas, qtdMedidas, oficial,
       auxilio, datasAuxilio: datasAux, valorAuxilio: valAux, total: pagamentoVisitas + comissao + pagamentoMedidas + totalReembolsos + auxilio };
   }
 
@@ -1048,7 +1062,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, podeConsultaProduto, podePrePedido, podeNegociacao, podeEditarProduto, podeLiberarMostruario, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, podeConsultaProduto, podePrePedido, podeNegociacao, podeEditarProduto, podeLiberarMostruario, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, visitasOficiais, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,

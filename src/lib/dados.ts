@@ -22,7 +22,10 @@ export type Estado = {
   ckBloqueios?: CkBloqueio[];
   consBloqueios?: { id: number; tipo: string; usuarioId: string; de: string; ate: string; periodo: string; ini: string; fim: string; motivo: string; obs: string; criadoPor: string }[];
   vendedorDias?: Record<string, Record<string, string>>;
+  /** nº oficial de visitas por ciclo de pagamento (29 → 28), lançado pela Gestão — vale para o pagamento de R$ por visita */
+  visitasCiclo?: VisitaCiclo[];
 };
+export type VisitaCiclo = { id: number; ciclo: string; usuarioId: string; pessoa: string; papel: string; visitas: number; obs: string; atualizadoEm: string };
 export type CkBloqueio = { id: number; projetista: string; inicio: string; fim: string; motivo: string; obs: string; criadoPor: string };
 export type MedidaCruz = { venda: string; comprador: string; telefone: string; visitado: string; consultor: string; statusMv: string; visitaEm: string; medidor: string; situacao: string; resultado: "ok" | "sem"; tratativa: string; obs: string; cruzadoEm: string; atualizadoEm: string; atualizadoPor: string };
 export type Reembolso = { id: string; usuarioId: string; chamadoId: string; data: string; tipo: string; valor: number; descricao: string; path: string; status: string; criadoEm: string; decididoEm: string; motivo: string };
@@ -116,7 +119,7 @@ async function principal(): Promise<{ chamados: any[]; historico: any[]; anexos:
   return { chamados, historico, anexos, vendas, valores, itens };
 }
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq, viscic] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em,faz_projeto,folga,turno,nome_completo,telefone,ferias_de,ferias_ate,edita_agenda,domingo_ref,na_agenda,freelancer,menus_ocultos,escala_dom", "criado_em"),
@@ -134,6 +137,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("vendedor_dias", "*", "dia").catch(() => []), // trocas de folga dos vendedores
     todos("montadores_conta", "*").catch(() => []), // conta de pagamento do montador — só Pós-venda e Gestão (RLS)
     todos("consultor_bloqueios", "*", "de").catch(() => []), // agenda fechada dos consultores (o próprio, Gestão e supervisões)
+    todos("visitas_ciclo", "*", "ciclo").catch(() => []), // nº oficial de visitas por ciclo (Gestão lança; o próprio vê o dele)
   ]);
   const { chamados, vendas, valores, historico: hist, anexos } = P; const proms = P.itens;
   // lançamentos da venda: nºs pagos, promissórias (com saldo) e pagamentos de promissória
@@ -201,6 +205,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       return { id: m.id, nome: m.nome, telefone: m.telefone || "", regiao: m.regiao || "", ativo: m.ativo,
         conta: k ? { titular: k.titular, docTitular: k.doc_titular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipoConta: k.tipo_conta, pixTipo: k.pix_tipo, pixChave: k.pix_chave, obs: k.obs, atualizadoEm: k.atualizado_em, atualizadoPor: k.atualizado_por } : null }; }),
     vendedorDias: (vdias as any[]).reduce((m: any, r: any) => { (m[r.usuario_id] = m[r.usuario_id] || {})[r.dia] = r.tipo; return m; }, {}),
+    visitasCiclo: (viscic as any[]).map((v: any) => ({ id: v.id, ciclo: v.ciclo, usuarioId: v.usuario_id || "", pessoa: v.pessoa, papel: v.papel, visitas: Number(v.visitas) || 0, obs: v.obs || "", atualizadoEm: v.atualizado_em })),
     consBloqueios: (cbloq as any[]).filter((b: any) => b.ativo).map((b: any) => ({ id: b.id, tipo: b.tipo || "bloqueio", usuarioId: b.usuario_id, de: String(b.de).slice(0, 10), ate: String(b.ate).slice(0, 10), periodo: b.periodo, ini: String(b.hora_ini || "").slice(0, 5), fim: String(b.hora_fim || "").slice(0, 5), motivo: b.motivo, obs: b.obs || "", criadoPor: b.criado_por || "" })),
     ckBloqueios: (bloqs as any[]).filter((b: any) => b.ativo).map((b: any) => ({ id: b.id, projetista: b.projetista || "", inicio: String(b.inicio).slice(0, 16).replace(" ", "T"), fim: String(b.fim).slice(0, 16).replace(" ", "T"), motivo: b.motivo, obs: b.obs || "", criadoPor: b.criado_por || "" })),
     medidasCruz: Object.fromEntries((mcruz as any[]).map((m: any) => [m.venda, { venda: m.venda, comprador: m.comprador, telefone: m.telefone, visitado: m.visitado, consultor: m.consultor,

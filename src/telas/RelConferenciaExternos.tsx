@@ -49,11 +49,17 @@ export default function RelConferenciaExternos({ fechar }: { fechar: () => void 
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0], "pt-BR"));
   }, [linhas]);
   const total = linhas.reduce((s, l) => s + l.valor, 0);
+  // visitas do ciclo: nº oficial lançado pela Gestão (R$ por visita) — consultores e medidores
+  const valorVisita = Number(R.cfg().pagamentoVisita) || 0;
+  const vis = ((st.visitasCiclo || []) as any[]).filter(v => v.ciclo === mes).sort((a, b) => (a.papel === b.papel ? 0 : a.papel === "medidor" ? 1 : -1) || a.pessoa.localeCompare(b.pessoa, "pt-BR"));
+  const totVis = vis.reduce((s, v) => s + v.visitas, 0);
 
   const gerar = () => baixarXlsxFormatado("VENDAS_EXTERNOS_" + de.slice(8, 10) + "-" + de.slice(5, 7) + "_a_" + ate.slice(8, 10) + "-" + ate.slice(5, 7) + "-" + ate.slice(0, 4) + ".xlsx", "VENDAS A CONFIRMAR",
     [{ titulo: "CLIENTE", largura: 58.57 }, { titulo: "VALOR", largura: 14.86, tipo: "moeda", alinhar: "left" }, { titulo: "DATA", largura: 12, tipo: "data", alinhar: "center" },
      { titulo: "VENDA", largura: 12, alinhar: "center" }, { titulo: "CONSULTOR", largura: 20.57, alinhar: "center" }],
-    linhas.map(l => [l.cliente, l.valor, l.data, l.venda, l.consultor]));
+    linhas.map(l => [l.cliente, l.valor, l.data, l.venda, l.consultor]),
+    vis.length ? [{ aba: "VISITAS", cols: [{ titulo: "NOME", largura: 30 }, { titulo: "FUNÇÃO", largura: 14, alinhar: "center" }, { titulo: "VISITAS", largura: 12, alinhar: "center" }, { titulo: "VALOR POR VISITA", largura: 18, tipo: "moeda", alinhar: "left" }, { titulo: "TOTAL", largura: 16, tipo: "moeda", alinhar: "left" }],
+      linhas: [...vis.map(v => [primeiro(v.pessoa), v.papel === "medidor" ? "MEDIDOR" : "CONSULTOR", v.visitas, valorVisita, v.visitas * valorVisita]), ["TOTAL", "", totVis, null, totVis * valorVisita]] }] : []);
 
   return (
     <div className="card" style={{ padding: 16, marginBottom: 14, borderLeft: "4px solid var(--primary)" }}>
@@ -73,6 +79,14 @@ export default function RelConferenciaExternos({ fechar }: { fechar: () => void 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 8 }}>
         {porCons.map(([k, x]) => <div key={k} className="card" style={{ padding: "8px 10px" }}><b>{k}</b><div className="hint">{x.n} venda{x.n === 1 ? "" : "s"}</div><b>{fmtMoeda(x.v)}</b></div>)}
         <div className="card" style={{ padding: "8px 10px", background: "var(--fundo2, #f3f5fa)" }}><b>TOTAL</b><div className="hint">{linhas.length} vendas</div><b>{fmtMoeda(total)}</b></div>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <b>🚶 Visitas do ciclo</b> <span className="hint">({fmtMoeda(valorVisita)} por visita · nº oficial lançado pela Gestão em Gestão → Financeiro)</span>
+        {vis.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 8, marginTop: 6 }}>
+          {vis.map(v => <div key={v.id} className="card" style={{ padding: "8px 10px" }}><b>{primeiro(v.pessoa)}</b> <span className="hint">{v.papel}</span><div>{v.visitas} visitas</div><b>{fmtMoeda(v.visitas * valorVisita)}</b></div>)}
+          <div className="card" style={{ padding: "8px 10px", background: "var(--fundo2, #f3f5fa)" }}><b>TOTAL</b><div>{totVis} visitas</div><b>{fmtMoeda(totVis * valorVisita)}</b></div>
+        </div> : <div className="hint" style={{ marginTop: 4 }}>Ainda não lançado para este ciclo.</div>}
+        {vis.length > 0 && <div className="hint" style={{ marginTop: 4 }}>A planilha sai com uma segunda aba, VISITAS, com esses números.</div>}
       </div>
       {(pend.length > 0 || prom.length > 0) && <div style={{ marginTop: 12, fontSize: 13.5 }}>
         {pend.length > 0 && <p style={{ margin: "4px 0", color: "var(--warn)" }}>⏳ <b>{pend.length} venda(s) aguardando a Gestão</b> no ciclo ({fmtMoeda(pend.reduce((s, l) => s + l.valor, 0))}) — não entram até serem aprovadas: {pend.map(l => l.venda + " " + l.cliente.split(" ")[0] + " (" + l.consultor + ")").join(" · ")}</p>}
