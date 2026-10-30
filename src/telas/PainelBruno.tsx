@@ -185,7 +185,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
           <div key={u.id} className={"pb-card" + (alerta ? " pb-alerta" : "")}>
             <div className="pb-card-h"><b>{u.nome}</b><span>{fmtMoeda(ex.total)} a receber</span></div>
             <div className="pb-card-n">
-              <div><b>{ex.visitas.length}</b><span>visitas pagas</span></div><div><b>{ex.medidas.length}</b><span>medidas</span></div>
+              <div><b>{ex.qtdVisitas}{ex.oficial && ex.oficial.papel !== "medidor" ? " ✓" : ""}</b><span>visitas pagas{ex.oficial && ex.oficial.papel !== "medidor" ? " (oficial)" : ""}</span></div><div><b>{ex.qtdMedidas}</b><span>medidas</span></div>
               <div><b>{ex.vendas.length}</b><span>vendas efetivadas</span></div><div><b>{F.pVisitaVenda ?? "—"}{F.pVisitaVenda != null ? "%" : ""}</b><span>visita→venda</span></div>
             </div>
             <div className="pb-card-f">{[["Clientes", F.total], ["Visitados", F.realizadas], ["Agend. loja", F.agendadas], ["Vieram", F.vieram], ["Vendas", F.vendas]].map(([l, n]: any) => <span key={l}>{l} <b>{n}</b></span>)}</div>

@@ -58,7 +58,7 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
         <Card ic="📍" n={F.realizadas} l="Visitas realizadas" sub={<><b>{F.total}</b> clientes direcionados · <b>{F.pendentes}</b> a realizar</>} cor="#5b7fc7" />
         <Card ic="🏬" n={F.vieram} l="Vieram à loja" sub={<>{F.agendadas} agendados · presença {pc(F.vieram, F.vieram + F.faltaram)}%</>} cor="#d4a020" />
         <Card ic="🤝" n={F.vendas} l="Vendas" sub={<>{pc(F.vendas, F.realizadas)}% das visitas viraram venda</>} cor="#2f8f5b" />
-        <Card ic="💰" n={fmtMoeda(ex.total)} l="Valor a receber" sub={<>{ex.visitas.length} visita(s) + comissão {pct}%{ex.auxilio ? " + auxílio" : ""}</>} cor="#2d6a4f" />
+        <Card ic="💰" n={fmtMoeda(ex.total)} l="Valor a receber" sub={<>{ex.qtdVisitas} visita(s) × {fmtMoeda(cfg.pagamentoVisita)} + comissão {pct}%{ex.auxilio ? " + auxílio" : ""}</>} cor="#2d6a4f" />
         <Card ic="📄" n={fmtMoeda(valProm)} l="Pendente em promissória" sub={<>{emProm.length} cliente(s) · comissão futura {fmtMoeda(valProm * cfg.comissaoPct / 100)}</>} cor="#a0661a" />
       </div>
 
@@ -124,7 +124,7 @@ export default function PainelConsultorVisual({ de, ate }: { de: string; ate: st
         <div className="panel">
           <h3>Seu extrato <span className="hint">· {fmtDate(de)} a {fmtDate(ate)}</span></h3>
           <div className="po-com">
-            <div><span>Visitas realizadas (pagas)</span><b>{ex.visitas.length} × {fmtMoeda(cfg.pagamentoVisita)}</b></div>
+            <div><span>Visitas realizadas (pagas){ex.oficial && ex.oficial.papel !== "medidor" ? " · nº oficial do ciclo" : ""}</span><b>{ex.qtdVisitas} × {fmtMoeda(cfg.pagamentoVisita)}</b></div>
             <div><span>Pagamento por visitas</span><b>{fmtMoeda(ex.pagamentoVisitas)}</b></div>
             <div><span>Vendas efetivadas</span><b>{ex.vendas.length}</b></div>
             <div><span>Total vendido</span><b>{fmtMoeda(ex.totalVendido)}</b></div>

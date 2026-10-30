@@ -39,6 +39,8 @@ export default function PainelGestao({ de, ate }: { de: string; ate: string }) {
   const lojaVend = loja.filter((c: any) => vendaContaVolume(c.venda));
   const novos = mkt.filter((c: any) => noPer(c.criadoEm));
   const visitas = mkt.filter((c: any) => !R.ehDireto(c) && R.visitaFeita(c) && noPer(c.dataVisita || c.criadoEm));
+  // nº oficial do ciclo (lançado pela Gestão) quando o período é o ciclo/mês fechado
+  const visOf = R.totalVisitasPeriodo(de, ate, (id: string) => visitas.filter((c: any) => c.consultorId === id).length, R.consultores().map((u: any) => u.id), "consultor");
 
   // ---- origem ----
   const orig = (o: string) => { const l = loja.filter((c: any) => R.origemLoja(c) === o); const v = vendidas.filter((c: any) => R.origemLoja(c) === o); return { ag: l.length, vieram: l.filter(R.compareceu).length, vendas: v.length, valor: soma(v) }; };
@@ -89,7 +91,7 @@ export default function PainelGestao({ de, ate }: { de: string; ate: string }) {
       <div className="sec-label" style={{ margin: "4px 0 8px" }}>Clientes e loja no período</div>
       <div className="kpis">
         <Kpi n={novos.length} l="Clientes novos cadastrados" />
-        <Kpi n={visitas.length} l="Visitas de consultor feitas" />
+        <Kpi n={visOf.oficial ? visOf.total : visitas.length} l={"Visitas de consultor feitas" + (visOf.oficial ? " (nº oficial do ciclo)" : "")} />
         <Kpi n={loja.length} l="Agendados na loja" />
         <Kpi n={vieram.length} l={`Vieram (${pct(vieram.length, loja.length)})`} />
         <Kpi n={faltaram.length} l="Não compareceram" cls={faltaram.length ? "urg" : ""} />

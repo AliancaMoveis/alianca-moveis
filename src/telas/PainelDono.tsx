@@ -68,8 +68,13 @@ export default function PainelDono() {
   // custo comercial do mês (o que se paga para vender)
   const cfg = R.cfg();
   const noMes = (d: any) => { const s = String(d || "").slice(0, 10); return s >= P.de && s <= P.ate; };
-  const visitas = mkt.filter((c: any) => c.consultorId && c.tratativa && c.tratativa.realizada && c.dataLoja && noMes(c.dataVisita || c.dataLoja)).length;
-  const medidas = st.chamados.filter((c: any) => c.tipo === "medidas" && c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && noMes(c.tratativa.medida.realizadaEm)).length;
+  // visitas e medidas pagas: nº oficial do ciclo lançado pela Gestão quando o período é o ciclo/mês fechado; senão, o que o 360 registrou
+  const idsCons = R.consultores().map((u: any) => u.id);
+  const idsMed = st.usuarios.filter((u: any) => (u.setores || []).includes("medidas") && u.somenteAtribuidos).map((u: any) => u.id);
+  const visTot = R.totalVisitasPeriodo(P.de, P.ate, (id: string) => mkt.filter((c: any) => c.consultorId === id && c.tratativa && c.tratativa.realizada && c.dataLoja && noMes(c.dataVisita || c.dataLoja)).length, idsCons, "consultor");
+  const medTot = R.totalVisitasPeriodo(P.de, P.ate, (id: string) => st.chamados.filter((c: any) => c.tipo === "medidas" && c.medidorId === id && c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && noMes(c.tratativa.medida.realizadaEm)).length, idsMed, "medidor");
+  const visitas = visTot.total;
+  const medidas = medTot.oficial ? medTot.total : st.chamados.filter((c: any) => c.tipo === "medidas" && c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm && noMes(c.tratativa.medida.realizadaEm)).length;
   const comConsultor = V.filter((c: any) => c.consultorId && vendaContaVolume(c.venda)).reduce((s, c) => s + val(c), 0) * cfg.comissaoPct / 100;
   const comMkt = V.filter((c: any) => R.ehDireto(c) && vendaContaComissao(c.venda)).length * (cfg.valorVendaMkt ?? 10);
   const reemb = (st.reembolsos || []).filter((r: any) => r.status === "aprovado" && noMes(r.data)).reduce((s: number, r: any) => s + r.valor, 0);
@@ -125,8 +130,8 @@ export default function PainelDono() {
         <div className="dn-bloco"><h3>Custo comercial do período</h3>
           <div className="dn-custo"><b>{fmtMoeda(custo)}</b><span>{tot ? ((custo / tot) * 100).toFixed(1).replace(".", ",") + "% do vendido" : "—"}</span></div>
           <div className="dn-linhas">
-            <div><span>Visitas pagas ({visitas} × {fmtMoeda(cfg.pagamentoVisita)})</span><b>{fmtMoeda(visitas * cfg.pagamentoVisita)}</b></div>
-            <div><span>Medidas ({medidas} × {fmtMoeda(cfg.pagamentoVisita)})</span><b>{fmtMoeda(medidas * cfg.pagamentoVisita)}</b></div>
+            <div><span>Visitas pagas ({visitas} × {fmtMoeda(cfg.pagamentoVisita)}){visTot.oficial ? " · nº oficial do ciclo" : ""}</span><b>{fmtMoeda(visitas * cfg.pagamentoVisita)}</b></div>
+            <div><span>Medidas ({medidas} × {fmtMoeda(cfg.pagamentoVisita)}){medTot.oficial ? " · nº oficial do ciclo" : ""}</span><b>{fmtMoeda(medidas * cfg.pagamentoVisita)}</b></div>
             <div><span>Comissão consultores ({String(cfg.comissaoPct).replace(".", ",")}%)</span><b>{fmtMoeda(comConsultor)}</b></div>
             <div><span>Marketing (por venda efetivada)</span><b>{fmtMoeda(comMkt)}</b></div>
             <div><span>Reembolsos aprovados</span><b>{fmtMoeda(reemb)}</b></div>

@@ -45,7 +45,7 @@ function Painel() {
       {P.ui}
       <div className="card" style={{ padding: 0, overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Consultor</th><th>Clientes</th><th>Visitados</th><th>Na loja</th><th>Vieram</th><th>Vendas</th><th>Visita→venda</th>{veValor && <th>Vendido</th>}{veValor && <th>A receber</th>}<th>Visitas a fazer</th></tr></thead><tbody>
         {linhas.map((x: any) => <tr key={x.u.id} onClick={() => setSel(sel === x.u.id ? "" : x.u.id)} style={{ cursor: "pointer", background: sel === x.u.id ? "var(--primary-soft)" : undefined }}>
-          <td><b>{x.u.nome}</b></td><td>{x.F.total}</td><td>{x.F.realizadas}</td><td>{x.F.agendadas}</td><td>{x.F.vieram}</td><td><b style={{ color: "var(--st-concluida)" }}>{x.F.vendas}</b></td><td>{x.F.pVisitaVenda === null ? "—" : x.F.pVisitaVenda + "%"}</td>
+          <td><b>{x.u.nome}</b></td><td>{x.F.total}</td><td>{x.ex.oficial && x.ex.oficial.papel !== "medidor" ? <b title="nº oficial do ciclo, lançado pela Gestão">{x.ex.qtdVisitas} ✓</b> : x.F.realizadas}</td><td>{x.F.agendadas}</td><td>{x.F.vieram}</td><td><b style={{ color: "var(--st-concluida)" }}>{x.F.vendas}</b></td><td>{x.F.pVisitaVenda === null ? "—" : x.F.pVisitaVenda + "%"}</td>
           {veValor && <td>{fmtMoeda(x.F.valor)}</td>}{veValor && <td><b>{fmtMoeda(x.ex.total)}</b></td>}<td style={x.F.pendentes ? { color: "var(--warn)", fontWeight: 700 } : undefined}>{x.F.pendentes}</td></tr>)}
       </tbody></table></div>
       {d && <div className="ap-sec" style={{ marginTop: 16 }}><h3>Clientes de {d.u.nome} no período <span className="badge b-tratativa">{d.l.length}</span></h3>

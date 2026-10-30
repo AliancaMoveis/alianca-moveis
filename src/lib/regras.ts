@@ -586,14 +586,30 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ate && d > new Date(ate + "T23:59:59")) return false;
     return true;
   }
-  /** nº oficial de visitas do ciclo (lançado pela Gestão), quando o período é exatamente um ciclo 29 → 28 */
-  function visitasOficiais(uid: string, de: string, ate: string): { ciclo: string; visitas: number; papel: string } | null {
+  /** ciclo (aaaa-mm) a que o período corresponde, para usar o nº oficial de visitas:
+   *  o próprio ciclo 29 → 28, ou o mês do calendário fechado (do dia 1º até pelo menos o dia 28). */
+  function cicloDoPeriodo(de: string, ate: string): string | null {
     if (!de || !ate) return null;
-    const [y, m, d] = ate.slice(0, 10).split("-").map(Number); if (d !== 28) return null;
-    const ym = ate.slice(0, 7); const ini = new Date(Date.UTC(y, m - 2, 28)); ini.setUTCDate(ini.getUTCDate() + 1);
-    if (de.slice(0, 10) !== ini.toISOString().slice(0, 10)) return null;
-    const v = (state.visitasCiclo || []).find(x => x.ciclo === ym && x.usuarioId === uid);
-    return v ? { ciclo: ym, visitas: v.visitas, papel: v.papel } : null;
+    const a = ate.slice(0, 10), d = de.slice(0, 10), ym = a.slice(0, 7);
+    const [y, m] = ym.split("-").map(Number);
+    const ini = new Date(Date.UTC(y, m - 2, 28)); ini.setUTCDate(ini.getUTCDate() + 1);
+    if (a === ym + "-28" && d === ini.toISOString().slice(0, 10)) return ym;               // ciclo exato
+    if (d === ym + "-01" && a >= ym + "-28") return ym;                                     // mês do calendário fechado
+    return null;
+  }
+  /** linhas do nº oficial de visitas do período (vazio se o período não é um ciclo/mês fechado ou se ainda não foi lançado) */
+  const oficiaisPeriodo = (de: string, ate: string) => { const ym = cicloDoPeriodo(de, ate); return ym ? (state.visitasCiclo || []).filter(x => x.ciclo === ym) : []; };
+  /** nº oficial de visitas do ciclo (lançado pela Gestão) para a pessoa, quando o período é um ciclo ou mês fechado */
+  function visitasOficiais(uid: string, de: string, ate: string): { ciclo: string; visitas: number; papel: string } | null {
+    const v = oficiaisPeriodo(de, ate).find(x => x.usuarioId === uid);
+    return v ? { ciclo: v.ciclo, visitas: v.visitas, papel: v.papel } : null;
+  }
+  /** total de visitas pagas no período: nº oficial de quem tem lançamento + contagem do 360 de quem não tem (+ quem não tem usuário) */
+  function totalVisitasPeriodo(de: string, ate: string, contar: (uid: string) => number, uids: string[], papel: "consultor" | "medidor") {
+    const of = oficiaisPeriodo(de, ate).filter(x => (papel === "medidor") === (x.papel === "medidor"));
+    const comUser = uids.reduce((s, id) => { const o = of.find(x => x.usuarioId === id); return s + (o ? o.visitas : contar(id)); }, 0);
+    const semUser = of.filter(x => !x.usuarioId || !uids.includes(x.usuarioId)).reduce((s, x) => s + x.visitas, 0);
+    return { total: comUser + semUser, oficial: of.length > 0 };
   }
   function extratoConsultor(consultorId: string, de: string, ate: string) {
     // visita paga no mês em que foi feita (data da visita); sem data da visita, vale a data na loja
@@ -1062,7 +1078,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   }
 
   return {
-    acompAtivo, podeConsultaProduto, podePrePedido, podeNegociacao, podeEditarProduto, podeLiberarMostruario, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, visitasOficiais, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
+    acompAtivo, podeConsultaProduto, podePrePedido, podeNegociacao, podeEditarProduto, podeLiberarMostruario, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, visitasOficiais, oficiaisPeriodo, totalVisitasPeriodo, cicloDoPeriodo, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
