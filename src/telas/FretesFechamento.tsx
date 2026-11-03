@@ -434,7 +434,7 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
           <span>Período: <b>{moeda(tot(doPer))}</b> ({doPer.length} rom.)</span>
           {ant.length > 0 && <span style={{ color: "#1D4ED8" }}>📥 {ant.length} de antes, ainda não enviado(s): {moeda(tot(ant))}</span>}
           <span style={{ color: "#1F6B3E" }}>✓ enviados {moeda(tot(enviados))}</span>
-          <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !prontos.length || !f.montador_nome} onClick={() => enviar(f, prontos)}>📤 Enviar {prontos.length} conferido(s) para o pagamento da montagem · {moeda(tot(prontos))}</button>
+          <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !prontos.length || !f.montador_nome} onClick={() => enviar(f, prontos)}>📤 Enviar pagamento para a montagem · {prontos.length} romaneio(s) · {moeda(tot(prontos))}</button>
         </div>
         {naoConf.length > 0 && <div className="hint" style={{ padding: "6px 14px", color: "#9A5B00" }}>⚠ {naoConf.length} romaneio(s) ainda não conferido(s) — confira na aba Romaneios antes de enviar.</div>}
         <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5, margin: 0 }}>
@@ -444,7 +444,7 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
             <td style={{ textAlign: "right" }}>{fmtN(c.km) || "—"}</td><td style={{ textAlign: "right" }}>{moeda(c.ent)}</td><td style={{ textAlign: "right" }}>{moeda(c.vKm)}</td><td style={{ textAlign: "right" }}><b>{moeda(c.total)}</b></td>
             <td>{r.envio_chave ? <span style={{ color: "#1F6B3E" }}>✓ enviado {r.envio_em ? br(r.envio_em.slice(0, 10)).slice(0, 5) : ""}</span> : r.conferido ? (c.total > 0 ? "conferido · a enviar" : <span style={{ color: "#9A5B00" }}>sem valor</span>) : <span style={{ color: "#9A5B00" }}>a conferir</span>}</td>
             <td>{r.envio_chave ? <button className="btn sm" disabled={ocup} onClick={async () => { if (!confirm("Tirar o romaneio " + numRom(r) + " do pagamento da montagem? (a ordem avulsa é excluída)")) return; setOcup(true); try { await desfazerEnvioAssist(r, uid); rec(); } catch (e: any) { toast?.(e.message); } finally { setOcup(false); } }}>↩ desfazer</button>
-              : r.conferido && c.total > 0 ? <button className="btn sm" disabled={ocup || !f.montador_nome} onClick={() => enviar(f, [r])}>📤 enviar</button> : null}</td>
+              : r.conferido && c.total > 0 ? <button className="btn sm" disabled={ocup || !f.montador_nome} onClick={() => enviar(f, [r])}>📤 Enviar pagamento p/ montagem</button> : null}</td>
           </tr>; })}</tbody>
         </table></div>
       </div>;
