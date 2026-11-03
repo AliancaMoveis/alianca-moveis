@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { baixarXlsxFormatado } from "../lib/planilha";
 import { podeFretes } from "../lib/fretes";
-import { criarManual, ehManual, mapsEntrega, numRom, TIPOS_MANUAL } from "../lib/fretesTatico";
+import { carregarAssist, criarManual, desfazerEnvioAssist, ehAssist, ehManual, enviarAssist, mapsEntrega, numRom, TIPOS_MANUAL } from "../lib/fretesTatico";
 import { apagarDesconto, apagarRom, avisosRom, carregar, contaRom, criarDesconto, importar, lerCsvTatico, salvarFreteiro, salvarPagto, salvarRom, trazerParcelas,
   type Desconto, type Freteiro, type ItemRom, type RomTat } from "../lib/fretesTatico";
 
@@ -21,7 +21,7 @@ export default function FretesFechamento() {
   const { R, toast } = useApp() as any;
   const uid = R.currentUserId;
   const [mes, setMes] = useState(mesAtual());
-  const [aba, setAba] = useState<"rom" | "rel" | "fr">("rom");
+  const [aba, setAba] = useState<"rom" | "rel" | "assist" | "fr">("rom");
   const [d, setD] = useState<{ fr: Freteiro[]; rom: RomTat[]; desc: Desconto[]; pagto: string } | null>(null);
   const [erro, setErro] = useState("");
   const [aberto, setAberto] = useState<number | null>(null);
@@ -53,6 +53,7 @@ export default function FretesFechamento() {
         <div className="subnav" style={{ margin: 0 }}>
           <button className={aba === "rom" ? "on" : ""} onClick={() => setAba("rom")}>📄 Romaneios</button>
           <button className={aba === "rel" ? "on" : ""} onClick={() => setAba("rel")}>💰 Relatório para o financeiro</button>
+          <button className={aba === "assist" ? "on" : ""} onClick={() => setAba("assist")}>🛠 Pagamento frete assistência</button>
           <button className={aba === "fr" ? "on" : ""} onClick={() => setAba("fr")}>👤 Freteiros e contas</button>
         </div>
         <button className="btn sm" onClick={() => setMes(somaMes(mes, -1))}>◀</button>
@@ -65,6 +66,7 @@ export default function FretesFechamento() {
       {!d ? <div className="empty">Carregando…</div> : <>
         {aba === "rom" && <ListaRomaneios mes={mes} d={d} uid={uid} toast={toast} rec={rec} aberto={aberto} setAberto={setAberto} fSit={fSit} setFSit={setFSit} busca={busca} setBusca={setBusca} patch={(id: number, p: Partial<RomTat>) => setD(x => x && ({ ...x, rom: x.rom.map(r => r.id === id ? { ...r, ...p } : r) }))} />}
         {aba === "rel" && <Relatorio d={d} mes={mes} toast={toast} rec={rec} />}
+        {aba === "assist" && <PagAssist fr={d.fr} uid={uid} toast={toast} />}
         {aba === "fr" && <Freteiros d={d} toast={toast} rec={rec} />}
       </>}
     </section>
@@ -78,13 +80,13 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
   const filtra = (r: RomTat) => (fSit === "todos" || (fSit === "conf" ? r.conferido : !r.conferido))
     && (!busca || r.romaneio.includes(busca) || r.itens.some(i => i.cliente.toLowerCase().includes(busca.toLowerCase()) || i.venda.includes(busca)));
   const grupos = useMemo(() => {
-    const m = new Map<string, { k: string; nome: string; ordem: number; rs: RomTat[] }>();
+    const m = new Map<string, { k: string; nome: string; ordem: number; rs: RomTat[]; assist: boolean }>();
     for (const r of rom) {
       const f = fr.find(x => x.id === r.freteiro_id); const k = f ? String(f.id) : "sem:" + r.transportadora;
-      const g = m.get(k) || { k, nome: f ? f.apelido : "⚠ " + r.transportadora + " (sem cadastro)", ordem: f ? f.ordem : 999, rs: [] }; g.rs.push(r); m.set(k, g);
+      const g = m.get(k) || { k, nome: f ? f.apelido : "⚠ " + r.transportadora + " (sem cadastro)", ordem: f ? f.ordem : 999, rs: [], assist: ehAssist(f) }; g.rs.push(r); m.set(k, g);
     }
     for (const g of m.values()) g.rs.sort((a, b) => String(a.data).localeCompare(String(b.data)) || a.romaneio.localeCompare(b.romaneio));
-    return Array.from(m.values()).sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"));
+    return Array.from(m.values()).sort((a, b) => Number(a.assist) - Number(b.assist) || a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"));
   }, [rom, fr]);
   const conf = rom.filter(r => r.conferido).length;
   if (!rom.length) return <><div style={{ marginBottom: 10 }}>{novoM === "topo" ? <FormManual fr={fr} mes={mes} uid={uid} toast={toast} fechar={() => setNovoM(null)} feito={rec} /> : <button className="btn sm" onClick={() => setNovoM("topo")}>➕ Romaneio manual</button>}</div><div className="empty">Nenhum romaneio neste mês. Clique em <b>Importar relatório do Tático</b> e escolha o .csv (pode ser um por entregador ou o geral, com todos).</div></>;
@@ -114,6 +116,7 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
       return <div key={g.k} className="card" style={{ marginBottom: 10, padding: 0, overflow: "hidden" }}>
         <button onClick={() => alterna(g.k)} style={{ width: "100%", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", background: nConf === g.rs.length ? "#E8F3EC" : "var(--fundo2, #f3f5fa)", border: 0, cursor: "pointer", textAlign: "left" }}>
           <b style={{ fontSize: 16, minWidth: 190 }}>{ab ? "▾" : "▸"} {g.nome}</b>
+          {g.assist && <span className="pill" style={{ background: "#FFEFD9", color: "#9A4A00", borderColor: "#E8A44A", fontWeight: 700 }}>🛠 FRETE ASSISTÊNCIA · pago na quinzena da montagem</span>}
           <span>{nConf}/{g.rs.length} conferidos</span>
           <span className="hint">{g.rs.reduce((s, x) => s + x.itens.length, 0)} entregas</span>
           <span className="hint">{fmtN(km)} km</span>
@@ -253,7 +256,9 @@ function Relatorio({ d, mes, toast, rec }: any) {
   const rom: RomTat[] = d.rom.filter((r: RomTat) => r.mes === mes); const atrasados = d.rom.filter((r: RomTat) => r.mes < mes).length;
   const [pagto, setPagto] = useState<string>(d.pagto || "");
   const [nd, setNd] = useState({ fid: "", descricao: "", parcela: "", valor: "" });
-  const linhas = fr.filter(f => f.ativo || rom.some(r => r.freteiro_id === f.id)).map(f => {
+  // frete de assistência não vai para o financeiro: é pago na quinzena da montagem (aba 🛠)
+  const assistRom = rom.filter(r => ehAssist(fr.find(f => f.id === r.freteiro_id))); const assistTot = assistRom.reduce((s, r) => s + contaRom(r).total, 0);
+  const linhas = fr.filter(f => !ehAssist(f) && (f.ativo || rom.some(r => r.freteiro_id === f.id))).map(f => {
     const rs = rom.filter(r => r.freteiro_id === f.id); const cs = rs.map(contaRom);
     const frete = cs.reduce((s, c) => s + c.ent, 0), km = cs.reduce((s, c) => s + c.vKm, 0);
     const ds = desc.filter(x => x.freteiro_id === f.id); const tDesc = ds.reduce((s, x) => s + x.valor, 0);
@@ -270,7 +275,7 @@ function Relatorio({ d, mes, toast, rec }: any) {
      ["TOTAL GERAL", T("frete"), T("km"), T("total"), "", "", linhas.reduce((s, l) => s + l.tDesc, 0) || null, T("pagar")]],
     [{ aba: "ROMANEIOS", cols: [{ titulo: "FRETEIRO", largura: 16 }, { titulo: "DATA", largura: 12, tipo: "data", alinhar: "center" }, { titulo: "ROMANEIO", largura: 12, alinhar: "center" }, { titulo: "ENTREGAS", largura: 10, alinhar: "center" },
       { titulo: "KM", largura: 8, alinhar: "center" }, { titulo: "KM (R$)", largura: 13, tipo: "moeda" }, { titulo: "ENTREGAS (R$)", largura: 15, tipo: "moeda" }, { titulo: "TOTAL", largura: 14, tipo: "moeda" }, { titulo: "CONFERIDO", largura: 11, alinhar: "center" }],
-      linhas: rom.slice().sort((a, b) => (fr.find(f => f.id === a.freteiro_id)?.apelido || "").localeCompare(fr.find(f => f.id === b.freteiro_id)?.apelido || "") || String(a.data).localeCompare(String(b.data)))
+      linhas: rom.filter(r => !ehAssist(fr.find(f => f.id === r.freteiro_id))).sort((a, b) => (fr.find(f => f.id === a.freteiro_id)?.apelido || "").localeCompare(fr.find(f => f.id === b.freteiro_id)?.apelido || "") || String(a.data).localeCompare(String(b.data)))
         .map(r => { const c = contaRom(r); return [fr.find(f => f.id === r.freteiro_id)?.apelido || r.transportadora, r.data, numRom(r), r.itens.length, c.km, c.vKm, c.ent, c.total, r.conferido ? "SIM" : "NÃO"]; }) }]);
   const imprimir = () => {
     const td = (s: string, a = "left", b = false) => `<td style="text-align:${a};${b ? "font-weight:bold;" : ""}">${s}</td>`;
@@ -286,6 +291,7 @@ function Relatorio({ d, mes, toast, rec }: any) {
     try { await criarDesconto({ mes, freteiro_id: +nd.fid, descricao: nd.descricao, parcela: nd.parcela, valor: v }); setNd({ fid: "", descricao: "", parcela: "", valor: "" }); rec(); } catch (e: any) { toast?.(e.message); }
   };
   return <>
+    {assistRom.length > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#FFEFD9" }}>🛠 <b>Frete de assistência: {assistRom.length} romaneio(s) · {moeda(assistTot)}</b> — <u>não entra</u> neste relatório. É enviado para o pagamento quinzenal da montagem na aba <b>🛠 Pagamento frete assistência</b>.</div>}
     {atrasados > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#EEF3FF" }}>📥 <b>{atrasados} romaneio(s) de meses anteriores</b> ainda a conferir — aparecem na aba Romaneios e entram neste relatório quando forem conferidos.</div>}
     {(pend > 0 || semF > 0) && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#FFF4DC" }}>⚠ {pend > 0 && <><b>{pend} romaneio(s) ainda não conferido(s)</b> — entram no relatório com o que já foi digitado. </>}{semF > 0 && <b>{semF} romaneio(s) sem freteiro.</b>}</div>}
     <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 10 }}>
@@ -326,16 +332,18 @@ function Relatorio({ d, mes, toast, rec }: any) {
 function Freteiros({ d, toast, rec }: any) {
   const [ed, setEd] = useState<Partial<Freteiro> | null>(null);
   const campos: [keyof Freteiro, string, number][] = [["apelido", "Nome no relatório", 130], ["nome_tatico", "Nome no Tático", 200], ["cod_transp", "Cód. no Tático", 90], ["favorecido", "Favorecido da conta", 220], ["agencia", "Agência", 70], ["conta", "Conta", 120], ["valor_km", "R$ por km", 70]];
-  const gravar = async () => { if (!ed?.apelido) return toast?.("Informe o nome"); try { await salvarFreteiro({ ...ed, apelido: String(ed.apelido).toUpperCase(), valor_km: Number(String(ed.valor_km ?? 3).replace(",", ".")) || 0 }); setEd(null); rec(); toast?.("Salvo"); } catch (e: any) { toast?.(e.message); } };
+  const gravar = async () => { if (!ed?.apelido) return toast?.("Informe o nome"); try { await salvarFreteiro({ ...ed, tipo: ed.tipo || "entrega", montador_nome: ed.tipo === "assistencia" ? (ed.montador_nome || "") : "", apelido: String(ed.apelido).toUpperCase(), valor_km: Number(String(ed.valor_km ?? 3).replace(",", ".")) || 0 }); setEd(null); rec(); toast?.("Salvo"); } catch (e: any) { toast?.(e.message); } };
   return <>
     <div className="hint" style={{ marginBottom: 8 }}>O "Nome no Tático" e o "Cód. no Tático" ligam o relatório importado ao freteiro. A conta sai no relatório do financeiro.</div>
     <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5 }}>
-      <thead><tr>{campos.map(c => <th key={c[0]}>{c[1]}</th>)}<th>Ativo</th><th></th></tr></thead>
-      <tbody>{d.fr.map((f: Freteiro) => ed?.id === f.id ? null : <tr key={f.id} style={{ opacity: f.ativo ? 1 : .5 }}>{campos.map(c => <td key={c[0]}>{c[0] === "valor_km" ? moeda(f.valor_km) : String(f[c[0]] ?? "")}</td>)}<td>{f.ativo ? "sim" : "não"}</td>
+      <thead><tr>{campos.map(c => <th key={c[0]}>{c[1]}</th>)}<th>Tipo</th><th>Ativo</th><th></th></tr></thead>
+      <tbody>{d.fr.map((f: Freteiro) => ed?.id === f.id ? null : <tr key={f.id} style={{ opacity: f.ativo ? 1 : .5 }}>{campos.map(c => <td key={c[0]}>{c[0] === "valor_km" ? moeda(f.valor_km) : String(f[c[0]] ?? "")}</td>)}<td>{ehAssist(f) ? <b style={{ color: "#9A4A00" }}>🛠 Assistência → {f.montador_nome || "?"}</b> : "Entrega"}</td><td>{f.ativo ? "sim" : "não"}</td>
         <td><button className="btn sm" onClick={() => setEd({ ...f })}>Editar</button></td></tr>)}</tbody>
     </table></div>
     {ed ? <div className="card" style={{ padding: 12, marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
       {campos.map(c => <div key={c[0]} className="field" style={{ margin: 0, width: c[2] }}><label>{c[1]}</label><input value={String(ed[c[0]] ?? "")} onChange={e => setEd({ ...ed, [c[0]]: e.target.value })} /></div>)}
+      <div className="field" style={{ margin: 0 }}><label>Tipo</label><select value={ed.tipo || "entrega"} onChange={e => setEd({ ...ed, tipo: e.target.value })}><option value="entrega">Entrega (relatório do financeiro)</option><option value="assistencia">🛠 Frete de assistência (pagamento da montagem)</option></select></div>
+      {ed.tipo === "assistencia" && <div className="field" style={{ margin: 0, width: 200 }}><label>Nome dele na montagem</label><input value={ed.montador_nome || ""} onChange={e => setEd({ ...ed, montador_nome: e.target.value })} placeholder="ex.: Costa (Assistência)" /></div>}
       <label style={{ display: "flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={ed.ativo !== false} onChange={e => setEd({ ...ed, ativo: e.target.checked })} /> ativo</label>
       <button className="btn primary" onClick={gravar}>Salvar</button><button className="btn" onClick={() => setEd(null)}>Cancelar</button>
     </div> : <button className="btn" style={{ marginTop: 10 }} onClick={() => setEd({ valor_km: 3, ativo: true, ordem: 99 })}>+ Novo freteiro</button>}
@@ -381,4 +389,66 @@ function FormManual({ fr, fixo, mes, uid, toast, fechar, feito }: { fr: Freteiro
       <button className="btn primary" onClick={gravar}>Incluir</button><button className="btn" onClick={fechar}>Cancelar</button>
     </div>
   </div>;
+}
+
+// ---------------- 🛠 pagamento do frete de assistência (quinzena da montagem) ----------------
+function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any }) {
+  const assist = fr.filter(ehAssist);
+  const hoje = new Date(); const ym = hoje.getFullYear() + "-" + String(hoje.getMonth() + 1).padStart(2, "0");
+  const fimMes = (m: string) => { const x = new Date(+m.slice(0, 4), +m.slice(5, 7), 0); return m + "-" + String(x.getDate()).padStart(2, "0"); };
+  const q1 = hoje.getDate() <= 15;
+  const [de, setDe] = useState(q1 ? ym + "-01" : ym + "-16"); const [ate, setAte] = useState(q1 ? ym + "-15" : fimMes(ym));
+  const [rs, setRs] = useState<RomTat[] | null>(null); const [ocup, setOcup] = useState(false);
+  const rec = () => carregarAssist(de, ate, assist.map(f => f.id)).then(setRs).catch(e => toast?.(e.message));
+  useEffect(() => { setRs(null); rec(); }, [de, ate, fr]);
+  const quinzena = (m: string, q: 1 | 2) => { setDe(m + (q === 1 ? "-01" : "-16")); setAte(q === 1 ? m + "-15" : fimMes(m)); };
+  const mAnt = (() => { const x = new Date(+de.slice(0, 4), +de.slice(5, 7) - 2, 1); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0"); })();
+  const enviar = async (f: Freteiro, lista: RomTat[]) => {
+    if (!lista.length) return;
+    if (!confirm(`Enviar ${lista.length} romaneio(s) de ${f.apelido} (${moeda(lista.reduce((s, r) => s + contaRom(r).total, 0))}) para o pagamento da montagem, em "${f.montador_nome}"?`)) return;
+    setOcup(true);
+    try { const n = await enviarAssist(lista, f, uid); toast?.(n + " romaneio(s) enviados para a montagem — aparecem como ordem avulsa 'Frete de assistência' de " + f.montador_nome); rec(); } catch (e: any) { toast?.(e.message); rec(); } finally { setOcup(false); }
+  };
+  if (!assist.length) return <div className="empty">Nenhum freteiro marcado como frete de assistência (aba Freteiros e contas → Tipo).</div>;
+  return <>
+    <div className="card" style={{ padding: 12, marginBottom: 12, background: "#FFF8EE" }}>
+      <b>🛠 Frete de assistência — pago na quinzena junto com a montagem</b>
+      <div className="hint" style={{ marginTop: 4 }}>Os romaneios destes freteiros não entram no relatório do financeiro. Confira-os na aba Romaneios, depois envie aqui: cada romaneio vira uma <b>ordem avulsa "Frete de assistência"</b> no pagamento do montador com o mesmo nome (ex.: Costa (Assistência)), e entra no fechamento da quinzena da montagem.</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
+        <button className="btn sm" onClick={() => quinzena(mAnt, 1)}>1ª quinzena {mAnt.slice(5, 7)}/{mAnt.slice(0, 4)}</button>
+        <button className="btn sm" onClick={() => quinzena(mAnt, 2)}>2ª quinzena {mAnt.slice(5, 7)}/{mAnt.slice(0, 4)}</button>
+        <button className="btn sm" onClick={() => quinzena(de.slice(0, 7), 1)}>1ª quinzena {de.slice(5, 7)}/{de.slice(0, 4)}</button>
+        <button className="btn sm" onClick={() => quinzena(de.slice(0, 7), 2)}>2ª quinzena {de.slice(5, 7)}/{de.slice(0, 4)}</button>
+        <div className="field" style={{ margin: 0 }}><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
+        <div className="field" style={{ margin: 0 }}><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
+      </div>
+    </div>
+    {!rs ? <div className="empty">Carregando…</div> : assist.map(f => {
+      const l = rs.filter(r => r.freteiro_id === f.id); if (!l.length) return null;
+      const doPer = l.filter(r => r.data && r.data >= de), ant = l.filter(r => r.data && r.data < de);
+      const prontos = l.filter(r => r.conferido && !r.envio_chave), naoConf = l.filter(r => !r.conferido && !r.envio_chave), enviados = l.filter(r => r.envio_chave);
+      const tot = (x: RomTat[]) => x.reduce((s, r) => s + contaRom(r).total, 0);
+      return <div key={f.id} className="card" style={{ padding: 0, marginBottom: 12, overflow: "hidden" }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", padding: "10px 14px", background: "#FFEFD9" }}>
+          <b style={{ fontSize: 16 }}>🛠 {f.apelido}</b><span className="hint">→ na montagem: <b>{f.montador_nome || "⚠ sem nome — cadastre em Freteiros e contas"}</b></span>
+          <span>Período: <b>{moeda(tot(doPer))}</b> ({doPer.length} rom.)</span>
+          {ant.length > 0 && <span style={{ color: "#1D4ED8" }}>📥 {ant.length} de antes, ainda não enviado(s): {moeda(tot(ant))}</span>}
+          <span style={{ color: "#1F6B3E" }}>✓ enviados {moeda(tot(enviados))}</span>
+          <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !prontos.length || !f.montador_nome} onClick={() => enviar(f, prontos)}>📤 Enviar {prontos.length} conferido(s) para o pagamento da montagem · {moeda(tot(prontos))}</button>
+        </div>
+        {naoConf.length > 0 && <div className="hint" style={{ padding: "6px 14px", color: "#9A5B00" }}>⚠ {naoConf.length} romaneio(s) ainda não conferido(s) — confira na aba Romaneios antes de enviar.</div>}
+        <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5, margin: 0 }}>
+          <thead><tr><th>Romaneio</th><th>Data</th><th style={{ textAlign: "center" }}>Entregas</th><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Entregas (R$)</th><th style={{ textAlign: "right" }}>Km (R$)</th><th style={{ textAlign: "right" }}>Total</th><th>Situação</th><th></th></tr></thead>
+          <tbody>{l.map(r => { const c = contaRom(r); return <tr key={r.id} style={{ background: r.envio_chave ? "#F2FAF5" : undefined }}>
+            <td><b>{numRom(r)}</b></td><td>{br(r.data).slice(0, 5)}{r.data && r.data < de && <span style={{ color: "#1D4ED8" }}> 📥</span>}</td><td style={{ textAlign: "center" }}>{r.itens.length}</td>
+            <td style={{ textAlign: "right" }}>{fmtN(c.km) || "—"}</td><td style={{ textAlign: "right" }}>{moeda(c.ent)}</td><td style={{ textAlign: "right" }}>{moeda(c.vKm)}</td><td style={{ textAlign: "right" }}><b>{moeda(c.total)}</b></td>
+            <td>{r.envio_chave ? <span style={{ color: "#1F6B3E" }}>✓ enviado {r.envio_em ? br(r.envio_em.slice(0, 10)).slice(0, 5) : ""}</span> : r.conferido ? (c.total > 0 ? "conferido · a enviar" : <span style={{ color: "#9A5B00" }}>sem valor</span>) : <span style={{ color: "#9A5B00" }}>a conferir</span>}</td>
+            <td>{r.envio_chave ? <button className="btn sm" disabled={ocup} onClick={async () => { if (!confirm("Tirar o romaneio " + numRom(r) + " do pagamento da montagem? (a ordem avulsa é excluída)")) return; setOcup(true); try { await desfazerEnvioAssist(r, uid); rec(); } catch (e: any) { toast?.(e.message); } finally { setOcup(false); } }}>↩ desfazer</button>
+              : r.conferido && c.total > 0 ? <button className="btn sm" disabled={ocup || !f.montador_nome} onClick={() => enviar(f, [r])}>📤 enviar</button> : null}</td>
+          </tr>; })}</tbody>
+        </table></div>
+      </div>;
+    })}
+    {rs && !rs.length && <div className="empty">Nenhum romaneio de frete de assistência neste período.</div>}
+  </>;
 }

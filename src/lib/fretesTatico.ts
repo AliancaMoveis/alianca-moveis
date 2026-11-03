@@ -3,10 +3,10 @@
 import { sb } from "./supabase";
 import { MOCK } from "./chat";
 
-export type Freteiro = { id: number; apelido: string; nome_tatico: string; cod_transp: string; favorecido: string; agencia: string; conta: string; valor_km: number; ativo: boolean; ordem: number };
+export type Freteiro = { id: number; apelido: string; nome_tatico: string; cod_transp: string; favorecido: string; agencia: string; conta: string; valor_km: number; ativo: boolean; ordem: number; tipo?: string; montador_nome?: string };
 export type ItemRom = { venda: string; cliente: string; cidade: string; bairro: string; nf: string; data: string; assist: string; transf: string; km: number | null; valor: number | null; tipo?: string; endereco?: string };
 export type RomTat = { id: number; mes: string; romaneio: string; cod_transp: string; transportadora: string; freteiro_id: number | null; data: string | null; itens: ItemRom[];
-  modo: "linhas" | "total"; km: number | null; valor_entregas: number | null; valor_km: number; total_papel: number | null; obs: string; conferido: boolean };
+  modo: "linhas" | "total"; km: number | null; valor_entregas: number | null; valor_km: number; total_papel: number | null; obs: string; conferido: boolean; envio_chave?: string | null; envio_em?: string | null };
 export type Desconto = { id: number; mes: string; freteiro_id: number; descricao: string; parcela: string; valor: number };
 
 // ---------- leitura do CSV do Tático (Windows-1252, ";" e aspas) ----------
@@ -200,4 +200,33 @@ export function mapsEntrega(i: ItemRom) {
   const end = (i.endereco || "").replace(/\s+-\s+(CASA|CS|SOB|SOBRADO|AP|APTO|APT|BL|BLOCO)[^,]*,/i, ",");
   const q = end ? end + ", PR" : [i.bairro, i.cidade, "PR"].filter(Boolean).join(", ");
   return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
+}
+
+// ---------- frete de assistência: vai para o pagamento quinzenal da montagem (não entra no relatório do financeiro) ----------
+export const ehAssist = (f?: Freteiro | null) => !!f && f.tipo === "assistencia";
+/** romaneios dos freteiros de assistência com data no período (qualquer mês) + os anteriores ainda não enviados */
+export async function carregarAssist(de: string, ate: string, ids: number[]): Promise<RomTat[]> {
+  if (!ids.length) return [];
+  if (MOCK) return mr.filter(r => ids.includes(r.freteiro_id || 0) && r.data && (r.data >= de && r.data <= ate || (r.data < de && !r.envio_chave)));
+  const r = await sb.from("frete_tat_rom").select("*").in("freteiro_id", ids).lte("data", ate).or(`data.gte.${de},envio_chave.is.null`).order("data").order("romaneio");
+  if (r.error) throw new Error(r.error.message);
+  return (r.data || []).map((x: any) => ({ ...x, km: x.km == null ? null : Number(x.km), valor_entregas: x.valor_entregas == null ? null : Number(x.valor_entregas), valor_km: Number(x.valor_km), total_papel: x.total_papel == null ? null : Number(x.total_papel) }));
+}
+/** cria uma ordem avulsa "Frete de assistência" no pagamento da montagem para cada romaneio e marca o romaneio como enviado */
+export async function enviarAssist(rs: RomTat[], f: Freteiro, uid: string): Promise<number> {
+  if (!f.montador_nome) throw new Error("Informe, no cadastro do freteiro " + f.apelido + ", o nome dele na montagem (ex.: Costa (Assistência))");
+  let n = 0;
+  for (const r of rs) {
+    const c = contaRom(r); if (c.total <= 0) continue;
+    const desc = `Frete assistência · romaneio ${numRom(r)} · ${r.itens.length} entrega(s)` + (c.km ? ` · ${String(c.km).replace(".", ",")} km` : "");
+    const { data, error } = await sb.rpc("montagem_avulsa_salvar", { p: { montador: f.montador_nome, tipo: "frete_assistencia", de: r.data, ate: r.data, prod: Math.round(c.total * 100) / 100, adic: 0, descricao: desc } });
+    if (error) throw new Error(error.message);
+    const u = await sb.from("frete_tat_rom").update({ envio_chave: data as string, envio_em: new Date().toISOString(), atualizado_por: uid }).eq("id", r.id); if (u.error) throw new Error(u.error.message);
+    n++;
+  }
+  return n;
+}
+export async function desfazerEnvioAssist(r: RomTat, uid: string) {
+  if (r.envio_chave) { const { error } = await sb.rpc("montagem_avulsa_excluir", { p_chave: r.envio_chave }); if (error && !/não encontrada/i.test(error.message)) throw new Error(error.message); }
+  const u = await sb.from("frete_tat_rom").update({ envio_chave: null, envio_em: null, atualizado_por: uid }).eq("id", r.id); if (u.error) throw new Error(u.error.message);
 }
