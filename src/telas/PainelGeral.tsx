@@ -31,7 +31,7 @@ function periodo(p: Per, pDe: string, pAte: string) {
 }
 
 // ---------- dados que não ficam no estado (anúncios, montagem, frete, satisfação) ----------
-type Extra = { anuncios: any[]; mont: any; mont0: any; montQ1: any; montQ2: any; fretesAnt: RomTat[]; fretesAtual: RomTat[]; freteiros: Freteiro[]; descAnt: number; aval: any[] };
+type Extra = { anuncios: any[]; mont: any; mont0: any; montQ1: any; montQ2: any; montQ0: any; freteOf: number | null; fretesAnt: RomTat[]; fretesAtual: RomTat[]; freteiros: Freteiro[]; descAnt: number; aval: any[] };
 async function anunciosPer(de: string, ate: string) {
   if (MOCK) return [];
   const out: any[] = [];
@@ -49,19 +49,21 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
   const P = periodo(per, pDe, pAte);
   const [ver, setVer] = useState(false); // valor investido: sempre começa escondido
   const [x, setX] = useState<Extra | null>(null);
-  const ym = ymDe(h), ymA = ymAnt(ym);
+  // mês de referência = mês do período escolhido (Mês anterior → outubro; Mês atual → novembro)
+  const ym = ymDe(P.ate), ymA = ymAnt(ym), ymHoje = ymDe(h), atual = ym === ymHoje;
   useEffect(() => {
     setX(null);
     const fimM = fimMes(ym);
     Promise.all([
       anunciosPer(P.pde, P.ate).catch(() => []), montRes(P.de, P.ate), montRes(P.pde, P.pate),
-      montRes(ym + "-01", ym + "-15"), montRes(ym + "-16", fimM),
+      montRes(ym + "-01", ym + "-15"), montRes(ym + "-16", fimM), montRes(ymA + "-16", fimMes(ymA)),
       fretesMes(ymA), fretesMes(ym),
       MOCK ? Promise.resolve({ data: [] }) : sb.from("frete_freteiros").select("*"),
-      MOCK ? Promise.resolve({ data: [] }) : sb.from("frete_descontos").select("valor").eq("mes", ymA),
+      MOCK ? Promise.resolve({ data: [] }) : sb.from("frete_descontos").select("valor").eq("mes", ym),
+      MOCK ? Promise.resolve({ data: [] }) : sb.from("frete_fechamento").select("total_oficial").eq("mes", ym),
       MOCK ? Promise.resolve({ data: [] }) : sb.from("avaliacoes").select("nps,respondido_em").gte("respondido_em", P.de).lte("respondido_em", P.ate + "T23:59:59"),
-    ]).then(([an, m, m0, q1, q2, fa, fat, fr, ds, av]: any) => setX({ anuncios: an, mont: m, mont0: m0, montQ1: q1, montQ2: q2, fretesAnt: fa, fretesAtual: fat, freteiros: (fr.data || []) as Freteiro[], descAnt: ((ds.data || []) as any[]).reduce((s, d) => s + Number(d.valor || 0), 0), aval: (av.data || []) as any[] }))
-      .catch(() => setX({ anuncios: [], mont: null, mont0: null, montQ1: null, montQ2: null, fretesAnt: [], fretesAtual: [], freteiros: [], descAnt: 0, aval: [] }));
+    ]).then(([an, m, m0, q1, q2, q0, fa, fat, fr, ds, fo, av]: any) => setX({ anuncios: an, mont: m, mont0: m0, montQ1: q1, montQ2: q2, montQ0: q0, freteOf: ((fo.data || [])[0] || {}).total_oficial != null ? Number(fo.data[0].total_oficial) : null, fretesAnt: fa, fretesAtual: fat, freteiros: (fr.data || []) as Freteiro[], descAnt: ((ds.data || []) as any[]).reduce((s, d) => s + Number(d.valor || 0), 0), aval: (av.data || []) as any[] }))
+      .catch(() => setX({ anuncios: [], mont: null, mont0: null, montQ1: null, montQ2: null, montQ0: null, freteOf: null, fretesAnt: [], fretesAtual: [], freteiros: [], descAnt: 0, aval: [] }));
   }, [P.de, P.ate, P.pde, P.pate]);
 
   const c = useMemo(() => {
@@ -117,11 +119,12 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
     const pagCampo = (de: string, ate: string) => campo.reduce((t: any, u: any) => { try { const e = R.extratoConsultor(u.id, de, ate);
       t.com += e.comissao || 0; t.vis += e.pagamentoVisitas || 0; t.med += e.pagamentoMedidas || 0; t.aux += e.auxilio || 0; t.reemb += e.totalReembolsos || 0; t.total += e.total || 0; } catch { /* sem extrato */ } return t; },
       { com: 0, vis: 0, med: 0, aux: 0, reemb: 0, total: 0 });
-    const cicF = ultimoFechado(h); const [cde, cate] = cicloDoMes(cicF); const campoF = pagCampo(cde, cate);
-    const [ade, aate] = cicloDoMes(cicloDe(h)); const campoA = pagCampo(ade, h < aate ? h : aate);
+    // ciclo do mês de referência (outubro = 29/09 a 28/10); no mês atual, até hoje
+    const [cde, cate0] = cicloDoMes(ymDe(P.ate)); const cate = h < cate0 ? h : cate0; const campoF = pagCampo(cde, cate0); // ciclo inteiro: o auxílio fixo (dia 15) já entra na previsão
+    const campoA = campoF, ade = cde;
     const comissoes = campoF.total;
     return { V, VA, tot, totA, serie, lojaHoje, emAtd, esperando, chegaram, faltaram, vend, vendHoje, vendFerias, vendFolga, atendendo, atdPer, atdVenda, durMed, porta, portaV, G, card, linha, agend, vieram, vMkt, vExt, extHoje, consHoje, medidas, medHoje, pvAbertas, comissoes, cde, cate, campoF, campoA, ade };
-  }, [st, P.de, P.ate, P.pde, P.pate, R]);
+  }, [st, P.de, P.ate, P.pde, P.pate, R, h]);
 
   // ---- anúncios ----
   const an = (x?.anuncios || []);
@@ -130,13 +133,19 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
   const aT = sumA(anP), aA = sumA(anA), aMeta = sumA(anP, "meta"), aGoo = sumA(anP, "google");
   // ---- frete ----
   const fr = x?.freteiros || []; const doFin = (r: RomTat) => !ehAssist(fr.find(f => f.id === r.freteiro_id));
-  const freteAnt = (x?.fretesAnt || []).filter(doFin).reduce((s, r) => s + contaRom(r).total, 0) - (x?.descAnt || 0);
+  const freteAnt = (x?.fretesAnt || []).filter(doFin).reduce((s, r) => s + contaRom(r).total, 0);
+  // frete do mês de referência: total do relatório oficial (quando lançado) ou o que já foi digitado nos romaneios
+  const freteLanc = (x?.fretesAtual || []).filter(doFin).reduce((s, r) => s + contaRom(r).total, 0) - (x?.descAnt || 0);
+  const freteMes = x?.freteOf != null ? x.freteOf : freteLanc;
   const fAtual = (x?.fretesAtual || []).filter(doFin); const freteAtual = fAtual.reduce((s, r) => s + contaRom(r).total, 0); const fAberto = fAtual.filter(r => !r.conferido).length;
   const freteAssist = [...(x?.fretesAtual || [])].filter(r => !doFin(r)).reduce((s, r) => s + contaRom(r).total, 0);
   // ---- montagem ----
   const nn = (v: any) => Number(v) || 0;
   const m = x?.mont, m0 = x?.mont0, q1 = x?.montQ1, q2 = x?.montQ2;
-  const q1Fechada = +h.slice(8, 10) > 15;
+  const q1Fechada = !atual || +h.slice(8, 10) > 15;
+  const q0 = x?.montQ0;
+  // montagem paga no mês: dia 10 (quinzena 16–fim do mês anterior) e dia 25 (quinzena 01–15 do mês)
+  const pago10 = !atual || +h.slice(8, 10) >= 10, pago25 = !atual || +h.slice(8, 10) >= 25;
   const aval = (x?.aval || []).filter((a: any) => a.nps != null); const npsMed = aval.length ? aval.reduce((s: number, a: any) => s + Number(a.nps), 0) / aval.length : null;
 
   const Var = ({ a, b, inv, money }: { a: number; b: number; inv?: boolean; money?: boolean }) => {
@@ -176,20 +185,22 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
               <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={c.serie.map((s, i) => (6 + i * (W - 12) / c.serie.length + bw / 2) + "," + (Hh - s.b / mx * (Hh - 10))).join(" ")} />
               <line x1="0" y1={Hh} x2={W} y2={Hh} stroke="var(--line)" />
             </svg></div>
-          <div className="pg-panel"><h3>💸 A pagar</h3>
+          <div className="pg-panel"><h3>💸 Custos de {nomeYm(ym)} <small>{atual ? "previsto até agora" : "valores do mês"}</small></h3>
             <table className="pg-tab"><tbody>
-              <tr><td colSpan={2} style={{ fontWeight: 700 }}>Consultores externos e medidores <small>(ciclo fechado {c.cde.slice(8, 10)}/{c.cde.slice(5, 7)}–{c.cate.slice(8, 10)}/{c.cate.slice(5, 7)})</small></td></tr>
+              <tr><td colSpan={2} style={{ fontWeight: 700 }}>Consultores externos e medidores <small>(ciclo {c.cde.slice(8, 10)}/{c.cde.slice(5, 7)}–{c.cate.slice(8, 10)}/{c.cate.slice(5, 7)}{atual ? ", até hoje" : ""})</small></td></tr>
               <tr><td style={{ paddingLeft: 14 }}>Comissão das vendas</td><td>{fmtMoeda(c.campoF.com)}</td></tr>
               <tr><td style={{ paddingLeft: 14 }}>Visitas</td><td>{fmtMoeda(c.campoF.vis)}</td></tr>
-              {c.campoF.med > 0 && <tr><td style={{ paddingLeft: 14 }}>Medidas</td><td>{fmtMoeda(c.campoF.med)}</td></tr>}
-              {c.campoF.aux > 0 && <tr><td style={{ paddingLeft: 14 }}>Auxílio fixo</td><td>{fmtMoeda(c.campoF.aux)}</td></tr>}
-              {c.campoF.reemb > 0 && <tr><td style={{ paddingLeft: 14 }}>Reembolsos</td><td>{fmtMoeda(c.campoF.reemb)}</td></tr>}
-              <tr><td style={{ paddingLeft: 14 }}><b>Total consultores e medidores</b></td><td><b>{fmtMoeda(c.campoF.total)}</b></td></tr>
-              <tr><td>Frete de {nomeYm(ymA)} <small>(fechado · pago em {nomeYm(ym)})</small></td><td>{fmtMoeda(freteAnt)}</td></tr>
-              <tr><td>Montagem · {q1Fechada ? "2ª quinzena (prevista)" : "1ª quinzena (prevista)"}</td><td>{fmtMoeda(nn((q1Fechada ? q2 : q1)?.ef_total))}</td></tr>
-              <tr><td><b>Total previsto</b></td><td><b>{fmtMoeda(c.comissoes + freteAnt + nn((q1Fechada ? q2 : q1)?.ef_total))}</b></td></tr>
+              <tr><td style={{ paddingLeft: 14 }}>Medidas</td><td>{fmtMoeda(c.campoF.med)}</td></tr>
+              <tr><td style={{ paddingLeft: 14 }}>Auxílio fixo</td><td>{fmtMoeda(c.campoF.aux)}</td></tr>
+              <tr><td style={{ paddingLeft: 14 }}>Reembolsos</td><td>{fmtMoeda(c.campoF.reemb)}</td></tr>
+              <tr><td style={{ paddingLeft: 14 }}><b>Subtotal consultores e medidores</b></td><td><b>{fmtMoeda(c.campoF.total)}</b></td></tr>
+              <tr><td>Frete de {nomeYm(ym)} <small>({x?.freteOf != null ? "relatório oficial" : atual ? "previsto · lançado até agora" : "lançado nos romaneios"})</small></td><td>{fmtMoeda(freteMes)}</td></tr>
+              <tr><td colSpan={2} style={{ fontWeight: 700 }}>Montagem paga em {nomeYm(ym)}</td></tr>
+              <tr><td style={{ paddingLeft: 14 }}>Dia 10 · quinzena 16–{fimMes(ymA).slice(8, 10)}/{ymA.slice(5, 7)} <small>{pago10 ? "" : "(previsto)"}</small></td><td>{fmtMoeda(nn(q0?.ef_total))}</td></tr>
+              <tr><td style={{ paddingLeft: 14 }}>Dia 25 · quinzena 01–15/{ym.slice(5, 7)} <small>{pago25 ? "" : "(previsto)"}</small></td><td>{fmtMoeda(nn(q1?.ef_total))}</td></tr>
+              <tr><td><b>Total {atual ? "previsto" : "do mês"}</b></td><td><b>{fmtMoeda(c.campoF.total + freteMes + nn(q0?.ef_total) + nn(q1?.ef_total))}</b></td></tr>
             </tbody></table>
-            <div className="pg-d neu" style={{ marginTop: 8 }}>Ciclo atual dos consultores ({c.ade.slice(8, 10)}/{c.ade.slice(5, 7)} até hoje, ainda aberto): {fmtMoeda(c.campoA.total)} — comissão {fmtMoeda(c.campoA.com)} · visitas {fmtMoeda(c.campoA.vis + c.campoA.med)}</div></div>
+            {x?.freteOf != null && freteLanc > 0 && Math.abs(freteLanc - x.freteOf) > 1 && <div className="pg-d neu" style={{ marginTop: 8 }}>Frete digitado nos romaneios até agora: {fmtMoeda(freteLanc)}</div>}</div>
         </div>
 
         <Sec ic="🏬" t="Atendimento da loja" s="agora e no período" />
@@ -248,8 +259,8 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
             <div className="pg-split"><i style={{ background: q1Fechada ? "var(--st-concluida-bg)" : "var(--warn-bg)", color: q1Fechada ? "var(--st-concluida)" : "var(--warn)" }}>{q1Fechada ? "✓" : "⏳"} 1ª quinzena (01–15) · <b>{q1Fechada ? "fechada" : "em andamento"}</b> {fmtMoeda(nn(q1?.ef_total))}</i>
               <i style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>⏳ 2ª quinzena (16–{fimMes(ym).slice(8, 10)}) · <b>prevista</b> {fmtMoeda(nn(q2?.ef_total))}</i></div>
           </Card>
-          <Card hl t={"Frete de " + nomeYm(ymA) + " (fechado)"} v={fmtMoeda(freteAnt)} d={<span className="pg-d neu">a pagar em {nomeYm(ym)}</span>} ir="fretes_fech" />
-          <Card t={"Frete de " + nomeYm(ym) + " (em aberto)"} v={fmtMoeda(freteAtual)} d={<span className="pg-d neu">{fAtual.length} romaneios · {fAberto} a conferir{freteAssist ? " · + " + fmtMoeda(freteAssist) + " de frete pago na montagem" : ""}</span>} ir="fretes_fech" />
+          <Card hl t={"Frete de " + nomeYm(ym) + (x?.freteOf != null ? " (relatório oficial)" : atual ? " (previsto)" : "")} v={fmtMoeda(freteMes)} d={<span className="pg-d neu">{x?.freteOf != null ? "digitado nos romaneios: " + fmtMoeda(freteLanc) : "lançado nos romaneios"}</span>} ir="fretes_fech" />
+          <Card t={"Romaneios de " + nomeYm(ym)} v={n0(fAtual.length)} d={<span className="pg-d neu">{fAberto} a conferir{freteAssist ? " · + " + fmtMoeda(freteAssist) + " de frete pago na montagem" : ""}</span>} ir="fretes_fech" />
           {m && <Card t="Custo médio por montagem" v={din(nn(m.ef_qtd) ? nn(m.ef_total) / nn(m.ef_qtd) : null)} d={<span className="pg-d neu">no período escolhido</span>} />}
           {c.tot > 0 && m && <Card t="Montagem + frete sobre o vendido" v={(((nn(m.ef_total) + freteAtual) / c.tot) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%"} d={<span className="pg-d neu">montagem do período + frete do mês</span>} />}
         </div>
