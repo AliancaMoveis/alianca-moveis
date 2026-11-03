@@ -4,7 +4,7 @@ import { sb } from "./supabase";
 
 export type Anexo = { id?: string; tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; path?: string | null; criadoPor?: string | null };
 export type Chamado = any;
-export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean; fazProjeto?: boolean; folga?: number | null; turno?: string | null; nomeCompleto?: string | null; telefone?: string | null; feriasDe?: string | null; feriasAte?: string | null; editaAgenda?: boolean; domingoRef?: string | null; naAgenda?: boolean };
+export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean; fazProjeto?: boolean; folga?: number | null; turno?: string | null; nomeCompleto?: string | null; telefone?: string | null; feriasDe?: string | null; feriasAte?: string | null; editaAgenda?: boolean; domingoRef?: string | null; naAgenda?: boolean; acessos?: string[] };
 export type Setor = { id: string; nome: string; liberacoes: Record<string, boolean> };
 export type Estado = {
   setores: Setor[];
@@ -119,7 +119,7 @@ async function principal(): Promise<{ chamados: any[]; historico: any[]; anexos:
   return { chamados, historico, anexos, vendas, valores, itens };
 }
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq, viscic, vtemp] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq, viscic, vtemp, uacess] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em,faz_projeto,folga,turno,nome_completo,telefone,ferias_de,ferias_ate,edita_agenda,domingo_ref,na_agenda,freelancer,menus_ocultos,escala_dom", "criado_em"),
@@ -139,6 +139,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("consultor_bloqueios", "*", "de").catch(() => []), // agenda fechada dos consultores (o próprio, Gestão e supervisões)
     todos("visitas_ciclo", "*", "ciclo").catch(() => []), // nº oficial de visitas por ciclo (Gestão lança; o próprio vê o dele)
     todos("vendas_temp", "*", "data").catch(() => []), // vendas lançadas só para a Gestão conferir (RLS: só Gestão) — não geram comissão nem aviso
+    todos("usuario_acessos", "usuario_id,acesso").catch(() => []), // acessos extras por pessoa (o próprio e a Gestão)
   ]);
   const { chamados, vendas, valores, historico: hist, anexos } = P; const proms = P.itens;
   // lançamentos da venda: nºs pagos, promissórias (com saldo) e pagamentos de promissória
@@ -204,7 +205,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       id: s.id, nome: s.nome,
       liberacoes: { criar: s.lib_criar, verTudo: s.lib_ver_tudo, cadastros: s.lib_cadastros, admin: s.lib_admin, verMarketing: s.lib_ver_marketing, viaCallcenter: !!s.via_callcenter },
     })),
-    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo, fazProjeto: u.faz_projeto !== false, folga: u.folga ?? null, turno: u.turno || null, nomeCompleto: u.nome_completo || null, telefone: u.telefone || null, feriasDe: u.ferias_de || null, feriasAte: u.ferias_ate || null, editaAgenda: !!u.edita_agenda, domingoRef: u.domingo_ref || null, naAgenda: u.na_agenda !== false, menusOcultos: u.menus_ocultos || [], freelancer: !!u.freelancer, escalaDom: u.escala_dom || null })),
+    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo, fazProjeto: u.faz_projeto !== false, folga: u.folga ?? null, turno: u.turno || null, nomeCompleto: u.nome_completo || null, telefone: u.telefone || null, feriasDe: u.ferias_de || null, feriasAte: u.ferias_ate || null, editaAgenda: !!u.edita_agenda, domingoRef: u.domingo_ref || null, naAgenda: u.na_agenda !== false, menusOcultos: u.menus_ocultos || [], acessos: (uacess as any[]).filter((a: any) => a.usuario_id === u.id).map((a: any) => a.acesso), freelancer: !!u.freelancer, escalaDom: u.escala_dom || null })),
     representantes: reps.map((r: any) => ({ id: r.id, nome: r.nome, whats: r.whats, email: r.email })).sort((a: any, b: any) => String(a.nome || "").trim().localeCompare(String(b.nome || "").trim(), "pt-BR", { sensitivity: "base", numeric: true })),
     fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })).sort((a: any, b: any) => { const na = /n[aã]o informad/i.test(a.nome) ? 1 : 0, nb = /n[aã]o informad/i.test(b.nome) ? 1 : 0; return na - nb || String(a.nome || "").trim().localeCompare(String(b.nome || "").trim(), "pt-BR", { sensitivity: "base", numeric: true }); }),
     tipos: tiposMap,

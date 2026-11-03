@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { baixarXlsxFormatado } from "../lib/planilha";
 import { podeFretes } from "../lib/fretes";
-import { criarManual, ehManual, numRom, TIPOS_MANUAL } from "../lib/fretesTatico";
+import { criarManual, ehManual, mapsEntrega, numRom, TIPOS_MANUAL } from "../lib/fretesTatico";
 import { apagarDesconto, apagarRom, avisosRom, carregar, contaRom, criarDesconto, importar, lerCsvTatico, salvarFreteiro, salvarPagto, salvarRom, trazerParcelas,
   type Desconto, type Freteiro, type ItemRom, type RomTat } from "../lib/fretesTatico";
 
@@ -29,7 +29,7 @@ export default function FretesFechamento() {
   const [busca, setBusca] = useState("");
   const rec = () => carregar(mes).then(x => { setD(x); setErro(""); }).catch(e => setErro(e.message));
   useEffect(() => { setD(null); rec(); }, [mes]);
-  if (!podeFretes(uid)) return <section className="view active"><div className="empty">Fechamento de fretes está em teste, só no usuário do Bruno.</div></section>;
+  if (!podeFretes(uid) && !R.temAcesso?.("fretes")) return <section className="view active"><div className="empty">Fechamento de fretes está em teste, só no usuário do Bruno.</div></section>;
 
   const subir = async (files: FileList | null) => {
     if (!files?.length || !d) return;
@@ -91,7 +91,7 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
   const alterna = (k: string) => setAbertos(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   return <>
     <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}><b>{conf} de {rom.length} romaneios conferidos · {grupos.length} entregadores</b><span className="hint">faltam {rom.length - conf}</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}><b>{conf} de {rom.length} romaneios conferidos · {grupos.length} entregadores</b>{rom.some(r => r.mes < mes) && <span style={{ color: "#1D4ED8" }}>📥 {rom.filter(r => r.mes < mes).length} de meses anteriores ainda a conferir (ao conferir, entram no fechamento de {nomeMes(mes).toLowerCase()})</span>}<span className="hint">faltam {rom.length - conf}</span></div>
       <div style={{ height: 8, background: "#e8ebf2", borderRadius: 6, marginTop: 6 }}><div style={{ height: 8, width: (100 * conf / rom.length) + "%", background: "var(--ok, #1f8a4c)", borderRadius: 6 }} /></div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
         <div className="subnav" style={{ margin: 0 }}>
@@ -121,8 +121,8 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
         </button>
         {ab && <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5, margin: 0 }}>
           <thead><tr><th>Romaneio</th><th>Data</th><th style={{ textAlign: "center" }}>Entregas</th><th>Avisos</th><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Entregas (R$)</th><th style={{ textAlign: "right" }}>Total</th><th style={{ textAlign: "right" }}>Total no papel</th><th style={{ textAlign: "center" }}>Conferido</th><th></th></tr></thead>
-          <tbody>{rs.map(x => <LinhaRom key={x.id} r={x} todos={rom} uid={uid} toast={toast} patch={patch} aberto={aberto === x.id} abrir={() => setAberto(aberto === x.id ? null : x.id)}
-            detalhe={aberto === x.id ? <Romaneio key={x.id} r={x} fr={fr} todos={rom} uid={uid} toast={toast} fechar={() => setAberto(null)} salvo={() => { rec(); setAberto(null); }} /> : null} />)}</tbody>
+          <tbody>{rs.map(x => <LinhaRom key={x.id} mes={mes} r={x} todos={rom} uid={uid} toast={toast} patch={patch} aberto={aberto === x.id} abrir={() => setAberto(aberto === x.id ? null : x.id)}
+            detalhe={aberto === x.id ? <Romaneio key={x.id} mes={mes} r={x} fr={fr} todos={rom} uid={uid} toast={toast} fechar={() => setAberto(null)} salvo={() => { rec(); setAberto(null); }} /> : null} />)}</tbody>
         </table>
           <div style={{ padding: "8px 12px" }}>{novoM === g.k ? <FormManual fr={fr} fixo={fr.find(f => String(f.id) === g.k)} mes={mes} uid={uid} toast={toast} fechar={() => setNovoM(null)} feito={rec} />
             : !g.k.startsWith("sem:") && <button className="btn sm" onClick={() => setNovoM(g.k)}>➕ Romaneio manual de {g.nome}</button>}</div>
@@ -133,7 +133,7 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
 }
 
 /** uma linha = um romaneio; km e valores digitados direto, grava ao sair do campo */
-function LinhaRom({ r, todos, uid, toast, patch, aberto, abrir, detalhe }: { r: RomTat; todos: RomTat[]; uid: string; toast: any; patch: (id: number, p: Partial<RomTat>) => void; aberto: boolean; abrir: () => void; detalhe: React.ReactNode }) {
+function LinhaRom({ mes, r, todos, uid, toast, patch, aberto, abrir, detalhe }: { mes: string; r: RomTat; todos: RomTat[]; uid: string; toast: any; patch: (id: number, p: Partial<RomTat>) => void; aberto: boolean; abrir: () => void; detalhe: React.ReactNode }) {
   const c = contaRom(r); const av = avisosRom(r, todos);
   const porLinha = r.modo === "linhas" && r.itens.some(i => i.valor != null || i.km != null);
   const [km, setKm] = useState(porLinha ? fmtN(c.km) : fmtN(r.km)); const [ent, setEnt] = useState(porLinha ? fmtN(c.ent) : fmtN(r.valor_entregas)); const [papel, setPapel] = useState(fmtN(r.total_papel));
@@ -155,14 +155,14 @@ function LinhaRom({ r, todos, uid, toast, patch, aberto, abrir, detalhe }: { r: 
   const bate = v.difPapel == null ? null : v.difPapel === 0;
   return <>
     <tr style={{ background: r.conferido ? "#F2FAF5" : undefined }}>
-      <td><b>{numRom(r)}</b></td><td>{br(r.data).slice(0, 5)}</td><td style={{ textAlign: "center" }}>{ehManual(r) ? r.itens.map(i => i.tipo).join(", ") : r.itens.length}</td>
+      <td><b>{numRom(r)}</b>{r.mes < mes && <div style={{ fontSize: 11.5, color: "#1D4ED8" }}>📥 de {r.mes.slice(5, 7)}/{r.mes.slice(0, 4)}</div>}</td><td>{br(r.data).slice(0, 5)}</td><td style={{ textAlign: "center" }}>{ehManual(r) ? r.itens.map(i => i.tipo).join(", ") : r.itens.length}</td>
       <td style={{ fontSize: 12, color: "#9a5b00", maxWidth: 240 }}>{av.join(" · ")}</td>
       <td style={{ textAlign: "right" }}><input className="fx" style={inp} inputMode="decimal" value={km} disabled={porLinha} title={porLinha ? "Lançado cliente por cliente" : ""} onChange={e => setKm(e.target.value)} onBlur={sair} onKeyDown={enter} /></td>
       <td style={{ textAlign: "right" }}><input className="fx" style={inp} inputMode="decimal" value={ent} disabled={porLinha} title={porLinha ? "Lançado cliente por cliente" : ""} onChange={e => setEnt(e.target.value)} onBlur={sair} onKeyDown={enter} /></td>
       <td style={{ textAlign: "right" }}>{v.lancado && <><b>{moeda(v.total)}</b>{v.km > 0 && <div className="hint">{moeda(v.vKm)} de km</div>}</>}</td>
       <td style={{ textAlign: "right" }}><input className="fx" style={{ ...inp, borderColor: bate == null ? undefined : bate ? "#1f8a4c" : "#c00" }} inputMode="decimal" value={papel} placeholder="opcional" onChange={e => setPapel(e.target.value)} onBlur={sair} onKeyDown={enter} />
         {bate === false && <div style={{ color: "#c00", fontSize: 12 }}>dif. {moeda(v.difPapel || 0)}</div>}</td>
-      <td style={{ textAlign: "center" }}><input type="checkbox" style={{ width: 20, height: 20 }} checked={r.conferido} onChange={e => gravar({ conferido: e.target.checked })} /></td>
+      <td style={{ textAlign: "center" }}><input type="checkbox" style={{ width: 20, height: 20 }} checked={r.conferido} onChange={e => gravar(e.target.checked && r.mes < mes ? { conferido: true, mes } : { conferido: e.target.checked })} /></td>
       <td><button className="btn sm" style={{ whiteSpace: "nowrap" }} onClick={abrir}>{aberto ? "▾" : "▸"} clientes</button></td>
     </tr>
     {detalhe && <tr><td colSpan={10} style={{ padding: "0 6px 8px", background: "#f7f9fd" }}>{detalhe}</td></tr>}
@@ -170,7 +170,7 @@ function LinhaRom({ r, todos, uid, toast, patch, aberto, abrir, detalhe }: { r: 
 }
 
 // ---------------- romaneio aberto (igual ao papel) ----------------
-function Romaneio({ r, fr, todos, uid, toast, fechar, salvo }: { r: RomTat; fr: Freteiro[]; todos: RomTat[]; uid: string; toast: any; fechar: () => void; salvo: (ir: boolean) => void }) {
+function Romaneio({ mes, r, fr, todos, uid, toast, fechar, salvo }: { mes: string; r: RomTat; fr: Freteiro[]; todos: RomTat[]; uid: string; toast: any; fechar: () => void; salvo: (ir: boolean) => void }) {
   const [modo, setModo] = useState(r.modo);
   const [itens, setItens] = useState<{ km: string; valor: string }[]>(r.itens.map(i => ({ km: fmtN(i.km), valor: fmtN(i.valor) })));
   const [km, setKm] = useState(fmtN(r.km)); const [ent, setEnt] = useState(fmtN(r.valor_entregas));
@@ -187,7 +187,7 @@ function Romaneio({ r, fr, todos, uid, toast, fechar, salvo }: { r: RomTat; fr: 
     if (conferido && !fid) return toast?.("Escolha o freteiro deste romaneio.");
     if (conferido && modo === "linhas" && c.semValor > 0 && !confirm(`${c.semValor} entrega(s) sem valor. Marcar como conferido mesmo assim?`)) return;
     try {
-      await salvarRom(r.id, { modo, freteiro_id: fid, km: atual.km, valor_entregas: atual.valor_entregas, valor_km: atual.valor_km, total_papel: atual.total_papel, obs, itens: atual.itens, conferido }, uid);
+      await salvarRom(r.id, { modo, freteiro_id: fid, km: atual.km, valor_entregas: atual.valor_entregas, valor_km: atual.valor_km, total_papel: atual.total_papel, obs, itens: atual.itens, conferido, ...(conferido && r.mes < mes ? { mes } : {}) }, uid);
       toast?.(conferido ? "Romaneio " + r.romaneio + " conferido" : "Salvo"); salvo(ir);
     } catch (e: any) { toast?.(e.message); }
   };
@@ -210,10 +210,12 @@ function Romaneio({ r, fr, todos, uid, toast, fechar, salvo }: { r: RomTat; fr: 
       {av.length > 0 && <div style={{ margin: "8px 0", padding: "6px 10px", background: "#FFF4DC", borderRadius: 6, fontSize: 13 }}>⚠ {av.join(" · ")}</div>}
       <div style={{ overflowX: "auto", marginTop: 8 }}>
         <table className="ma-tab" style={{ width: "100%", fontSize: 13.5 }}>
-          <thead><tr><th>Venda</th><th>Cliente</th><th>Bairro</th><th>Cidade</th><th>NF</th>{modo === "linhas" && <><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Valor (R$)</th></>}</tr></thead>
+          <thead><tr><th>Venda</th><th>Cliente</th><th>Endereço</th><th>Cidade</th><th>NF</th>{modo === "linhas" && <><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Valor (R$)</th></>}</tr></thead>
           <tbody>{r.itens.map((i: ItemRom, k: number) => <tr key={k} style={{ background: i.transf ? "#f3eefc" : i.assist ? "#eef6ff" : undefined }}>
             <td>{i.tipo || i.venda || (i.transf ? "Transf." : i.assist ? "Assist." : "")}</td><td>{i.cliente}{i.data && i.data !== r.data && <span className="hint"> ({br(i.data).slice(0, 5)})</span>}</td>
-            <td>{i.bairro}</td><td>{i.cidade}</td><td>{i.nf}</td>
+            <td style={{ minWidth: 220 }}>{i.endereco || i.bairro}{i.endereco ? null : <span className="hint"> (só o bairro)</span>}
+              {(i.endereco || i.bairro) && <a className="btn sm" style={{ marginLeft: 6, padding: "1px 7px", whiteSpace: "nowrap" }} href={mapsEntrega(i)} target="_blank" rel="noopener" title="Abrir no Google Maps — arraste o boneco amarelo (ou clique na foto) para ver o Street View">📍 Maps</a>}</td>
+            <td>{i.cidade}</td><td>{i.nf}</td>
             {modo === "linhas" && <><td style={{ textAlign: "right" }}><input {...ref()} style={inp} inputMode="decimal" value={itens[k].km} onChange={e => setItens(v => v.map((x, j) => j === k ? { ...x, km: e.target.value } : x))} /></td>
               <td style={{ textAlign: "right" }}><input {...ref()} style={inp} inputMode="decimal" value={itens[k].valor} onChange={e => setItens(v => v.map((x, j) => j === k ? { ...x, valor: e.target.value } : x))} /></td></>}
           </tr>)}</tbody>
@@ -246,7 +248,9 @@ function Romaneio({ r, fr, todos, uid, toast, fechar, salvo }: { r: RomTat; fr: 
 
 // ---------------- relatório para o financeiro ----------------
 function Relatorio({ d, mes, toast, rec }: any) {
-  const fr: Freteiro[] = d.fr; const rom: RomTat[] = d.rom; const desc: Desconto[] = d.desc;
+  const fr: Freteiro[] = d.fr; const desc: Desconto[] = d.desc;
+  // só os romaneios fechados neste mês; os de meses anteriores ainda não conferidos entram quando forem conferidos aqui
+  const rom: RomTat[] = d.rom.filter((r: RomTat) => r.mes === mes); const atrasados = d.rom.filter((r: RomTat) => r.mes < mes).length;
   const [pagto, setPagto] = useState<string>(d.pagto || "");
   const [nd, setNd] = useState({ fid: "", descricao: "", parcela: "", valor: "" });
   const linhas = fr.filter(f => f.ativo || rom.some(r => r.freteiro_id === f.id)).map(f => {
@@ -276,11 +280,13 @@ function Relatorio({ d, mes, toast, rec }: any) {
       <tr>${td("Total geral", "left", true)}${td(moeda(T("frete")), "right", true)}${td(moeda(T("km")), "right", true)}${td(moeda(T("total")), "right", true)}<td></td><td></td>${td(moeda(T("pagar")), "right", true)}</tr></table></body></html>`;
     const w = window.open("", "_blank"); if (!w) return toast?.("Libere pop-up para imprimir"); w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300);
   };
+  const novoDesc = (fid: number) => { setNd({ fid: String(fid), descricao: "", parcela: "", valor: "" }); setTimeout(() => document.getElementById("form-desc-frete")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); };
   const addDesc = async () => {
     const v = num(nd.valor); if (!nd.fid || !v) return toast?.("Escolha o freteiro e o valor do desconto");
     try { await criarDesconto({ mes, freteiro_id: +nd.fid, descricao: nd.descricao, parcela: nd.parcela, valor: v }); setNd({ fid: "", descricao: "", parcela: "", valor: "" }); rec(); } catch (e: any) { toast?.(e.message); }
   };
   return <>
+    {atrasados > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#EEF3FF" }}>📥 <b>{atrasados} romaneio(s) de meses anteriores</b> ainda a conferir — aparecem na aba Romaneios e entram neste relatório quando forem conferidos.</div>}
     {(pend > 0 || semF > 0) && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#FFF4DC" }}>⚠ {pend > 0 && <><b>{pend} romaneio(s) ainda não conferido(s)</b> — entram no relatório com o que já foi digitado. </>}{semF > 0 && <b>{semF} romaneio(s) sem freteiro.</b>}</div>}
     <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 10 }}>
       <div className="field" style={{ margin: 0 }}><label>Data do pagamento</label><input type="date" value={pagto} onChange={e => setPagto(e.target.value)} onBlur={() => salvarPagto(mes, pagto).catch((e: any) => toast?.(e.message))} /></div>
@@ -295,13 +301,14 @@ function Relatorio({ d, mes, toast, rec }: any) {
           <td><b>{l.f.apelido}</b>{l.pend > 0 && <div className="hint">{l.pend} a conferir</div>}</td>
           <td style={{ textAlign: "right" }}>{moeda(l.frete)}</td><td style={{ textAlign: "right" }}>{moeda(l.km)}</td><td style={{ textAlign: "right" }}>{moeda(l.total)}</td>
           <td>{conta(l.f)}</td>
-          <td style={{ textAlign: "right" }}>{l.ds.map(x => <div key={x.id}>{x.parcela && <span className="hint">{x.parcela} </span>}{moeda(x.valor)} <button className="btn sm" style={{ padding: "0 5px" }} title={x.descricao} onClick={async () => { if (confirm("Apagar este desconto?")) { await apagarDesconto(x.id); rec(); } }}>✕</button></div>)}</td>
+          <td style={{ textAlign: "right" }}>{l.ds.map(x => <div key={x.id}>{x.parcela && <span className="hint">{x.parcela} </span>}{moeda(x.valor)} <button className="btn sm" style={{ padding: "0 5px" }} title={x.descricao} onClick={async () => { if (confirm("Apagar este desconto?")) { await apagarDesconto(x.id); rec(); } }}>✕</button></div>)}
+            <button className="btn sm" style={{ padding: "1px 7px", marginTop: 2 }} onClick={() => novoDesc(l.f.id)}>➖ desconto</button></td>
           <td style={{ textAlign: "right" }}><b>{moeda(l.pagar)}</b></td></tr>)}
           <tr style={{ fontWeight: 700 }}><td>Total geral</td><td style={{ textAlign: "right" }}>{moeda(T("frete"))}</td><td style={{ textAlign: "right" }}>{moeda(T("km"))}</td><td style={{ textAlign: "right" }}>{moeda(T("total"))}</td><td></td><td></td><td style={{ textAlign: "right" }}>{moeda(T("pagar"))}</td></tr>
         </tbody>
       </table>
     </div>
-    <div className="card" style={{ padding: 12, marginTop: 14 }}>
+    <div id="form-desc-frete" className="card" style={{ padding: 12, marginTop: 14, border: nd.fid ? "2px solid var(--primary)" : undefined }}>
       <b>➖ Descontos do mês</b> <span className="hint">(parcela no formato 2/5 — no mês seguinte use "Trazer parcelas" e ela vira 3/5 sozinha)</span>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
         <div className="field" style={{ margin: 0 }}><label>Freteiro</label><select value={nd.fid} onChange={e => setNd({ ...nd, fid: e.target.value })}><option value="">—</option>{fr.map(f => <option key={f.id} value={f.id}>{f.apelido}</option>)}</select></div>

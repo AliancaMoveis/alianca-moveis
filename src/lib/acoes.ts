@@ -110,6 +110,11 @@ export const A = {
   juridicoCriar: (p: any) => rpc<string>("juridico_criar", { p }),
   juridicoSalvar: (id: string, p: any) => rpc("juridico_salvar", { p_id: id, p }),
   minhasMedidasChecklist: () => rpc<Record<string, string>>("minhas_medidas_checklist"),
+  // acessos extras da pessoa (fretes, montagem…) — tabela usuario_acessos, só a Gestão grava (RLS)
+  salvarAcessos: async (id: string, acessos: string[]) => {
+    const d = await sb.from("usuario_acessos").delete().eq("usuario_id", id); if (d.error) throw new Error(d.error.message);
+    if (acessos.length) { const r = await sb.from("usuario_acessos").insert(acessos.map(acesso => ({ usuario_id: id, acesso }))); if (r.error) throw new Error(r.error.message); }
+  },
   salvarUsuario: (id: string, nome: string, setores: string[], somente: boolean) => rpc("salvar_usuario", { p_id: id, p_nome: nome, p_setores: setores, p_somente: somente }),
   desativarUsuario: (id: string) => rpc("desativar_usuario", { p_id: id }),
   reativarUsuario: (id: string) => rpc("reativar_usuario", { p_id: id }),

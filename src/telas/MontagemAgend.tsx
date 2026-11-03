@@ -15,7 +15,7 @@ import { ciclo } from "./MontagemMeus";
 
 type Ag = { chave: string; os: string; lider: string; montador: string; status: string; indisponivel: boolean; data_inclusao: string; data_montagem: string; data_finalizacao: string | null; tipos: string; total: number; bruto?: any[] | null };
 
-export const podeMontagemAgend = (R: any) => R.mySetores().includes("gestao") || R.mySetores().includes("financeiro");
+export const podeMontagemAgend = (R: any) => R.mySetores().includes("gestao") || R.mySetores().includes("financeiro") || !!R.temAcesso?.("montagem");
 
 const iso = (s: string) => { const m = String(s || "").match(/(\d{2})[-\/](\d{2})[-\/](\d{4})/); return m ? m[3] + "-" + m[2] + "-" + m[1] : ""; };
 const num = (s: string) => { const n = Number(String(s || "0").replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
@@ -145,7 +145,7 @@ export default function MontagemAgend() {
   const recarregar = () => carregar().then(setDados).catch(e => setErro(e.message));
   useEffect(() => { recarregar(); }, []);
   if (!podeMontagemAgend(R)) return <section className="view active"><div className="empty">Só a Gestão e o Financeiro veem esta tela.</div></section>;
-  const soLeitura = !R.mySetores().includes("gestao"); // Financeiro: vê tudo e baixa relatórios, mas não importa, não muda valores e não fecha o mês
+  const soLeitura = !R.mySetores().includes("gestao") && !R.temAcesso?.("montagem"); // Financeiro: vê tudo e baixa relatórios, mas não importa, não muda valores e não fecha o mês
   const abasTela = <div className="subnav" style={{ margin: "0 0 14px" }}><button className={tela === "periodo" ? "on" : ""} onClick={() => setTela("periodo")}>📋 Agendamentos</button><button className={tela === "hist" ? "on" : ""} onClick={() => setTela("hist")}>📚 Histórico de pagamentos das agendadoras</button></div>;
   if (tela === "hist") return <section className="view active"><div className="view-head"><div><h2>🔧 Montagem · Histórico das agendadoras</h2><p>Cada fechamento guarda os valores pagos e todas as O.S. de cada agendadora daquele mês. Se o mês for fechado de novo, o anterior fica como “substituído” — nada se perde.</p></div></div>{abasTela}<HistoricoAg /></section>;
 

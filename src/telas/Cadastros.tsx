@@ -123,6 +123,7 @@ function EditUser({ id }: { id: string | null }) {
   const u: any = id ? st.usuarios.find(x => x.id === id) : { nome: "", setores: [], somenteAtribuidos: false, email: "" };
   const [nome, setNome] = useState(u.nome); const [setores, setSetores] = useState<string[]>(u.setores || []); const [ext, setExt] = useState(!!u.somenteAtribuidos);
   const [email, setEmail] = useState(u.email || ""); const [senha, setSenha] = useState("");
+  const [acessos, setAcessos] = useState<string[]>(u.acessos || []);
   const fechar = () => setModal(null);
   const toggle = (s: string) => setSetores(x => x.includes(s) ? x.filter(y => y !== s) : [...x, s]);
   async function salvar() {
@@ -132,13 +133,14 @@ function EditUser({ id }: { id: string | null }) {
     if (!id) {
       if (!email.includes("@")) { toast("Informe o e-mail de acesso"); return; }
       if (senha.length < 8) { toast("A senha inicial precisa ter pelo menos 8 caracteres"); return; }
-      if (await executar(() => A.adminUsuarios({ acao: "criar", nome, email, senha, setores: ordenados, somenteAtribuidos: ext }), "Usuário salvo")) fechar();
+      if (await executar(async () => { const r: any = await A.adminUsuarios({ acao: "criar", nome, email, senha, setores: ordenados, somenteAtribuidos: ext }); const novo = r?.id || r?.usuario?.id; if (novo && acessos.length) await A.salvarAcessos(novo, acessos); }, "Usuário salvo")) fechar();
       return;
     }
     const ok = await executar(async () => {
       await A.salvarUsuario(id, nome, ordenados, ext);
       if (email.trim() && email.trim().toLowerCase() !== (u.email || "").toLowerCase()) await A.adminUsuarios({ acao: "email", id, email });
       if (senha) await A.adminUsuarios({ acao: "senha", id, senha });
+      if (JSON.stringify([...acessos].sort()) !== JSON.stringify([...(u.acessos || [])].sort())) await A.salvarAcessos(id, acessos);
     }, "Usuário salvo");
     if (ok) fechar();
   }
@@ -150,10 +152,16 @@ function EditUser({ id }: { id: string | null }) {
       <div className="field" style={{ marginBottom: 14 }}><label>Setores <span className="req-star">*</span> <span className="hint">(pode marcar mais de um)</span></label>
         <div id="uSetores">{st.setores.filter(s => R.ehGestao() || !R.setorRestrito(s.id)).map(s => <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--line-soft)" }}><input type="checkbox" checked={setores.includes(s.id)} onChange={() => toggle(s.id)} style={{ width: "auto" }} /> {s.nome}</label>)}</div></div>
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}><input type="checkbox" checked={ext} onChange={e => setExt(e.target.checked)} style={{ width: "auto" }} /> É consultor externo <span className="hint">(vê e trata apenas o que for atribuído a ele mesmo, mesmo dentro do setor)</span></label>
+      {R.ehGestao() && <div className="field" style={{ marginBottom: 20 }}><label>Acessos extras <span className="hint">(libera módulos só para esta pessoa, sem mudar o setor)</span></label>
+        {ACESSOS_EXTRAS.map(([k, l, h]) => <label key={k} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--line-soft)" }}><input type="checkbox" checked={acessos.includes(k)} onChange={() => setAcessos(x => x.includes(k) ? x.filter(y => y !== k) : [...x, k])} style={{ width: "auto", marginTop: 3 }} /> <span><b>{l}</b><div className="hint">{h}</div></span></label>)}</div>}
       <button className="btn primary" onClick={salvar}>Salvar</button>
     </Modal>
   );
 }
+const ACESSOS_EXTRAS: [string, string, string][] = [
+  ["fretes", "🚚 Fretes — fechamento", "Fechamento de fretes do Tático: romaneios, km e valores, descontos e relatório para o financeiro"],
+  ["montagem", "🔧 Montagem — agendamentos e pagamento", "Agendamentos (Exact), montagens efetivadas, fechamento e pagamento dos montadores (pode importar, aprovar e fechar)"],
+];
 
 function EditSetor({ id }: { id: string | null }) {
   const { st, executar, setModal, toast } = useApp();

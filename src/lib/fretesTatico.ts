@@ -4,7 +4,7 @@ import { sb } from "./supabase";
 import { MOCK } from "./chat";
 
 export type Freteiro = { id: number; apelido: string; nome_tatico: string; cod_transp: string; favorecido: string; agencia: string; conta: string; valor_km: number; ativo: boolean; ordem: number };
-export type ItemRom = { venda: string; cliente: string; cidade: string; bairro: string; nf: string; data: string; assist: string; transf: string; km: number | null; valor: number | null; tipo?: string };
+export type ItemRom = { venda: string; cliente: string; cidade: string; bairro: string; nf: string; data: string; assist: string; transf: string; km: number | null; valor: number | null; tipo?: string; endereco?: string };
 export type RomTat = { id: number; mes: string; romaneio: string; cod_transp: string; transportadora: string; freteiro_id: number | null; data: string | null; itens: ItemRom[];
   modo: "linhas" | "total"; km: number | null; valor_entregas: number | null; valor_km: number; total_papel: number | null; obs: string; conferido: boolean };
 export type Desconto = { id: number; mes: string; freteiro_id: number; descricao: string; parcela: string; valor: number };
@@ -92,10 +92,11 @@ let mr: RomTat[] = []; let md: Desconto[] = []; let mfe: Record<string, string> 
 const num = (x: any) => x == null ? null : Number(x);
 
 export async function carregar(mes: string) {
-  if (MOCK) return { fr: mf.map(x => ({ ...x })), rom: mr.filter(r => r.mes === mes).map(r => ({ ...r, itens: r.itens.map(i => ({ ...i })) })), desc: md.filter(d => d.mes === mes), pagto: mfe[mes] || "" };
+  if (MOCK) return { fr: mf.map(x => ({ ...x })), rom: mr.filter(r => r.mes === mes || (r.mes < mes && !r.conferido)).map(r => ({ ...r, itens: r.itens.map(i => ({ ...i })) })), desc: md.filter(d => d.mes === mes), pagto: mfe[mes] || "" };
   const [a, b, c, d] = await Promise.all([
     sb.from("frete_freteiros").select("*").order("ordem").order("apelido"),
-    sb.from("frete_tat_rom").select("*").eq("mes", mes).order("data").order("romaneio"),
+    // do mês + os de meses anteriores ainda não conferidos (o freteiro trouxe o fechamento depois): aparecem para aprovar agora
+    sb.from("frete_tat_rom").select("*").or(`mes.eq.${mes},and(mes.lt.${mes},conferido.eq.false)`).order("data").order("romaneio"),
     sb.from("frete_descontos").select("*").eq("mes", mes).order("id"),
     sb.from("frete_fechamento").select("*").eq("mes", mes).maybeSingle(),
   ]);
@@ -110,7 +111,17 @@ export async function carregar(mes: string) {
 /** grava os romaneios lidos; os que já existem só atualizam a lista de clientes (km e valores digitados ficam) */
 export async function importar(lidos: RomLido[], fr: Freteiro[], uid: string): Promise<{ novos: number; atual: number; semFreteiro: string[] }> {
   let novos = 0, atual = 0; const semF = new Set<string>();
-  const exist = MOCK ? mr : (((await sb.from("frete_tat_rom").select("id,romaneio,itens").in("romaneio", lidos.map(l => l.romaneio))).data) || []) as any[];
+  // endereço de cada venda (base de vendas do Tático), para o botão do Google Maps
+  const ends: Record<string, string> = {};
+  if (!MOCK) {
+    const nums = Array.from(new Set(lidos.flatMap(l => l.itens.map(i => i.venda)).filter(Boolean)));
+    for (let k = 0; k < nums.length; k += 300) {
+      const q = await sb.from("base_clientes_vendas").select("num_venda,endereco_venda,data_venda").in("num_venda", nums.slice(k, k + 300)).order("data_venda");
+      (q.data || []).forEach((x: any) => { if (x.endereco_venda) ends[x.num_venda] = x.endereco_venda; });
+    }
+  }
+  lidos.forEach(l => l.itens.forEach(i => { if (i.venda && ends[i.venda]) i.endereco = ends[i.venda]; }));
+  const exist = MOCK ? mr : (((await sb.from("frete_tat_rom").select("id,romaneio,itens,mes").in("romaneio", lidos.map(l => l.romaneio))).data) || []) as any[];
   for (const l of lidos) {
     const f = casarFreteiro(fr, l.cod_transp, l.transportadora); if (!f) semF.add(l.transportadora);
     const ex = exist.find((e: any) => e.romaneio === l.romaneio);
@@ -118,9 +129,10 @@ export async function importar(lidos: RomLido[], fr: Freteiro[], uid: string): P
     if (ex) {
       // mantém o que já foi digitado em cada linha (casando por NF + cliente)
       const velhos: ItemRom[] = ex.itens || [];
-      const itens = l.itens.map(i => { const o = velhos.find(v => v.nf === i.nf && sem(v.cliente) === sem(i.cliente)); return o ? { ...i, km: o.km, valor: o.valor } : i; });
-      if (MOCK) mr = mr.map(r => r.id === ex.id ? { ...r, ...base, itens } : r);
-      else { const r = await sb.from("frete_tat_rom").update({ ...base, itens, atualizado_em: new Date().toISOString(), atualizado_por: uid }).eq("id", ex.id); if (r.error) throw new Error(r.error.message); }
+      const itens = l.itens.map(i => { const o = velhos.find(v => v.nf === i.nf && sem(v.cliente) === sem(i.cliente)); return o ? { ...i, km: o.km, valor: o.valor, endereco: i.endereco || o.endereco || "" } : i; });
+      const { mes: _m, ...semMes } = base; // reimportar não muda o mês de fechamento
+      if (MOCK) mr = mr.map(r => r.id === ex.id ? { ...r, ...semMes, itens } : r);
+      else { const r = await sb.from("frete_tat_rom").update({ ...semMes, itens, atualizado_em: new Date().toISOString(), atualizado_por: uid }).eq("id", ex.id); if (r.error) throw new Error(r.error.message); }
       atual++;
     } else {
       const novo = { ...base, romaneio: l.romaneio, itens: l.itens, modo: "linhas", valor_km: f?.valor_km ?? 3, atualizado_por: uid };
@@ -181,4 +193,11 @@ export async function criarManual(fr: Freteiro, numero: string, data: string, li
   if (MOCK) { if (mr.some(r => r.romaneio === romaneio)) throw new Error("O romaneio manual " + numero + " já foi lançado."); mr.push({ id: Date.now(), km: null, valor_entregas: null, total_papel: null, obs: "", conferido: false, ...novo } as any); return; }
   const r = await sb.from("frete_tat_rom").insert(novo);
   if (r.error) throw new Error(/duplicate|unique/i.test(r.error.message) ? "O romaneio manual " + numero + " já foi lançado." : r.error.message);
+}
+
+/** link do Google Maps para o endereço da entrega (abre o lugar; dali o boneco amarelo abre o Street View) */
+export function mapsEntrega(i: ItemRom) {
+  const end = (i.endereco || "").replace(/\s+-\s+(CASA|CS|SOB|SOBRADO|AP|APTO|APT|BL|BLOCO)[^,]*,/i, ",");
+  const q = end ? end + ", PR" : [i.bairro, i.cidade, "PR"].filter(Boolean).join(", ");
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
 }

@@ -350,6 +350,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // cliente porta: entrou direto na loja (sem marketing e sem consultor externo) — registrado pela Confirmação de presença
   const ehPorta = (c: any) => !!c && c.tipo === "porta";
   // menus que a Gestão escondeu para a pessoa (ex.: Weverton: anuncios, presenca, consultores, clientes)
+  // acessos extras liberados por pessoa no cadastro do usuário (ex.: fretes, montagem) — tabela usuario_acessos
+  const temAcesso = (k: string) => (((me() as any) || {}).acessos || []).includes(k);
   const oculto = (k: string) => (((me() as any) || {}).menusOcultos || []).includes(k);
   const temPresenca = () => (ehGestao() || mySetores().includes("presenca")) && !oculto("presenca");
   // ▶️ iniciar atendimento na loja: o vendedor do cliente, a Confirmação de presença, o gerente ou a Gestão (com vendedor definido)
@@ -1054,13 +1056,14 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // consultor externo e medidor: as medidas deles separadas das visitas de venda (medida paga R$ 40, sem comissão)
     else if (false) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
     // Montagem: só acompanhamento dos agendamentos do Exact (agendadoras e montadores) — só a Gestão
-    if (mySetores().includes("gestao")) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Montagem", ic: "🔧", itens: [["montagem_agend", "Agendamentos (Exact)"], ["montagem_pag", "Montagens efetivadas e pagamento"]] });
+    if (mySetores().includes("gestao") || temAcesso("montagem")) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Montagem", ic: "🔧", itens: [["montagem_agend", "Agendamentos (Exact)"], ["montagem_pag", "Montagens efetivadas e pagamento"]] });
     // RH · Folha ponto: só o Bruno e a Patrícia (RH)
     if (["00000000-0000-4000-a000-000000000007", "7443a59e-91ae-4428-baa4-aa159f0bdf0b"].includes(currentUserId)) G.push({ g: "RH", ic: "🕐", itens: [["rh_funcionarios", "Funcionários"], ["rh_admissao", "Admissão por link"], ["rh_ponto", "Folha ponto"], ["rh_consulta_dia", "Consulta do dia"], ["rh_ferias", "Controle de férias"], ["rh_gestao", "Gestão (valores e folha)"]] });
     // Fretes: em SIMULAÇÃO, só no usuário do Bruno
     if (currentUserId === "00000000-0000-4000-a000-000000000007") G.push({ g: "Fretes", ic: "🚚", itens: [["fretes_fech", "Fechamento de fretes (Tático)"], ["fretes_lanc", "Lançar fretes (escritório)"], ["fretes_gestao", "Gestão de fretes (simulação)"], ["fretes", "Romaneios (simulação)"]] });
     // Financeiro (Salete, Patrícia): pagamento dos montadores — relatório em PDF e controle das notas fiscais
-    else if (mySetores().includes("financeiro")) G.push({ g: "Financeiro", ic: "💰", itens: [["montagem_pag", "Montadores · pagamento e notas fiscais"], ["montagem_agend", "Agendadoras da montagem · valores"]] });
+    else if (temAcesso("fretes")) G.push({ g: "Fretes", ic: "🚚", itens: [["fretes_fech", "Fechamento de fretes (Tático)"]] });
+    if (currentUserId !== "00000000-0000-4000-a000-000000000007" && !temAcesso("montagem") && mySetores().includes("financeiro")) G.push({ g: "Financeiro", ic: "💰", itens: [["montagem_pag", "Montadores · pagamento e notas fiscais"], ["montagem_agend", "Agendadoras da montagem · valores"]] });
     if (podeConsultaProduto()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Produtos", ic: "🏷", itens: [["consulta_produto", "Consulta de produto"], ...(podeNegociacao() ? [["negociacao", "🤝 Negociação"]] : [])] });
     if (podeEncontrarVendas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Encontrar vendas", ic: "🔎", itens: [["confirmacao_vendas", "✅ Confirmação de vendas"], ["encontrar_vendas360", "Encontrar vendas do 360"], ["encontrar_vendas", "Encontrar vendas da Minha Visita"]] });
     if (ehJuridico() || ehGestao()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Jurídico", ic: "⚖", itens: [["jur_novo", "Novo caso"], ["jur_andamento", "Casos em andamento"], ["jur_prazos", "Prazos (próx. 15 dias)"], ["jur_encerrados", "Encerrados"]] });
@@ -1084,7 +1087,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
-    msgWhatsMedida, ehDireto, ehPorta, temPresenca, veAnuncios, veQualidade, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
+    msgWhatsMedida, temAcesso, ehDireto, ehPorta, temPresenca, veAnuncios, veQualidade, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
     podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
     podeChecklist, alguemCiente, cancelouSemCiente, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };
