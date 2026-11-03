@@ -105,6 +105,8 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["eu", "Mais", "☰"]];
   // 📊 Painel controle geral (Bruno, Washington): primeira aba no celular
   if (R.temAcesso("painel_geral") && !abas.some(x => x[0] === "geral")) abas.unshift(["geral", "Geral", "📊"]);
+  // dono: o Painel controle geral substitui o "Resumo" (Painel do dono), que ficava repetido
+  if (perfil === "dono" && R.temAcesso("painel_geral")) { const i = abas.findIndex(x => x[0] === "painel"); if (i >= 0) abas.splice(i, 1); }
   // 🏷 Consulta de produto (teste, só o Bruno): aba antes da última
   if (R.podeConsultaProduto() && !abas.some(x => x[0] === "produto")) abas.splice(Math.max(0, abas.length - 1), 0, ["produto", "Produto", "🏷"]);
   const [aba, setAba] = useState(abas[0][0]);

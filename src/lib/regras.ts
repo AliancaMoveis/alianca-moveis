@@ -968,8 +968,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const defineVend = coord || mySetores().includes("suporte_consultores") || temMarketing();
     // Suporte dos consultores (Carla): distribuir os clientes para os vendedores e cobrar o status — menu enxuto, sem valores
     const soSuporte = mySetores().includes("suporte_consultores") && !ehGestao() && !temMarketing();
-    const pessoal: string[][] = ehProprietario() ? [["dashboard", "Painel do dono"]] : [["dashboard", "Dashboard"], ["pendencias", "Minhas pendências"]];
-    if (temAcesso("painel_geral")) pessoal.splice(1, 0, ["painel_geral", "📊 Painel controle geral"]);
+    // dono com o Painel controle geral: ele é a tela inicial (substitui o "Painel do dono")
+    const pessoal: string[][] = ehProprietario() ? [["dashboard", temAcesso("painel_geral") ? "📊 Painel controle geral" : "Painel do dono"]] : [["dashboard", "Dashboard"], ["pendencias", "Minhas pendências"]];
+    if (temAcesso("painel_geral") && !ehProprietario()) pessoal.splice(1, 0, ["painel_geral", "📊 Painel controle geral"]);
     if (!ehProprietario()) {
       if (ehGestao()) pessoal.push(["aprovacoes", "Aprovações (vendas e transferências)"]);
       if (defineVend) pessoal.push(["definir", "Definir vendedor"]);

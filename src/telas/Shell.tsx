@@ -176,7 +176,7 @@ export default function Shell() {
             {atual === "direcionamento" && <Direcionamento />}
             {atual === "definir" && <Definir />}
             {atual === "consulta" && <Consulta />}
-            {atual === "dashboard" && <Dashboard />}
+            {atual === "dashboard" && (R.ehProprietario() && R.temAcesso("painel_geral") ? <PainelGeral /> : <Dashboard />)}
             {atual === "pendencias" && <Pendencias />}
             {atual === "aprovacoes" && <Aprovacoes />}
             {atual === "agenda" && <Agenda />}
