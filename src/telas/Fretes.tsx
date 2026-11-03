@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import { carregarFretes, moeda, podeFretes, reiniciarSimulacao, resumo, salvarEntrega, salvarRomaneio, SITUACAO, STATUS_ROM, valorEntrega, type Entrega, type Romaneio } from "../lib/fretes";
 
-const corSt: Record<string, [string, string]> = { conferido: ["#EEF1F6", "#3B4558"], em_rota: ["#E8EEF8", "#1F3864"], enviado: ["#FFF4DC", "#7A4F00"], devolvido: ["#FDECEC", "#8A1C1C"], aprovado: ["#E8F3EC", "#1F6B3E"] };
+const corSt: Record<string, [string, string]> = { conferido: ["var(--tn-grey)", "var(--tn-grey-i)"], em_rota: ["var(--tn-blue)", "var(--tn-blue-i)"], enviado: ["var(--tn-amber)", "var(--tn-amber-i)"], devolvido: ["var(--tn-red)", "var(--tn-red-i)"], aprovado: ["var(--tn-green)", "var(--tn-green-i)"] };
 
 export default function Fretes() {
   const { R, toast } = useApp() as any;

@@ -5,7 +5,7 @@ import { carregarFretes, moeda, podeFretes, reiniciarSimulacao, resumo, salvarRo
 import { CartaoRomaneio } from "./Fretes";
 import { Kpi } from "./Dashboard";
 
-const corSt: Record<string, [string, string]> = { conferido: ["#EEF1F6", "#3B4558"], em_rota: ["#E8EEF8", "#1F3864"], enviado: ["#FFF4DC", "#7A4F00"], devolvido: ["#FDECEC", "#8A1C1C"], aprovado: ["#E8F3EC", "#1F6B3E"] };
+const corSt: Record<string, [string, string]> = { conferido: ["var(--tn-grey)", "var(--tn-grey-i)"], em_rota: ["var(--tn-blue)", "var(--tn-blue-i)"], enviado: ["var(--tn-amber)", "var(--tn-amber-i)"], devolvido: ["var(--tn-red)", "var(--tn-red-i)"], aprovado: ["var(--tn-green)", "var(--tn-green-i)"] };
 const dataBr = (d: string) => new Date(d + "T12:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
 
 type Linha = { chave: string; dia: string; freteiro: string; placa: string; rom: Romaneio[]; n: number; feitas: number; vol: number; km: number; vEnt: number; vKm: number; total: number; alertas: number; extras: number; status: string };
@@ -62,7 +62,7 @@ export default function FretesGestao() {
         : <td><b style={{ textTransform: "capitalize" }}>{dataBr(l.dia)}</b><div className="hint">romaneio {l.rom.map(r => r.numero).join(", ")}</div></td>}
       <td className="n">{l.feitas}/{l.n}</td><td className="n">{l.vol}</td><td className="n">{l.km || "—"}</td>
       <td className="n">{moeda(l.vEnt)}</td><td className="n">{moeda(l.vKm)}</td><td className="n"><b>{moeda(l.total)}</b></td>
-      <td>{l.alertas ? <span style={{ color: "var(--warn)", fontWeight: 700 }}>⚠️ {l.alertas}</span> : <span style={{ color: "var(--st-concluida)", fontWeight: 700 }}>OK</span>}{l.extras ? <div style={{ color: "#7A4F00", fontWeight: 700, fontSize: 12 }}>+{l.extras} extra p/ autorizar</div> : null}</td>
+      <td>{l.alertas ? <span style={{ color: "var(--warn)", fontWeight: 700 }}>⚠️ {l.alertas}</span> : <span style={{ color: "var(--st-concluida)", fontWeight: 700 }}>OK</span>}{l.extras ? <div style={{ color: "var(--tn-amber-i)", fontWeight: 700, fontSize: 12 }}>+{l.extras} extra p/ autorizar</div> : null}</td>
       <td><Pill st={l.status} /></td>
       <td onClick={e => e.stopPropagation()} style={{ whiteSpace: "nowrap" }}>
         {l.status === "enviado" ? <><button className="btn sm primary" onClick={() => aprovar(l)}>✅ Aprovar</button> <button className="btn sm" onClick={() => devolver(l)}>Devolver</button></>

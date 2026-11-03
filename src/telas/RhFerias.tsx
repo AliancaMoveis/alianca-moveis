@@ -16,13 +16,13 @@ const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "o
 
 type Sit = "ferias" | "vencida" | "vencendo" | "programada" | "a_tirar" | "em_dia" | "primeiro_ano";
 const SIT: Record<Sit, [string, string, string]> = {
-  ferias: ["🏖 De férias agora", "#E6F0FF", "#1D4ED8"],
-  vencida: ["⛔ Passou do prazo — risco de dobra", "#FDE8E8", "#B91C1C"],
-  vencendo: ["⚠ Vence em até 90 dias", "#FFF4DC", "#9A5B00"],
-  programada: ["📅 Programada", "#EEF6EE", "#1F6B3E"],
-  a_tirar: ["Tem saldo a tirar", "#F3F4F6", "#374151"],
-  em_dia: ["✓ Em dia", "#E8F3EC", "#1F6B3E"],
-  primeiro_ano: ["1º ano de casa", "#F3F4F6", "#6B7280"],
+  ferias: ["🏖 De férias agora", "var(--tn-blue)", "var(--tn-blue-i)"],
+  vencida: ["⛔ Passou do prazo — risco de dobra", "var(--tn-red)", "var(--tn-red-i)"],
+  vencendo: ["⚠ Vence em até 90 dias", "var(--tn-amber)", "var(--tn-amber-i)"],
+  programada: ["📅 Programada", "var(--tn-green)", "var(--tn-green-i)"],
+  a_tirar: ["Tem saldo a tirar", "var(--tn-grey)", "var(--tn-grey-i)"],
+  em_dia: ["✓ Em dia", "var(--tn-green)", "var(--tn-green-i)"],
+  primeiro_ano: ["1º ano de casa", "var(--tn-grey)", "var(--tn-grey-i)"],
 };
 
 /** período aquisitivo vencido mais recente (12 meses completos), saldo, prazo e período em andamento */
@@ -131,7 +131,7 @@ function LinhaF({ l, h, aberto, abrir, uid, toast, rec }: { l: any; h: string; a
     try { await criarFerias({ funcionario_id: l.f.id, de, ate, obs }, uid); setDe(""); setObs(""); rec(); toast?.("Férias lançadas: " + br(de) + " a " + br(ate)); } catch (e: any) { toast?.(e.message); }
   };
   return <>
-    <tr className="ma-lin" onClick={abrir} style={{ cursor: "pointer", background: aberto ? "#eef3ff" : undefined }}>
+    <tr className="ma-lin" onClick={abrir} style={{ cursor: "pointer", background: aberto ? "var(--tn-blue)" : undefined }}>
       <td>{l.f.folha || "—"}</td>
       <td><b>{l.f.nome}</b><div className="hint">{[l.f.cargo, l.f.setor].filter(Boolean).join(" · ")}</div></td>
       <td>{nomeEmpresa(l.f.empresa)}</td>
@@ -143,7 +143,7 @@ function LinhaF({ l, h, aberto, abrir, uid, toast, rec }: { l: any; h: string; a
       <td style={{ textAlign: "center" }}>{l.proporcional} dias<div className="hint">{l.mesesAtual}/12 meses</div></td>
       <td><span className="pill" style={{ background: bg, color: cor, borderColor: cor }}>{SIT[l.sit as Sit][0]}</span></td>
     </tr>
-    {aberto && <tr><td colSpan={10} style={{ background: "#f7f9fd", padding: 12 }}>
+    {aberto && <tr><td colSpan={10} style={{ background: "var(--tn-grey)", padding: 12 }}>
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 320px" }}>
           <b>Férias registradas</b>
@@ -179,7 +179,7 @@ function Escala({ linhas, h }: { linhas: any[]; h: string }) {
       return <div key={m} className="card" style={{ padding: 10 }}>
         <b style={{ textTransform: "capitalize" }}>{MESES[+m.slice(5, 7) - 1]}/{m.slice(0, 4)}</b> <span className="hint">· {q.length} de férias</span>
         {q.map(({ l, x }) => <div key={x.id} style={{ fontSize: 13, marginTop: 4 }}>🏖 <b>{l.f.nome.split(" ").slice(0, 2).join(" ")}</b> <span className="hint">{br(x.de).slice(0, 5)}–{br(x.ate).slice(0, 5)} · {l.f.setor}</span></div>)}
-        {vence.length > 0 && <div style={{ fontSize: 12.5, color: "#9A5B00", marginTop: 6 }}>⚠ Prazo para começar vence: {vence.map(l => l.f.nome.split(" ")[0]).join(", ")}</div>}
+        {vence.length > 0 && <div style={{ fontSize: 12.5, color: "var(--tn-amber-i)", marginTop: 6 }}>⚠ Prazo para começar vence: {vence.map(l => l.f.nome.split(" ")[0]).join(", ")}</div>}
         {!q.length && !vence.length && <div className="hint" style={{ marginTop: 4 }}>—</div>}
       </div>;
     })}

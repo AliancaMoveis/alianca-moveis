@@ -81,7 +81,7 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
     const mk = todos.filter((c: any) => R.domMarketing(c) || R.ehPorta(c));
     const lojaHoje = mk.filter((c: any) => String(c.dataLoja || "").slice(0, 10) === h);
     const fim = (c: any) => !!c.venda || ["orcamento", "sem_resposta", "reprovado", "nao_vai_comprar", "nao_compareceu", "venda_cancelada", "atendido"].includes(R.statusClienteDe(c));
-    const emAtd = lojaHoje.filter((c: any) => c.tratativa && c.tratativa.emAtendimento && !fim(c));
+    const emAtd = lojaHoje.filter((c: any) => R.atendendoAgora(c));
     const agora = new Date();
     const esperando = lojaHoje.filter((c: any) => !fim(c) && !(c.tratativa && c.tratativa.emAtendimento) && parseData(c.dataLoja) <= agora && !R.ehPorta(c));
     const chegaram = lojaHoje.filter((c: any) => (c.tratativa && c.tratativa.emAtendimento) || R.compareceu(c));
@@ -164,9 +164,9 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
             <svg viewBox={`0 0 ${W} ${Hh + 18}`} width="100%" role="img" aria-label="Vendas por dia">
               {c.serie.map((s, i) => { const xx = 6 + i * (W - 12) / c.serie.length; const hh = s.a / mx * (Hh - 10); const dom = parseData(s.d + "T12:00").getDay() === 0;
                 return <g key={s.d}><rect x={xx} y={Hh - hh} width={bw} height={Math.max(hh, 0)} rx="2" fill={dom ? "#93b4f7" : "#2563eb"}><title>{s.d.slice(8, 10) + "/" + s.d.slice(5, 7) + ": " + fmtMoeda(s.a) + " (antes " + fmtMoeda(s.b) + ")"}</title></rect>
-                  {(i === 0 || i === c.serie.length - 1 || i % 7 === 0) && <text x={xx} y={Hh + 14} fontSize="10" fill="#8a93a3">{s.d.slice(8, 10)}</text>}</g>; })}
+                  {(i === 0 || i === c.serie.length - 1 || i % 7 === 0) && <text x={xx} y={Hh + 14} fontSize="10" fill="var(--ink-faint)">{s.d.slice(8, 10)}</text>}</g>; })}
               <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={c.serie.map((s, i) => (6 + i * (W - 12) / c.serie.length + bw / 2) + "," + (Hh - s.b / mx * (Hh - 10))).join(" ")} />
-              <line x1="0" y1={Hh} x2={W} y2={Hh} stroke="#e3e7ee" />
+              <line x1="0" y1={Hh} x2={W} y2={Hh} stroke="var(--line)" />
             </svg></div>
           <div className="pg-panel"><h3>💸 A pagar</h3>
             <table className="pg-tab"><tbody>
@@ -230,8 +230,8 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
         <Sec ic="🚚🔧" t="Custo de entregar e montar" />
         <div className="pg-grid">
           <Card big hl t={"Montagem de " + nomeYm(ym)} v={fmtMoeda(nn(q1?.ef_total) + nn(q2?.ef_total))} d={<span className="pg-d neu">{n0(nn(q1?.ef_qtd) + nn(q2?.ef_qtd))} montagens</span>} ir="montagem_pag">
-            <div className="pg-split"><i style={{ background: q1Fechada ? "#e8f3ec" : "#fff4dc", color: q1Fechada ? "#1f6b3e" : "#7a4f00" }}>{q1Fechada ? "✓" : "⏳"} 1ª quinzena (01–15) · <b>{q1Fechada ? "fechada" : "em andamento"}</b> {fmtMoeda(nn(q1?.ef_total))}</i>
-              <i style={{ background: "#fff4dc", color: "#7a4f00" }}>⏳ 2ª quinzena (16–{fimMes(ym).slice(8, 10)}) · <b>prevista</b> {fmtMoeda(nn(q2?.ef_total))}</i></div>
+            <div className="pg-split"><i style={{ background: q1Fechada ? "var(--st-concluida-bg)" : "var(--warn-bg)", color: q1Fechada ? "var(--st-concluida)" : "var(--warn)" }}>{q1Fechada ? "✓" : "⏳"} 1ª quinzena (01–15) · <b>{q1Fechada ? "fechada" : "em andamento"}</b> {fmtMoeda(nn(q1?.ef_total))}</i>
+              <i style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>⏳ 2ª quinzena (16–{fimMes(ym).slice(8, 10)}) · <b>prevista</b> {fmtMoeda(nn(q2?.ef_total))}</i></div>
           </Card>
           <Card hl t={"Frete de " + nomeYm(ymA) + " (fechado)"} v={fmtMoeda(freteAnt)} d={<span className="pg-d neu">a pagar em {nomeYm(ym)}</span>} ir="fretes_fech" />
           <Card t={"Frete de " + nomeYm(ym) + " (em aberto)"} v={fmtMoeda(freteAtual)} d={<span className="pg-d neu">{fAtual.length} romaneios · {fAberto} a conferir{freteAssist ? " · + " + fmtMoeda(freteAssist) + " de frete pago na montagem" : ""}</span>} ir="fretes_fech" />
@@ -256,28 +256,28 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
 }
 
 const CSS = `
-.pg{--pg-line:#e3e7ee;--pg-pri:#1f3a5f;max-width:1280px;margin:0 auto}
+.pg{--pg-line:var(--line);--pg-pri:var(--primary);color:var(--ink);max-width:1280px;margin:0 auto}
 .pg-top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px}
-.pg h1{font-size:22px;margin:0}.pg-sub{color:var(--ink-soft,#5b6576);font-size:13px}
-.pg-seg{display:flex;background:#fff;border:1px solid var(--pg-line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
-.pg-seg b{padding:8px 12px;font-size:13px;font-weight:500;color:#5b6576;cursor:pointer}.pg-seg b.on{background:var(--pg-pri);color:#fff}
-.pg-sec{margin:18px 0 8px;display:flex;align-items:baseline;gap:8px}.pg-sec h2{font-size:15px;margin:0;text-transform:uppercase;letter-spacing:.04em;color:var(--pg-pri)}.pg-sec span{font-size:12px;color:#8a93a3}
+.pg h1{font-size:22px;margin:0}.pg-sub{color:var(--ink-soft);font-size:13px}
+.pg-seg{display:flex;background:var(--surface);border:1px solid var(--pg-line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.pg-seg b{padding:8px 12px;font-size:13px;font-weight:500;color:var(--ink-soft);cursor:pointer}.pg-seg b.on{background:var(--pg-pri);color:var(--primary-ink)}
+.pg-sec{margin:18px 0 8px;display:flex;align-items:baseline;gap:8px}.pg-sec h2{font-size:15px;margin:0;text-transform:uppercase;letter-spacing:.04em;color:var(--pg-pri)}.pg-sec span{font-size:12px;color:var(--ink-faint)}
 .pg-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
-.pg-card{background:#fff;border:1px solid var(--pg-line);border-radius:12px;padding:14px;position:relative}
+.pg-card{background:var(--surface);border:1px solid var(--pg-line);border-radius:12px;padding:14px;position:relative}
 .pg-card:hover{box-shadow:0 4px 14px rgba(20,40,80,.08)}.pg-card.big{grid-column:span 2}.pg-card.hl{border-left:4px solid var(--pg-pri)}
-.pg-t{font-size:12.5px;color:#5b6576}.pg-v{font-size:28px;font-weight:700;margin:4px 0 2px;letter-spacing:-.02em}.pg-v small{font-size:15px;font-weight:600;color:#5b6576}
-.pg-d{font-size:12px;display:block}.pg-d.up{color:#1f8a4c}.pg-d.down{color:#c0392b}.pg-d.neu{color:#8a93a3}
-.pg-go{position:absolute;top:12px;right:12px;font-size:12px;color:#8a93a3}
-.pg-split{display:flex;gap:8px;margin-top:8px;font-size:12.5px;flex-wrap:wrap}.pg-split i{font-style:normal;padding:3px 9px;border-radius:20px;background:#eef2f8}
-.pg-bar{height:8px;border-radius:6px;background:#eef1f6;display:flex;overflow:hidden;margin-top:8px}.pg-bar span{display:block;height:100%}
+.pg-t{font-size:12.5px;color:var(--ink-soft)}.pg-v{font-size:28px;font-weight:700;margin:4px 0 2px;letter-spacing:-.02em}.pg-v small{font-size:15px;font-weight:600;color:var(--ink-soft)}
+.pg-d{font-size:12px;display:block}.pg-d.up{color:var(--st-concluida)}.pg-d.down{color:var(--danger)}.pg-d.neu{color:var(--ink-faint)}
+.pg-go{position:absolute;top:12px;right:12px;font-size:12px;color:var(--ink-faint)}
+.pg-split{display:flex;gap:8px;margin-top:8px;font-size:12.5px;flex-wrap:wrap}.pg-split i{font-style:normal;padding:3px 9px;border-radius:20px;background:var(--surface-2)}
+.pg-bar{height:8px;border-radius:6px;background:var(--surface-2);display:flex;overflow:hidden;margin-top:8px}.pg-bar span{display:block;height:100%}
 .pg-live{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:6px;box-shadow:0 0 0 3px rgba(34,197,94,.2)}
-.pg-funil{display:flex;gap:6px;flex-wrap:wrap}.pg-fs{flex:1;min-width:130px;background:#fff;border:1px solid var(--pg-line);border-radius:12px;padding:12px;text-align:center;position:relative;overflow:hidden}
+.pg-funil{display:flex;gap:6px;flex-wrap:wrap}.pg-fs{flex:1;min-width:130px;background:var(--surface);border:1px solid var(--pg-line);border-radius:12px;padding:12px;text-align:center;position:relative;overflow:hidden}
 .pg-fs .pg-v{font-size:24px}.pg-p{font-size:12px;color:var(--pg-pri);font-weight:600;margin-top:4px}.pg-bg{position:absolute;left:0;bottom:0;height:4px;background:var(--pg-pri)}
-.pg-row2{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:10px}.pg-panel{background:#fff;border:1px solid var(--pg-line);border-radius:12px;padding:14px}
-.pg-panel h3{margin:0 0 8px;font-size:14px}.pg-panel h3 small{font-weight:400;color:#8a93a3;font-size:12px}
-.pg-tab{width:100%;border-collapse:collapse;font-size:13px}.pg-tab td{padding:6px 4px;border-bottom:1px solid var(--pg-line)}.pg-tab td:last-child{text-align:right;font-weight:600;white-space:nowrap}.pg-tab small{color:#8a93a3}
-.pg-olho{border:1px solid var(--pg-line);background:#f1f4f9;color:var(--pg-pri);border-radius:8px;padding:3px 6px;cursor:pointer;display:inline-flex}
-.pg-card.oculto .pg-v{color:#8a93a3;letter-spacing:.12em}
-.pg-alert{padding:8px 10px;border-radius:8px;font-size:13px;margin-bottom:6px}.pg-alert.r{background:#fdecea;color:#8a1f14}.pg-alert.y{background:#fff4dc;color:#7a4f00}
+.pg-row2{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:10px}.pg-panel{background:var(--surface);border:1px solid var(--pg-line);border-radius:12px;padding:14px}
+.pg-panel h3{margin:0 0 8px;font-size:14px}.pg-panel h3 small{font-weight:400;color:var(--ink-faint);font-size:12px}
+.pg-tab{width:100%;border-collapse:collapse;font-size:13px}.pg-tab td{padding:6px 4px;border-bottom:1px solid var(--pg-line)}.pg-tab td:last-child{text-align:right;font-weight:600;white-space:nowrap}.pg-tab small{color:var(--ink-faint)}
+.pg-olho{border:1px solid var(--pg-line);background:var(--surface-2);color:var(--pg-pri);border-radius:8px;padding:3px 6px;cursor:pointer;display:inline-flex}
+.pg-card.oculto .pg-v{color:var(--ink-faint);letter-spacing:.12em}
+.pg-alert{padding:8px 10px;border-radius:8px;font-size:13px;margin-bottom:6px}.pg-alert.r{background:var(--danger-bg);color:var(--danger)}.pg-alert.y{background:var(--warn-bg);color:var(--warn)}
 @media(max-width:760px){.pg-card.big{grid-column:span 1}.pg-row2{grid-template-columns:1fr}.pg-v{font-size:24px}}
 `;

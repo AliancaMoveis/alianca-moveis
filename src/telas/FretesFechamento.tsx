@@ -94,8 +94,8 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
   const alterna = (k: string) => setAbertos(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   return <>
     <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}><b>{conf} de {rom.length} romaneios conferidos · {grupos.length} entregadores</b>{rom.some(r => r.mes < mes) && <span style={{ color: "#1D4ED8" }}>📥 {rom.filter(r => r.mes < mes).length} de meses anteriores ainda a conferir (ao conferir, entram no fechamento de {nomeMes(mes).toLowerCase()})</span>}<span className="hint">faltam {rom.length - conf}</span></div>
-      <div style={{ height: 8, background: "#e8ebf2", borderRadius: 6, marginTop: 6 }}><div style={{ height: 8, width: (100 * conf / rom.length) + "%", background: "var(--ok, #1f8a4c)", borderRadius: 6 }} /></div>
+      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}><b>{conf} de {rom.length} romaneios conferidos · {grupos.length} entregadores</b>{rom.some(r => r.mes < mes) && <span style={{ color: "var(--tn-blue-i)" }}>📥 {rom.filter(r => r.mes < mes).length} de meses anteriores ainda a conferir (ao conferir, entram no fechamento de {nomeMes(mes).toLowerCase()})</span>}<span className="hint">faltam {rom.length - conf}</span></div>
+      <div style={{ height: 8, background: "var(--tn-grey)", borderRadius: 6, marginTop: 6 }}><div style={{ height: 8, width: (100 * conf / rom.length) + "%", background: "var(--ok, #1f8a4c)", borderRadius: 6 }} /></div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
         <div className="subnav" style={{ margin: 0 }}>
           <button className={fSit === "todos" ? "on" : ""} onClick={() => setFSit("todos")}>Todos</button>
@@ -120,9 +120,9 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
       const cs = g.rs.map(contaRom); const tot = cs.reduce((s, c) => s + c.total, 0), km = cs.reduce((s, c) => s + c.km, 0);
       const nConf = g.rs.filter(x => x.conferido).length; const ab = abertos.has(g.k) || !!busca;
       return <div key={g.k} className="card" style={{ marginBottom: 10, padding: 0, overflow: "hidden" }}>
-        <button onClick={() => alterna(g.k)} style={{ width: "100%", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", background: nConf === g.rs.length ? "#E8F3EC" : "var(--fundo2, #f3f5fa)", border: 0, cursor: "pointer", textAlign: "left" }}>
+        <button onClick={() => alterna(g.k)} style={{ width: "100%", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", background: nConf === g.rs.length ? "var(--tn-green)" : "var(--surface-2)", border: 0, cursor: "pointer", textAlign: "left" }}>
           <b style={{ fontSize: 16, minWidth: 190 }}>{ab ? "▾" : "▸"} {g.nome}</b>
-          {g.assist && <span className="pill" style={{ background: "#FFEFD9", color: "#9A4A00", borderColor: "#E8A44A", fontWeight: 700 }}>{g.rot} · pago na quinzena da montagem</span>}
+          {g.assist && <span className="pill" style={{ background: "var(--tn-amber)", color: "#9A4A00", borderColor: "#E8A44A", fontWeight: 700 }}>{g.rot} · pago na quinzena da montagem</span>}
           <span>{nConf}/{g.rs.length} conferidos</span>
           <span className="hint">{g.rs.reduce((s, x) => s + x.itens.length, 0)} entregas</span>
           <span className="hint">{fmtN(km)} km</span>
@@ -132,10 +132,10 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
           const f = fr.find(x => String(x.id) === g.k); if (!f) return null;
           const prontos = g.rs.filter(r => r.conferido && !r.envio_chave && contaRom(r).total > 0), enviados = g.rs.filter(r => r.envio_chave), faltam = g.rs.filter(r => !r.conferido && !r.envio_chave);
           const vp = prontos.reduce((s, r) => s + contaRom(r).total, 0), ve = enviados.reduce((s, r) => s + contaRom(r).total, 0);
-          return <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "8px 14px", background: "#FFF8EE", borderTop: "1px solid #F1D9B5" }}>
+          return <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "8px 14px", background: "var(--tn-amber)", borderTop: "1px solid #F1D9B5" }}>
             <span>Na montagem: <b>{f.montador_nome || "⚠ sem nome (Freteiros e contas)"}</b></span>
-            {enviados.length > 0 && <span style={{ color: "#1F6B3E" }}>✓ {enviados.length} já enviado(s) · {moeda(ve)}</span>}
-            {faltam.length > 0 && <span style={{ color: "#9A5B00" }}>⚠ {faltam.length} a conferir</span>}
+            {enviados.length > 0 && <span style={{ color: "var(--tn-green-i)" }}>✓ {enviados.length} já enviado(s) · {moeda(ve)}</span>}
+            {faltam.length > 0 && <span style={{ color: "var(--tn-amber-i)" }}>⚠ {faltam.length} a conferir</span>}
             {faltam.filter(r => contaRom(r).total > 0).length > 0 && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={async () => {
               const l = faltam.filter(r => contaRom(r).total > 0);
               if (!confirm(`Fechar (marcar como conferidos) ${l.length} romaneio(s) de ${f.apelido} com valor lançado?`)) return;
@@ -179,19 +179,19 @@ function LinhaRom({ mes, r, todos, uid, toast, patch, aberto, abrir, detalhe }: 
   const v = porLinha ? c : contaRom({ ...r, modo: "total", km: num(km), valor_entregas: num(ent), total_papel: num(papel) });
   const bate = v.difPapel == null ? null : v.difPapel === 0;
   return <>
-    <tr style={{ background: r.conferido ? "#F2FAF5" : undefined }}>
-      <td><b>{numRom(r)}</b>{r.mes < mes && <div style={{ fontSize: 11.5, color: "#1D4ED8" }}>📥 de {r.mes.slice(5, 7)}/{r.mes.slice(0, 4)}</div>}</td><td>{br(r.data).slice(0, 5)}</td><td style={{ textAlign: "center" }}>{ehManual(r) ? r.itens.map(i => i.tipo).join(", ") : r.itens.length}</td>
-      <td style={{ fontSize: 12, color: "#9a5b00", maxWidth: 240 }}>{av.join(" · ")}</td>
+    <tr style={{ background: r.conferido ? "var(--tn-green)" : undefined }}>
+      <td><b>{numRom(r)}</b>{r.mes < mes && <div style={{ fontSize: 11.5, color: "var(--tn-blue-i)" }}>📥 de {r.mes.slice(5, 7)}/{r.mes.slice(0, 4)}</div>}</td><td>{br(r.data).slice(0, 5)}</td><td style={{ textAlign: "center" }}>{ehManual(r) ? r.itens.map(i => i.tipo).join(", ") : r.itens.length}</td>
+      <td style={{ fontSize: 12, color: "var(--tn-amber-i)", maxWidth: 240 }}>{av.join(" · ")}</td>
       <td style={{ textAlign: "right" }}><input className="fx" style={inp} inputMode="decimal" value={km} disabled={porLinha} title={porLinha ? "Lançado cliente por cliente" : ""} onChange={e => setKm(e.target.value)} onBlur={sair} onKeyDown={enter} /></td>
       <td style={{ textAlign: "right" }}><input className="fx" style={inp} inputMode="decimal" value={ent} disabled={porLinha} title={porLinha ? "Lançado cliente por cliente" : ""} onChange={e => setEnt(e.target.value)} onBlur={sair} onKeyDown={enter} /></td>
       <td style={{ textAlign: "right" }}>{v.lancado && <><b>{moeda(v.total)}</b>{v.km > 0 && <div className="hint">{moeda(v.vKm)} de km</div>}</>}</td>
       <td style={{ textAlign: "right" }}><input className="fx" style={{ ...inp, borderColor: bate == null ? undefined : bate ? "#1f8a4c" : "#c00" }} inputMode="decimal" value={papel} placeholder="opcional" onChange={e => setPapel(e.target.value)} onBlur={sair} onKeyDown={enter} />
         {bate === false && <div style={{ color: "#c00", fontSize: 12 }}>dif. {moeda(v.difPapel || 0)}</div>}</td>
       <td style={{ textAlign: "center" }}><input type="checkbox" style={{ width: 20, height: 20 }} checked={r.conferido} disabled={!!r.envio_chave} title={r.envio_chave ? "Já enviado para a montagem — desfaça o envio na aba 🛠 para mexer" : ""} onChange={e => gravar(e.target.checked && r.mes < mes ? { conferido: true, mes } : { conferido: e.target.checked })} />
-        {r.envio_chave && <div style={{ fontSize: 11, color: "#1F6B3E" }}>✓ na montagem</div>}</td>
+        {r.envio_chave && <div style={{ fontSize: 11, color: "var(--tn-green-i)" }}>✓ na montagem</div>}</td>
       <td><button className="btn sm" style={{ whiteSpace: "nowrap" }} onClick={abrir}>{aberto ? "▾" : "▸"} clientes</button></td>
     </tr>
-    {detalhe && <tr><td colSpan={10} style={{ padding: "0 6px 8px", background: "#f7f9fd" }}>{detalhe}</td></tr>}
+    {detalhe && <tr><td colSpan={10} style={{ padding: "0 6px 8px", background: "var(--tn-grey)" }}>{detalhe}</td></tr>}
   </>;
 }
 
@@ -233,11 +233,11 @@ function Romaneio({ mes, r, fr, todos, uid, toast, fechar, salvo }: { mes: strin
           <button className="btn sm" onClick={fechar}>✕</button>
         </div>
       </div>
-      {av.length > 0 && <div style={{ margin: "8px 0", padding: "6px 10px", background: "#FFF4DC", borderRadius: 6, fontSize: 13 }}>⚠ {av.join(" · ")}</div>}
+      {av.length > 0 && <div style={{ margin: "8px 0", padding: "6px 10px", background: "var(--tn-amber)", borderRadius: 6, fontSize: 13 }}>⚠ {av.join(" · ")}</div>}
       <div style={{ overflowX: "auto", marginTop: 8 }}>
         <table className="ma-tab" style={{ width: "100%", fontSize: 13.5 }}>
           <thead><tr><th>Venda</th><th>Cliente</th><th>Endereço</th><th>Cidade</th><th>NF</th>{modo === "linhas" && <><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Valor (R$)</th></>}</tr></thead>
-          <tbody>{r.itens.map((i: ItemRom, k: number) => <tr key={k} style={{ background: i.transf ? "#f3eefc" : i.assist ? "#eef6ff" : undefined }}>
+          <tbody>{r.itens.map((i: ItemRom, k: number) => <tr key={k} style={{ background: i.transf ? "var(--tn-purple)" : i.assist ? "var(--tn-blue)" : undefined }}>
             <td>{i.tipo || i.venda || (i.transf ? "Transf." : i.assist ? "Assist." : "")}</td><td>{i.cliente}{i.data && i.data !== r.data && <span className="hint"> ({br(i.data).slice(0, 5)})</span>}</td>
             <td style={{ minWidth: 220 }}>{i.endereco || i.bairro}{i.endereco ? null : <span className="hint"> (só o bairro)</span>}
               {(i.endereco || i.bairro) && <a className="btn sm" style={{ marginLeft: 6, padding: "1px 7px", whiteSpace: "nowrap" }} href={mapsEntrega(i)} target="_blank" rel="noopener" title="Abrir no Google Maps — arraste o boneco amarelo (ou clique na foto) para ver o Street View">📍 Maps</a>}</td>
@@ -256,7 +256,7 @@ function Romaneio({ mes, r, fr, todos, uid, toast, fechar, salvo }: { mes: strin
         <div className="field" style={{ margin: 0, width: 150 }}><label>Total escrito no papel</label><input {...ref()} inputMode="decimal" value={papel} onChange={e => setPapel(e.target.value)} placeholder="opcional" /></div>
         <div className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}><label>Obs.</label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="ex.: desmonte autorizado pelo Tadeu" /></div>
       </div>
-      <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--fundo2, #f3f5fa)", borderRadius: 8, fontSize: 16 }}>
+      <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--surface-2)", borderRadius: 8, fontSize: 16 }}>
         <b>TOTAL</b> Km {fmtN(c.km) || 0} = {moeda(c.vKm)} + Entregas {moeda(c.ent)} = <b style={{ fontSize: 19 }}>{moeda(c.total)}</b>
         {c.difPapel != null && (c.difPapel === 0 ? <span style={{ color: "#1f8a4c", marginLeft: 10 }}>✓ bate com o papel</span>
           : <span style={{ color: "#b00", marginLeft: 10 }}>✗ papel {moeda(atual.total_papel || 0)} — diferença {moeda(c.difPapel)}</span>)}
@@ -314,9 +314,9 @@ function Relatorio({ d, mes, toast, rec }: any) {
     try { await criarDesconto({ mes, freteiro_id: +nd.fid, descricao: nd.descricao, parcela: nd.parcela, valor: v }); setNd({ fid: "", descricao: "", parcela: "", valor: "" }); rec(); } catch (e: any) { toast?.(e.message); }
   };
   return <>
-    {assistRom.length > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#FFEFD9" }}>🛠 <b>Frete de assistência e de montadores: {assistRom.length} romaneio(s) · {moeda(assistTot)}</b> — <u>não entra</u> neste relatório. É enviado para o pagamento quinzenal da montagem na aba <b>🛠 Frete pago na montagem</b>.</div>}
-    {atrasados > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#EEF3FF" }}>📥 <b>{atrasados} romaneio(s) de meses anteriores</b> ainda a conferir — aparecem na aba Romaneios e entram neste relatório quando forem conferidos.</div>}
-    {(pend > 0 || semF > 0) && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#FFF4DC" }}>⚠ {pend > 0 && <><b>{pend} romaneio(s) ainda não conferido(s)</b> — entram no relatório com o que já foi digitado. </>}{semF > 0 && <b>{semF} romaneio(s) sem freteiro.</b>}</div>}
+    {assistRom.length > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "var(--tn-amber)" }}>🛠 <b>Frete de assistência e de montadores: {assistRom.length} romaneio(s) · {moeda(assistTot)}</b> — <u>não entra</u> neste relatório. É enviado para o pagamento quinzenal da montagem na aba <b>🛠 Frete pago na montagem</b>.</div>}
+    {atrasados > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "var(--tn-blue)" }}>📥 <b>{atrasados} romaneio(s) de meses anteriores</b> ainda a conferir — aparecem na aba Romaneios e entram neste relatório quando forem conferidos.</div>}
+    {(pend > 0 || semF > 0) && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "var(--tn-amber)" }}>⚠ {pend > 0 && <><b>{pend} romaneio(s) ainda não conferido(s)</b> — entram no relatório com o que já foi digitado. </>}{semF > 0 && <b>{semF} romaneio(s) sem freteiro.</b>}</div>}
     <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 10 }}>
       <div className="field" style={{ margin: 0 }}><label>Data do pagamento</label><input type="date" value={pagto} onChange={e => setPagto(e.target.value)} onBlur={() => salvarPagto(mes, pagto).catch((e: any) => toast?.(e.message))} /></div>
       <button className="btn primary" disabled={!linhas.length} onClick={xlsx}>⬇ Excel para o financeiro</button>
@@ -452,7 +452,7 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
      { titulo: "KM", largura: 8, alinhar: "center" }, { titulo: "ENTREGAS (R$)", largura: 15, tipo: "moeda" }, { titulo: "KM (R$)", largura: 13, tipo: "moeda" }, { titulo: "TOTAL", largura: 14, tipo: "moeda" }, { titulo: "SITUAÇÃO", largura: 18 }],
     vis.flatMap(f => (rs || []).filter(r => r.freteiro_id === f.id).map(r => { const c = contaRom(r); return [f.apelido, f.montador_nome || "", numRom(r), r.data, r.itens.length, c.km, c.ent, c.vKm, c.total, r.envio_chave ? "ENVIADO" : r.conferido ? "CONFERIDO" : "A CONFERIR"]; })));
   return <>
-    <div className="card" style={{ padding: 12, marginBottom: 12, background: "#FFF8EE" }}>
+    <div className="card" style={{ padding: 12, marginBottom: 12, background: "var(--tn-amber)" }}>
       <b>🛠 Frete de assistência e de montadores — pago na quinzena junto com a montagem</b>
       <div className="hint" style={{ marginTop: 4 }}>Os romaneios destes freteiros não entram no relatório do financeiro. Confira-os na aba Romaneios, depois envie aqui: cada romaneio vira uma <b>ordem avulsa de frete</b> ("Frete de assistência" ou "Frete") no pagamento do montador ligado a ele (ex.: Costa (Assistência), Julio Silva), e entra no fechamento da quinzena da montagem.</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
@@ -478,20 +478,20 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
       const prontos = prontosDe(f), naoConf = doPer.filter(r => !r.conferido && !r.envio_chave), enviados = doPer.filter(r => r.envio_chave);
       const tot = (x: RomTat[]) => x.reduce((s, r) => s + contaRom(r).total, 0);
       return <div key={f.id} className="card" style={{ padding: 0, marginBottom: 12, overflow: "hidden" }}>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", padding: "10px 14px", background: "#FFEFD9" }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", padding: "10px 14px", background: "var(--tn-amber)" }}>
           <b style={{ fontSize: 16 }}>{f.tipo === "montador" ? "🔧" : "🛠"} {f.apelido}</b><span className="hint">→ na montagem: <b>{f.montador_nome || "⚠ sem nome — cadastre em Freteiros e contas"}</b></span>
           <span>Período: <b>{moeda(tot(doPer))}</b> ({doPer.length} rom.)</span>
-          {ant.length > 0 && <span style={{ color: "#1D4ED8" }}>📥 {ant.length} de quinzena anterior ainda não enviado(s) ({moeda(tot(ant))}) — selecione a quinzena deles para enviar</span>}
-          <span style={{ color: "#1F6B3E" }}>✓ enviados {moeda(tot(enviados))}</span>
+          {ant.length > 0 && <span style={{ color: "var(--tn-blue-i)" }}>📥 {ant.length} de quinzena anterior ainda não enviado(s) ({moeda(tot(ant))}) — selecione a quinzena deles para enviar</span>}
+          <span style={{ color: "var(--tn-green-i)" }}>✓ enviados {moeda(tot(enviados))}</span>
           <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !prontos.length || !f.montador_nome} onClick={() => enviar(f, prontos)}>🔒 Enviar quinzena para a montagem · {prontos.length} romaneio(s) · {moeda(tot(prontos))}</button>
         </div>
-        {naoConf.length > 0 && <div className="hint" style={{ padding: "6px 14px", color: "#9A5B00" }}>⚠ {naoConf.length} romaneio(s) ainda não conferido(s) — confira na aba Romaneios antes de enviar.</div>}
+        {naoConf.length > 0 && <div className="hint" style={{ padding: "6px 14px", color: "var(--tn-amber-i)" }}>⚠ {naoConf.length} romaneio(s) ainda não conferido(s) — confira na aba Romaneios antes de enviar.</div>}
         <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5, margin: 0 }}>
           <thead><tr><th>Romaneio</th><th>Data</th><th style={{ textAlign: "center" }}>Entregas</th><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Entregas (R$)</th><th style={{ textAlign: "right" }}>Km (R$)</th><th style={{ textAlign: "right" }}>Total</th><th>Situação</th><th></th></tr></thead>
-          <tbody>{l.map(r => { const c = contaRom(r); return <tr key={r.id} style={{ background: r.envio_chave ? "#F2FAF5" : undefined }}>
-            <td><b>{numRom(r)}</b></td><td>{br(r.data).slice(0, 5)}{r.data && r.data < de && <span style={{ color: "#1D4ED8" }}> 📥</span>}</td><td style={{ textAlign: "center" }}>{r.itens.length}</td>
+          <tbody>{l.map(r => { const c = contaRom(r); return <tr key={r.id} style={{ background: r.envio_chave ? "var(--tn-green)" : undefined }}>
+            <td><b>{numRom(r)}</b></td><td>{br(r.data).slice(0, 5)}{r.data && r.data < de && <span style={{ color: "var(--tn-blue-i)" }}> 📥</span>}</td><td style={{ textAlign: "center" }}>{r.itens.length}</td>
             <td style={{ textAlign: "right" }}>{fmtN(c.km) || "—"}</td><td style={{ textAlign: "right" }}>{moeda(c.ent)}</td><td style={{ textAlign: "right" }}>{moeda(c.vKm)}</td><td style={{ textAlign: "right" }}><b>{moeda(c.total)}</b></td>
-            <td>{r.envio_chave ? <span style={{ color: "#1F6B3E" }}>✓ enviado {r.envio_em ? br(r.envio_em.slice(0, 10)).slice(0, 5) : ""}</span> : r.conferido ? (c.total > 0 ? "conferido · a enviar" : <span style={{ color: "#9A5B00" }}>sem valor</span>) : <span style={{ color: "#9A5B00" }}>a conferir</span>}</td>
+            <td>{r.envio_chave ? <span style={{ color: "var(--tn-green-i)" }}>✓ enviado {r.envio_em ? br(r.envio_em.slice(0, 10)).slice(0, 5) : ""}</span> : r.conferido ? (c.total > 0 ? "conferido · a enviar" : <span style={{ color: "var(--tn-amber-i)" }}>sem valor</span>) : <span style={{ color: "var(--tn-amber-i)" }}>a conferir</span>}</td>
             <td>{r.envio_chave ? <button className="btn sm" disabled={ocup} onClick={async () => { if (!confirm("Tirar o romaneio " + numRom(r) + " do pagamento da montagem? (a ordem avulsa é excluída)")) return; setOcup(true); try { await desfazerEnvioAssist(r, uid); rec(); } catch (e: any) { toast?.(e.message); } finally { setOcup(false); } }}>↩ desfazer</button>
               : r.conferido && c.total > 0 && noPer(r) ? <button className="btn sm" disabled={ocup || !f.montador_nome} onClick={() => enviar(f, [r])}>📤 enviar só este</button> : r.data && r.data < de ? <span className="hint">quinzena anterior</span> : null}</td>
           </tr>; })}</tbody>

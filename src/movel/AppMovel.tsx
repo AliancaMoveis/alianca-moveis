@@ -93,7 +93,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const gerAnuncios = R.mySetores().includes("anuncios") && !R.ehGestao() && !R.ehProprietario();
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
     : perfil === "dono" ? [["resumo", "Ver tudo", "📈"], ["painel", "Resumo", "📊"], ["status", "Status", "🚦"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["atend_vend", "Vendedores", "👔"], ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
-    : perfil === "gerente" ? [...(R.mySetores().includes("presenca") ? [["presenca", "Presença", "✅"], ["porta", "Porta", "＋"]] as [string, string, string][] : []), ["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
+    : perfil === "gerente" ? [...(R.temPresenca() ? [["porta", "Novo cliente", "＋"], ["presenca", "Presença", "✅"]] as [string, string, string][] : []), ["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
     : perfil === "juridico" ? [...(R.temPresenca() ? [["presenca", "Presença", "✅"], ["porta", "Novo cliente", "＋"]] as [string, string, string][] : []), ["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [...(R.temPresenca() ? [["presenca", "Presença", "✅"], ["porta", "Novo cliente", "＋"]] as [string, string, string][] : []), ["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
     : perfil === "produtos" ? [["produto", "Produto", "🏷"], ["eu", "Mais", "☰"]]
@@ -609,7 +609,7 @@ function AcoesVendedor({ c }: any) {
   return (
     <div className="mv-bloco">
       {t.cobradoEm && <div className="mv-alerta">Parecer cobrado por {t.cobradoPor} · {fmtDateTime(t.cobradoEm)}</div>}
-      {t.emAtendimento ? <div className="mv-ematd">🟢 Em atendimento desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+      {R.atendendoAgora(c) ? <div className="mv-ematd">🟢 Em atendimento desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
         : <button className="mv-principal mv-iniciar" onClick={() => ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado")}>▶️ Iniciar atendimento</button>}
       <div className="mv-2">
         <button className={"mv-op" + (t.emContato ? " on" : "")} onClick={() => ex(() => A.alternarMarcacao(c.id, "emContato"), "Atualizado")}>{t.emContato ? "✓ Em contato" : "Já estou em contato"}</button>

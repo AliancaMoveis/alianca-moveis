@@ -160,7 +160,7 @@ function ClienteCard({ c }: any) {
   return (
     <div className="cli-card">
       <div className="cli-card-nome">{c.cliente}</div>
-      <div className="cli-card-sub">{c.clienteDoc ? c.clienteDoc + " · " : ""}{c.id}{R.ehProspeccao(c) ? <span className="pill" style={{ marginLeft: 8, background: "#f3ece2", color: "#7a5324" }}>🧭 Prospecção própria do consultor · sem comissão do marketing</span> : null}</div>
+      <div className="cli-card-sub">{c.clienteDoc ? c.clienteDoc + " · " : ""}{c.id}{R.ehProspeccao(c) ? <span className="pill" style={{ marginLeft: 8, background: "var(--tn-amber)", color: "var(--tn-amber-i)" }}>🧭 Prospecção própria do consultor · sem comissão do marketing</span> : null}</div>
       <div className="cli-card-grid">{itens.map(([k, v]) => <div className="item" key={k}><span className="k">{k}</span><span className="v">{v}</span></div>)}</div>
       <div className="cli-card-acoes">
         {wa ? (() => { const tels = separarTelefones(c.telefone); return tels.length > 1 ? tels.map(t => <a key={t} className="btn wa sm" href={R.waLinkCliente(c, t)} target="_blank" rel="noopener">WhatsApp {t}</a>) : <a className="btn wa sm" href={wa} target="_blank" rel="noopener">WhatsApp do cliente</a>; })() : <button className="btn sm" disabled>Sem telefone</button>}
@@ -202,8 +202,8 @@ function Tratativa({ c }: any) {
   if (c.tipo === "assistencia") return <div className="resp-box"><h4>Tratativa — Assistência (peça + montador)</h4><div className="grid"><div className="field"><label>Peça solicitada</label><input value={v.peca} onChange={s("peca")} placeholder="Ex.: puxador, dobradiça…" /></div><div className="field"><label>Montador designado</label><input value={v.montador} onChange={s("montador")} /></div></div><div style={{ marginTop: 12 }}><button className="btn primary sm" onClick={() => salvar(["peca", "montador"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "vistoria") return <div className="resp-box"><h4>Tratativa — Vistoria (aprovar e designar)</h4><div className="grid"><div className="field"><label>Montador de vistoria</label><input value={v.montador} onChange={s("montador")} /></div><div className="field"><label>Data da vistoria</label><input type="date" value={v.data} onChange={s("data")} /></div></div><div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.aprovada} campo="aprovada" lOn="Vistoria aprovada ✓" lOff="Aprovar vistoria" /><button className="btn primary sm" onClick={() => salvar(["montador", "data"])}>Salvar tratativa</button></div></div>;
   if (c.tipo === "entrega") return <div className="resp-box"><h4>Tratativa — Entrega (Tático)</h4><p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 12px" }}>Se há disponibilidade, coloque para entrega no Tático. Se não houver, encaminhe para Prazo de fábrica.</p><div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}><Btn on={t.entregaTatico} campo="entregaTatico" lOn="Enviado ao Tático ✓" lOff="Colocar para entrega (Tático)" /><button className="btn sm" onClick={() => ex(() => A.entregaParaFabrica(c.id), "Encaminhado para Prazo de fábrica")}>Sem disponibilidade → Prazo de fábrica</button></div>
-    <div style={{ marginTop: 14, padding: "11px 13px", background: t.aguardandoCompra ? "#fff1d6" : "var(--surface-2)", border: "1px dashed " + (t.aguardandoCompra ? "#e0a84a" : "var(--line)"), borderRadius: 9 }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: "#7a4a00", marginBottom: 6 }}>🔒 Status interno {t.aguardandoCompra && <span className="badge" style={{ background: "#e0a84a", color: "#fff", marginLeft: 6 }}>🛒 Aguardando compra</span>}</div>
+    <div style={{ marginTop: 14, padding: "11px 13px", background: t.aguardandoCompra ? "var(--tn-amber)" : "var(--surface-2)", border: "1px dashed " + (t.aguardandoCompra ? "#e0a84a" : "var(--line)"), borderRadius: 9 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--tn-amber-i)", marginBottom: 6 }}>🔒 Status interno {t.aguardandoCompra && <span className="badge" style={{ background: "#e0a84a", color: "#fff", marginLeft: 6 }}>🛒 Aguardando compra</span>}</div>
       <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Use quando Compras ainda não comprou o produto. É só acompanhamento interno — <b>não passe ao cliente dessa forma</b>.</div>
       <Btn on={t.aguardandoCompra} campo="aguardandoCompra" lOn="Compra feita — tirar “Aguardando compra”" lOff="🛒 Marcar: aguardando compra" />
     </div></div>;
@@ -267,7 +267,7 @@ function Tratativa({ c }: any) {
     if (!R.podeEditarAgenda()) return <div className="resp-box"><h4>Aguardando definir o vendedor</h4><div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>O Suporte a Consultores, a Supervisão de Marketing ou a Gestão fazem esse direcionamento.</div></div>;
     return (
       <div className="resp-box"><h4>Definir vendedor</h4>
-        {t.atendenteExterno && <div className="dv-pedido" style={{ marginBottom: 12, background: "#fff1d6", borderColor: "#e0a84a", color: "#7a4a00" }}>⚠️ <b>{t.atendenteExterno}</b> (freelancer, sem cadastro) assumiu este cliente pela tela da loja{t.assumidoEm ? " em " + fmtDateTime(t.assumidoEm) : ""}. Defina abaixo o vendedor responsável no sistema.</div>}
+        {t.atendenteExterno && <div className="dv-pedido" style={{ marginBottom: 12, background: "var(--tn-amber)", borderColor: "#e0a84a", color: "var(--tn-amber-i)" }}>⚠️ <b>{t.atendenteExterno}</b> (freelancer, sem cadastro) assumiu este cliente pela tela da loja{t.assumidoEm ? " em " + fmtDateTime(t.assumidoEm) : ""}. Defina abaixo o vendedor responsável no sistema.</div>}
         {t.pedidoAtend && <div className="dv-pedido" style={{ marginBottom: 12 }}>🙋 <b>{t.pedidoAtendNome || R.nomeUser(t.pedidoAtend)}</b> informou que está atendendo este cliente — aguardando aprovação
           <div style={{ display: "flex", gap: 6, marginTop: 6 }}><button className="btn primary sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, true), "Aprovado — cliente com o vendedor")}>Aprovar</button>
             <button className="btn ghost sm" onClick={() => ex(() => A.responderPedidoAtendimento(c.id, false), "Pedido recusado")}>Recusar</button></div></div>}
@@ -1183,7 +1183,7 @@ function FichaPorta({ c }: { c: any }) {
           <Row k="Chegou na loja">{fmtDateTime(c.dataLoja)}</Row>
           <Row k="Vendedor que atendeu"><b>{c.atendenteId ? R.nomeUser(c.atendenteId) : "—"}</b></Row>
           {c.produto && <Row k="Ambientes">{c.produto}</Row>}
-          <Row k="Atendimento">{c.tratativa && c.tratativa.emAtendimento ? "🟢 Em atendimento desde " + fmtDateTime(c.tratativa.emAtendimento) : R.podeIniciarAtend(c) ? <button className="btn sm" onClick={() => ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado")}>▶️ Iniciar atendimento</button> : "—"}</Row>
+          <Row k="Atendimento">{R.atendendoAgora(c) ? "🟢 Em atendimento desde " + fmtDateTime(c.tratativa.emAtendimento) : R.podeIniciarAtend(c) ? <button className="btn sm" onClick={() => ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado")}>▶️ Iniciar atendimento</button> : "—"}</Row>
           {c.motivo && <Row k="Observação">{c.motivo}</Row>}
           <Row k="Registrado por">{c.solicitante} · {fmtDateTime(c.criadoEm)}</Row>
           {c.venda && <Row k="Venda">{c.venda.numero} <SeloVenda c={c} /></Row>}

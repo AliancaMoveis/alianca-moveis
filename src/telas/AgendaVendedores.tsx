@@ -57,7 +57,7 @@ export default function AgendaVendedores({ movel = false }: { movel?: boolean })
                   <b className="hr">{String(c.dataLoja || "").slice(11, 16) || "—"}</b>
                   <div><div><span className={"origem " + og}>{ROT[og]}</span> <b>{c.cliente}</b> <SeloVinda c={c} />{c.venda ? <span className="pill" style={{ marginLeft: 6 }}>venda {c.venda.numero}</span> : null}</div>
                     <small>{[c.telefone, c.consultorId ? "consultor " + R.nomeUser(c.consultorId) : "", c.produto].filter(Boolean).join(" · ")}</small>
-                    {t.emAtendimento ? <div><b className="ag-ematd">🟢 Em atendimento</b> desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div> : null}</div>
+                    {R.atendendoAgora(c) ? <div><b className="ag-ematd">🟢 Em atendimento</b> desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div> : null}</div>
                 </div>; })}
             </div>; })}
         </>}

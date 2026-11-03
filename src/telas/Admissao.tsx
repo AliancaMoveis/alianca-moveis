@@ -95,7 +95,7 @@ function Anexo({ rotulo, dica, lista, muda }: { rotulo: string; dica: string; li
 
 function Caixa({ children }: { children: any }) {
   return (
-    <div style={{ minHeight: "100vh", background: "#f2f4f8", padding: "24px 12px" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "24px 12px" }}>
       <div className="card" style={{ maxWidth: 680, margin: "0 auto", padding: 20 }}>
         <style>{".grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.grid2{grid-template-columns:1fr}}h3{margin:18px 0 8px}"}</style>
         {children}

@@ -82,6 +82,9 @@ html,body{height:100%}
     --danger:#c23b3b; --danger-bg:#fbe9e9;
     --critico:#7a1f2b; --critico-bg:#f6dde0;
     --warn:#c98a12; --warn-bg:#faf1df; --wa:#1fa855;
+    /* tons de etiqueta/faixa (claro) — no escuro viram fundo escuro com texto claro */
+    --tn-amber:#fff4dc; --tn-amber-i:#7a4f00; --tn-red:#fdecec; --tn-red-i:#9b1c1c; --tn-green:#e8f3ec; --tn-green-i:#1f6b3e;
+    --tn-blue:#e8eef8; --tn-blue-i:#1f3864; --tn-grey:#eef1f6; --tn-grey-i:#3b4558; --tn-purple:#f3eefc; --tn-purple-i:#5b3c99;
     --shadow:0 1px 2px rgba(20,28,45,.05),0 4px 16px rgba(20,28,45,.06);
   }
   @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
@@ -90,6 +93,8 @@ html,body{height:100%}
     --st-aberta:#7b96e6; --st-aberta-bg:#1e2740; --st-tratativa:#d19a45; --st-tratativa-bg:#33291a;
     --st-respondida:#4fb5cf; --st-respondida-bg:#152e35; --st-informar:#e0a445; --st-informar-bg:#3a2c14; --st-concluida:#5cbf6f; --st-concluida-bg:#17301d;
     --danger:#e46464; --danger-bg:#33191a; --critico:#ff8a8a; --critico-bg:#3a1418; --warn:#e6b34d; --warn-bg:#332a17; --wa:#2bbd67;
+    --tn-amber:#33291a; --tn-amber-i:#f0c24b; --tn-red:#3a1c1e; --tn-red-i:#ff9a9a; --tn-green:#17301d; --tn-green-i:#8fd0a8;
+    --tn-blue:#1e2740; --tn-blue-i:#9db4f0; --tn-grey:#262d36; --tn-grey-i:#c3cad5; --tn-purple:#2a2140; --tn-purple-i:#c7b3f5;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
   }}
   :root[data-theme="dark"]{
@@ -98,6 +103,8 @@ html,body{height:100%}
     --st-aberta:#7b96e6; --st-aberta-bg:#1e2740; --st-tratativa:#d19a45; --st-tratativa-bg:#33291a;
     --st-respondida:#4fb5cf; --st-respondida-bg:#152e35; --st-informar:#e0a445; --st-informar-bg:#3a2c14; --st-concluida:#5cbf6f; --st-concluida-bg:#17301d;
     --danger:#e46464; --danger-bg:#33191a; --critico:#ff8a8a; --critico-bg:#3a1418; --warn:#e6b34d; --warn-bg:#332a17; --wa:#2bbd67;
+    --tn-amber:#33291a; --tn-amber-i:#f0c24b; --tn-red:#3a1c1e; --tn-red-i:#ff9a9a; --tn-green:#17301d; --tn-green-i:#8fd0a8;
+    --tn-blue:#1e2740; --tn-blue-i:#9db4f0; --tn-grey:#262d36; --tn-grey-i:#c3cad5; --tn-purple:#2a2140; --tn-purple-i:#c7b3f5;
   }
   *{box-sizing:border-box}
   html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
@@ -893,11 +900,7 @@ button.mv-tile.sel{border-color:var(--primary);box-shadow:0 0 0 2px var(--primar
 .ap-resumo i{width:11px;height:11px;border-radius:3px;display:inline-block}
 i.mk,.ap-origem.marketing{background:#c0428a}
 i.ex,.ap-origem.externo{background:#5b7fc7}
-.ap-lista{flex:1;padding:0 28px 18px;display:flex;flex-direction:column;gap:8px}
-.ap-item{display:grid;grid-template-columns:96px 92px 1fr 220px 140px 190px;align-items:center;gap:14px;background:#fff;border:1px solid #dfe4ee;border-left:6px solid #9aa6bd;border-radius:14px;padding:12px 16px}
-.ap-item.agu{border-left-color:#c77a00}.ap-item.com,.ap-item.atd{border-left-color:#d4a020}.ap-item.ven{border-left-color:#2f8f5b;opacity:.8}.ap-item.nao{border-left-color:#c24a4a;opacity:.6}
-.ap-item.agora{box-shadow:0 0 0 3px #27468f;background:#f4f7ff}
-.ap-item.atrasado{background:#fff6f5}
+.ap-lista{flex:1;padding:0 28px 18px;display:flex;flex-direction:column;gap:8px}.ap .ap-item{display:grid;grid-template-columns:96px 92px 1fr 220px 140px 190px;align-items:center;gap:14px;background:#fff;border:1px solid #dfe4ee;border-left:6px solid #9aa6bd;border-radius:14px;padding:12px 16px}.ap .ap-item.agu{border-left-color:#c77a00}.ap .ap-item.com,.ap .ap-item.atd{border-left-color:#d4a020}.ap .ap-item.ven{border-left-color:#2f8f5b;opacity:.8}.ap .ap-item.nao{border-left-color:#c24a4a;opacity:.6}.ap .ap-item.agora{box-shadow:0 0 0 3px #27468f;background:#f4f7ff}.ap .ap-item.atrasado{background:#fff6f5}
 .ap-hora{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;line-height:1}
 .ap-hora small{font-size:11px;font-weight:700;color:#27468f;text-transform:uppercase;margin-top:4px;letter-spacing:.05em}
 .ap-origem{color:#fff;font-size:12px;font-weight:800;text-transform:uppercase;border-radius:8px;padding:5px 0;text-align:center;letter-spacing:.03em}
@@ -909,13 +912,12 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ap-vend b.semv{color:#c77a00;font-size:16px}
 .ap-vend b.pedido{color:#27468f}
 .ap-sit{text-align:center;font-weight:800;font-size:14px;border-radius:20px;padding:7px 10px}
-.ap-sit.agu{background:#fff1d6;color:#9a5d00}.ap-sit.com,.ap-sit.atd{background:#fdf3d2;color:#8a6a00}.ap-sit.ven{background:#dcf2e5;color:#1f6e43}.ap-sit.nao{background:#f9e0df;color:#9c2f2f}
-.ap-item.atrasado .ap-sit{background:#f9e0df;color:#9c2f2f}
+.ap-sit.agu{background:#fff1d6;color:#9a5d00}.ap-sit.com,.ap-sit.atd{background:#fdf3d2;color:#8a6a00}.ap-sit.ven{background:#dcf2e5;color:#1f6e43}.ap-sit.nao{background:#f9e0df;color:#9c2f2f}.ap .ap-item.atrasado .ap-sit{background:#f9e0df;color:#9c2f2f}
 .ap-vazio{text-align:center;padding:60px 10px;font-size:20px;color:#7a869d;background:#fff;border-radius:14px;border:1px dashed #cfd6e3}
 .ap-rod{padding:10px 28px 16px;font-size:12.5px;color:#7a869d;text-align:center}
 .ap-erro{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#eef1f6;color:#1b2333;text-align:center;padding:20px}
 .ap-erro img{height:60px;margin-bottom:10px}.ap-erro b{font-size:24px}.ap-erro span{color:#56627a}
-@media (max-width:900px){.ap-item{grid-template-columns:70px 1fr;grid-template-areas:"h c" "o v" "s s"}.ap-hora{grid-area:h;font-size:22px}.ap-cli{grid-area:c}.ap-origem{grid-area:o}.ap-vend{grid-area:v}.ap-sit{grid-area:s}.ap-top,.ap-dias,.ap-resumo,.ap-lista{padding-left:14px;padding-right:14px}.ap-relogio b{font-size:28px}.ap-resumo .mix{margin-left:0}}
+@media (max-width:900px){.ap .ap-item{grid-template-columns:70px 1fr;grid-template-areas:"h c" "o v" "s s"}.ap-hora{grid-area:h;font-size:22px}.ap-cli{grid-area:c}.ap-origem{grid-area:o}.ap-vend{grid-area:v}.ap-sit{grid-area:s}.ap-top,.ap-dias,.ap-resumo,.ap-lista{padding-left:14px;padding-right:14px}.ap-relogio b{font-size:28px}.ap-resumo .mix{margin-left:0}}
 .mv-convite{display:flex;align-items:center;gap:10px;background:#fff7e0;border:1px solid #e8c56a;color:#6d5000;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13px;cursor:pointer}
 .mv-convite span{flex:1}
 .mv-convite button{border:0;background:none;color:inherit;font-size:15px;padding:0 4px}
@@ -927,7 +929,7 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ap-chegou:disabled{background:#dfe4ee;color:#56627a;box-shadow:none;cursor:default;font-variant-numeric:tabular-nums}
 .ap-toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#2f8f5b;color:#fff;font-weight:700;font-size:17px;padding:14px 22px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:50;max-width:90vw;text-align:center}
 .ap-toast.erro{background:#c24a4a}
-@media (max-width:900px){.ap-item{grid-template-areas:"h c" "o v" "s s" "a a"}.ap-acao{grid-area:a}}
+@media (max-width:900px){.ap .ap-item{grid-template-areas:"h c" "o v" "s s" "a a"}.ap-acao{grid-area:a}}
 .ap-iniciar{border:0;border-radius:12px;padding:11px 10px;font:inherit;font-weight:800;font-size:15px;background:#c77a00;color:#fff;cursor:pointer;box-shadow:0 2px 6px rgba(199,122,0,.3)}
 .ap-iniciar:hover{background:#a86700}
 .ap-iniciado{font-weight:800;color:#27468f;font-size:15px;padding:6px 0}
@@ -952,8 +954,7 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .ap-ematd{display:inline-block;background:#1f9d55;color:#fff;border-radius:10px;padding:10px 14px;font-weight:700;white-space:nowrap}
 .ap-resumo>button{background:#fff;border-radius:14px;padding:12px 18px;display:flex;align-items:baseline;gap:8px;border:2px solid #dfe4ee;cursor:pointer;font:inherit}
 .ap-resumo>button.on{border-color:#27468f;background:#eef2fb}
-.ap-resumo .f-sem_vendedor b{color:#c77a00}.ap-resumo .f-com_vendedor b{color:#b58a10}.ap-resumo .f-em_atendimento b{color:#1f9d55}.ap-resumo .f-finalizado b{color:#56627a}
-.ap-item.fin{border-left-color:#8a94a8;opacity:.75}.ap-sit.fin{color:#56627a}
+.ap-resumo .f-sem_vendedor b{color:#c77a00}.ap-resumo .f-com_vendedor b{color:#b58a10}.ap-resumo .f-em_atendimento b{color:#1f9d55}.ap-resumo .f-finalizado b{color:#56627a}.ap .ap-item.fin{border-left-color:#8a94a8;opacity:.75}.ap-sit.fin{color:#56627a}
 .mv-sel{width:100%;padding:13px 12px;border-radius:12px;border:1px solid var(--line,#ccd);font:inherit;font-size:15px;background:var(--card,#fff);color:inherit;margin-top:8px}
 .pg-wrap .bar-row .v{white-space:nowrap}
 .sc-med-agendada{background:var(--warn-bg,#fff4d6);color:var(--warn,#b07a00)}.sc-med-realizada{background:#e6efff;color:#27468f}.sc-med-liberada{background:#e3f5ea;color:#1f7a44}.sc-med-validar{background:#eef0f4;color:#56627a}
@@ -1990,3 +1991,23 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .pres-esteve.ok{background:#e8f6ee;color:#1f6b3e;border-radius:10px;padding:10px 12px;font-size:15px}
 .pres-esteve.nao{background:#fdecea;color:#8a1f14;border-radius:10px;padding:10px 12px;font-size:15px}
 .pg-movel{padding:10px 6px}.pg-movel .pg h1{font-size:19px}
+
+/* ===== modo escuro: etiquetas e faixas claras viram tons escuros (nada de caixa branca no escuro) ===== */
+@media (prefers-color-scheme: dark){
+:root:not([data-theme="light"]) .mv-aviso, :root:not([data-theme="light"]) .mv-convite, :root:not([data-theme="light"]) .marca-loja.assumido, :root:not([data-theme="light"]) .selo-venda.prom, :root:not([data-theme="light"]) .sc-vendido_entrada, :root:not([data-theme="light"]) .sc-em_obras, :root:not([data-theme="light"]) .selo-litoral.pendente, :root:not([data-theme="light"]) .mv-litoral:not(.on), :root:not([data-theme="light"]) .btn-litoral:not(.on), :root:not([data-theme="light"]) .chat-edit, :root:not([data-theme="light"]) .ql-nota.media, :root:not([data-theme="light"]) .md-onde.fora, :root:not([data-theme="light"]) .cv-tipo.marketing{background:var(--tn-amber);color:var(--tn-amber-i);border-color:color-mix(in srgb,var(--tn-amber-i) 40%,transparent)}
+:root:not([data-theme="light"]) .pb-card-a .r, :root:not([data-theme="light"]) .selo-venda.venc, :root:not([data-theme="light"]) .vv-op.canc.on, :root:not([data-theme="light"]) .vv-linha.vencida, :root:not([data-theme="light"]) .gr-res.erro, :root:not([data-theme="light"]) .selo-litoral.recusado, :root:not([data-theme="light"]) .ql-nota.ruim, :root:not([data-theme="light"]) .ql-n, :root:not([data-theme="light"]) .pres-esteve.nao{background:var(--tn-red);color:var(--tn-red-i);border-color:color-mix(in srgb,var(--tn-red-i) 40%,transparent)}
+:root:not([data-theme="light"]) .pb-card-a .ok, :root:not([data-theme="light"]) .selo-venda.ok, :root:not([data-theme="light"]) .md-quem, :root:not([data-theme="light"]) .ma-os tr.ma-sel td, :root:not([data-theme="light"]) .pres-esteve.ok{background:var(--tn-green);color:var(--tn-green-i);border-color:color-mix(in srgb,var(--tn-green-i) 40%,transparent)}
+:root:not([data-theme="light"]) .sc-med-validar, :root:not([data-theme="light"]) .pb-card-a span, :root:not([data-theme="light"]) .selo-venda.pend, :root:not([data-theme="light"]) .selo-venda.canc, :root:not([data-theme="light"]) .sc-standby, :root:not([data-theme="light"]) .chat-menu button:hover{background:var(--tn-grey);color:var(--tn-grey-i);border-color:color-mix(in srgb,var(--tn-grey-i) 40%,transparent)}
+:root:not([data-theme="light"]) .selo-pedevend, :root:not([data-theme="light"]) .md-quem.cons, :root:not([data-theme="light"]) .md-onde.visita{background:var(--tn-purple);color:var(--tn-purple-i);border-color:color-mix(in srgb,var(--tn-purple-i) 40%,transparent)}
+:root:not([data-theme="light"]) .chat-menu, :root:not([data-theme="light"]) .chat-balao{background:var(--surface);color:var(--ink);border-color:var(--line)}
+:root:not([data-theme="light"]) .pres-naoveio{background:var(--surface);color:var(--danger);border-color:color-mix(in srgb,var(--danger) 55%,transparent)}
+:root:not([data-theme="light"]) .ac-vis, :root:not([data-theme="light"]) .ac-vis-i{filter:none}
+}
+:root[data-theme="dark"] .mv-aviso, :root[data-theme="dark"] .mv-convite, :root[data-theme="dark"] .marca-loja.assumido, :root[data-theme="dark"] .selo-venda.prom, :root[data-theme="dark"] .sc-vendido_entrada, :root[data-theme="dark"] .sc-em_obras, :root[data-theme="dark"] .selo-litoral.pendente, :root[data-theme="dark"] .mv-litoral:not(.on), :root[data-theme="dark"] .btn-litoral:not(.on), :root[data-theme="dark"] .chat-edit, :root[data-theme="dark"] .ql-nota.media, :root[data-theme="dark"] .md-onde.fora, :root[data-theme="dark"] .cv-tipo.marketing{background:var(--tn-amber);color:var(--tn-amber-i);border-color:color-mix(in srgb,var(--tn-amber-i) 40%,transparent)}
+:root[data-theme="dark"] .pb-card-a .r, :root[data-theme="dark"] .selo-venda.venc, :root[data-theme="dark"] .vv-op.canc.on, :root[data-theme="dark"] .vv-linha.vencida, :root[data-theme="dark"] .gr-res.erro, :root[data-theme="dark"] .selo-litoral.recusado, :root[data-theme="dark"] .ql-nota.ruim, :root[data-theme="dark"] .ql-n, :root[data-theme="dark"] .pres-esteve.nao{background:var(--tn-red);color:var(--tn-red-i);border-color:color-mix(in srgb,var(--tn-red-i) 40%,transparent)}
+:root[data-theme="dark"] .pb-card-a .ok, :root[data-theme="dark"] .selo-venda.ok, :root[data-theme="dark"] .md-quem, :root[data-theme="dark"] .ma-os tr.ma-sel td, :root[data-theme="dark"] .pres-esteve.ok{background:var(--tn-green);color:var(--tn-green-i);border-color:color-mix(in srgb,var(--tn-green-i) 40%,transparent)}
+:root[data-theme="dark"] .sc-med-validar, :root[data-theme="dark"] .pb-card-a span, :root[data-theme="dark"] .selo-venda.pend, :root[data-theme="dark"] .selo-venda.canc, :root[data-theme="dark"] .sc-standby, :root[data-theme="dark"] .chat-menu button:hover{background:var(--tn-grey);color:var(--tn-grey-i);border-color:color-mix(in srgb,var(--tn-grey-i) 40%,transparent)}
+:root[data-theme="dark"] .selo-pedevend, :root[data-theme="dark"] .md-quem.cons, :root[data-theme="dark"] .md-onde.visita{background:var(--tn-purple);color:var(--tn-purple-i);border-color:color-mix(in srgb,var(--tn-purple-i) 40%,transparent)}
+:root[data-theme="dark"] .chat-menu, :root[data-theme="dark"] .chat-balao{background:var(--surface);color:var(--ink);border-color:var(--line)}
+:root[data-theme="dark"] .pres-naoveio{background:var(--surface);color:var(--danger);border-color:color-mix(in srgb,var(--danger) 55%,transparent)}
+:root[data-theme="dark"] .ac-vis, :root[data-theme="dark"] .ac-vis-i{filter:none}

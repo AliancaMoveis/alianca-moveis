@@ -142,7 +142,7 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
                         : t.atendenteExterno ? <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "#8a4b00" }}>freelancer {t.atendenteExterno} (assumiu na fila)</b></>
                         : <>{(alheio && !cons) ? "" : " · "}<b style={{ color: "var(--warn)" }}>Sem vendedor · fila</b></>}
                       {vend && t.assumidoFila ? <> <span className="marca-loja assumido">assumido na fila</span></> : null}</div>
-                    {t.emAtendimento ? <div className="dt"><b className="ag-ematd">🟢 Em atendimento</b> desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+                    {R.atendendoAgora(c) ? <div className="dt"><b className="ag-ematd">🟢 Em atendimento</b> desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
                       : !alheio && iso === hoje && R.podeIniciarAtend(c) ? <div style={{ marginTop: 6 }}><button className="btn sm ag-iniciar" onClick={e => { e.stopPropagation(); if (confirm("Iniciar o atendimento de " + c.cliente + " com " + (vend || "o vendedor") + "?")) ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado"); }}>▶️ Iniciar atendimento</button></div> : null}
                     {c.produto && <div className="dt">{c.produto}</div>}
                     {!alheio && obsAg(c) ? <div className="dt">📝 {obsAg(c)}</div> : null}

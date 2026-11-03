@@ -9,7 +9,7 @@ const FRETEIROS = ["José Elias da Silva", "Carlos (exemplo)", "Marcos (exemplo)
 const num = (s: string) => { const t = String(s || "").replace(/[^\d,.-]/g, ""); const n = Number(/,\d{1,2}$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "")); return isFinite(n) ? n : 0; };
 const br = (s: string) => s ? s.slice(8, 10) + "/" + s.slice(5, 7) : "";
 const hoje = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
-const ST: Record<string, [string, string, string]> = { lancado: ["Em digitação", "#EEF1F6", "#3B4558"], enviado: ["Aguardando aprovação", "#FFF4DC", "#7A4F00"], aprovado: ["Aprovado", "#E8F3EC", "#1F6B3E"] };
+const ST: Record<string, [string, string, string]> = { lancado: ["Em digitação", "var(--tn-grey)", "var(--tn-grey-i)"], enviado: ["Aguardando aprovação", "var(--tn-amber)", "var(--tn-amber-i)"], aprovado: ["Aprovado", "var(--tn-green)", "var(--tn-green-i)"] };
 
 export default function FretesLancamento() {
   const { R, toast } = useApp() as any;
@@ -165,8 +165,8 @@ function GrupoFreteiro({ g, rec, toast, podeEditar, enviar, aprovacao, aprovar, 
         <b style={{ fontSize: 15 }}>{g.freteiro}</b>
         <span className="pill" style={{ background: bg, color: cor, fontWeight: 800 }}>{st}</span>
         {g.dif != null && (batido
-          ? <span className="pill" style={{ background: "#E8F3EC", color: "#1F6B3E", fontWeight: 800 }}>✓ conferência bateu: romaneios = total informado</span>
-          : <span className="pill" style={{ background: "#FDECEC", color: "#8A1C1C", fontWeight: 800 }}>⚠ diferença de {moeda(Math.abs(g.dif))} entre os romaneios ({moeda(g.somaRom)}) e o total informado ({moeda(g.somaTot)})</span>)}
+          ? <span className="pill" style={{ background: "var(--tn-green)", color: "var(--tn-green-i)", fontWeight: 800 }}>✓ conferência bateu: romaneios = total informado</span>
+          : <span className="pill" style={{ background: "var(--tn-red)", color: "var(--tn-red-i)", fontWeight: 800 }}>⚠ diferença de {moeda(Math.abs(g.dif))} entre os romaneios ({moeda(g.somaRom)}) e o total informado ({moeda(g.somaTot)})</span>)}
         <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <b style={{ fontSize: 17 }}>{moeda(g.pagar)}</b>
           {podeEditar && pend.length > 0 && <button className="btn sm primary" onClick={() => enviar(g.freteiro, pend.map((l: Lanc) => l.id))}>📤 Enviar para aprovação ({pend.length})</button>}

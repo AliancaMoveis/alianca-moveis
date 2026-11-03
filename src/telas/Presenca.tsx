@@ -84,7 +84,7 @@ function Cartao({ c, porta, tag }: { c: any; porta: boolean; tag?: string }) {
         </div>
         {fotos.length > 0 && <div className="pres-fotos" onClick={() => abrirDetalhe(c.id)} title="Abrir a ficha para ver as fotos">{fotos.slice(0, 4).map((a: any) => <img key={a.id} src={a.url} alt="" loading="lazy" />)}{fotos.length > 4 && <span>+{fotos.length - 4}</span>}</div>}
         {!fotos.length && !porta && <div className="pres-semfoto">⚠️ Sem foto/planta anexada</div>}
-        {c.tratativa && c.tratativa.emAtendimento ? <div className="pres-ematd">🟢 Em atendimento desde {new Date(c.tratativa.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+        {R.atendendoAgora(c) ? <div className="pres-ematd">🟢 Em atendimento desde {new Date(c.tratativa.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
           : porta && R.podeIniciarAtend(c) && String(c.dataLoja).slice(0, 10) === hojeISO() ? <button className="btn pres-iniciar" onClick={() => { if (confirm("Iniciar o atendimento de " + c.cliente + " com " + R.nomeUser(c.atendenteId) + "?")) ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado"); }}>▶️ Iniciar atendimento</button> : null}
         {!porta && <EsteveNaLoja c={c} />}
         {!porta && <ConfirmarVinda c={c} />}

@@ -34,7 +34,7 @@ export function GerHoje({ ir }: { ir: (aba: string) => void }) {
   const loja = st.chamados.filter((c: any) => R.domMarketing(c) && c.dataLoja && String(c.dataLoja).slice(0, 10) === hoje)
     .sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
   const semVend = loja.filter((c: any) => !c.atendenteId && !(c.tratativa && c.tratativa.atendenteExterno) && !["nao_compareceu", "reagendado"].includes(R.statusClienteDe(c)));
-  const emAtd = loja.filter((c: any) => c.tratativa && c.tratativa.emAtendimento && !c.venda);
+  const emAtd = loja.filter((c: any) => R.atendendoAgora(c));
   const meus = st.chamados.filter((c: any) => !R.domMarketing(c) && c.solicitanteId === eu && c.status !== "concluida")
     .sort((a: any, b: any) => String(b.criadoEm).localeCompare(String(a.criadoEm)));
   const { grupos } = R.minhasPendencias();

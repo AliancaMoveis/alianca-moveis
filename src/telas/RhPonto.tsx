@@ -140,7 +140,7 @@ function LinhaFunc({ x, aberto, abrir, rec, toast }: { x: any; aberto: boolean; 
       <td className="n">{x.faltasDia.length || "–"}</td>
       <td>{x.confere ? <span style={{ color: "var(--st-concluida)", fontWeight: 700 }}>✓ confere</span> : <span style={{ color: "var(--danger)", fontWeight: 700 }}>⚠ divergiu do cartão</span>}</td>
     </tr>
-    {aberto && <tr><td colSpan={10} style={{ background: "var(--fundo2, #f7f8fb)", padding: 12 }}>
+    {aberto && <tr><td colSpan={10} style={{ background: "var(--surface-2)", padding: 12 }}>
       {x.doms.length > 0 && <p style={{ margin: "0 0 6px" }}><b>Domingos trabalhados:</b> {x.doms.map((d: Dia) => br(d.data) + " (" + hm(d.trabalhado) + ")").join(" · ")}</p>}
       {x.fers.length > 0 && <p style={{ margin: "0 0 6px" }}><b>Feriados trabalhados:</b> {x.fers.map((d: Dia) => br(d.data) + " (extra 100% " + hm(d.ex100) + ")").join(" · ")}</p>}
       {x.faltasDia.length > 0 && <p style={{ margin: "0 0 10px" }}><b>Faltas de dia cheio:</b> {x.faltasDia.map((d: Dia) => br(d.data)).join(" · ")}</p>}

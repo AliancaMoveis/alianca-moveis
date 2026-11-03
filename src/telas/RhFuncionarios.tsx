@@ -5,7 +5,7 @@ import { podeRh } from "../lib/ponto";
 import { abrirDoc, apagarDoc, apagarFuncionario, aprovarEnvio, criarLink, fmtCpf, listarDocs, listarFuncionarios, listarLinks, mudarLink, salvarFuncionario, subirDoc, urlAdmissao, STATUS_FUNC, TIPOS_DOC, EMPRESAS, nomeEmpresa, type Doc, type Envio, type Funcionario, type Link } from "../lib/rh";
 
 const br = (s?: string | null) => (s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "—");
-const stCor: Record<string, string> = { ativo: "#1F6B3E", ferias: "#1F3864", afastado: "#7A4F00", desligado: "#8A1C1C" };
+const stCor: Record<string, string> = { ativo: "var(--tn-green-i)", ferias: "var(--tn-blue-i)", afastado: "var(--tn-amber-i)", desligado: "var(--tn-red-i)" };
 
 export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: string }) {
   const { R, toast } = useApp() as any;
@@ -44,7 +44,7 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
               <tbody>{l.map(f => <tr key={f.id} className="ma-lin" onClick={() => setAberto(f.id)}>
                 <td>{f.folha || "—"}</td><td><b>{f.nome}</b>{f.origem === "link" ? <span className="pill" style={{ marginLeft: 6 }}>pelo link</span> : null}</td>
                 <td>{[f.cargo, f.setor].filter(Boolean).join(" · ") || "—"}</td><td>{nomeEmpresa(f.empresa)}</td><td>{f.cpf || "—"}</td><td>{f.pis || "—"}</td><td style={{ fontSize: 12.5 }}>{f.horario || "—"}</td><td>{br(f.admissao)}</td>
-                <td><b style={{ color: stCor[f.status] || "#333" }}>{(STATUS_FUNC.find(x => x[0] === f.status) || ["", f.status])[1]}</b></td>
+                <td><b style={{ color: stCor[f.status] || "var(--tn-grey-i)" }}>{(STATUS_FUNC.find(x => x[0] === f.status) || ["", f.status])[1]}</b></td>
               </tr>)}</tbody>
             </table>
           </div>}
@@ -155,7 +155,7 @@ function Admissoes({ rec }: { rec: () => any }) {
     if (!nome.trim()) { toast("Coloque o nome da pessoa que vai ser contratada"); return; }
     try { const l = await criarLink(nome.trim(), cargo.trim(), setor.trim(), R.currentUserId); setNome(""); setCargo(""); setSetor(""); await recL(); copiar(l.token); } catch (e: any) { toast(e.message); }
   };
-  const stL: Record<string, [string, string]> = { aberto: ["Aguardando preencher", "#7A4F00"], preenchido: ["✅ Preenchido — revisar", "#1F6B3E"], aprovado: ["Aprovado e cadastrado", "#1F3864"], cancelado: ["Cancelado", "#8A1C1C"] };
+  const stL: Record<string, [string, string]> = { aberto: ["Aguardando preencher", "var(--tn-amber-i)"], preenchido: ["✅ Preenchido — revisar", "var(--tn-green-i)"], aprovado: ["Aprovado e cadastrado", "var(--tn-blue-i)"], cancelado: ["Cancelado", "var(--tn-red-i)"] };
   return (
     <>
       <div className="card" style={{ padding: 14 }}>
@@ -174,7 +174,7 @@ function Admissoes({ rec }: { rec: () => any }) {
             <thead><tr><th>Pessoa</th><th>Cargo · setor</th><th>Criado em</th><th>Situação</th><th></th></tr></thead>
             <tbody>{d.links.map(l => {
               const envio = d.envios.find(e => e.token === l.token && !e.revisado_em);
-              const [sn, sc] = stL[l.status] || [l.status, "#333"];
+              const [sn, sc] = stL[l.status] || [l.status, "var(--tn-grey-i)"];
               return <tr key={l.token}>
                 <td><b>{l.nome || "—"}</b></td><td>{[l.cargo, l.setor].filter(Boolean).join(" · ") || "—"}</td>
                 <td>{new Date(l.criado_em).toLocaleDateString("pt-BR")}</td>

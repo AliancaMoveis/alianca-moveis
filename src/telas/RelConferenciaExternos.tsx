@@ -78,13 +78,13 @@ export default function RelConferenciaExternos({ fechar }: { fechar: () => void 
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 8 }}>
         {porCons.map(([k, x]) => <div key={k} className="card" style={{ padding: "8px 10px" }}><b>{k}</b><div className="hint">{x.n} venda{x.n === 1 ? "" : "s"}</div><b>{fmtMoeda(x.v)}</b></div>)}
-        <div className="card" style={{ padding: "8px 10px", background: "var(--fundo2, #f3f5fa)" }}><b>TOTAL</b><div className="hint">{linhas.length} vendas</div><b>{fmtMoeda(total)}</b></div>
+        <div className="card" style={{ padding: "8px 10px", background: "var(--surface-2)" }}><b>TOTAL</b><div className="hint">{linhas.length} vendas</div><b>{fmtMoeda(total)}</b></div>
       </div>
       <div style={{ marginTop: 12 }}>
         <b>🚶 Visitas do ciclo</b> <span className="hint">({fmtMoeda(valorVisita)} por visita · nº oficial lançado pela Gestão em Gestão → Financeiro)</span>
         {vis.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 8, marginTop: 6 }}>
           {vis.map(v => <div key={v.id} className="card" style={{ padding: "8px 10px" }}><b>{primeiro(v.pessoa)}</b> <span className="hint">{v.papel}</span><div>{v.visitas} visitas</div><b>{fmtMoeda(v.visitas * valorVisita)}</b></div>)}
-          <div className="card" style={{ padding: "8px 10px", background: "var(--fundo2, #f3f5fa)" }}><b>TOTAL</b><div>{totVis} visitas</div><b>{fmtMoeda(totVis * valorVisita)}</b></div>
+          <div className="card" style={{ padding: "8px 10px", background: "var(--surface-2)" }}><b>TOTAL</b><div>{totVis} visitas</div><b>{fmtMoeda(totVis * valorVisita)}</b></div>
         </div> : <div className="hint" style={{ marginTop: 4 }}>Ainda não lançado para este ciclo.</div>}
         {vis.length > 0 && <div className="hint" style={{ marginTop: 4 }}>A planilha sai com uma segunda aba, VISITAS, com esses números.</div>}
       </div>

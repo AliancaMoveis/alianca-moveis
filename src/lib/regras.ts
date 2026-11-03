@@ -353,7 +353,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // acessos extras liberados por pessoa no cadastro do usuário (ex.: fretes, montagem) — tabela usuario_acessos
   const temAcesso = (k: string) => (((me() as any) || {}).acessos || []).includes(k);
   const oculto = (k: string) => (((me() as any) || {}).menusOcultos || []).includes(k);
-  const temPresenca = () => (ehGestao() || mySetores().includes("presenca")) && !oculto("presenca");
+  // presença na loja e cliente porta: Confirmação de presença, gerentes da loja e Gestão
+  const temPresenca = () => (ehGestao() || mySetores().includes("presenca") || mySetores().includes("gerente_loja")) && !oculto("presenca");
   // ▶️ iniciar atendimento na loja: o vendedor do cliente, a Confirmação de presença, o gerente ou a Gestão (com vendedor definido)
   const podeIniciarAtend = (c: any) => !!c && !!c.atendenteId && !c.venda && !(c.tratativa && c.tratativa.emAtendimento) && (domMarketing(c) || c.tipo === "porta")
     && !["vendido", "vendido_promissoria", "vendido_entrada", "vendido_revisao", "atendido", "venda_cancelada", "reprovado", "nao_vai_comprar", "nao_compareceu", "loja_cancelada"].includes(String(c.statusCliente || ""))
@@ -496,6 +497,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const precisaDefinirVendedor = (c: Chamado) => !ehDireto(c) || !!(c.tratativa && (c.tratativa.querProjeto === "sim" || c.tratativa.pedeVendedor));
   const origemLoja = (c: Chamado) => ehDireto(c) ? "marketing" : "externo";
   // cliente que vem (ou veio) à loja sem planta/fotos anexadas
+  // "Em atendimento" só enquanto não há venda nem desfecho (venda registrada ou parecer final encerram o atendimento)
+  const atendendoAgora = (c: any) => !!(c && c.tratativa && c.tratativa.emAtendimento) && !c.venda && !c.tratativa.atendimentoFim && ![...statusFinalCliente, "vendido_revisao", "orcamento", "sem_resposta", "em_obras", "standby", "em_analise"].includes(statusClienteDe(c));
   const semAnexo = (c: Chamado) => domMarketing(c) && !(c.tratativa && c.tratativa.importadoVisita) && !(c.anexos || []).length && !c.venda && !statusFinalCliente.includes(statusClienteDe(c))
     && (!!c.dataLoja || !!(c.tratativa && c.tratativa.realizada));
   // o cliente já veio (data/hora da loja passou) e o vendedor ainda não deu parecer depois disso
@@ -1091,7 +1094,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
 
   return {
     acompAtivo, podeConsultaProduto, podePrePedido, podeNegociacao, podeEditarProduto, podeLiberarMostruario, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, visitasOficiais, oficiaisPeriodo, totalVisitasPeriodo, cicloDoPeriodo, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
-    verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
+    atendendoAgora, verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
     msgWhatsMedida, temAcesso, ehDireto, ehPorta, temPresenca, veAnuncios, veQualidade, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,

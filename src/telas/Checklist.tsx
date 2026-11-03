@@ -1090,10 +1090,10 @@ export function Sugestoes({ valor, onPick, excluirId, projetista, durMin }: { va
           : <span className="hint">{mes ? "Nenhum horário livre nesse mês para essa duração." : "Nenhum horário livre nas próximas semanas — revise em ⚙ Horários."}</span>}
       </div>
       {lib.length > 0 && <div style={{ marginTop: 8 }}>
-        <button type="button" className="btn ghost sm" style={{ color: "#6b7280" }} onClick={() => setVerLib(!verLib)}>{verLib ? "▾" : "▸"} 🔓 Liberáveis (prazo vencido) · {lib.length}</button>
+        <button type="button" className="btn ghost sm" style={{ color: "var(--tn-grey-i)" }} onClick={() => setVerLib(!verLib)}>{verLib ? "▾" : "▸"} 🔓 Liberáveis (prazo vencido) · {lib.length}</button>
         {verLib && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, ...(mes ? { maxHeight: 200, overflowY: "auto" } : {}) }}>
           {lib.map(x => { const d = parseData(x.slot); return (
-            <button type="button" key={x.slot + x.proj} className="chip" disabled={!!liberando} style={{ background: "#f3f4f6", color: "#4b5563", borderStyle: "dashed" }}
+            <button type="button" key={x.slot + x.proj} className="chip" disabled={!!liberando} style={{ background: "var(--tn-grey)", color: "var(--tn-grey-i)", borderStyle: "dashed" }}
               title={"Ocupado só por reserva vencida: " + x.bloq.map(o => o.cliente + " (sem resposta há " + (o.dias ?? 0) + "d)").join("; ") + "\nClique para liberar e usar este horário"}
               onClick={() => usarLib(x)}>
               🔓 {DIAS[d.getDay()].slice(0, 3)} {d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · <b>{x.slot.slice(11, 16)}</b> · {x.proj} <span className="n">{liberando === x.slot + x.proj ? "liberando…" : x.bloq[0].cliente.split(" ")[0]}</span></button>); })}
@@ -1215,9 +1215,9 @@ function CalendarioDia() {
   return (
     <div className="card" style={{ padding: "8px 12px", margin: "6px 0" }}>
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
-        <button className="btn sm" style={{ background: "var(--ink)", color: "var(--surface)" }} onClick={() => mover(-1)}>&lt;</button>
-        <button className="btn sm" style={{ background: "var(--ink)", color: "var(--surface)" }} onClick={() => setDia(hoje())}>Hoje</button>
-        <button className="btn sm" style={{ background: "var(--ink)", color: "var(--surface)" }} onClick={() => mover(1)}>&gt;</button>
+        <button className="btn sm" style={{ background: "var(--primary)", color: "var(--primary-ink)" }} onClick={() => mover(-1)}>&lt;</button>
+        <button className="btn sm" style={{ background: "var(--primary)", color: "var(--primary-ink)" }} onClick={() => setDia(hoje())}>Hoje</button>
+        <button className="btn sm" style={{ background: "var(--primary)", color: "var(--primary-ink)" }} onClick={() => mover(1)}>&gt;</button>
         <input type="date" value={dia} onChange={e => e.target.value && setDia(e.target.value)} style={{ width: "auto", padding: "4px 8px", borderRadius: 8 }} />
         <span style={{ width: 8 }} />
         {cfg.projetistas.map((n: string) => { const off = ocultos.includes(n); return (
