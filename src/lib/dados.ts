@@ -119,7 +119,7 @@ async function principal(): Promise<{ chamados: any[]; historico: any[]; anexos:
   return { chamados, historico, anexos, vendas, valores, itens };
 }
 async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq, viscic] = await Promise.all([
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq, viscic, vtemp] = await Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em,faz_projeto,folga,turno,nome_completo,telefone,ferias_de,ferias_ate,edita_agenda,domingo_ref,na_agenda,freelancer,menus_ocultos,escala_dom", "criado_em"),
@@ -138,6 +138,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("montadores_conta", "*").catch(() => []), // conta de pagamento do montador — só Pós-venda e Gestão (RLS)
     todos("consultor_bloqueios", "*", "de").catch(() => []), // agenda fechada dos consultores (o próprio, Gestão e supervisões)
     todos("visitas_ciclo", "*", "ciclo").catch(() => []), // nº oficial de visitas por ciclo (Gestão lança; o próprio vê o dele)
+    todos("vendas_temp", "*", "data").catch(() => []), // vendas lançadas só para a Gestão conferir (RLS: só Gestão) — não geram comissão nem aviso
   ]);
   const { chamados, vendas, valores, historico: hist, anexos } = P; const proms = P.itens;
   // lançamentos da venda: nºs pagos, promissórias (com saldo) e pagamentos de promissória
@@ -145,6 +146,13 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
   (proms as any[]).forEach((i: any) => (itensDe[i.chamado_id] = itensDe[i.chamado_id] || []).push({
     id: i.id, tipo: i.tipo, numero: i.numero, valor: Number(i.valor), dataVenda: i.data_venda || "", vencimento: i.vencimento || "", status: i.status,
     valorPago: Number(i.valor_pago) || 0, promissoriaId: i.promissoria_id || "", registradoEm: i.registrado_em, decididoEm: i.decidido_em || "" }));
+  // vendas temporárias (só a Gestão recebe as linhas): entram como nº pago efetivado, marcadas temp — somam no efetivado, fora da comissão
+  const vendaTempDe: Record<string, any> = {};
+  (vtemp as any[]).forEach((t: any) => {
+    (itensDe[t.chamado_id] = itensDe[t.chamado_id] || []).push({ id: "temp-" + t.id, tipo: "pago", numero: String(t.numero), valor: Number(t.valor), dataVenda: t.data, vencimento: "", status: "efetivada",
+      valorPago: 0, promissoriaId: "", registradoEm: t.criado_em, decididoEm: t.data + "T12:00:00", temp: true, obs: t.obs || "" });
+    vendaTempDe[t.chamado_id] = vendaTempDe[t.chamado_id] || { numero: String(t.numero), data_venda: t.data, decidido_em: t.data + "T12:00:00", registrado_em: t.criado_em, status: "efetivada", vendedor: "", temp: true };
+  });
   // promissórias no formato usado pelas telas: aberta (validada com saldo), quitada, pendente (a validar), cancelada
   const promDe: Record<string, any[]> = {};
   Object.entries(itensDe).forEach(([k, l]) => (promDe[k] = l.filter(i => i.tipo === "promissoria").map(i => ({
@@ -213,7 +221,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       cruzadoEm: m.cruzado_em, atualizadoEm: m.atualizado_em, atualizadoPor: m.atualizado_por }])),
     config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), valorVendaMkt: cfg.data.valor_venda_mkt != null ? Number(cfg.data.valor_venda_mkt) : 10, modoTeste: !!cfg.data.modo_teste, auxilioFixo: cfg.data.auxilio_fixo != null ? Number(cfg.data.auxilio_fixo) : 1500, diaAuxilio: Number(cfg.data.dia_auxilio) || 15, checklistAgenda: cfg.data.checklist_agenda || null, escalaDomingos: cfg.data.escala_domingos || {}, googleReview: cfg.data.google_review_url || "" } : { comissaoPct: 1.5, pagamentoVisita: 40 },
     chamados: chamados.filter((c: any) => !(c.tratativa && c.tratativa.excluido)).map((c: any) => {
-      const v = vendaDe[c.id];
+      const v = vendaDe[c.id] || vendaTempDe[c.id];
       const t = trDe[c.id];
       return {
         id: c.id, tipo: c.tipo, setorDestino: c.setor_destino, status: c.status, criadoEm: c.criado_em, slaResposta: c.sla_resposta,
@@ -229,9 +237,10 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
         venda: v ? {
           numero: v.numero, valor: valorDe[c.id] != null ? fmtValor(valorDe[c.id]) : "", valorNum: valorDe[c.id] ?? null,
           // competência: a venda conta no mês em que a Gestão aprovou; se a data da venda é de mês anterior, vai para o 1º dia do mês da aprovação
-          ...competencia(v.data_venda || "", v.decidido_em || v.registrado_em), vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: v.status,
+          ...competencia(v.data_venda || "", v.decidido_em || v.registrado_em), vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: vendaTempDe[c.id] && !["entrada", "efetivada"].includes(v.status) ? "efetivada" : v.status,
           gerenteId: v.gerente_id || "", gerenteNome: v.gerente_nome || "",
           entrada: entradaDe[c.id] || 0, promissorias: promDe[c.id] || [], itens: itensDe[c.id] || null, tipoInformado: v.tipo_informado || "", entradaInformada: entInfDe[c.id] || 0,
+          ...(v.temp ? { temp: true } : {}),
         } : null,
         transferencia: t ? { de: t.de_usuario, para: t.para_usuario, solicitadoPor: t.solicitado_por, quando: t.quando, status: "pendente" } : null,
         anexos: anxDe[c.id] || [],

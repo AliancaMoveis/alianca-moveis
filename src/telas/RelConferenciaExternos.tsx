@@ -28,7 +28,7 @@ export default function RelConferenciaExternos({ fechar }: { fechar: () => void 
       const itens = itensVenda(c.venda);
       const pagos = new Set(itens.filter((i: any) => i.tipo === "pagamento" && i.status === "efetivada").map((i: any) => String(i.numero)));
       for (const i of itens) {
-        if (i.status === "cancelada") continue;
+        if (i.status === "cancelada" || i.temp) continue; // temp = lançada só para a Gestão conferir
         const data = competenciaItem(i.dataVenda, i.decididoEm, i.registradoEm);
         if (!data || data < de || data > ate) continue;
         const l: L = { cliente: c.cliente, valor: Number(i.valor) || 0, data, venda: String(i.numero || ""), consultor: cons, alm: c.id };

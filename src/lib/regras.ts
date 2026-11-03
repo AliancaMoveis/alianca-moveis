@@ -186,7 +186,7 @@ export function competenciaItem(data: string, decidido: string, registrado?: str
   return d.slice(0, 7) < m ? m + "-01" : d;
 }
 // pagamentos que geram comissão: cada nº pago efetivado (mês da aprovação) + cada pagamento de promissória (data do pagamento)
-export function pagamentosVenda(v: any): { valor: number; data: string; tipo: string; numero: string }[] {
+export function pagamentosVenda(v: any): { valor: number; data: string; tipo: string; numero: string; temp?: boolean }[] {
   if (!v) return [];
   if (!Array.isArray(v.itens)) {
     if (v.status !== "efetivada") return [];
@@ -194,7 +194,7 @@ export function pagamentosVenda(v: any): { valor: number; data: string; tipo: st
     return [{ valor: total, data: String(v.dataVenda || v.quando || "").slice(0, 10), tipo: "total", numero: v.numero }];
   }
   return v.itens.filter((i: any) => i.tipo !== "promissoria" && i.status === "efetivada")
-    .map((i: any) => ({ valor: i.valor, data: competenciaItem(i.dataVenda, i.decididoEm, i.registradoEm), tipo: i.tipo === "pagamento" ? "promissoria" : "venda", numero: i.numero }));
+    .map((i: any) => ({ valor: i.valor, data: competenciaItem(i.dataVenda, i.decididoEm, i.registradoEm), tipo: i.tipo === "pagamento" ? "promissoria" : "venda", numero: i.numero, ...(i.temp ? { temp: true } : {}) }));
 }
 
 // VALOR VENDIDO NO PERÍODO: cada nº pago conta no mês em que foi efetivado; pagamento de promissória conta no mês em que foi pago.
@@ -617,7 +617,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const oficial = visitasOficiais(consultorId, de, ate);
     // comissão pelos pagamentos: entrada na data da venda, promissórias na data em que foram pagas
     const meusVend = state.chamados.filter(c => c.consultorId === consultorId && c.venda);
-    const pagamentos = meusVend.flatMap(c => pagamentosVenda(c.venda).map(p => ({ ...p, c }))).filter(p => dentroPeriodo(p.data, de, ate) || (!de && !ate));
+    // vendas lançadas só para a Gestão conferir (temp) não geram comissão
+    const pagamentos = meusVend.flatMap(c => pagamentosVenda(c.venda).filter(p => !p.temp).map(p => ({ ...p, c }))).filter(p => dentroPeriodo(p.data, de, ate) || (!de && !ate));
     const vendas = meusVend.filter(c => pagamentos.some(p => p.c === c));
     const { pagamentoVisita, comissaoPct: pct } = cfg();
     // ciclo com nº oficial lançado pela Gestão: o pagamento das visitas usa esse nº (consultor → visitas; medidor → medidas)
