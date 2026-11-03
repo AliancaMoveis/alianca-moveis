@@ -228,7 +228,7 @@ function FinConsultor() {
         <div className="kpis" id="finKpis"><Kpi n={totVisitas + extraVis} l="Visitas pagas" /><Kpi n={totMed} l="Medidas feitas" /><Kpi n={totVendas} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(totVendido)} l="Valor vendido" /><Kpi fs={22} n={fmtMoeda(totComissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(totReemb)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(totAux)} l="Auxílio fixo (dia 15)" /><Kpi fs={22} n={fmtMoeda(totGeral)} l="Total a receber" cor="var(--st-concluida)" /></div>
         <VisitasDoCiclo de={de} ate={ate} pessoas={consultores} />
         <PrevisaoCiclos ids={consultores.filter(u => (u.setores || []).includes("consultor_externo")).map(u => u.id)} />
-        <FechamentoGestao />
+        <FechamentoGestao de={de} ate={ate} pessoas={consultores} />
         <PromissoriasAbertas titulo="Promissórias em aberto (comissão futura)" />
         <div id="finResumoTodos" className="panel"><h3>Por consultor <span className="hint" style={{ marginLeft: 6 }}>clique para ver o extrato</span></h3>
           {resumos.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Nome</th><th>Visitas pagas</th><th>Medidas</th><th>Vendas efetivadas</th><th>Valor vendido</th><th>Visitas + medidas</th><th>Comissão ({pct}%)</th><th>Reembolsos</th><th>Auxílio (dia 15)</th><th>Valor a receber</th></tr></thead>

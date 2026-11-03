@@ -2011,3 +2011,12 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 :root[data-theme="dark"] .chat-menu, :root[data-theme="dark"] .chat-balao{background:var(--surface);color:var(--ink);border-color:var(--line)}
 :root[data-theme="dark"] .pres-naoveio{background:var(--surface);color:var(--danger);border-color:color-mix(in srgb,var(--danger) 55%,transparent)}
 :root[data-theme="dark"] .ac-vis, :root[data-theme="dark"] .ac-vis-i{filter:none}
+
+/* relatório de fechamento do ciclo (consultores e medidores) */
+.rf{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--surface)}
+.rf-cab{display:flex;flex-direction:column;align-items:center;margin-bottom:10px}.rf-cab b{font-size:16px;text-transform:uppercase}.rf-cab span{font-size:12.5px;color:var(--ink-soft);font-weight:600}
+.rf-corpo{display:grid;grid-template-columns:1fr 290px;gap:14px;align-items:start}
+.rf-tab{overflow-x:auto}.rf-tab td{font-size:12.5px}
+.rf-res{border:1px solid var(--line);border-radius:8px;overflow:hidden}.rf-res>div{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line-soft);font-size:12.5px}
+.rf-res>div span{font-weight:700;color:var(--ink-soft)}.rf-res>div.tot{background:var(--tn-green);color:var(--tn-green-i)}.rf-res>div.tot span{color:inherit}.rf-res small{display:block;padding:6px 10px}
+@media(max-width:760px){.rf-corpo{grid-template-columns:1fr}.rf-res{order:-1}}
