@@ -210,7 +210,9 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
 
         <Sec ic="🧭" t="Consultores externos" />
         <div className="pg-grid">
-          <Card t="Visitas realizadas" v={n0(c.linha("cons", "Realizadas"))} ir="ce_painel" />
+          <Card big hl t={"Visitas realizadas" + (c.G.visitas.oficial ? " · nº oficial do ciclo" : "")} v={n0(c.G.visitas.total)} ir="ce_painel">
+            <div className="pg-split"><i>🧭 Consultores <b>{n0(c.G.visitas.consultores)}</b></i><i>📐 Medidas (Gilberto, César) <b>{n0(c.G.visitas.medidas)}</b></i></div>
+          </Card>
           <Card t="Visitas hoje" v={n0(c.extHoje.length)} d={<span className="pg-d neu">{c.consHoje.size} consultores em campo</span>} ir="ce_agenda" />
           <Card t="Vendas dos externos" v={n0(c.vExt.length)} d={<span className="pg-d neu">{fmtMoeda(c.vExt.reduce((s: number, v: any) => s + (Number(v.venda.valorNum) || 0), 0))}</span>} ir="ce_vendas" />
         </div>
@@ -218,7 +220,7 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
         <Sec ic="📐" t="Operação e produção" s="no período · hoje" />
         <div className="pg-grid">
           <Card t="Checklists realizados" v={n0(c.linha("ck", "Realizados"))} d={<span className="pg-d neu">{c.card("ck")?.n || 0} agendados no período</span>} ir="ck_agenda" />
-          <Card t="Medidas realizadas" v={n0(c.medidas)} d={<span className="pg-d neu">hoje: {c.medHoje} agendadas</span>} />
+          <Card t="Medidas realizadas" v={n0(c.G.visitas.oficial ? c.G.visitas.medidas : c.medidas)} d={<span className="pg-d neu">{c.G.visitas.oficial ? "nº oficial do ciclo · " : ""}hoje: {c.medHoje} agendadas</span>} />
           <Card t="Agendamentos de montagem gerados" v={m ? n0(nn(m.ag_total)) : "—"} d={m && m0 ? <Var a={nn(m.ag_total)} b={nn(m0.ag_total)} /> : null} />
           <Card t="Montagens feitas" v={m ? n0(nn(m.ef_qtd)) : "—"} d={m && m0 ? <Var a={nn(m.ef_qtd)} b={nn(m0.ef_qtd)} /> : null} />
           <Card t="Pós-venda / assistências abertas" v={n0(c.pvAbertas)} ir="pv_clientes" />

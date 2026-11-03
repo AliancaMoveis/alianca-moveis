@@ -60,6 +60,11 @@ export function calcGeral(R: any, st: any, de: string, ate: string) {
   const visAtras = visAFazer.filter((c: any) => c.dataVisita && String(c.dataVisita).slice(0, 10) < hojeS);
   // nº oficial de visitas do ciclo (lançado pela Gestão) quando o período é o ciclo/mês fechado
   const visOf = R.totalVisitasPeriodo ? R.totalVisitasPeriodo(de, ate, (id: string) => visFeitas.filter((c: any) => c.consultorId === id).length, R.consultores().map((u: any) => u.id), "consultor") : { total: visFeitas.length, oficial: false };
+  // medidas pagas (Gilberto, César…): nº oficial do ciclo quando lançado; senão, as medidas realizadas no 360
+  const idsMed = (st.usuarios || []).filter((u: any) => (u.setores || []).includes("medidas") && u.somenteAtribuidos).map((u: any) => u.id);
+  const medFeitas = (id: string) => todos.filter((c: any) => c.tipo === "medidas" && c.medidorId === id && c.tratativa && c.tratativa.medida && dentro(c.tratativa.medida.realizadaEm)).length;
+  const medOf = R.totalVisitasPeriodo ? R.totalVisitasPeriodo(de, ate, medFeitas, idsMed, "medidor") : { total: idsMed.reduce((s: number, id: string) => s + medFeitas(id), 0), oficial: false };
+  const visCons = visOf.oficial ? visOf.total : visFeitas.length;
   const cancelT = ext.filter((c: any) => R.cancelouSemCiente(c)); // depois do "Estou ciente" sai do alerta
 
   // ----- checklist -----
@@ -84,9 +89,9 @@ export function calcGeral(R: any, st: any, de: string, ate: string) {
   const cartoes: CartaoGeral[] = [
     { k: "cc", ic: "☎", t: "Call center", n: R1.length, l: "registrados", linhas: [["Finalizados", F1.length], ["No prazo", prazo == null ? "—" : prazo + "%"]], pend: abertos.length + " em aberto · " + atrasados.length + " fora do prazo", alerta: atrasados.length > 0 },
     { k: "ag", ic: "◎", t: "Agendamentos", n: A1.length, l: "agendados", linhas: [["Marketing", oM], ["Externos", oE], ["Vieram", V1.length]], pend: agHojeLoja.length + " na loja hoje · " + semVendT.length + " sem vendedor", alerta: semVendT.length > 0 },
-    { k: "cons", ic: "🧭", t: "Externos", n: visPer.length, l: "visitas", linhas: [[visOf.oficial ? "Realizadas (oficial)" : "Realizadas", visOf.oficial ? visOf.total : visFeitas.length], ["Atrasadas", visAtras.length]], pend: semConsT.length + " sem consultor · " + visAFazer.length + " a fazer" + (cancelT.length ? " · " + cancelT.length + " cancelaram" : ""), alerta: semConsT.length + visAtras.length + cancelT.length > 0 },
+    { k: "cons", ic: "🧭", t: "Externos", n: visPer.length, l: "visitas", linhas: [[visOf.oficial ? "Realizadas (oficial)" : "Realizadas", visCons], [medOf.oficial ? "Medidas (oficial)" : "Medidas", medOf.total], ["Total visitas + medidas", visCons + medOf.total], ["Atrasadas", visAtras.length]], pend: semConsT.length + " sem consultor · " + visAFazer.length + " a fazer" + (cancelT.length ? " · " + cancelT.length + " cancelaram" : ""), alerta: semConsT.length + visAtras.length + cancelT.length > 0 },
     { k: "ck", ic: "✓", t: "Checklist", n: ckAg.length, l: "agendados", linhas: [["Realizados", ckReal.length], ["Contatados", ckCont.length]], pend: ckAgendar.length + " a agendar · " + ckVenc.length + " prazo vencido · " + ckConf.length + " confirmar", alerta: ckVenc.length + ckEnc.length + ckPassou.length > 0 },
     { k: "vendas", ic: "💰", t: "Vendas", n: vendasPer.length, l: "vendas", linhas: veValor ? [["Valor", fmtMoeda(valorPer)]] : [], pend: vendasAConf.length + " a confirmar", alerta: vendasAConf.length > 0 },
   ];
-  return { alertas, cartoes };
+  return { alertas, cartoes, visitas: { consultores: visCons, medidas: medOf.total, total: visCons + medOf.total, oficial: visOf.oficial || medOf.oficial } };
 }
