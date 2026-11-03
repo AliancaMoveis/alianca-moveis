@@ -64,7 +64,7 @@ export default function FretesFechamento() {
       </div>
       {erro && <div className="empty" style={{ color: "var(--danger, #b00)" }}>{erro}</div>}
       {!d ? <div className="empty">Carregando…</div> : <>
-        {aba === "rom" && <ListaRomaneios mes={mes} d={d} uid={uid} toast={toast} rec={rec} aberto={aberto} setAberto={setAberto} fSit={fSit} setFSit={setFSit} busca={busca} setBusca={setBusca} patch={(id: number, p: Partial<RomTat>) => setD(x => x && ({ ...x, rom: x.rom.map(r => r.id === id ? { ...r, ...p } : r) }))} />}
+        {aba === "rom" && <ListaRomaneios irAssist={() => setAba("assist")} mes={mes} d={d} uid={uid} toast={toast} rec={rec} aberto={aberto} setAberto={setAberto} fSit={fSit} setFSit={setFSit} busca={busca} setBusca={setBusca} patch={(id: number, p: Partial<RomTat>) => setD(x => x && ({ ...x, rom: x.rom.map(r => r.id === id ? { ...r, ...p } : r) }))} />}
         {aba === "rel" && <Relatorio d={d} mes={mes} toast={toast} rec={rec} />}
         {aba === "assist" && <PagAssist fr={d.fr} uid={uid} toast={toast} />}
         {aba === "fr" && <Freteiros d={d} toast={toast} rec={rec} />}
@@ -74,7 +74,7 @@ export default function FretesFechamento() {
 }
 
 // ---------------- lista de romaneios: um bloco por entregador, todos os romaneios dele na mesma tela ----------------
-function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setFSit, busca, setBusca, patch }: any) {
+function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setFSit, busca, setBusca, patch, irAssist }: any) {
   const fr: Freteiro[] = d.fr; const rom: RomTat[] = d.rom;
   const [abertos, setAbertos] = useState<Set<string>>(new Set()); const [novoM, setNovoM] = useState<string | null>(null);
   const [fQuem, setFQuem] = useState<"todos" | "entrega" | "montagem">("todos");
@@ -136,10 +136,12 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
             <span>Na montagem: <b>{f.montador_nome || "⚠ sem nome (Freteiros e contas)"}</b></span>
             {enviados.length > 0 && <span style={{ color: "#1F6B3E" }}>✓ {enviados.length} já enviado(s) · {moeda(ve)}</span>}
             {faltam.length > 0 && <span style={{ color: "#9A5B00" }}>⚠ {faltam.length} a conferir</span>}
-            <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={!prontos.length || !f.montador_nome} onClick={async () => {
-              if (!confirm(`Fechar e enviar ${prontos.length} romaneio(s) conferido(s) de ${f.apelido} (${moeda(vp)}) para o pagamento da montagem, em "${f.montador_nome}"?`)) return;
-              try { const n = await enviarAssist(prontos, f, uid); toast?.(n + " romaneio(s) de " + f.apelido + " enviados para a montagem (" + f.montador_nome + ")"); rec(); } catch (e: any) { toast?.(e.message); rec(); }
-            }}>🔒 Fechar e enviar para a montagem · {prontos.length} rom. · {moeda(vp)}</button>
+            {faltam.filter(r => contaRom(r).total > 0).length > 0 && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={async () => {
+              const l = faltam.filter(r => contaRom(r).total > 0);
+              if (!confirm(`Fechar (marcar como conferidos) ${l.length} romaneio(s) de ${f.apelido} com valor lançado?`)) return;
+              try { for (const r of l) { const p: Partial<RomTat> = r.mes < mes ? { conferido: true, mes } : { conferido: true }; await salvarRom(r.id, p, uid); patch(r.id, p); } toast?.(l.length + " romaneio(s) fechados — envie na aba 🛠 por quinzena"); } catch (e: any) { toast?.(e.message); rec(); }
+            }}>✓ Fechar romaneios com valor ({faltam.filter(r => contaRom(r).total > 0).length})</button>}
+            <button className="btn primary sm" style={faltam.filter(r => contaRom(r).total > 0).length ? undefined : { marginLeft: "auto" }} onClick={irAssist}>🛠 Enviar por quinzena ({prontos.length} pronto(s) · {moeda(vp)}) →</button>
           </div>;
         })()}
         {ab && <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5, margin: 0 }}>
@@ -433,13 +435,15 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
   };
   if (!assist.length) return <div className="empty">Nenhum freteiro marcado como frete de assistência ou montador (aba Freteiros e contas → Tipo).</div>;
   const vis = assist.filter(f => sel === "todos" || f.id === sel);
-  const prontosDe = (f: Freteiro) => (rs || []).filter(r => r.freteiro_id === f.id && r.conferido && !r.envio_chave && contaRom(r).total > 0);
+  // só os romaneios com data DENTRO da quinzena escolhida — os de antes ficam para a quinzena deles (evita cair em quinzena já fechada)
+  const noPer = (r: RomTat) => !!r.data && r.data >= de && r.data <= ate;
+  const prontosDe = (f: Freteiro) => (rs || []).filter(r => r.freteiro_id === f.id && noPer(r) && r.conferido && !r.envio_chave && contaRom(r).total > 0);
   const totProntos = vis.reduce((s, f) => s + prontosDe(f).reduce((a, r) => a + contaRom(r).total, 0), 0);
   const nProntos = vis.reduce((s, f) => s + prontosDe(f).length, 0);
   const enviarTodos = async () => {
     const fs = vis.filter(f => prontosDe(f).length && f.montador_nome);
     if (!fs.length) return;
-    if (!confirm(`Fechar e enviar ${nProntos} romaneio(s) de ${fs.length} freteiro(s) (${moeda(totProntos)}) para o pagamento da montagem?`)) return;
+    if (!confirm(`Enviar a quinzena ${br(de)} a ${br(ate)}: ${nProntos} romaneio(s) de ${fs.length} freteiro(s) (${moeda(totProntos)}) para o pagamento da montagem?`)) return;
     for (const f of fs) await enviar(f, prontosDe(f), true);
     rec();
   };
@@ -465,21 +469,21 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
         <button className={"chip" + (sel === "todos" ? " on" : "")} onClick={() => setSel("todos")}>Todos</button>
         {assist.map(f => { const n = (rs || []).filter(r => r.freteiro_id === f.id && !r.envio_chave).length;
           return <button key={f.id} className={"chip" + (sel === f.id ? " on" : "")} onClick={() => setSel(f.id)}>{f.tipo === "montador" ? "🔧" : "🛠"} {f.apelido} → {f.montador_nome || "?"}{n ? " · " + n + " a fechar" : ""}</button>; })}
-        <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !nProntos} onClick={enviarTodos}>🔒 Fechar e enviar {sel === "todos" ? "todos" : "este"} para a montagem · {nProntos} rom. · {moeda(totProntos)}</button>
+        <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !nProntos} onClick={enviarTodos}>🔒 Enviar quinzena {br(de).slice(0, 5)} a {br(ate).slice(0, 5)} para a montagem ({sel === "todos" ? "todos" : "este"}) · {nProntos} rom. · {moeda(totProntos)}</button>
       </div>
     </div>
     {!rs ? <div className="empty">Carregando…</div> : vis.map(f => {
       const l = rs.filter(r => r.freteiro_id === f.id); if (!l.length) return null;
       const doPer = l.filter(r => r.data && r.data >= de), ant = l.filter(r => r.data && r.data < de);
-      const prontos = l.filter(r => r.conferido && !r.envio_chave), naoConf = l.filter(r => !r.conferido && !r.envio_chave), enviados = l.filter(r => r.envio_chave);
+      const prontos = prontosDe(f), naoConf = doPer.filter(r => !r.conferido && !r.envio_chave), enviados = doPer.filter(r => r.envio_chave);
       const tot = (x: RomTat[]) => x.reduce((s, r) => s + contaRom(r).total, 0);
       return <div key={f.id} className="card" style={{ padding: 0, marginBottom: 12, overflow: "hidden" }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", padding: "10px 14px", background: "#FFEFD9" }}>
           <b style={{ fontSize: 16 }}>{f.tipo === "montador" ? "🔧" : "🛠"} {f.apelido}</b><span className="hint">→ na montagem: <b>{f.montador_nome || "⚠ sem nome — cadastre em Freteiros e contas"}</b></span>
           <span>Período: <b>{moeda(tot(doPer))}</b> ({doPer.length} rom.)</span>
-          {ant.length > 0 && <span style={{ color: "#1D4ED8" }}>📥 {ant.length} de antes, ainda não enviado(s): {moeda(tot(ant))}</span>}
+          {ant.length > 0 && <span style={{ color: "#1D4ED8" }}>📥 {ant.length} de quinzena anterior ainda não enviado(s) ({moeda(tot(ant))}) — selecione a quinzena deles para enviar</span>}
           <span style={{ color: "#1F6B3E" }}>✓ enviados {moeda(tot(enviados))}</span>
-          <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !prontos.length || !f.montador_nome} onClick={() => enviar(f, prontos)}>🔒 Fechar e enviar para a montagem · {prontos.length} romaneio(s) · {moeda(tot(prontos))}</button>
+          <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !prontos.length || !f.montador_nome} onClick={() => enviar(f, prontos)}>🔒 Enviar quinzena para a montagem · {prontos.length} romaneio(s) · {moeda(tot(prontos))}</button>
         </div>
         {naoConf.length > 0 && <div className="hint" style={{ padding: "6px 14px", color: "#9A5B00" }}>⚠ {naoConf.length} romaneio(s) ainda não conferido(s) — confira na aba Romaneios antes de enviar.</div>}
         <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5, margin: 0 }}>
@@ -489,7 +493,7 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
             <td style={{ textAlign: "right" }}>{fmtN(c.km) || "—"}</td><td style={{ textAlign: "right" }}>{moeda(c.ent)}</td><td style={{ textAlign: "right" }}>{moeda(c.vKm)}</td><td style={{ textAlign: "right" }}><b>{moeda(c.total)}</b></td>
             <td>{r.envio_chave ? <span style={{ color: "#1F6B3E" }}>✓ enviado {r.envio_em ? br(r.envio_em.slice(0, 10)).slice(0, 5) : ""}</span> : r.conferido ? (c.total > 0 ? "conferido · a enviar" : <span style={{ color: "#9A5B00" }}>sem valor</span>) : <span style={{ color: "#9A5B00" }}>a conferir</span>}</td>
             <td>{r.envio_chave ? <button className="btn sm" disabled={ocup} onClick={async () => { if (!confirm("Tirar o romaneio " + numRom(r) + " do pagamento da montagem? (a ordem avulsa é excluída)")) return; setOcup(true); try { await desfazerEnvioAssist(r, uid); rec(); } catch (e: any) { toast?.(e.message); } finally { setOcup(false); } }}>↩ desfazer</button>
-              : r.conferido && c.total > 0 ? <button className="btn sm" disabled={ocup || !f.montador_nome} onClick={() => enviar(f, [r])}>📤 Enviar pagamento p/ montagem</button> : null}</td>
+              : r.conferido && c.total > 0 && noPer(r) ? <button className="btn sm" disabled={ocup || !f.montador_nome} onClick={() => enviar(f, [r])}>📤 enviar só este</button> : r.data && r.data < de ? <span className="hint">quinzena anterior</span> : null}</td>
           </tr>; })}</tbody>
         </table></div>
       </div>;

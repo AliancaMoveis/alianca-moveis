@@ -220,6 +220,9 @@ export async function enviarAssist(rs: RomTat[], f: Freteiro, uid: string): Prom
   let n = 0;
   for (const r of rs) {
     const c = contaRom(r); if (c.total <= 0) continue;
+    // confere no banco se outra pessoa já não enviou este romaneio (evita pagar duas vezes)
+    const ja = await sb.from("frete_tat_rom").select("envio_chave").eq("id", r.id).maybeSingle();
+    if (ja.error) throw new Error(ja.error.message); if ((ja.data as any)?.envio_chave) continue;
     const desc = `${f.tipo === "montador" ? "Frete" : "Frete assistência"} · romaneio ${numRom(r)} · ${r.itens.length} entrega(s)` + (c.km ? ` · ${String(c.km).replace(".", ",")} km` : "");
     const { data, error } = await sb.rpc("montagem_avulsa_salvar", { p: { montador: f.montador_nome, tipo: f.tipo === "montador" ? "frete" : "frete_assistencia", de: r.data, ate: r.data, prod: Math.round(c.total * 100) / 100, adic: 0, descricao: desc } });
     if (error) throw new Error(error.message);
