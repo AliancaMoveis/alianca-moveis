@@ -12,21 +12,22 @@ import { BotaoWhats, separarTelefones } from "../comp/Whats";
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const maisDias = (iso: string, n: number) => { const d = parseData(iso + "T12:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
 const hora = (v: any) => { const s = String(v || ""); return s.length > 10 ? s.slice(11, 16) : "—"; };
-type Aba = "marketing" | "externo" | "porta";
+type Aba = "todos" | "marketing" | "externo" | "porta";
 
 export default function Presenca({ movel, novoPorta }: { movel?: boolean; novoPorta?: boolean }) {
   const { R, st } = useApp() as any;
   const [dia, setDia] = useState(hojeISO());
-  const [aba, setAba] = useState<Aba>(novoPorta ? "porta" : "marketing");
+  const [aba, setAba] = useState<Aba>(novoPorta ? "porta" : "todos");
   const [novo, setNovo] = useState(!!novoPorta);
   const abrirNovo = () => { setAba("porta"); setNovo(true); setDia(hojeISO()); };
   const origem = (c: any): Aba | null => R.ehPorta(c) ? "porta" : R.domMarketing(c) ? (R.ehDireto(c) ? "marketing" : "externo") : null;
-  const doDia = st.chamados.filter((c: any) => c.dataLoja && String(c.dataLoja).slice(0, 10) === dia && R.podeVer(c) && origem(c)
+  // "Todos": a loja inteira do dia — marketing, externo, porta e quem mais estiver marcado na loja
+  const doDia = st.chamados.filter((c: any) => c.dataLoja && String(c.dataLoja).slice(0, 10) === dia && R.podeVer(c)
     && !(c.tratativa && (c.tratativa.importadoVisita || c.tratativa.visitaImportada)))
     .sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
-  const de = (k: Aba) => doDia.filter((c: any) => origem(c) === k);
+  const de = (k: Aba) => k === "todos" ? doDia : doDia.filter((c: any) => origem(c) === k);
   const lista = de(aba);
-  const pend = (k: Aba) => k === "porta" ? 0 : de(k).filter((c: any) => !vindaConfirmada(c) && !c.venda).length;
+  const pend = (k: Aba) => k === "porta" ? 0 : de(k).filter((c: any) => origem(c) !== "porta" && !vindaConfirmada(c) && !c.venda).length;
   const semVend = lista.filter((c: any) => !c.atendenteId).length;
   const d = parseData(dia + "T12:00");
   const titulo = (dia === hojeISO() ? "Hoje · " : dia === maisDias(hojeISO(), 1) ? "Amanhã · " : "") + DIAS[d.getDay()] + ", " + fmtDate(dia);
@@ -42,19 +43,19 @@ export default function Presenca({ movel, novoPorta }: { movel?: boolean; novoPo
         {dia !== hojeISO() && <button className="btn ghost sm" onClick={() => setDia(hojeISO())}>Hoje</button>}
         <b className="pres-tit">{titulo}</b>
       </div>
-      <div className="subnav pres-abas"><Tab k="marketing" l="📣 Marketing" /><Tab k="externo" l="🧭 Externo" /><Tab k="porta" l="🚪 Porta" /></div>
+      <div className="subnav pres-abas"><Tab k="todos" l="🏬 Todos (loja)" /><Tab k="marketing" l="📣 Marketing" /><Tab k="externo" l="🧭 Externo" /><Tab k="porta" l="🚪 Porta" /></div>
       {aba === "porta" && <div className="pres-porta-top">
         {novo ? <NovoPorta fechar={() => setNovo(false)} /> : <button className="btn primary" onClick={abrirNovo}>＋ Registrar cliente porta</button>}
         <div className="pres-dica">Cliente porta é quem entrou direto na loja, sem vir do marketing nem do consultor externo. Não entra nos números do marketing nem dos consultores: aparece só na agenda da loja, para o vendedor que atendeu e para a Gestão.</div>
       </div>}
-      <div className="pres-resumo">{lista.length} cliente{lista.length === 1 ? "" : "s"}{aba !== "porta" ? <> · <b>{lista.filter(vindaConfirmada).length}</b> com vinda confirmada</> : null}{semVend ? <> · <b style={{ color: "var(--warn)" }}>{semVend} sem vendedor</b></> : null}</div>
-      {!lista.length ? <div className="empty" style={{ padding: "24px 10px" }}>{aba === "porta" ? "Nenhum cliente porta registrado neste dia." : "Nenhum cliente " + (aba === "marketing" ? "do marketing" : "de consultor externo") + " marcado na loja neste dia."}</div>
-        : <div className="pres-lista">{lista.map((c: any) => <Cartao key={c.id} c={c} porta={aba === "porta"} />)}</div>}
+      <div className="pres-resumo">{lista.length} cliente{lista.length === 1 ? "" : "s"}{aba !== "porta" ? <> · <b>{lista.filter((c: any) => origem(c) !== "porta" && vindaConfirmada(c)).length}</b> com vinda confirmada</> : null}{semVend ? <> · <b style={{ color: "var(--warn)" }}>{semVend} sem vendedor</b></> : null}</div>
+      {!lista.length ? <div className="empty" style={{ padding: "24px 10px" }}>{aba === "porta" ? "Nenhum cliente porta registrado neste dia." : "Nenhum cliente " + (aba === "todos" ? "" : aba === "marketing" ? "do marketing" : "de consultor externo") + " marcado na loja neste dia."}</div>
+        : <div className="pres-lista">{lista.map((c: any) => <Cartao key={c.id} c={c} porta={origem(c) === "porta"} tag={aba === "todos" ? ({ marketing: "📣 Marketing", externo: "🧭 Externo", porta: "🚪 Porta" } as any)[origem(c) || ""] || "🏬 Loja" : ""} />)}</div>}
     </section>
   );
 }
 
-function Cartao({ c, porta }: { c: any; porta: boolean }) {
+function Cartao({ c, porta, tag }: { c: any; porta: boolean; tag?: string }) {
   const { R, abrirDetalhe, executar: ex, toast } = useApp() as any;
   const [vend, setVend] = useState("");
   const fotos = (c.anexos || []).filter((a: any) => a.tipo === "img");
@@ -71,7 +72,7 @@ function Cartao({ c, porta }: { c: any; porta: boolean }) {
     <div className={"pres-card" + (porta ? " porta" : vindaConfirmada(c) ? " ok" : "")}>
       <div className="pres-hora">{hora(c.dataLoja)}</div>
       <div className="pres-corpo">
-        <div className="pres-nome"><b>{c.cliente}</b> {!porta && <SeloVinda c={c} />} {c.venda && <span className="marca-loja ok">💰 venda {c.venda.numero}</span>}
+        <div className="pres-nome">{tag ? <span className="pill">{tag}</span> : null} <b>{c.cliente}</b> {!porta && <SeloVinda c={c} />} {c.venda && <span className="marca-loja ok">💰 venda {c.venda.numero}</span>}
           {!porta && sc && STATUS_CLIENTE[sc] && <span className="pill">{STATUS_CLIENTE[sc]}</span>}</div>
         <div className="pres-info">
           {c.telefone ? <span>📞 {c.telefone}</span> : null}
