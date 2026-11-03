@@ -8,7 +8,8 @@ export function linhaMedida(l: Record<string, string>) {
   const linhas = d.split(/\n/).map(x => x.trim()).filter(Boolean);
   const fimEnd = linhas.findIndex((x, i) => i > 0 && (/^\(?\d{2}\)?\s?9?[\d\s-]{8,}/.test(x) || /\?/.test(x) || /^data limite/i.test(x)));
   const endereco = linhas.slice(1, fimEnd > 0 ? fimEnd : 3).filter(x => !/simplificada|favor|vendedor/i.test(x)).join(", ");
-  const sit = tira(l["Situação"] || "");
+  // o Exact passou a prefixar a situação, ex.: "(LM) AGUARDANDO MEDIÇÃO" — ignora o que vem entre parênteses no começo
+  const sit = tira((l["Situação"] || "").replace(/^\s*(\([^)]*\)\s*)+/, ""));
   return {
     venda: vm ? vm[1] : "", cliente: l["Contato"] || "", telefone: l["Telefone 1"] && l["Telefone 1"] !== "N/A" ? l["Telefone 1"] : (l["Telefone 2"] || "").replace("N/A", ""),
     situacao: l["Situação"] || "", etapa: SIT_ETAPA[sit] || "", medidor: (l["Medidor"] || "").trim(), endereco,
