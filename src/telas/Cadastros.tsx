@@ -160,7 +160,7 @@ function EditUser({ id }: { id: string | null }) {
 }
 const ACESSOS_EXTRAS: [string, string, string][] = [
   ["fretes", "🚚 Fretes — fechamento", "Fechamento de fretes do Tático: romaneios, km e valores, descontos e relatório para o financeiro"],
-  ["montagem", "🔧 Montagem — agendamentos e pagamento", "Agendamentos (Exact), montagens efetivadas, fechamento e pagamento dos montadores (pode importar, aprovar e fechar)"],
+  ["montagem", "🔧 Montagem — efetivadas e pagamento", "Montagens efetivadas, aprovação, notas fiscais, fechamento e pagamento dos montadores (os agendamentos do Exact ficam com a Gestão)"],
 ];
 
 function EditSetor({ id }: { id: string | null }) {

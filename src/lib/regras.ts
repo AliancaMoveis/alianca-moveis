@@ -1056,7 +1056,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // consultor externo e medidor: as medidas deles separadas das visitas de venda (medida paga R$ 40, sem comissão)
     else if (false) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
     // Montagem: só acompanhamento dos agendamentos do Exact (agendadoras e montadores) — só a Gestão
-    if (mySetores().includes("gestao") || temAcesso("montagem")) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Montagem", ic: "🔧", itens: [["montagem_agend", "Agendamentos (Exact)"], ["montagem_pag", "Montagens efetivadas e pagamento"]] });
+    if (mySetores().includes("gestao")) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Montagem", ic: "🔧", itens: [["montagem_agend", "Agendamentos (Exact)"], ["montagem_pag", "Montagens efetivadas e pagamento"]] });
+    // acesso extra "montagem" (ex.: Patrícia do controle): só montagens efetivadas e pagamento — os agendamentos do Exact ficam com a Gestão
+    else if (temAcesso("montagem")) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Montagem", ic: "🔧", itens: [["montagem_pag", "Montagens efetivadas e pagamento"]] });
     // RH · Folha ponto: só o Bruno e a Patrícia (RH)
     if (["00000000-0000-4000-a000-000000000007", "7443a59e-91ae-4428-baa4-aa159f0bdf0b"].includes(currentUserId)) G.push({ g: "RH", ic: "🕐", itens: [["rh_funcionarios", "Funcionários"], ["rh_admissao", "Admissão por link"], ["rh_ponto", "Folha ponto"], ["rh_consulta_dia", "Consulta do dia"], ["rh_ferias", "Controle de férias"], ["rh_gestao", "Gestão (valores e folha)"]] });
     // Fretes: em SIMULAÇÃO, só no usuário do Bruno

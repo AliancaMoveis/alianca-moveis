@@ -144,8 +144,8 @@ export default function MontagemAgend() {
   const [enviando, setEnviando] = useState(""); const inp = useRef<HTMLInputElement>(null);
   const recarregar = () => carregar().then(setDados).catch(e => setErro(e.message));
   useEffect(() => { recarregar(); }, []);
-  if (!podeMontagemAgend(R)) return <section className="view active"><div className="empty">Só a Gestão e o Financeiro veem esta tela.</div></section>;
-  const soLeitura = !R.mySetores().includes("gestao") && !R.temAcesso?.("montagem"); // Financeiro: vê tudo e baixa relatórios, mas não importa, não muda valores e não fecha o mês
+  if (!(R.mySetores().includes("gestao") || R.mySetores().includes("financeiro"))) return <section className="view active"><div className="empty">Só a Gestão e o Financeiro veem esta tela.</div></section>;
+  const soLeitura = !R.mySetores().includes("gestao"); // Financeiro: vê tudo e baixa relatórios, mas não importa, não muda valores e não fecha o mês
   const abasTela = <div className="subnav" style={{ margin: "0 0 14px" }}><button className={tela === "periodo" ? "on" : ""} onClick={() => setTela("periodo")}>📋 Agendamentos</button><button className={tela === "hist" ? "on" : ""} onClick={() => setTela("hist")}>📚 Histórico de pagamentos das agendadoras</button></div>;
   if (tela === "hist") return <section className="view active"><div className="view-head"><div><h2>🔧 Montagem · Histórico das agendadoras</h2><p>Cada fechamento guarda os valores pagos e todas as O.S. de cada agendadora daquele mês. Se o mês for fechado de novo, o anterior fica como “substituído” — nada se perde.</p></div></div>{abasTela}<HistoricoAg /></section>;
 
