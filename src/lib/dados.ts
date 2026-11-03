@@ -151,7 +151,8 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
   (vtemp as any[]).forEach((t: any) => {
     (itensDe[t.chamado_id] = itensDe[t.chamado_id] || []).push({ id: "temp-" + t.id, tipo: "pago", numero: String(t.numero), valor: Number(t.valor), dataVenda: t.data, vencimento: "", status: "efetivada",
       valorPago: 0, promissoriaId: "", registradoEm: t.criado_em, decididoEm: t.data + "T12:00:00", temp: true, obs: t.obs || "" });
-    vendaTempDe[t.chamado_id] = vendaTempDe[t.chamado_id] || { numero: String(t.numero), data_venda: t.data, decidido_em: t.data + "T12:00:00", registrado_em: t.criado_em, status: "efetivada", vendedor: "", temp: true };
+    vendaTempDe[t.chamado_id] = vendaTempDe[t.chamado_id] || { numero: String(t.numero), data_venda: t.data, decidido_em: t.data + "T12:00:00", registrado_em: t.criado_em, status: "efetivada", vendedor: "", temp: true, soma: 0 };
+    vendaTempDe[t.chamado_id].soma += Number(t.valor) || 0;
   });
   // promissórias no formato usado pelas telas: aberta (validada com saldo), quitada, pendente (a validar), cancelada
   const promDe: Record<string, any[]> = {};
@@ -235,7 +236,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
         tratativa: c.tratativa || {},
         resposta: c.resposta_quando ? { previsao: c.resposta_previsao || "", quem: c.resposta_quem, texto: c.resposta_texto, quando: c.resposta_quando } : null,
         venda: v ? {
-          numero: v.numero, valor: valorDe[c.id] != null ? fmtValor(valorDe[c.id]) : "", valorNum: valorDe[c.id] ?? null,
+          numero: v.numero, valor: valorDe[c.id] != null ? fmtValor(valorDe[c.id]) : v.temp ? fmtValor(v.soma) : "", valorNum: valorDe[c.id] ?? (v.temp ? v.soma : null),
           // competência: a venda conta no mês em que a Gestão aprovou; se a data da venda é de mês anterior, vai para o 1º dia do mês da aprovação
           ...competencia(v.data_venda || "", v.decidido_em || v.registrado_em), vendedor: v.vendedor, atendenteNome: v.atendente_nome, quando: v.registrado_em, status: vendaTempDe[c.id] && !["entrada", "efetivada"].includes(v.status) ? "efetivada" : v.status,
           gerenteId: v.gerente_id || "", gerenteNome: v.gerente_nome || "",
