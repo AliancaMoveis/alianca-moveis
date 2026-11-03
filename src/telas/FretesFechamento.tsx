@@ -77,6 +77,7 @@ export default function FretesFechamento() {
 function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setFSit, busca, setBusca, patch }: any) {
   const fr: Freteiro[] = d.fr; const rom: RomTat[] = d.rom;
   const [abertos, setAbertos] = useState<Set<string>>(new Set()); const [novoM, setNovoM] = useState<string | null>(null);
+  const [fQuem, setFQuem] = useState<"todos" | "entrega" | "montagem">("todos");
   const filtra = (r: RomTat) => (fSit === "todos" || (fSit === "conf" ? r.conferido : !r.conferido))
     && (!busca || r.romaneio.includes(busca) || r.itens.some(i => i.cliente.toLowerCase().includes(busca.toLowerCase()) || i.venda.includes(busca)));
   const grupos = useMemo(() => {
@@ -101,6 +102,11 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
           <button className={fSit === "pend" ? "on" : ""} onClick={() => setFSit("pend")}>A conferir</button>
           <button className={fSit === "conf" ? "on" : ""} onClick={() => setFSit("conf")}>Conferidos</button>
         </div>
+        <div className="subnav" style={{ margin: 0 }}>
+          <button className={fQuem === "todos" ? "on" : ""} onClick={() => setFQuem("todos")}>Todos os freteiros</button>
+          <button className={fQuem === "entrega" ? "on" : ""} onClick={() => setFQuem("entrega")}>🚚 Entregadores (financeiro)</button>
+          <button className={fQuem === "montagem" ? "on" : ""} onClick={() => setFQuem("montagem")}>🛠🔧 Montadores e assistência</button>
+        </div>
         <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar nº do romaneio, venda ou cliente" style={{ flex: 1, minWidth: 200 }} />
         <button className="btn sm" onClick={() => setAbertos(new Set(grupos.map(g => g.k)))}>Abrir todos</button>
         <button className="btn sm" onClick={() => setAbertos(new Set())}>Fechar todos</button>
@@ -109,7 +115,7 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
         : <button className="btn sm" onClick={() => setNovoM("topo")}>➕ Romaneio manual</button>}</div>
       <div className="hint" style={{ marginTop: 6 }}>Digite direto na linha: <b>Km</b> e <b>valor das entregas</b> do romaneio (Enter vai para o próximo campo). Para lançar cliente por cliente, clique em <b>▸ clientes</b>.</div>
     </div>
-    {grupos.map(g => {
+    {grupos.filter(g => fQuem === "todos" || (fQuem === "montagem" ? g.assist : !g.assist)).map(g => {
       const rs = g.rs.filter(filtra); if (!rs.length && (busca || fSit !== "todos")) return null;
       const cs = g.rs.map(contaRom); const tot = cs.reduce((s, c) => s + c.total, 0), km = cs.reduce((s, c) => s + c.km, 0);
       const nConf = g.rs.filter(x => x.conferido).length; const ab = abertos.has(g.k) || !!busca;
@@ -399,17 +405,33 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
   const q1 = hoje.getDate() <= 15;
   const [de, setDe] = useState(q1 ? ym + "-01" : ym + "-16"); const [ate, setAte] = useState(q1 ? ym + "-15" : fimMes(ym));
   const [rs, setRs] = useState<RomTat[] | null>(null); const [ocup, setOcup] = useState(false);
+  const [sel, setSel] = useState<number | "todos">("todos");
   const rec = () => carregarAssist(de, ate, assist.map(f => f.id)).then(setRs).catch(e => toast?.(e.message));
   useEffect(() => { setRs(null); rec(); }, [de, ate, fr]);
   const quinzena = (m: string, q: 1 | 2) => { setDe(m + (q === 1 ? "-01" : "-16")); setAte(q === 1 ? m + "-15" : fimMes(m)); };
   const mAnt = (() => { const x = new Date(+de.slice(0, 4), +de.slice(5, 7) - 2, 1); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0"); })();
-  const enviar = async (f: Freteiro, lista: RomTat[]) => {
+  const enviar = async (f: Freteiro, lista: RomTat[], sem = false) => {
     if (!lista.length) return;
-    if (!confirm(`Enviar ${lista.length} romaneio(s) de ${f.apelido} (${moeda(lista.reduce((s, r) => s + contaRom(r).total, 0))}) para o pagamento da montagem, em "${f.montador_nome}"?`)) return;
+    if (!sem && !confirm(`Fechar e enviar ${lista.length} romaneio(s) de ${f.apelido} (${moeda(lista.reduce((s, r) => s + contaRom(r).total, 0))}) para o pagamento da montagem, em "${f.montador_nome}"?`)) return;
     setOcup(true);
-    try { const n = await enviarAssist(lista, f, uid); toast?.(n + " romaneio(s) enviados para a montagem — aparecem como ordem avulsa 'Frete de assistência' de " + f.montador_nome); rec(); } catch (e: any) { toast?.(e.message); rec(); } finally { setOcup(false); }
+    try { const n = await enviarAssist(lista, f, uid); toast?.(n + " romaneio(s) de " + f.apelido + " fechados e enviados para a montagem (" + f.montador_nome + ")"); if (!sem) rec(); } catch (e: any) { toast?.(e.message); rec(); } finally { setOcup(false); }
   };
-  if (!assist.length) return <div className="empty">Nenhum freteiro marcado como frete de assistência (aba Freteiros e contas → Tipo).</div>;
+  if (!assist.length) return <div className="empty">Nenhum freteiro marcado como frete de assistência ou montador (aba Freteiros e contas → Tipo).</div>;
+  const vis = assist.filter(f => sel === "todos" || f.id === sel);
+  const prontosDe = (f: Freteiro) => (rs || []).filter(r => r.freteiro_id === f.id && r.conferido && !r.envio_chave && contaRom(r).total > 0);
+  const totProntos = vis.reduce((s, f) => s + prontosDe(f).reduce((a, r) => a + contaRom(r).total, 0), 0);
+  const nProntos = vis.reduce((s, f) => s + prontosDe(f).length, 0);
+  const enviarTodos = async () => {
+    const fs = vis.filter(f => prontosDe(f).length && f.montador_nome);
+    if (!fs.length) return;
+    if (!confirm(`Fechar e enviar ${nProntos} romaneio(s) de ${fs.length} freteiro(s) (${moeda(totProntos)}) para o pagamento da montagem?`)) return;
+    for (const f of fs) await enviar(f, prontosDe(f), true);
+    rec();
+  };
+  const xlsx = () => baixarXlsxFormatado("FRETE_MONTAGEM_" + de + "_a_" + ate + ".xlsx", "FRETE PAGO NA MONTAGEM",
+    [{ titulo: "FRETEIRO", largura: 22 }, { titulo: "NA MONTAGEM", largura: 22 }, { titulo: "ROMANEIO", largura: 14, alinhar: "center" }, { titulo: "DATA", largura: 12, tipo: "data", alinhar: "center" }, { titulo: "ENTREGAS", largura: 10, alinhar: "center" },
+     { titulo: "KM", largura: 8, alinhar: "center" }, { titulo: "ENTREGAS (R$)", largura: 15, tipo: "moeda" }, { titulo: "KM (R$)", largura: 13, tipo: "moeda" }, { titulo: "TOTAL", largura: 14, tipo: "moeda" }, { titulo: "SITUAÇÃO", largura: 18 }],
+    vis.flatMap(f => (rs || []).filter(r => r.freteiro_id === f.id).map(r => { const c = contaRom(r); return [f.apelido, f.montador_nome || "", numRom(r), r.data, r.itens.length, c.km, c.ent, c.vKm, c.total, r.envio_chave ? "ENVIADO" : r.conferido ? "CONFERIDO" : "A CONFERIR"]; })));
   return <>
     <div className="card" style={{ padding: 12, marginBottom: 12, background: "#FFF8EE" }}>
       <b>🛠 Frete de assistência e de montadores — pago na quinzena junto com a montagem</b>
@@ -421,9 +443,17 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
         <button className="btn sm" onClick={() => quinzena(de.slice(0, 7), 2)}>2ª quinzena {de.slice(5, 7)}/{de.slice(0, 4)}</button>
         <div className="field" style={{ margin: 0 }}><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
         <div className="field" style={{ margin: 0 }}><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
+        <button className="btn sm" disabled={!rs || !rs.length} onClick={xlsx}>⬇ Excel do período</button>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+        <b style={{ fontSize: 13 }}>Freteiro / montador:</b>
+        <button className={"chip" + (sel === "todos" ? " on" : "")} onClick={() => setSel("todos")}>Todos</button>
+        {assist.map(f => { const n = (rs || []).filter(r => r.freteiro_id === f.id && !r.envio_chave).length;
+          return <button key={f.id} className={"chip" + (sel === f.id ? " on" : "")} onClick={() => setSel(f.id)}>{f.tipo === "montador" ? "🔧" : "🛠"} {f.apelido} → {f.montador_nome || "?"}{n ? " · " + n + " a fechar" : ""}</button>; })}
+        <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !nProntos} onClick={enviarTodos}>🔒 Fechar e enviar {sel === "todos" ? "todos" : "este"} para a montagem · {nProntos} rom. · {moeda(totProntos)}</button>
       </div>
     </div>
-    {!rs ? <div className="empty">Carregando…</div> : assist.map(f => {
+    {!rs ? <div className="empty">Carregando…</div> : vis.map(f => {
       const l = rs.filter(r => r.freteiro_id === f.id); if (!l.length) return null;
       const doPer = l.filter(r => r.data && r.data >= de), ant = l.filter(r => r.data && r.data < de);
       const prontos = l.filter(r => r.conferido && !r.envio_chave), naoConf = l.filter(r => !r.conferido && !r.envio_chave), enviados = l.filter(r => r.envio_chave);
@@ -434,7 +464,7 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
           <span>Período: <b>{moeda(tot(doPer))}</b> ({doPer.length} rom.)</span>
           {ant.length > 0 && <span style={{ color: "#1D4ED8" }}>📥 {ant.length} de antes, ainda não enviado(s): {moeda(tot(ant))}</span>}
           <span style={{ color: "#1F6B3E" }}>✓ enviados {moeda(tot(enviados))}</span>
-          <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !prontos.length || !f.montador_nome} onClick={() => enviar(f, prontos)}>📤 Enviar pagamento para a montagem · {prontos.length} romaneio(s) · {moeda(tot(prontos))}</button>
+          <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={ocup || !prontos.length || !f.montador_nome} onClick={() => enviar(f, prontos)}>🔒 Fechar e enviar para a montagem · {prontos.length} romaneio(s) · {moeda(tot(prontos))}</button>
         </div>
         {naoConf.length > 0 && <div className="hint" style={{ padding: "6px 14px", color: "#9A5B00" }}>⚠ {naoConf.length} romaneio(s) ainda não conferido(s) — confira na aba Romaneios antes de enviar.</div>}
         <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5, margin: 0 }}>
