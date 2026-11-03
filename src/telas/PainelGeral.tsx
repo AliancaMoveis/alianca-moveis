@@ -6,7 +6,7 @@ import { sb } from "../lib/supabase";
 import { MOCK } from "../lib/chat";
 import { feriasEm, fmtMoeda, parseMoeda, hojeISO, isoLocal, pagamentosVenda, parseData, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
 import { calcGeral } from "../lib/geral";
-import { cicloDe, cicloDoMes } from "../lib/ciclo";
+import { cicloDe, cicloDoMes, ultimoFechado } from "../lib/ciclo";
 import { contaRom, ehAssist, type RomTat, type Freteiro } from "../lib/fretesTatico";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -112,9 +112,15 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
     const medHoje = todos.filter((c: any) => c.tipo === "medidas" && String(c.dataMedida || "").slice(0, 10) === h).length;
     const pvAbertas = todos.filter((c: any) => c.posvenda && c.status !== "concluida").length;
     // ---- comissões dos externos no ciclo atual ----
-    const cic = cicloDe(h); const [cde, cate] = cicloDoMes(cic);
-    const comissoes = R.consultores().reduce((s: number, u: any) => { try { const e = R.extratoConsultor(u.id, cde, cate); return s + (e.comissao || 0) + (e.pagamentoVisitas || 0) + (e.auxilio || 0) + (e.pagamentoMedidas || 0) + (e.totalReembolsos || 0); } catch { return s; } }, 0);
-    return { V, VA, tot, totA, serie, lojaHoje, emAtd, esperando, chegaram, faltaram, vend, vendHoje, vendFerias, vendFolga, atendendo, atdPer, atdVenda, durMed, porta, portaV, G, card, linha, agend, vieram, vMkt, vExt, extHoje, consHoje, medidas, medHoje, pvAbertas, comissoes, cde, cate };
+    // consultores externos e medidores: o ciclo FECHADO (29 a 28) é o que se paga agora — mesma conta do Financeiro
+    const campo = (st.usuarios as any[]).filter((u: any) => u.somenteAtribuidos && ((u.setores || []).includes("consultor_externo") || (u.setores || []).includes("medidas")));
+    const pagCampo = (de: string, ate: string) => campo.reduce((t: any, u: any) => { try { const e = R.extratoConsultor(u.id, de, ate);
+      t.com += e.comissao || 0; t.vis += e.pagamentoVisitas || 0; t.med += e.pagamentoMedidas || 0; t.aux += e.auxilio || 0; t.reemb += e.totalReembolsos || 0; t.total += e.total || 0; } catch { /* sem extrato */ } return t; },
+      { com: 0, vis: 0, med: 0, aux: 0, reemb: 0, total: 0 });
+    const cicF = ultimoFechado(h); const [cde, cate] = cicloDoMes(cicF); const campoF = pagCampo(cde, cate);
+    const [ade, aate] = cicloDoMes(cicloDe(h)); const campoA = pagCampo(ade, h < aate ? h : aate);
+    const comissoes = campoF.total;
+    return { V, VA, tot, totA, serie, lojaHoje, emAtd, esperando, chegaram, faltaram, vend, vendHoje, vendFerias, vendFolga, atendendo, atdPer, atdVenda, durMed, porta, portaV, G, card, linha, agend, vieram, vMkt, vExt, extHoje, consHoje, medidas, medHoje, pvAbertas, comissoes, cde, cate, campoF, campoA, ade };
   }, [st, P.de, P.ate, P.pde, P.pate, R]);
 
   // ---- anúncios ----
@@ -172,11 +178,18 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
             </svg></div>
           <div className="pg-panel"><h3>💸 A pagar</h3>
             <table className="pg-tab"><tbody>
-              <tr><td>Comissões consultores externos <small>(ciclo {c.cde.slice(8, 10)}/{c.cde.slice(5, 7)}–{c.cate.slice(8, 10)}/{c.cate.slice(5, 7)}, até hoje)</small></td><td>{fmtMoeda(c.comissoes)}</td></tr>
+              <tr><td colSpan={2} style={{ fontWeight: 700 }}>Consultores externos e medidores <small>(ciclo fechado {c.cde.slice(8, 10)}/{c.cde.slice(5, 7)}–{c.cate.slice(8, 10)}/{c.cate.slice(5, 7)})</small></td></tr>
+              <tr><td style={{ paddingLeft: 14 }}>Comissão das vendas</td><td>{fmtMoeda(c.campoF.com)}</td></tr>
+              <tr><td style={{ paddingLeft: 14 }}>Visitas</td><td>{fmtMoeda(c.campoF.vis)}</td></tr>
+              {c.campoF.med > 0 && <tr><td style={{ paddingLeft: 14 }}>Medidas</td><td>{fmtMoeda(c.campoF.med)}</td></tr>}
+              {c.campoF.aux > 0 && <tr><td style={{ paddingLeft: 14 }}>Auxílio fixo</td><td>{fmtMoeda(c.campoF.aux)}</td></tr>}
+              {c.campoF.reemb > 0 && <tr><td style={{ paddingLeft: 14 }}>Reembolsos</td><td>{fmtMoeda(c.campoF.reemb)}</td></tr>}
+              <tr><td style={{ paddingLeft: 14 }}><b>Total consultores e medidores</b></td><td><b>{fmtMoeda(c.campoF.total)}</b></td></tr>
               <tr><td>Frete de {nomeYm(ymA)} <small>(fechado · pago em {nomeYm(ym)})</small></td><td>{fmtMoeda(freteAnt)}</td></tr>
               <tr><td>Montagem · {q1Fechada ? "2ª quinzena (prevista)" : "1ª quinzena (prevista)"}</td><td>{fmtMoeda(nn((q1Fechada ? q2 : q1)?.ef_total))}</td></tr>
               <tr><td><b>Total previsto</b></td><td><b>{fmtMoeda(c.comissoes + freteAnt + nn((q1Fechada ? q2 : q1)?.ef_total))}</b></td></tr>
-            </tbody></table></div>
+            </tbody></table>
+            <div className="pg-d neu" style={{ marginTop: 8 }}>Ciclo atual dos consultores ({c.ade.slice(8, 10)}/{c.ade.slice(5, 7)} até hoje, ainda aberto): {fmtMoeda(c.campoA.total)} — comissão {fmtMoeda(c.campoA.com)} · visitas {fmtMoeda(c.campoA.vis + c.campoA.med)}</div></div>
         </div>
 
         <Sec ic="🏬" t="Atendimento da loja" s="agora e no período" />
