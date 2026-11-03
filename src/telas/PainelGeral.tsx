@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { sb } from "../lib/supabase";
 import { MOCK } from "../lib/chat";
-import { fmtMoeda, hojeISO, isoLocal, pagamentosVenda, parseData, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
+import { feriasEm, fmtMoeda, hojeISO, isoLocal, pagamentosVenda, parseData, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
 import { calcGeral } from "../lib/geral";
 import { cicloDe, cicloDoMes } from "../lib/ciclo";
 import { contaRom, ehAssist, type RomTat, type Freteiro } from "../lib/fretesTatico";
@@ -86,7 +86,9 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
     const esperando = lojaHoje.filter((c: any) => !fim(c) && !(c.tratativa && c.tratativa.emAtendimento) && parseData(c.dataLoja) <= agora && !R.ehPorta(c));
     const chegaram = lojaHoje.filter((c: any) => (c.tratativa && c.tratativa.emAtendimento) || R.compareceu(c));
     const faltaram = lojaHoje.filter((c: any) => R.statusClienteDe(c) === "nao_compareceu");
-    const vend = R.vendAgenda(); const vendHoje = vend.filter((u: any) => !R.folgaDia(u.id, h));
+    const vend = R.vendAgenda(); // na loja hoje = sem férias e sem folga no dia
+    const vendFerias = vend.filter((u: any) => !!feriasEm(u, h)), vendFolga = vend.filter((u: any) => !feriasEm(u, h) && R.folgaDia(u.id, h));
+    const vendHoje = vend.filter((u: any) => !feriasEm(u, h) && !R.folgaDia(u.id, h));
     const atendendo = new Set(emAtd.map((c: any) => c.atendenteId).filter(Boolean));
     const atdPer = mk.filter((c: any) => dentro(c.dataLoja) && ((c.tratativa && c.tratativa.emAtendimento) || R.compareceu(c)));
     const atdVenda = atdPer.filter((c: any) => c.venda && vendaContaVolume(c.venda));
@@ -110,7 +112,7 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
     // ---- comissões dos externos no ciclo atual ----
     const cic = cicloDe(h); const [cde, cate] = cicloDoMes(cic);
     const comissoes = R.consultores().reduce((s: number, u: any) => { try { const e = R.extratoConsultor(u.id, cde, cate); return s + (e.comissao || 0) + (e.pagamentoVisitas || 0) + (e.auxilio || 0) + (e.pagamentoMedidas || 0) + (e.totalReembolsos || 0); } catch { return s; } }, 0);
-    return { V, VA, tot, totA, serie, lojaHoje, emAtd, esperando, chegaram, faltaram, vend, vendHoje, atendendo, atdPer, atdVenda, durMed, porta, portaV, G, card, linha, agend, vieram, vMkt, vExt, extHoje, consHoje, medidas, medHoje, pvAbertas, comissoes, cde, cate };
+    return { V, VA, tot, totA, serie, lojaHoje, emAtd, esperando, chegaram, faltaram, vend, vendHoje, vendFerias, vendFolga, atendendo, atdPer, atdVenda, durMed, porta, portaV, G, card, linha, agend, vieram, vMkt, vExt, extHoje, consHoje, medidas, medHoje, pvAbertas, comissoes, cde, cate };
   }, [st, P.de, P.ate, P.pde, P.pate, R]);
 
   // ---- anúncios ----
@@ -178,7 +180,7 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
         <Sec ic="🏬" t="Atendimento da loja" s="agora e no período" />
         <div className="pg-grid">
           <Card hl t={<><i className="pg-live" />Clientes sendo atendidos agora</>} v={n0(c.emAtd.length)} d={<span className="pg-d neu">{c.esperando.length} esperando · {c.atendendo.size} vendedor(es) atendendo</span>} ir="presenca" />
-          <Card t="Vendedores na loja hoje" v={<>{c.vendHoje.length} <small>/ {c.vend.length}</small></>} d={<span className="pg-d neu">{c.atendendo.size} atendendo · {Math.max(0, c.vendHoje.length - c.atendendo.size)} livres · {c.vend.length - c.vendHoje.length} de folga</span>} ir="agenda_vendedores" />
+          <Card t="Vendedores na loja hoje" v={<>{c.vendHoje.length} <small>/ {c.vend.length}</small></>} d={<span className="pg-d neu">{c.atendendo.size} atendendo · {Math.max(0, c.vendHoje.length - c.atendendo.size)} livres · {c.vendFolga.length} de folga{c.vendFerias.length ? " · " + c.vendFerias.length + " de férias" : ""}</span>} ir="agenda_vendedores" />
           <Card t="Agendados hoje na loja" v={n0(c.lojaHoje.filter((x: any) => !R.ehPorta(x)).length)} d={<span className="pg-d neu">{c.chegaram.length} chegaram · {c.faltaram.length} faltaram</span>} ir="agenda" />
           <Card t="Atendimentos no período" v={n0(c.atdPer.length)} d={<span className="pg-d neu">{c.atdVenda.length} viraram venda ({c.atdPer.length ? Math.round(c.atdVenda.length / c.atdPer.length * 100) : 0}%)</span>} />
           {c.durMed != null && <Card t="Tempo médio de atendimento" v={Math.floor(c.durMed / 60) + "h " + String(Math.round(c.durMed % 60)).padStart(2, "0")} />}
@@ -214,7 +216,6 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
             <div className="pg-split"><i>🧭 Consultores <b>{n0(c.G.visitas.consultores)}</b></i><i>📐 Medidas (Gilberto, César) <b>{n0(c.G.visitas.medidas)}</b></i></div>
           </Card>
           <Card t="Visitas hoje" v={n0(c.extHoje.length)} d={<span className="pg-d neu">{c.consHoje.size} consultores em campo</span>} ir="ce_agenda" />
-          <Card t="Vendas dos externos" v={n0(c.vExt.length)} d={<span className="pg-d neu">{fmtMoeda(c.vExt.reduce((s: number, v: any) => s + (Number(v.venda.valorNum) || 0), 0))}</span>} ir="ce_vendas" />
         </div>
 
         <Sec ic="📐" t="Operação e produção" s="no período · hoje" />

@@ -37,12 +37,15 @@ function competencia(dv: string, reg: string) {
   return dv.slice(0, 7) < regMes ? { dataVenda: regMes + "-01", dataVendaReal: dv } : { dataVenda: dv, dataVendaReal: dv };
 }
 
-async function todos<T = any>(tabela: string, colunas = "*", ordem?: string): Promise<T[]> {
+// ordem precisa ser ÚNICA para paginar de 1.000 em 1.000: com empate (ex.: chamados importados no mesmo instante),
+// o banco pode devolver a mesma linha em duas páginas e pular outra — e cada pessoa via um total diferente.
+async function todos<T = any>(tabela: string, colunas = "*", ordem?: string, desempate?: string): Promise<T[]> {
   const out: T[] = [];
   const passo = 1000;
   for (let de = 0; ; de += passo) {
     let q = sb.from(tabela).select(colunas).range(de, de + passo - 1);
     if (ordem) q = q.order(ordem, { ascending: true });
+    if (desempate && desempate !== ordem) q = q.order(desempate, { ascending: true });
     const { data, error } = await q;
     if (error) throw error;
     out.push(...((data as T[]) || []));
@@ -112,9 +115,9 @@ async function principal(): Promise<{ chamados: any[]; historico: any[]; anexos:
   const { data, error } = await sb.rpc("carregar_principal");
   if (!error && data) return data as any;
   const [chamados, vendas, valores, historico, anexos, itens] = await Promise.all([
-    todos("chamados", "*", "criado_em"), todos("vendas", "*"), todos("vendas_valores", "*"),
-    todos("historico", "chamado_id,quando,quem_nome,texto,id", "id"), todos("anexos", "id,chamado_id,tipo,nome,url,storage_path,criado_em,criado_por", "criado_em"),
-    todos("venda_itens", "*", "registrado_em").catch(() => []),
+    todos("chamados", "*", "criado_em", "id"), todos("vendas", "*", "chamado_id"), todos("vendas_valores", "*", "chamado_id"),
+    todos("historico", "chamado_id,quando,quem_nome,texto,id", "id"), todos("anexos", "id,chamado_id,tipo,nome,url,storage_path,criado_em,criado_por", "criado_em", "id"),
+    todos("venda_itens", "*", "registrado_em", "id").catch(() => []),
   ]);
   return { chamados, historico, anexos, vendas, valores, itens };
 }
@@ -138,7 +141,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("montadores_conta", "*").catch(() => []), // conta de pagamento do montador — só Pós-venda e Gestão (RLS)
     todos("consultor_bloqueios", "*", "de").catch(() => []), // agenda fechada dos consultores (o próprio, Gestão e supervisões)
     todos("visitas_ciclo", "*", "ciclo").catch(() => []), // nº oficial de visitas por ciclo (Gestão lança; o próprio vê o dele)
-    todos("vendas_temp", "*", "data").catch(() => []), // vendas lançadas só para a Gestão conferir (RLS: só Gestão) — não geram comissão nem aviso
+    todos("vendas_temp", "*", "data", "id").catch(() => []), // vendas lançadas só para a Gestão conferir (RLS: só Gestão) — não geram comissão nem aviso
     todos("usuario_acessos", "usuario_id,acesso").catch(() => []), // acessos extras por pessoa (o próprio e a Gestão)
   ]);
   const { chamados, vendas, valores, historico: hist, anexos } = P; const proms = P.itens;
@@ -222,7 +225,8 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       statusMv: m.status_mv, visitaEm: m.visita_em, medidor: m.medidor, situacao: m.situacao_exact, resultado: m.resultado, tratativa: m.tratativa, obs: m.obs,
       cruzadoEm: m.cruzado_em, atualizadoEm: m.atualizado_em, atualizadoPor: m.atualizado_por }])),
     config: cfg.data ? { comissaoPct: Number(cfg.data.comissao_pct), pagamentoVisita: Number(cfg.data.pagamento_visita), valorVendaMkt: cfg.data.valor_venda_mkt != null ? Number(cfg.data.valor_venda_mkt) : 10, modoTeste: !!cfg.data.modo_teste, auxilioFixo: cfg.data.auxilio_fixo != null ? Number(cfg.data.auxilio_fixo) : 1500, diaAuxilio: Number(cfg.data.dia_auxilio) || 15, checklistAgenda: cfg.data.checklist_agenda || null, escalaDomingos: cfg.data.escala_domingos || {}, googleReview: cfg.data.google_review_url || "" } : { comissaoPct: 1.5, pagamentoVisita: 40 },
-    chamados: chamados.filter((c: any) => !(c.tratativa && c.tratativa.excluido)).map((c: any) => {
+    // proteção extra: o mesmo chamado nunca entra duas vezes (somaria a venda em dobro)
+    chamados: ((vistos: Set<string>) => chamados.filter((c: any) => !(c.tratativa && c.tratativa.excluido) && !vistos.has(c.id) && !!vistos.add(c.id)))(new Set()).map((c: any) => {
       const v = vendaDe[c.id] || vendaTempDe[c.id];
       const t = trDe[c.id];
       return {
