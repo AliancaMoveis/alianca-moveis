@@ -128,6 +128,20 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
           <span className="hint">{fmtN(km)} km</span>
           <b style={{ marginLeft: "auto" }}>{moeda(tot)}</b>
         </button>
+        {g.assist && (() => {
+          const f = fr.find(x => String(x.id) === g.k); if (!f) return null;
+          const prontos = g.rs.filter(r => r.conferido && !r.envio_chave && contaRom(r).total > 0), enviados = g.rs.filter(r => r.envio_chave), faltam = g.rs.filter(r => !r.conferido && !r.envio_chave);
+          const vp = prontos.reduce((s, r) => s + contaRom(r).total, 0), ve = enviados.reduce((s, r) => s + contaRom(r).total, 0);
+          return <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "8px 14px", background: "#FFF8EE", borderTop: "1px solid #F1D9B5" }}>
+            <span>Na montagem: <b>{f.montador_nome || "⚠ sem nome (Freteiros e contas)"}</b></span>
+            {enviados.length > 0 && <span style={{ color: "#1F6B3E" }}>✓ {enviados.length} já enviado(s) · {moeda(ve)}</span>}
+            {faltam.length > 0 && <span style={{ color: "#9A5B00" }}>⚠ {faltam.length} a conferir</span>}
+            <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={!prontos.length || !f.montador_nome} onClick={async () => {
+              if (!confirm(`Fechar e enviar ${prontos.length} romaneio(s) conferido(s) de ${f.apelido} (${moeda(vp)}) para o pagamento da montagem, em "${f.montador_nome}"?`)) return;
+              try { const n = await enviarAssist(prontos, f, uid); toast?.(n + " romaneio(s) de " + f.apelido + " enviados para a montagem (" + f.montador_nome + ")"); rec(); } catch (e: any) { toast?.(e.message); rec(); }
+            }}>🔒 Fechar e enviar para a montagem · {prontos.length} rom. · {moeda(vp)}</button>
+          </div>;
+        })()}
         {ab && <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5, margin: 0 }}>
           <thead><tr><th>Romaneio</th><th>Data</th><th style={{ textAlign: "center" }}>Entregas</th><th>Avisos</th><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Entregas (R$)</th><th style={{ textAlign: "right" }}>Total</th><th style={{ textAlign: "right" }}>Total no papel</th><th style={{ textAlign: "center" }}>Conferido</th><th></th></tr></thead>
           <tbody>{rs.map(x => <LinhaRom key={x.id} mes={mes} r={x} todos={rom} uid={uid} toast={toast} patch={patch} aberto={aberto === x.id} abrir={() => setAberto(aberto === x.id ? null : x.id)}
@@ -171,7 +185,8 @@ function LinhaRom({ mes, r, todos, uid, toast, patch, aberto, abrir, detalhe }: 
       <td style={{ textAlign: "right" }}>{v.lancado && <><b>{moeda(v.total)}</b>{v.km > 0 && <div className="hint">{moeda(v.vKm)} de km</div>}</>}</td>
       <td style={{ textAlign: "right" }}><input className="fx" style={{ ...inp, borderColor: bate == null ? undefined : bate ? "#1f8a4c" : "#c00" }} inputMode="decimal" value={papel} placeholder="opcional" onChange={e => setPapel(e.target.value)} onBlur={sair} onKeyDown={enter} />
         {bate === false && <div style={{ color: "#c00", fontSize: 12 }}>dif. {moeda(v.difPapel || 0)}</div>}</td>
-      <td style={{ textAlign: "center" }}><input type="checkbox" style={{ width: 20, height: 20 }} checked={r.conferido} onChange={e => gravar(e.target.checked && r.mes < mes ? { conferido: true, mes } : { conferido: e.target.checked })} /></td>
+      <td style={{ textAlign: "center" }}><input type="checkbox" style={{ width: 20, height: 20 }} checked={r.conferido} disabled={!!r.envio_chave} title={r.envio_chave ? "Já enviado para a montagem — desfaça o envio na aba 🛠 para mexer" : ""} onChange={e => gravar(e.target.checked && r.mes < mes ? { conferido: true, mes } : { conferido: e.target.checked })} />
+        {r.envio_chave && <div style={{ fontSize: 11, color: "#1F6B3E" }}>✓ na montagem</div>}</td>
       <td><button className="btn sm" style={{ whiteSpace: "nowrap" }} onClick={abrir}>{aberto ? "▾" : "▸"} clientes</button></td>
     </tr>
     {detalhe && <tr><td colSpan={10} style={{ padding: "0 6px 8px", background: "#f7f9fd" }}>{detalhe}</td></tr>}
