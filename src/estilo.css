@@ -1981,3 +1981,12 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .pp-promob label{display:flex;flex-direction:column;font-size:12px;font-weight:700}
 .pp-neg{border-left:5px solid #f2b705}.pp-neg.negociando{border-left-color:var(--primary)}.pp-neg.fechado{border-left-color:var(--st-concluida)}
 .pp-neg-prop{display:flex;flex-direction:column;gap:2px;margin:4px 0 8px;padding:8px 10px;border-radius:10px;background:rgba(31,138,76,.1)}.pp-neg-prop b{font-size:20px;color:var(--st-concluida)}.pp-neg-prop small{font-size:12.5px}
+
+/* Presença na loja: confirmação visual em um toque */
+.pres-esteve{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.pres-chegou{flex:1;min-width:180px;background:#1f8a4c;color:#fff;border:0;border-radius:12px;padding:14px 16px;font-size:16px;font-weight:800;letter-spacing:.02em;cursor:pointer;box-shadow:0 2px 8px rgba(31,138,76,.25)}
+.pres-chegou:active{transform:scale(.98)}
+.pres-naoveio{background:#fff;color:#b42318;border:2px solid #f3b4ad;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:700;cursor:pointer}
+.pres-esteve.ok{background:#e8f6ee;color:#1f6b3e;border-radius:10px;padding:10px 12px;font-size:15px}
+.pres-esteve.nao{background:#fdecea;color:#8a1f14;border-radius:10px;padding:10px 12px;font-size:15px}
+.pg-movel{padding:10px 6px}.pg-movel .pg h1{font-size:19px}

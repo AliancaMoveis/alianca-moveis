@@ -33,8 +33,8 @@ export default function Presenca({ movel, novoPorta }: { movel?: boolean; novoPo
   const Tab = ({ k, l }: { k: Aba; l: string }) => <button className={aba === k ? "on" : ""} onClick={() => { setAba(k); setNovo(false); }}>{l} <b>{de(k).length}</b>{pend(k) ? <i>{pend(k)}</i> : null}</button>;
   return (
     <section className={"view active pres" + (movel ? " pres-movel" : "")}>
-      {!movel && <div className="view-head"><div><h2>✅ Confirmação de presença</h2><p>Quem vem à loja no dia: confirme a vinda, defina ou troque o vendedor, inicie o atendimento e veja as fotos. O cliente que entra direto na loja (porta) é registrado aqui, com o vendedor que atendeu.</p></div>{!novo && <button className="btn primary pres-mais" onClick={abrirNovo}>＋ Cliente porta</button>}</div>}
-      {movel && !novo && <button className="pres-fab" onClick={abrirNovo} title="Novo cliente porta">＋ Cliente porta</button>}
+      {!movel && <div className="view-head"><div><h2>✅ Confirmação de presença</h2><p>Quem vem à loja no dia: confirme a vinda, defina ou troque o vendedor, inicie o atendimento e veja as fotos. O cliente que entra direto na loja (porta) é registrado aqui, com o vendedor que atendeu.</p></div>{!novo && <button className="btn primary pres-mais" onClick={abrirNovo}>＋ Novo cliente</button>}</div>}
+      {movel && !novo && <button className="pres-fab" onClick={abrirNovo} title="Novo cliente porta">＋ Novo cliente</button>}
       <div className="ag-nav">
         <button className="btn sm" onClick={() => setDia(maisDias(dia, -1))}>‹</button>
         <input type="date" value={dia} onChange={e => setDia(e.target.value || dia)} style={{ maxWidth: 170 }} />
@@ -58,7 +58,7 @@ function Cartao({ c, porta }: { c: any; porta: boolean }) {
   const { R, abrirDetalhe, executar: ex, toast } = useApp() as any;
   const [vend, setVend] = useState("");
   const fotos = (c.anexos || []).filter((a: any) => a.tipo === "img");
-  const podeDefinir = !c.atendenteId && c.setorDestino === "suporte_consultores";
+  const podeDefinir = !c.atendenteId && !c.venda;
   const podeTrocar = !!c.atendenteId && !c.venda;
   const sc = R.statusClienteDe(c);
   const salvarVend = async () => {
@@ -84,7 +84,8 @@ function Cartao({ c, porta }: { c: any; porta: boolean }) {
         {fotos.length > 0 && <div className="pres-fotos" onClick={() => abrirDetalhe(c.id)} title="Abrir a ficha para ver as fotos">{fotos.slice(0, 4).map((a: any) => <img key={a.id} src={a.url} alt="" loading="lazy" />)}{fotos.length > 4 && <span>+{fotos.length - 4}</span>}</div>}
         {!fotos.length && !porta && <div className="pres-semfoto">⚠️ Sem foto/planta anexada</div>}
         {c.tratativa && c.tratativa.emAtendimento ? <div className="pres-ematd">🟢 Em atendimento desde {new Date(c.tratativa.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
-          : R.podeIniciarAtend(c) && String(c.dataLoja).slice(0, 10) === hojeISO() ? <button className="btn pres-iniciar" onClick={() => { if (confirm("Iniciar o atendimento de " + c.cliente + " com " + R.nomeUser(c.atendenteId) + "?")) ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado"); }}>▶️ Iniciar atendimento</button> : null}
+          : porta && R.podeIniciarAtend(c) && String(c.dataLoja).slice(0, 10) === hojeISO() ? <button className="btn pres-iniciar" onClick={() => { if (confirm("Iniciar o atendimento de " + c.cliente + " com " + R.nomeUser(c.atendenteId) + "?")) ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado"); }}>▶️ Iniciar atendimento</button> : null}
+        {!porta && <EsteveNaLoja c={c} />}
         {!porta && <ConfirmarVinda c={c} />}
         {(podeDefinir || podeTrocar) && R.podeEditarAgenda() && <div className="pres-vend">
           <SelVendedor value={vend} onChange={setVend} quando={c.dataLoja} c={c} placeholder={podeTrocar ? "Trocar o vendedor…" : "Definir o vendedor…"} />
@@ -130,4 +131,28 @@ function NovoPorta({ fechar }: { fechar: () => void }) {
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}><button className="btn primary" onClick={salvar}>✓ Registrar e iniciar atendimento</button><button className="btn ghost" onClick={fechar}>Cancelar</button></div>
     </div>
   );
+}
+
+/** confirmação visual de que o cliente ESTEVE na loja hoje: um toque — chegou (inicia o atendimento) ou não veio */
+function EsteveNaLoja({ c }: { c: any }) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const hoje = hojeISO(); const dia = String(c.dataLoja || "").slice(0, 10);
+  if (!dia || dia > hoje || c.venda) return null;
+  const sc = R.statusClienteDe(c); const t = c.tratativa || {};
+  if (t.emAtendimento || R.compareceu(c)) return <div className="pres-esteve ok">✅ <b>ESTEVE NA LOJA</b>{t.emAtendimento ? <small> · atendimento desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small> : null}</div>;
+  if (sc === "nao_compareceu") return <div className="pres-esteve nao">❌ <b>NÃO VEIO</b> <button className="btn ghost sm" onClick={() => ex(() => A.marcarComparecimento(c.id, "voltou"), "Reaberto — cliente veio")}>Veio afinal</button></div>;
+  const chegou = async () => {
+    if (!c.atendenteId) { toast("Defina o vendedor primeiro (logo abaixo) e toque de novo em “Chegou”"); return; }
+    if (R.podeIniciarAtend(c)) await ex(() => A.iniciarAtendimento(c.id), "✅ Cliente na loja — atendimento iniciado com " + R.nomeUser(c.atendenteId));
+    else if (c.setorDestino === "atendente_cliente") await ex(() => A.marcarComparecimento(c.id, "chegou"), "✅ Cliente na loja");
+    else toast("Não foi possível marcar — abra a ficha do cliente");
+  };
+  const naoVeio = () => {
+    if (c.setorDestino !== "atendente_cliente") { toast("Abra a ficha para marcar que o cliente não veio"); return; }
+    if (confirm(c.cliente + " não veio à loja?")) ex(() => A.marcarComparecimento(c.id, "nao_compareceu"), "Marcado: não veio");
+  };
+  return <div className="pres-esteve">
+    <button className="pres-chegou" onClick={chegou}>✅ CHEGOU NA LOJA</button>
+    {dia <= hoje && <button className="pres-naoveio" onClick={naoVeio}>✖ Não veio</button>}
+  </div>;
 }

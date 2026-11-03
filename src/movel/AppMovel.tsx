@@ -1,6 +1,7 @@
 // ALIANÇA 360 no celular (app instalado pelo navegador).
 // Consultor externo e vendedor: telas simples, com as ações do dia a um toque. Gestão/Supervisões: resumo visual.
 // Os demais setores usam a versão completa (responsiva).
+import PainelGeral from "../telas/PainelGeral";
 import Anuncios from "../telas/Anuncios";
 import Presenca from "../telas/Presenca";
 import { VendUrgentes, pendUrgentes } from "./Urgentes";
@@ -93,8 +94,8 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   const abas: [string, string, string][] = perfil === "marketing" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Registrar", "＋"], ["ganhos", "Meu mês", "💰"], ["eu", "Eu", "👤"]]
     : perfil === "dono" ? [["resumo", "Ver tudo", "📈"], ["painel", "Resumo", "📊"], ["status", "Status", "🚦"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["atend_vend", "Vendedores", "👔"], ["loja", "Loja", "🏬"], ["eu", "Conta", "🔑"]]
     : perfil === "gerente" ? [...(R.mySetores().includes("presenca") ? [["presenca", "Presença", "✅"], ["porta", "Porta", "＋"]] as [string, string, string][] : []), ["hoje", "Hoje", "☀"], ["loja", "Agenda", "🏬"], ["chamar", "Chamar", "📣"], ["chamado", "Chamado", "＋"], ["clientes", "Clientes", "🔎"], ["eu", "Mais", "☰"]]
-    : perfil === "juridico" ? [["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
-    : perfil === "posvenda" ? [["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
+    : perfil === "juridico" ? [...(R.temPresenca() ? [["presenca", "Presença", "✅"], ["porta", "Novo cliente", "＋"]] as [string, string, string][] : []), ["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
+    : perfil === "posvenda" ? [...(R.temPresenca() ? [["presenca", "Presença", "✅"], ["porta", "Novo cliente", "＋"]] as [string, string, string][] : []), ["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
     : perfil === "produtos" ? [["produto", "Produto", "🏷"], ["eu", "Mais", "☰"]]
     : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["cagenda", "Agenda", "📅"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
@@ -102,6 +103,8 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ...(gerAnuncios ? [] : [["time", "Time", "🎯"]] as [string, string, string][]), ["equipe", "Equipe", "👥"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : podeDistribuir(R) ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : [["resumo", "Painel", "📊"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ["eu", "Mais", "☰"]];
+  // 📊 Painel controle geral (Bruno, Washington): primeira aba no celular
+  if (R.temAcesso("painel_geral") && !abas.some(x => x[0] === "geral")) abas.unshift(["geral", "Geral", "📊"]);
   // 🏷 Consulta de produto (teste, só o Bruno): aba antes da última
   if (R.podeConsultaProduto() && !abas.some(x => x[0] === "produto")) abas.splice(Math.max(0, abas.length - 1), 0, ["produto", "Produto", "🏷"]);
   const [aba, setAba] = useState(abas[0][0]);
@@ -132,6 +135,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {aba === "atend_vend" && <AgendaVendedores movel />}
         {aba === "produto" && <ConsultaProduto movel />}
         {aba === "status" && <StatusGeral abrir={setAberto} />}
+        {aba === "geral" && <div className="mv-anun pg-movel"><PainelGeral movel /></div>}
         {aba === "presenca" && <div className="mv-anun"><div className="mv-sec">✅ Confirmação de presença</div><Presenca movel /></div>}
         {aba === "porta" && <div className="mv-anun"><div className="mv-sec">🚪 Novo cliente porta</div><Presenca movel novoPorta key={"porta" + nPorta} /></div>}
         {aba === "anuncios" && <div className="mv-anun"><div className="mv-sec">📣 Anúncios</div><Anuncios movel /></div>}

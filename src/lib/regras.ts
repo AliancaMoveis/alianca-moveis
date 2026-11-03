@@ -969,6 +969,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // Suporte dos consultores (Carla): distribuir os clientes para os vendedores e cobrar o status — menu enxuto, sem valores
     const soSuporte = mySetores().includes("suporte_consultores") && !ehGestao() && !temMarketing();
     const pessoal: string[][] = ehProprietario() ? [["dashboard", "Painel do dono"]] : [["dashboard", "Dashboard"], ["pendencias", "Minhas pendências"]];
+    if (temAcesso("painel_geral")) pessoal.splice(1, 0, ["painel_geral", "📊 Painel controle geral"]);
     if (!ehProprietario()) {
       if (ehGestao()) pessoal.push(["aprovacoes", "Aprovações (vendas e transferências)"]);
       if (defineVend) pessoal.push(["definir", "Definir vendedor"]);
@@ -1026,7 +1027,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // Confirmação de presença: quem vem à loja (marketing, externo) e o cliente porta (entrou direto) — Camila e Gestão
     // 👔 Vendedores: gerentes (e Gestão) veem os atendimentos de cada vendedor hoje e nos próximos dias
     if ((mySetores().includes("gerente_loja") || ehGestao()) && !oculto("vendedores")) G.push({ g: "Vendedores", ic: "👔", itens: [["agenda_vendedores", "Atendimentos dos vendedores"], ...(!ehGestao() ? [["ctl_vendedores", "Controle dos vendedores (horários, almoço, férias)"]] : [])] });
-    if (temPresenca()) G.push({ g: "Presença na loja", ic: "✅", itens: [["presenca", "✅ Confirmação de presença"], ["presenca_porta", "＋ Novo cliente porta"]] });
+    // Presença na loja fica dentro do menu "Loja" (para todos)
     if (veQualidade()) G.push({ g: "Qualidade", ic: "⭐", itens: [["qualidade", "Pesquisa de satisfação"]] });
     if (veAnuncios()) G.push({ g: "Anúncios", ic: "📣", itens: [["anuncios", "Meta e Google (Reportei)"]] });
     // Consultores externos: setor próprio (o marketing gera a demanda, o consultor atende). Fica logo abaixo do Marketing.
@@ -1044,7 +1045,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if ((ehGestao() || ehProjetista || (mySetores().includes("suporte_consultores") && !soSuporte)) && !((ehConsultorExterno() || ehMedidor()) && !ehGestao())) ge.push(["financeiro", ehGestao() ? "Financeiro" : ehConsultorExterno() ? "Vendas e comissão" : ehMedidor() ? "Minhas medidas e reembolsos" : ehProjetista ? "Minhas vendas" : "Vendas dos vendedores"]);
     if (verTudo()) ge.push(["relatorios", "Relatórios"]);
     if (verTudo() || temMarketing()) ge.push(["atividades", "Controle de atividades"]);
-    if (ge.length) G.push({ g: (ehConsultorExterno() || ehMedidor()) && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
+    if (ge.length && !oculto("gestao")) G.push({ g: (ehConsultorExterno() || ehMedidor()) && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
     // Pós-venda Projetados: grupo próprio (Vânia, Jurídico e Gestão)
     const pv: string[][] = [];
     if (ehPosvenda() || ehGestao()) pv.push(["novopv_cli", "Nova solicitação do cliente"], ["novopv_mont", "Nova solicitação do montador"]);
@@ -1073,7 +1074,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
       const gi = G.findIndex(g => ["Jurídico", "Checklist", "Medidas", "Pós-venda"].includes(g.g)); if (gi >= 0) G[gi].itens.push(["consulta", "Consulta"]);
     }
     // permissão avulsa de agenda da loja (ex.: Camila no fim de semana), para quem não é do marketing
-    if ((me() as any)?.editaAgenda && !temMarketing() && !ehGestao()) G.push({ g: "Loja", ic: "🏬", itens: [["agenda", "Agendamento loja"], ["definir", "Definir vendedor"]] });
+    const loja: string[][] = [];
+    if (temPresenca()) loja.push(["presenca_porta", "＋ Novo cliente (porta)"], ["presenca", "✅ Presença na loja"]);
+    if ((me() as any)?.editaAgenda && !temMarketing() && !ehGestao()) loja.push(["agenda", "Agendamento loja"], ["definir", "Definir vendedor"]);
+    if (loja.length) G.push({ g: "Loja", ic: "🏬", itens: loja });
     if (podeBaseClientes() && !oculto("clientes")) G.push({ g: "Clientes", ic: "📇", itens: [["cli_base", "Base de clientes"]] });
     const cd: string[][] = [];
     if (temCadastros()) cd.push(["cadastros", "Fábricas"]);
