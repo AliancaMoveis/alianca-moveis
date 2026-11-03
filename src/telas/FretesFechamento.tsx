@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { baixarXlsxFormatado } from "../lib/planilha";
 import { podeFretes } from "../lib/fretes";
-import { carregarAssist, criarManual, desfazerEnvioAssist, ehAssist, ehManual, enviarAssist, mapsEntrega, numRom, TIPOS_MANUAL } from "../lib/fretesTatico";
+import { rotuloTipo, carregarAssist, criarManual, desfazerEnvioAssist, ehAssist, ehManual, enviarAssist, mapsEntrega, numRom, TIPOS_MANUAL } from "../lib/fretesTatico";
 import { apagarDesconto, apagarRom, avisosRom, carregar, contaRom, criarDesconto, importar, lerCsvTatico, salvarFreteiro, salvarPagto, salvarRom, trazerParcelas,
   type Desconto, type Freteiro, type ItemRom, type RomTat } from "../lib/fretesTatico";
 
@@ -53,7 +53,7 @@ export default function FretesFechamento() {
         <div className="subnav" style={{ margin: 0 }}>
           <button className={aba === "rom" ? "on" : ""} onClick={() => setAba("rom")}>📄 Romaneios</button>
           <button className={aba === "rel" ? "on" : ""} onClick={() => setAba("rel")}>💰 Relatório para o financeiro</button>
-          <button className={aba === "assist" ? "on" : ""} onClick={() => setAba("assist")}>🛠 Pagamento frete assistência</button>
+          <button className={aba === "assist" ? "on" : ""} onClick={() => setAba("assist")}>🛠 Frete pago na montagem</button>
           <button className={aba === "fr" ? "on" : ""} onClick={() => setAba("fr")}>👤 Freteiros e contas</button>
         </div>
         <button className="btn sm" onClick={() => setMes(somaMes(mes, -1))}>◀</button>
@@ -80,10 +80,10 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
   const filtra = (r: RomTat) => (fSit === "todos" || (fSit === "conf" ? r.conferido : !r.conferido))
     && (!busca || r.romaneio.includes(busca) || r.itens.some(i => i.cliente.toLowerCase().includes(busca.toLowerCase()) || i.venda.includes(busca)));
   const grupos = useMemo(() => {
-    const m = new Map<string, { k: string; nome: string; ordem: number; rs: RomTat[]; assist: boolean }>();
+    const m = new Map<string, { k: string; nome: string; ordem: number; rs: RomTat[]; assist: boolean; rot: string }>();
     for (const r of rom) {
       const f = fr.find(x => x.id === r.freteiro_id); const k = f ? String(f.id) : "sem:" + r.transportadora;
-      const g = m.get(k) || { k, nome: f ? f.apelido : "⚠ " + r.transportadora + " (sem cadastro)", ordem: f ? f.ordem : 999, rs: [], assist: ehAssist(f) }; g.rs.push(r); m.set(k, g);
+      const g = m.get(k) || { k, nome: f ? f.apelido : "⚠ " + r.transportadora + " (sem cadastro)", ordem: f ? f.ordem : 999, rs: [], assist: ehAssist(f), rot: rotuloTipo(f) }; g.rs.push(r); m.set(k, g);
     }
     for (const g of m.values()) g.rs.sort((a, b) => String(a.data).localeCompare(String(b.data)) || a.romaneio.localeCompare(b.romaneio));
     return Array.from(m.values()).sort((a, b) => Number(a.assist) - Number(b.assist) || a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"));
@@ -116,7 +116,7 @@ function ListaRomaneios({ mes, d, uid, toast, rec, aberto, setAberto, fSit, setF
       return <div key={g.k} className="card" style={{ marginBottom: 10, padding: 0, overflow: "hidden" }}>
         <button onClick={() => alterna(g.k)} style={{ width: "100%", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 14px", background: nConf === g.rs.length ? "#E8F3EC" : "var(--fundo2, #f3f5fa)", border: 0, cursor: "pointer", textAlign: "left" }}>
           <b style={{ fontSize: 16, minWidth: 190 }}>{ab ? "▾" : "▸"} {g.nome}</b>
-          {g.assist && <span className="pill" style={{ background: "#FFEFD9", color: "#9A4A00", borderColor: "#E8A44A", fontWeight: 700 }}>🛠 FRETE ASSISTÊNCIA · pago na quinzena da montagem</span>}
+          {g.assist && <span className="pill" style={{ background: "#FFEFD9", color: "#9A4A00", borderColor: "#E8A44A", fontWeight: 700 }}>{g.rot} · pago na quinzena da montagem</span>}
           <span>{nConf}/{g.rs.length} conferidos</span>
           <span className="hint">{g.rs.reduce((s, x) => s + x.itens.length, 0)} entregas</span>
           <span className="hint">{fmtN(km)} km</span>
@@ -291,7 +291,7 @@ function Relatorio({ d, mes, toast, rec }: any) {
     try { await criarDesconto({ mes, freteiro_id: +nd.fid, descricao: nd.descricao, parcela: nd.parcela, valor: v }); setNd({ fid: "", descricao: "", parcela: "", valor: "" }); rec(); } catch (e: any) { toast?.(e.message); }
   };
   return <>
-    {assistRom.length > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#FFEFD9" }}>🛠 <b>Frete de assistência: {assistRom.length} romaneio(s) · {moeda(assistTot)}</b> — <u>não entra</u> neste relatório. É enviado para o pagamento quinzenal da montagem na aba <b>🛠 Pagamento frete assistência</b>.</div>}
+    {assistRom.length > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#FFEFD9" }}>🛠 <b>Frete de assistência e de montadores: {assistRom.length} romaneio(s) · {moeda(assistTot)}</b> — <u>não entra</u> neste relatório. É enviado para o pagamento quinzenal da montagem na aba <b>🛠 Frete pago na montagem</b>.</div>}
     {atrasados > 0 && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#EEF3FF" }}>📥 <b>{atrasados} romaneio(s) de meses anteriores</b> ainda a conferir — aparecem na aba Romaneios e entram neste relatório quando forem conferidos.</div>}
     {(pend > 0 || semF > 0) && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "#FFF4DC" }}>⚠ {pend > 0 && <><b>{pend} romaneio(s) ainda não conferido(s)</b> — entram no relatório com o que já foi digitado. </>}{semF > 0 && <b>{semF} romaneio(s) sem freteiro.</b>}</div>}
     <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 10 }}>
@@ -332,18 +332,18 @@ function Relatorio({ d, mes, toast, rec }: any) {
 function Freteiros({ d, toast, rec }: any) {
   const [ed, setEd] = useState<Partial<Freteiro> | null>(null);
   const campos: [keyof Freteiro, string, number][] = [["apelido", "Nome no relatório", 130], ["nome_tatico", "Nome no Tático", 200], ["cod_transp", "Cód. no Tático", 90], ["favorecido", "Favorecido da conta", 220], ["agencia", "Agência", 70], ["conta", "Conta", 120], ["valor_km", "R$ por km", 70]];
-  const gravar = async () => { if (!ed?.apelido) return toast?.("Informe o nome"); try { await salvarFreteiro({ ...ed, tipo: ed.tipo || "entrega", montador_nome: ed.tipo === "assistencia" ? (ed.montador_nome || "") : "", apelido: String(ed.apelido).toUpperCase(), valor_km: Number(String(ed.valor_km ?? 3).replace(",", ".")) || 0 }); setEd(null); rec(); toast?.("Salvo"); } catch (e: any) { toast?.(e.message); } };
+  const gravar = async () => { if (!ed?.apelido) return toast?.("Informe o nome"); try { await salvarFreteiro({ ...ed, tipo: ed.tipo || "entrega", montador_nome: ed.tipo === "assistencia" || ed.tipo === "montador" ? (ed.montador_nome || "") : "", apelido: String(ed.apelido).toUpperCase(), valor_km: Number(String(ed.valor_km ?? 3).replace(",", ".")) || 0 }); setEd(null); rec(); toast?.("Salvo"); } catch (e: any) { toast?.(e.message); } };
   return <>
     <div className="hint" style={{ marginBottom: 8 }}>O "Nome no Tático" e o "Cód. no Tático" ligam o relatório importado ao freteiro. A conta sai no relatório do financeiro.</div>
     <div style={{ overflowX: "auto" }}><table className="ma-tab" style={{ width: "100%", fontSize: 13.5 }}>
       <thead><tr>{campos.map(c => <th key={c[0]}>{c[1]}</th>)}<th>Tipo</th><th>Ativo</th><th></th></tr></thead>
-      <tbody>{d.fr.map((f: Freteiro) => ed?.id === f.id ? null : <tr key={f.id} style={{ opacity: f.ativo ? 1 : .5 }}>{campos.map(c => <td key={c[0]}>{c[0] === "valor_km" ? moeda(f.valor_km) : String(f[c[0]] ?? "")}</td>)}<td>{ehAssist(f) ? <b style={{ color: "#9A4A00" }}>🛠 Assistência → {f.montador_nome || "?"}</b> : "Entrega"}</td><td>{f.ativo ? "sim" : "não"}</td>
+      <tbody>{d.fr.map((f: Freteiro) => ed?.id === f.id ? null : <tr key={f.id} style={{ opacity: f.ativo ? 1 : .5 }}>{campos.map(c => <td key={c[0]}>{c[0] === "valor_km" ? moeda(f.valor_km) : String(f[c[0]] ?? "")}</td>)}<td>{ehAssist(f) ? <b style={{ color: "#9A4A00" }}>{f.tipo === "montador" ? "🔧 Montador" : "🛠 Assistência"} → {f.montador_nome || "?"}</b> : "Entrega"}</td><td>{f.ativo ? "sim" : "não"}</td>
         <td><button className="btn sm" onClick={() => setEd({ ...f })}>Editar</button></td></tr>)}</tbody>
     </table></div>
     {ed ? <div className="card" style={{ padding: 12, marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
       {campos.map(c => <div key={c[0]} className="field" style={{ margin: 0, width: c[2] }}><label>{c[1]}</label><input value={String(ed[c[0]] ?? "")} onChange={e => setEd({ ...ed, [c[0]]: e.target.value })} /></div>)}
-      <div className="field" style={{ margin: 0 }}><label>Tipo</label><select value={ed.tipo || "entrega"} onChange={e => setEd({ ...ed, tipo: e.target.value })}><option value="entrega">Entrega (relatório do financeiro)</option><option value="assistencia">🛠 Frete de assistência (pagamento da montagem)</option></select></div>
-      {ed.tipo === "assistencia" && <div className="field" style={{ margin: 0, width: 200 }}><label>Nome dele na montagem</label><input value={ed.montador_nome || ""} onChange={e => setEd({ ...ed, montador_nome: e.target.value })} placeholder="ex.: Costa (Assistência)" /></div>}
+      <div className="field" style={{ margin: 0 }}><label>Tipo</label><select value={ed.tipo || "entrega"} onChange={e => setEd({ ...ed, tipo: e.target.value })}><option value="entrega">Entrega (relatório do financeiro)</option><option value="assistencia">🛠 Frete de assistência (pagamento da montagem)</option><option value="montador">🔧 Montador que faz frete (pagamento da montagem)</option></select></div>
+      {(ed.tipo === "assistencia" || ed.tipo === "montador") && <div className="field" style={{ margin: 0, width: 200 }}><label>Nome dele na montagem</label><input value={ed.montador_nome || ""} onChange={e => setEd({ ...ed, montador_nome: e.target.value })} placeholder="ex.: Costa (Assistência)" /></div>}
       <label style={{ display: "flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={ed.ativo !== false} onChange={e => setEd({ ...ed, ativo: e.target.checked })} /> ativo</label>
       <button className="btn primary" onClick={gravar}>Salvar</button><button className="btn" onClick={() => setEd(null)}>Cancelar</button>
     </div> : <button className="btn" style={{ marginTop: 10 }} onClick={() => setEd({ valor_km: 3, ativo: true, ordem: 99 })}>+ Novo freteiro</button>}
@@ -412,8 +412,8 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
   if (!assist.length) return <div className="empty">Nenhum freteiro marcado como frete de assistência (aba Freteiros e contas → Tipo).</div>;
   return <>
     <div className="card" style={{ padding: 12, marginBottom: 12, background: "#FFF8EE" }}>
-      <b>🛠 Frete de assistência — pago na quinzena junto com a montagem</b>
-      <div className="hint" style={{ marginTop: 4 }}>Os romaneios destes freteiros não entram no relatório do financeiro. Confira-os na aba Romaneios, depois envie aqui: cada romaneio vira uma <b>ordem avulsa "Frete de assistência"</b> no pagamento do montador com o mesmo nome (ex.: Costa (Assistência)), e entra no fechamento da quinzena da montagem.</div>
+      <b>🛠 Frete de assistência e de montadores — pago na quinzena junto com a montagem</b>
+      <div className="hint" style={{ marginTop: 4 }}>Os romaneios destes freteiros não entram no relatório do financeiro. Confira-os na aba Romaneios, depois envie aqui: cada romaneio vira uma <b>ordem avulsa de frete</b> ("Frete de assistência" ou "Frete") no pagamento do montador ligado a ele (ex.: Costa (Assistência), Julio Silva), e entra no fechamento da quinzena da montagem.</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
         <button className="btn sm" onClick={() => quinzena(mAnt, 1)}>1ª quinzena {mAnt.slice(5, 7)}/{mAnt.slice(0, 4)}</button>
         <button className="btn sm" onClick={() => quinzena(mAnt, 2)}>2ª quinzena {mAnt.slice(5, 7)}/{mAnt.slice(0, 4)}</button>
@@ -430,7 +430,7 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
       const tot = (x: RomTat[]) => x.reduce((s, r) => s + contaRom(r).total, 0);
       return <div key={f.id} className="card" style={{ padding: 0, marginBottom: 12, overflow: "hidden" }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", padding: "10px 14px", background: "#FFEFD9" }}>
-          <b style={{ fontSize: 16 }}>🛠 {f.apelido}</b><span className="hint">→ na montagem: <b>{f.montador_nome || "⚠ sem nome — cadastre em Freteiros e contas"}</b></span>
+          <b style={{ fontSize: 16 }}>{f.tipo === "montador" ? "🔧" : "🛠"} {f.apelido}</b><span className="hint">→ na montagem: <b>{f.montador_nome || "⚠ sem nome — cadastre em Freteiros e contas"}</b></span>
           <span>Período: <b>{moeda(tot(doPer))}</b> ({doPer.length} rom.)</span>
           {ant.length > 0 && <span style={{ color: "#1D4ED8" }}>📥 {ant.length} de antes, ainda não enviado(s): {moeda(tot(ant))}</span>}
           <span style={{ color: "#1F6B3E" }}>✓ enviados {moeda(tot(enviados))}</span>

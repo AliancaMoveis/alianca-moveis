@@ -203,7 +203,9 @@ export function mapsEntrega(i: ItemRom) {
 }
 
 // ---------- frete de assistência: vai para o pagamento quinzenal da montagem (não entra no relatório do financeiro) ----------
-export const ehAssist = (f?: Freteiro | null) => !!f && f.tipo === "assistencia";
+/** freteiro pago na quinzena da montagem: frete de assistência ou montador que também faz frete */
+export const ehAssist = (f?: Freteiro | null) => !!f && (f.tipo === "assistencia" || f.tipo === "montador");
+export const rotuloTipo = (f?: Freteiro | null) => f?.tipo === "montador" ? "🔧 FRETE DE MONTADOR" : "🛠 FRETE ASSISTÊNCIA";
 /** romaneios dos freteiros de assistência com data no período (qualquer mês) + os anteriores ainda não enviados */
 export async function carregarAssist(de: string, ate: string, ids: number[]): Promise<RomTat[]> {
   if (!ids.length) return [];
@@ -218,8 +220,8 @@ export async function enviarAssist(rs: RomTat[], f: Freteiro, uid: string): Prom
   let n = 0;
   for (const r of rs) {
     const c = contaRom(r); if (c.total <= 0) continue;
-    const desc = `Frete assistência · romaneio ${numRom(r)} · ${r.itens.length} entrega(s)` + (c.km ? ` · ${String(c.km).replace(".", ",")} km` : "");
-    const { data, error } = await sb.rpc("montagem_avulsa_salvar", { p: { montador: f.montador_nome, tipo: "frete_assistencia", de: r.data, ate: r.data, prod: Math.round(c.total * 100) / 100, adic: 0, descricao: desc } });
+    const desc = `${f.tipo === "montador" ? "Frete" : "Frete assistência"} · romaneio ${numRom(r)} · ${r.itens.length} entrega(s)` + (c.km ? ` · ${String(c.km).replace(".", ",")} km` : "");
+    const { data, error } = await sb.rpc("montagem_avulsa_salvar", { p: { montador: f.montador_nome, tipo: f.tipo === "montador" ? "frete" : "frete_assistencia", de: r.data, ate: r.data, prod: Math.round(c.total * 100) / 100, adic: 0, descricao: desc } });
     if (error) throw new Error(error.message);
     const u = await sb.from("frete_tat_rom").update({ envio_chave: data as string, envio_em: new Date().toISOString(), atualizado_por: uid }).eq("id", r.id); if (u.error) throw new Error(u.error.message);
     n++;
