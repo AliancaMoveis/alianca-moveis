@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { sb } from "../lib/supabase";
 import { MOCK } from "../lib/chat";
-import { feriasEm, fmtMoeda, hojeISO, isoLocal, pagamentosVenda, parseData, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
+import { feriasEm, fmtMoeda, parseMoeda, hojeISO, isoLocal, pagamentosVenda, parseData, vendaContaVolume, vendasDoPeriodo } from "../lib/regras";
 import { calcGeral } from "../lib/geral";
 import { cicloDe, cicloDoMes } from "../lib/ciclo";
 import { contaRom, ehAssist, type RomTat, type Freteiro } from "../lib/fretesTatico";
@@ -70,7 +70,9 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
     // ---- vendas (todas as origens) ----
     const comVenda = todos.filter(c => c.venda);
     const V = vendasDoPeriodo(comVenda, P.de, P.ate), VA = vendasDoPeriodo(comVenda, P.pde, P.pate);
-    const val = (c: any) => Number(c.venda.valorNum) || 0;
+    // total vendido = valor CHEIO de cada venda fechada no período (mesma conta do Dashboard da Gestão: inclui a parte em promissória)
+    const cheioDe: Record<string, number> = {}; comVenda.forEach((c: any) => { cheioDe[c.id] = c.venda.valorNum != null ? Number(c.venda.valorNum) || 0 : parseMoeda(c.venda.valor); });
+    const val = (c: any) => cheioDe[c.id] || 0;
     const tot = V.reduce((s: number, c: any) => s + val(c), 0), totA = VA.reduce((s: number, c: any) => s + val(c), 0);
     // vendas por dia: período atual × mesmo dia do período anterior
     const porDia = (de: string, ate: string) => { const m: Record<string, number> = {}; comVenda.forEach((c: any) => vendaContaVolume(c.venda) && pagamentosVenda(c.venda).forEach(p => { if (dentro(p.data, de, ate)) m[p.data] = (m[p.data] || 0) + p.valor; })); return m; };
@@ -155,7 +157,7 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
 
         <Sec ic="💰" t="Vendas" s={P.nome} />
         <div className="pg-grid">
-          <Card big hl t="Total vendido no período" v={fmtMoeda(c.tot)} d={<Var a={c.tot} b={c.totA} money />} ir="financeiro" />
+          <Card big hl t="Total vendido no período" v={fmtMoeda(c.tot)} d={<><Var a={c.tot} b={c.totA} money /><span className="pg-d neu">valor cheio das vendas fechadas no período</span></>} ir="financeiro" />
           <Card t="Vendas efetivadas" v={n0(c.V.length)} d={<Var a={c.V.length} b={c.VA.length} />} ir="financeiro" />
           <Card t="Ticket médio" v={din(c.V.length ? c.tot / c.V.length : null)} d={<Var a={c.V.length ? c.tot / c.V.length : 0} b={c.VA.length ? c.totA / c.VA.length : 0} />} />
         </div>
