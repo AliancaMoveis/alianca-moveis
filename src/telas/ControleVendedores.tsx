@@ -33,7 +33,7 @@ export default function ControleVendedores({ movel }: { movel?: boolean }) {
   return (
     <section className={movel ? "cv mv-cv" : "view active cv"}>
       {!movel && <div className="view-head"><div><h2>Controle dos vendedores</h2><p>Folga da semana, domingos de folga (trabalha 2, folga 1), trocas de folga, horário de almoço e férias.</p></div></div>}
-      <div className="cv-info">🗓 <b>Sábado e domingo:</b> todos entram às 9:00 e saem às 18:00, com 1h de almoço em qualquer horário. <b>Folga no domingo</b> = trabalha a semana toda; <b>trabalhou o domingo</b> = tem a folga do dia da semana.</div>
+      <div className="cv-info">🗓 <b>Sábado e domingo:</b> todos entram às 9:00 e saem às 18:00, com 1h de almoço em qualquer horário. <b>Folga da semana é fixa</b> (vale toda semana); o que varia é só o <b>domingo</b>, pela escala A·B·C.</div>
       <div className="cv-doms">{doms.map(d => { const f = todos.filter((u: any) => u.naAgenda !== false && folgaEm(u, d, dias[u.id])); return (
         <div key={d} className="cv-dom"><b>Domingo {fmtDate(d).slice(0, 5)}</b><span>{f.length ? f.map((u: any) => nomeCurto(u.nome)).join(", ") : "ninguém de folga"}</span><small>{f.length} de folga</small></div>); })}</div>
       <EscalaABC todos={todos} pode={pode} />

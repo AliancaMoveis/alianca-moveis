@@ -228,8 +228,8 @@ export const parseData = (v: any): Date => {
   return new Date(s);
 };
 /** vendedor de férias num dia (AAAA-MM-DD) — devolve o texto "férias até DD/MM" ou "" */
-// folga no dia (mesma regra do banco, _vend_folga_em): troca do dia > domingo do rodízio (trabalha 2, folga 1) >
-// folga da semana — que só vale na semana (seg–dom) em que ele trabalha o domingo
+// folga no dia (mesma regra do banco, _vend_folga_em): troca do dia > domingo do rodízio (escala ABC: trabalha 2, folga 1) >
+// folga da semana, que é fixa (vale toda semana)
 const diasEntre = (a: string, b: string) => Math.round((Date.parse(a + "T12:00:00Z") - Date.parse(b + "T12:00:00Z")) / 864e5);
 const somaDias = (iso: string, n: number) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 // Escala ABC de domingos: o gerente define o primeiro domingo/grupo, os domingos com a loja FECHADA e trocas pontuais;
@@ -257,9 +257,8 @@ export function folgaEm(u: any, dia: string, dias?: Record<string, string>): boo
   const ex = dias && dias[dia]; if (ex) return ex === "folga";
   const dow = new Date(dia + "T12:00:00Z").getUTCDay();
   if (dow === 0) return domingoDeFolga(u, dia, dias);
-  if (u.folga === null || u.folga === undefined || dow !== u.folga) return false;
-  if (!u.domingoRef) return true;
-  return !domingoDeFolga(u, somaDias(dia, 7 - dow), dias);
+  // folga da semana é FIXA: vale toda semana; o que varia é só o domingo (escala ABC)
+  return !(u.folga === null || u.folga === undefined || dow !== u.folga);
 }
 export const fimDeSemana = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
 export const feriasEm = (u: any, dia: string) => u && u.feriasAte && dia <= u.feriasAte && dia >= (u.feriasDe || dia) ? "férias até " + u.feriasAte.slice(8, 10) + "/" + u.feriasAte.slice(5, 7) : "";
