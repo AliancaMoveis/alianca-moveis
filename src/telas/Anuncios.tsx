@@ -265,7 +265,7 @@ function OrigemClientes({ mk, de, ate, contatos, deAn }: { mk: any[]; de: string
       {nivel === "bairro" && cidades.length > 0 && <select value={cid} onChange={e => { setCidSel(e.target.value); setTodas(false); }} style={{ marginLeft: 6 }}>{cidades.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}</select>}
     </div>
     {loc === null ? <div className="dn-vazio">Cruzando com a base de clientes…</div> : !rank.length ? <div className="dn-vazio">Nenhum cliente do período encontrado na base de clientes.</div> : <>
-      {nivel === "cidade" && <MapaCidades rank={rank} />}
+      {nivel === "cidade" ? <MapaCidades rank={rank} /> : <MapaBairros cidade={cid} rank={rank} />}
       <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>#</th><th>{nivel === "cidade" ? "Cidade" : "Bairro de " + cid}</th><th>{quem === "cad" ? "Leads" : "Clientes"}</th><th>% do total</th>{quem === "cad" && <th>Compraram</th>}<th></th></tr></thead>
         <tbody>{rank.slice(0, lim).map(([k, g], i) => <tr key={k}><td>{i + 1}</td><td><b>{k}</b></td><td>{n0(g.n)}</td><td>{pctTxt(g.n / base)}</td>{quem === "cad" && <td>{n0(g.fat)}</td>}
           <td style={{ minWidth: 120 }}><div style={{ height: 8, borderRadius: 4, background: "var(--surface-2)" }}><div style={{ height: 8, borderRadius: 4, width: (g.n / mx * 100) + "%", background: "var(--primary)" }} /></div></td></tr>)}
@@ -307,28 +307,63 @@ const COORD: Record<string, [number, number]> = {
   "GUARATUBA": [-25.88, -48.57], "PONTAL DO PARANA": [-25.67, -48.51], "ANTONINA": [-25.43, -48.71], "MORRETES": [-25.47, -48.83], "PONTA GROSSA": [-25.09, -50.16],
 };
 const semAcento = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-function MapaCidades({ rank }: { rank: [string, { n: number; fat: number }][] }) {
+type Bolha = { k: string; n: number; fat: number; c: [number, number] };
+function MapaBolhas({ pts, rotulo, nota }: { pts: Bolha[]; rotulo: string; nota: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const pts = rank.map(([k, g]) => ({ k, g, c: COORD[semAcento(k)] })).filter(p => p.c);
-  const chave = pts.map(p => p.k + p.g.n).join("|");
+  const chave = pts.map(p => p.k + p.n + p.c.join(",")).join("|");
   useEffect(() => {
     if (!ref.current || !pts.length) return;
     const escuro = document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     const mapa = L.map(ref.current, { scrollWheelZoom: false, attributionControl: true });
     // OpenStreetMap (sem chave); no modo escuro o fundo é escurecido por filtro
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap", className: escuro ? "an-tiles-escuro" : "" }).addTo(mapa);
-    const mx = Math.max(...pts.map(p => p.g.n));
-    pts.slice().sort((a, b) => b.g.n - a.g.n).forEach((p, i) => {
-      const m = L.circleMarker(p.c, { radius: 7 + Math.sqrt(p.g.n / mx) * 30, color: "#284b8f", weight: 2, fillColor: "#3b6fd8", fillOpacity: 0.35 }).addTo(mapa);
-      m.bindTooltip(`<b>${p.k}</b><br>${p.g.n} lead(s)${p.g.fat ? " · " + p.g.fat + " compraram" : ""}`, { permanent: i < 3, direction: "top", className: "an-map-tip" });
+    const mx = Math.max(...pts.map(p => p.n));
+    pts.slice().sort((a, b) => b.n - a.n).forEach((p, i) => {
+      const m = L.circleMarker(p.c, { radius: 7 + Math.sqrt(p.n / mx) * 30, color: "#284b8f", weight: 2, fillColor: "#3b6fd8", fillOpacity: 0.35 }).addTo(mapa);
+      m.bindTooltip(`<b>${p.k}</b><br>${p.n} ${rotulo}${p.fat ? " · " + p.fat + " compraram" : ""}`, { permanent: i < 3, direction: "top", className: "an-map-tip" });
     });
-    mapa.fitBounds(L.latLngBounds(pts.map(p => p.c)).pad(0.15));
+    if (pts.length === 1) mapa.setView(pts[0].c, 13); else mapa.fitBounds(L.latLngBounds(pts.map(p => p.c)).pad(0.15));
     return () => { mapa.remove(); };
   }, [chave]);
   if (!pts.length) return null;
+  return <div className="an-mapa"><div ref={ref} style={{ height: 380, borderRadius: 10 }} /><div className="pb-per">{nota}</div></div>;
+}
+function MapaCidades({ rank }: { rank: [string, { n: number; fat: number }][] }) {
+  const pts = rank.map(([k, g]) => ({ k, n: g.n, fat: g.fat, c: COORD[semAcento(k)] })).filter(p => p.c) as Bolha[];
   const fora = rank.length - pts.length;
-  return <div className="an-mapa">
-    <div ref={ref} style={{ height: 380, borderRadius: 10 }} />
-    <div className="pb-per">Bolha = nº de leads de cada cidade (Curitiba e região){fora ? " · " + fora + " cidade(s) fora do mapa, veja na tabela" : ""}.</div>
-  </div>;
+  return <MapaBolhas pts={pts} rotulo="lead(s)" nota={"Bolha = nº de leads de cada cidade (Curitiba e região)" + (fora ? " · " + fora + " cidade(s) fora do mapa, veja na tabela" : "") + "."} />;
+}
+// bairros: posição pelo OpenStreetMap (Nominatim), procurada uma vez e guardada no banco (geo_bairros) para todos
+const geoCache: Record<string, [number, number] | null> = {};
+function MapaBairros({ cidade, rank }: { cidade: string; rank: [string, { n: number; fat: number }][] }) {
+  const nomes = rank.map(([k]) => k).filter(k => !k.startsWith("(")).slice(0, 40);
+  const [geo, setGeo] = useState<Record<string, [number, number] | null>>({}); const [buscando, setBuscando] = useState(0);
+  const chave = cidade + "|" + nomes.join(",");
+  useEffect(() => {
+    let vivo = true; if (!cidade || !nomes.length || MOCK) return;
+    (async () => {
+      const id = (b: string) => cidade + "|" + b; const g: Record<string, [number, number] | null> = {};
+      nomes.forEach(b => { if (id(b) in geoCache) g[b] = geoCache[id(b)]; });
+      const falta0 = nomes.filter(b => !(b in g));
+      if (falta0.length) { const { data } = await sb.from("geo_bairros").select("bairro,lat,lng").eq("cidade", cidade).in("bairro", falta0);
+        (data || []).forEach((r: any) => { g[r.bairro] = r.lat == null ? null : [r.lat, r.lng]; geoCache[id(r.bairro)] = g[r.bairro]; }); }
+      if (!vivo) return; setGeo({ ...g });
+      const falta = nomes.filter(b => !(b in g)); setBuscando(falta.length);
+      for (const b of falta) {   // Nominatim: no máximo 1 busca por segundo
+        if (!vivo) return;
+        try {
+          const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=" + encodeURIComponent(b + ", " + cidade + ", Paraná"), { headers: { "Accept-Language": "pt-BR" } });
+          const j = await r.json(); const c: [number, number] | null = j && j[0] ? [Number(j[0].lat), Number(j[0].lon)] : null;
+          g[b] = c; geoCache[id(b)] = c;
+          await sb.from("geo_bairros").insert({ cidade, bairro: b, lat: c ? c[0] : null, lng: c ? c[1] : null });
+        } catch { g[b] = null; }
+        if (!vivo) return; setGeo({ ...g }); setBuscando(n => Math.max(0, n - 1));
+        await new Promise(res => setTimeout(res, 1100));
+      }
+    })().catch(() => null);
+    return () => { vivo = false; };
+  }, [chave]);
+  const pts = rank.map(([k, g]) => ({ k, n: g.n, fat: g.fat, c: geo[k] })).filter(p => p.c) as Bolha[];
+  if (!pts.length) return buscando ? <div className="dn-vazio">Localizando os bairros de {cidade} no mapa… ({buscando})</div> : null;
+  return <MapaBolhas pts={pts} rotulo="lead(s)" nota={"Bolha = nº de leads de cada bairro de " + cidade + (buscando ? " · localizando mais " + buscando + " bairro(s)…" : "") + (nomes.length > pts.length && !buscando ? " · " + (nomes.length - pts.length) + " bairro(s) sem posição no mapa" : "") + "."} />;
 }
