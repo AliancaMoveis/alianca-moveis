@@ -1,5 +1,5 @@
 // Clientes → Base de clientes: busca por CPF/CNPJ, telefone ou nome; ficha com cadastro editável, resumo e histórico de vendas.
-// Importação (só Gestão): planilha .xlsx do cruzamento Tático/Exact (abas "Base de Clientes" + "Vendas + CPF") ou .csv de clientes.
+// Importação (só Gestão): relatório de vendas do Tático (.csv com CPFCNPJCli → só o cadastro dos clientes), planilha .xlsx antiga (Tático/Exact) ou .csv de clientes.
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { Modal } from "../comp/Modal";
@@ -118,20 +118,20 @@ function Importar() {
   }
   return (
     <Modal titulo="Importar base de clientes" onFechar={() => setModal(null)}>
-      <p style={{ marginTop: 0 }}>Envie a planilha <b>.xlsx</b> do cruzamento Tático/Exact (abas <b>“Base de Clientes”</b> e <b>“Vendas + CPF”</b>) ou um <b>.csv</b> só de clientes.</p>
+      <p style={{ marginTop: 0 }}>Envie o <b>relatório de vendas do Tático (.csv) com o CPF do cliente</b> — dele entra só o <b>cadastro do cliente</b> (CPF, nome, telefones e endereço), sem nº de venda, valores ou vendedor. Também aceita a planilha <b>.xlsx</b> antiga do cruzamento Tático/Exact.</p>
       <ul className="hint" style={{ marginTop: 0 }}>
         <li>Clientes novos entram; os que já existem são atualizados.</li>
         <li>Telefone e endereço corrigidos à mão no 360 <b>não</b> são substituídos, e campo vazio na planilha não apaga o que já existe.</li>
-        <li>Vendas entram pelo nº da venda (sem duplicar); se a venda já existe, atualiza situação e valores.</li>
+        <li>Cliente que aparece em mais de uma venda entra uma vez só, com os dados da venda mais recente.</li>
       </ul>
       <input type="file" accept=".xlsx,.csv" disabled={rodando} onChange={e => ler(e.target.files?.[0] || null)} />
       {dados && !res && <div className="card" style={{ padding: "10px 14px", marginTop: 12 }}>
-        <b>{arq?.name}</b>: {dados.clientes.length.toLocaleString("pt-BR")} clientes · {dados.vendas.length.toLocaleString("pt-BR")} vendas
+        <b>{arq?.name}</b>: {dados.clientes.length.toLocaleString("pt-BR")} clientes{dados.vendas.length ? " · " + dados.vendas.length.toLocaleString("pt-BR") + " vendas" : ""}
         <div style={{ marginTop: 10 }}><button className="btn primary" disabled={rodando} onClick={importar}>{rodando ? "Importando…" : "Importar"}</button></div></div>}
       {prog && <div className="hint" style={{ marginTop: 10, fontWeight: 600 }}>{prog}</div>}
       {res && <div className="card" style={{ padding: "10px 14px", marginTop: 12, lineHeight: 1.7 }}>
         <div>✅ Clientes novos: <b>{res.clientesNovos}</b> · atualizados: <b>{res.clientesAtualizados}</b>{res.invalidos ? <> · ignorados (sem CPF/nome): <b>{res.invalidos}</b></> : null}</div>
-        <div>🧾 Vendas: <b>{res.vendas}</b> ({res.vendasNovas} novas){res.vendasSemCliente ? <> · sem cliente na base: <b>{res.vendasSemCliente}</b></> : null}</div>
+        {res.vendas > 0 && <div>🧾 Vendas: <b>{res.vendas}</b> ({res.vendasNovas} novas){res.vendasSemCliente ? <> · sem cliente na base: <b>{res.vendasSemCliente}</b></> : null}</div>}
       </div>}
     </Modal>
   );

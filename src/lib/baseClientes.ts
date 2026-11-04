@@ -78,7 +78,11 @@ export const BC = {
   },
   async importar(clientes: any[], vendas: any[]): Promise<any> {
     if (MOCK) return { clientesNovos: clientes.length, clientesAtualizados: 0, invalidos: 0, vendas: vendas.length, vendasNovas: vendas.length, vendasSemCliente: 0 };
-    return rpc("base_clientes_importar", { p_clientes: clientes, p_vendas: vendas });
+    const t: any = { clientesNovos: 0, clientesAtualizados: 0, invalidos: 0, vendas: 0, vendasNovas: 0, vendasSemCliente: 0 };
+    const soma = (r: any) => Object.keys(t).forEach(k => (t[k] += Number(r?.[k]) || 0));
+    for (let i = 0; i < clientes.length; i += 400) soma(await rpc("base_clientes_importar", { p_clientes: clientes.slice(i, i + 400), p_vendas: [] }));
+    for (let i = 0; i < vendas.length; i += 400) soma(await rpc("base_clientes_importar", { p_clientes: [], p_vendas: vendas.slice(i, i + 400) }));
+    return t;
   },
 };
 
@@ -121,11 +125,36 @@ function lerCsv(txt: string): Record<string, string>[] {
   const cab = (linhas.shift() || []).map(h => h.replace(/^﻿/, "").trim());
   return linhas.filter(l => l.some(x => x.trim())).map(l => Object.fromEntries(cab.map((h, i) => [h, (l[i] ?? "").trim()])));
 }
+/** endereço do relatório de vendas do Tático ("Orçamento"): "RUA X, 930 - CASA, BAIRRO - CIDADE" → partes */
+export function partesEndereco(t: string) {
+  let r = String(t || "").replace(/\s+/g, " ").trim(); const o = { logradouro: "", numero: "", complemento: "", bairro: "", cidade: "" };
+  if (!r) return o;
+  let i = r.lastIndexOf(" - "); if (i > 0) { o.cidade = r.slice(i + 3).trim(); r = r.slice(0, i).trim(); }
+  i = r.lastIndexOf(","); if (i > 0) { o.bairro = r.slice(i + 1).trim(); r = r.slice(0, i).trim(); }
+  i = r.indexOf(" - "); if (i > 0) { o.complemento = r.slice(i + 3).trim(); r = r.slice(0, i).trim(); }
+  i = r.lastIndexOf(","); if (i > 0 && /\d|^s\/?n$/i.test(r.slice(i + 1).trim())) { o.numero = r.slice(i + 1).trim(); r = r.slice(0, i).trim(); }
+  o.logradouro = r; return o;
+}
+/** relatório de vendas do Tático (CSV com CPFCNPJCli) → SÓ o cadastro dos clientes (sem vendas): um por CPF, o mais recente vale */
+function clientesDoRelVendas(ls: Record<string, string>[]) {
+  const por = new Map<string, { quando: string; c: any }>();
+  for (const l of ls) {
+    const doc = soDig(pega(l, "CPFCNPJCli")); const nome = pega(l, "Cliente"); if (!doc || !nome) continue;
+    const quando = dataImport(pega(l, "DataSituação", "IncluidaEm")) || "";
+    const ant = por.get(doc); if (ant && ant.quando > quando) continue;
+    const e = partesEndereco(pega(l, "Orçamento", "Endereço"));
+    por.set(doc, { quando, c: { cpf_cnpj: doc, nome, telefone1: soDig(pega(l, "ClienteTel1")), telefone2: soDig(pega(l, "ClienteTel2")), ...e, uf: "", cod_tatico: pega(l, "IDPessoaCli") } });
+  }
+  return [...por.values()].map(x => x.c);
+}
 /** .xlsx com as abas "Base de Clientes" e "Vendas + CPF" (cruzamento Tático/Exact) ou .csv só de clientes */
 export async function lerArquivoBase(arq: File): Promise<{ clientes: any[]; vendas: any[] }> {
   if (/\.csv$/i.test(arq.name)) {
+    const ls = lerCsv(await arq.text());
+    // relatório de vendas do Tático com o CPF do cliente: sobe só a BASE DE CLIENTES (nº da venda, valores e vendedor não entram)
+    if (ls.length && Object.keys(ls[0]).some(k => norm(k) === norm("CPFCNPJCli"))) return { clientes: clientesDoRelVendas(ls), vendas: [] };
     // csv: só o cadastro dos clientes (o histórico de vendas vem pela planilha .xlsx, aba "Vendas + CPF")
-    return { clientes: lerCsv(await arq.text()).map(linhaCliente), vendas: [] };
+    return { clientes: ls.map(linhaCliente), vendas: [] };
   }
   let cl = await lerXlsx(arq, /base de clientes|clientes/i);
   const ve = await lerXlsx(arq, /vendas \+ cpf|^vendas$/i);
