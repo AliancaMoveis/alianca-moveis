@@ -95,6 +95,7 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
     return { cad: cad.length, loja: loja.length, vend: vend.length, fat };
   };
   const F1 = useMemo(() => funil(de, ate), [st.chamados, de, ate]);
+  const mk360 = useMemo(() => st.chamados.filter((c: any) => R.domMarketing(c) && !importado(c) && String(c.criadoEm).slice(0, 10) >= INICIO_360), [st.chamados]);
   const F0 = useMemo(() => funil(dePrev, atePrev), [st.chamados, dePrev, atePrev]);
 
   if (dados === undefined) return <div className="dn-vazio">Carregando os anúncios…</div>;
@@ -170,6 +171,10 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
       {semDados > 0 && <div className="pb-per">{semDados} dia(s) do período sem dados no Reportei.</div>}
     </div>
 
+    <DiaSemana linhas={dados.linhas} mk={mk360} de={cl(de)} ate={ate} />
+    <Horario mk={mk360} de={cl(de)} ate={ate} />
+    <OrigemClientes mk={mk360} de={cl(de)} ate={ate} />
+
     <div className="panel">
       <h3>Campanhas no período</h3>
       {camps.length ? <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>Campanha</th><th>Investido</th><th>Impressões</th><th>Cliques</th><th>CTR</th><th>Resultado</th><th>Custo/result.</th></tr></thead>
@@ -178,5 +183,126 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
     </div>
     </>}
     {!resumo && <div className="pb-per">Fonte: Reportei (Meta Ads e Google Ads){dados.sync?.ate ? " · dados até " + fmtDate(dados.sync.ate) : ""}{dados.sync?.ultimo ? " · atualizado em " + new Date(dados.sync.ultimo).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}. Os números do dia de hoje entram na próxima atualização.</div>}
+  </div>;
+}
+
+// ---------- 📅 melhor dia da semana: investimento e contatos (Reportei) × cadastros, agendamentos e vendas (360) pelo dia em que o lead chegou ----------
+const DIAS_SEM = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const diaLocal = (v: any) => { const d = new Date(String(v).length <= 10 ? v + "T12:00" : v); return isNaN(+d) ? null : d; };
+function DiaSemana({ linhas, mk, de, ate }: { linhas: Linha[]; mk: any[]; de: string; ate: string }) {
+  if (de > ate) return null;
+  const L = Array.from({ length: 7 }, () => ({ dias: 0, gasto: 0, contatos: 0, cad: 0, loja: 0, vend: 0, fat: 0 }));
+  for (let d = new Date(de + "T12:00"); d <= new Date(ate + "T12:00"); d.setDate(d.getDate() + 1)) L[d.getDay()].dias++;
+  linhas.filter(l => l.dia >= de && l.dia <= ate).forEach(l => { const d = diaLocal(l.dia); if (!d) return; const x = L[d.getDay()]; x.gasto += l.gasto; x.contatos += l.conversas + l.conversoes; });
+  mk.forEach((c: any) => { const d = diaLocal(c.criadoEm); if (!d) return; const iso = isoLocal(d); if (iso < de || iso > ate) return;
+    const x = L[d.getDay()]; x.cad++; if (c.dataLoja) x.loja++; if (vendaContaVolume(c.venda)) { x.vend++; x.fat += Number(c.venda.valorNum) || 0; } });
+  const ordem = [1, 2, 3, 4, 5, 6, 0];
+  const tot = L.reduce((t, x) => ({ gasto: t.gasto + x.gasto, contatos: t.contatos + x.contatos, cad: t.cad + x.cad, loja: t.loja + x.loja, vend: t.vend + x.vend, fat: t.fat + x.fat }), { gasto: 0, contatos: 0, cad: 0, loja: 0, vend: 0, fat: 0 });
+  const comVenda = ordem.filter(i => L[i].vend > 0);
+  const melhorVenda = comVenda.length ? comVenda.reduce((a, b) => (L[b].gasto / L[b].vend < L[a].gasto / L[a].vend ? b : a)) : -1;
+  const comCont = ordem.filter(i => L[i].contatos > 0);
+  const melhorCont = comCont.length ? comCont.reduce((a, b) => (L[b].gasto / L[b].contatos < L[a].gasto / L[a].contatos ? b : a)) : -1;
+  const mxV = Math.max(1, ...L.map(x => x.dias ? x.vend / x.dias : 0));
+  return <div className="panel">
+    <h3>📅 Melhor dia da semana <small>(de {fmtDate(de)} a {fmtDate(ate)} · cadastros, agendamentos e vendas contados pelo dia em que o lead chegou)</small></h3>
+    {melhorVenda >= 0 && <div className="an-aviso" style={{ marginBottom: 8 }}>🏆 Menor investimento por venda: <b>{DIAS_SEM[melhorVenda]}</b> ({din(L[melhorVenda].gasto / L[melhorVenda].vend)} por venda){melhorCont >= 0 ? <> · contato mais barato: <b>{DIAS_SEM[melhorCont]}</b> ({din(L[melhorCont].gasto / L[melhorCont].contatos)})</> : null}</div>}
+    <div className="an-semgraf">{ordem.map(i => { const x = L[i]; const cc = div(x.gasto, x.contatos); const mxC = Math.max(1, ...L.map(y => y.contatos));
+      return <div key={i} className={"an-semcol" + (i === melhorVenda ? " top" : "")} title={DIAS_SEM[i] + ": " + n0(x.contatos) + " contatos · " + n0(x.vend) + " vendas · " + din(div(x.gasto, x.vend)) + " por venda"}>
+        <div className="an-sembar"><i className="c" style={{ height: (x.contatos / mxC * 100) + "%" }} /><i className="v" style={{ height: ((x.dias ? x.vend / x.dias : 0) / mxV * 100) + "%" }} /></div>
+        <b>{DIAS_SEM[i].slice(0, 3)}</b><small>{n0(x.vend)} venda(s)</small><small>{cc == null ? "—" : din(cc) + "/contato"}</small></div>; })}
+      <div className="an-semleg"><span><i className="c" /> contatos</span><span><i className="v" /> vendas por dia</span></div></div>
+    <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>Dia</th><th>Investido</th><th>Contatos</th><th>Custo/contato</th><th>Cadastros</th><th>Agendaram loja</th><th>Compraram</th><th>Conversão</th><th>Investido/venda</th><th>Vendas por dia</th></tr></thead>
+      <tbody>{ordem.map(i => { const x = L[i]; const vd = x.dias ? x.vend / x.dias : 0; return <tr key={i} style={i === melhorVenda ? { background: "var(--tn-green)" } : undefined}>
+        <td><b>{DIAS_SEM[i]}</b> <small className="hint">({x.dias}×)</small></td><td>{din(x.gasto)}</td><td>{n0(x.contatos)}</td><td>{din(div(x.gasto, x.contatos))}</td>
+        <td>{n0(x.cad)}</td><td>{n0(x.loja)} <small className="hint">{pctTxt(div(x.loja, x.cad))}</small></td><td><b>{n0(x.vend)}</b></td><td>{pctTxt(div(x.vend, x.cad))}</td><td>{din(div(x.gasto, x.vend))}</td>
+        <td style={{ minWidth: 110 }}><div style={{ height: 8, borderRadius: 4, background: "var(--surface-2)" }}><div style={{ height: 8, borderRadius: 4, width: (vd / mxV * 100) + "%", background: "var(--st-concluida)" }} /></div><small className="hint">{vd.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}/dia</small></td></tr>; })}</tbody>
+      <tfoot><tr><td>Total</td><td>{din(tot.gasto)}</td><td>{n0(tot.contatos)}</td><td>{din(div(tot.gasto, tot.contatos))}</td><td>{n0(tot.cad)}</td><td>{n0(tot.loja)}</td><td>{n0(tot.vend)}</td><td>{pctTxt(div(tot.vend, tot.cad))}</td><td>{din(div(tot.gasto, tot.vend))}</td><td></td></tr></tfoot></table></div>
+    <div className="pb-per">“Compraram” = leads que chegaram naquele dia da semana e já têm venda (em qualquer data). Leads recentes ainda podem comprar, então os últimos dias tendem a aparecer menores.</div>
+  </div>;
+}
+
+// ---------- 📍 de onde vêm os clientes: cidade e bairro (pela base de clientes: nº da venda ou telefone) ----------
+function OrigemClientes({ mk, de, ate }: { mk: any[]; de: string; ate: string }) {
+  const [quem, setQuem] = useState<"vend" | "cad">("vend"); const [nivel, setNivel] = useState<"cidade" | "bairro">("cidade");
+  const lista = useMemo(() => de > ate ? [] : mk.filter((c: any) => { const d = diaLocal(c.criadoEm); if (!d) return false; const iso = isoLocal(d); return iso >= de && iso <= ate && (quem === "cad" || vendaContaVolume(c.venda)); }), [mk, de, ate, quem]);
+  const [loc, setLoc] = useState<Record<string, { cidade: string; bairro: string }> | null>(null);
+  useEffect(() => { let vivo = true; setLoc(null);
+    if (MOCK) { const cs = ["CURITIBA", "CURITIBA", "CURITIBA", "SÃO JOSÉ DOS PINHAIS", "COLOMBO", "ARAUCÁRIA", "PINHAIS", "FAZENDA RIO GRANDE", "CAMPO LARGO", "ALMIRANTE TAMANDARÉ"], bs = ["PORTÃO", "CIC", "BOQUEIRÃO", "SÍTIO CERCADO", "CENTRO", "ÁGUA VERDE"];
+      const m: Record<string, any> = {}; lista.forEach((c: any, i: number) => (m[c.id] = { cidade: cs[i % cs.length], bairro: bs[i % bs.length] })); setLoc(m); return; }
+    (async () => { const m: Record<string, any> = {};
+      for (let i = 0; i < lista.length; i += 800) {
+        const { data } = await sb.rpc("anuncios_origem_clientes", { p: lista.slice(i, i + 800).map((c: any) => ({ k: c.id, venda: c.venda?.numero || "", tel: c.telefone || "" })) });
+        (data || []).forEach((r: any) => (m[r.k] = { cidade: r.cidade || "", bairro: r.bairro || "" }));
+      }
+      if (vivo) setLoc(m); })().catch(() => vivo && setLoc({}));
+    return () => { vivo = false; }; }, [lista]);
+  if (de > ate) return null;
+  const grupos: Record<string, { n: number; fat: number }> = {}; let sem = 0;
+  lista.forEach((c: any) => { const l = loc?.[c.id]; if (!l || !l.cidade) { sem++; return; } const k = nivel === "cidade" ? l.cidade : (l.bairro || "(sem bairro)") + " · " + l.cidade;
+    const g = (grupos[k] = grupos[k] || { n: 0, fat: 0 }); g.n++; g.fat += vendaContaVolume(c.venda) ? Number(c.venda.valorNum) || 0 : 0; });
+  const rank = Object.entries(grupos).sort((a, b) => b[1].n - a[1].n || b[1].fat - a[1].fat); const mx = Math.max(1, ...rank.map(([, g]) => g.n));
+  const achados = lista.length - sem;
+  return <div className="panel">
+    <h3>📍 De onde vêm os clientes <small>(clientes do marketing que chegaram de {fmtDate(de)} a {fmtDate(ate)} · cidade e bairro da base de clientes)</small></h3>
+    <div className="an-per" style={{ marginBottom: 8 }}>
+      {([["vend", "Que compraram"], ["cad", "Todos os cadastros"]] as const).map(([k, l]) => <button key={k} className={"chip" + (quem === k ? " on" : "")} onClick={() => setQuem(k)}>{l}</button>)}
+      <span style={{ width: 10 }} />{([["cidade", "Por cidade"], ["bairro", "Por bairro"]] as const).map(([k, l]) => <button key={k} className={"chip" + (nivel === k ? " on" : "")} onClick={() => setNivel(k)}>{l}</button>)}
+    </div>
+    {loc === null ? <div className="dn-vazio">Cruzando com a base de clientes…</div> : !rank.length ? <div className="dn-vazio">Nenhum cliente do período encontrado na base de clientes.</div> : <>
+      {nivel === "cidade" && <MapaCidades rank={rank} />}
+      <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>#</th><th>{nivel === "cidade" ? "Cidade" : "Bairro · cidade"}</th><th>Clientes</th><th>% do total</th>{quem === "vend" && <th>Vendido</th>}<th></th></tr></thead>
+        <tbody>{rank.slice(0, nivel === "cidade" ? 15 : 25).map(([k, g], i) => <tr key={k}><td>{i + 1}</td><td><b>{k}</b></td><td>{n0(g.n)}</td><td>{pctTxt(g.n / achados)}</td>{quem === "vend" && <td>{din(g.fat)}</td>}
+          <td style={{ minWidth: 120 }}><div style={{ height: 8, borderRadius: 4, background: "var(--surface-2)" }}><div style={{ height: 8, borderRadius: 4, width: (g.n / mx * 100) + "%", background: "var(--primary)" }} /></div></td></tr>)}</tbody></table></div>
+      <div className="pb-per">{n0(achados)} de {n0(lista.length)} clientes localizados na base (pelo nº da venda ou pelo telefone){sem ? " · " + n0(sem) + " sem endereço na base" : ""}.</div>
+    </>}
+  </div>;
+}
+
+// ---------- ⏰ melhor horário: quando os leads chegam (hora do cadastro no 360) e quantos viram venda ----------
+function Horario({ mk, de, ate }: { mk: any[]; de: string; ate: string }) {
+  if (de > ate) return null;
+  const H = Array.from({ length: 24 }, () => ({ cad: 0, vend: 0 }));
+  mk.forEach((c: any) => { const d = diaLocal(c.criadoEm); if (!d) return; const iso = isoLocal(d); if (iso < de || iso > ate) return; const x = H[d.getHours()]; x.cad++; if (vendaContaVolume(c.venda)) x.vend++; });
+  const horas = H.map((x, h) => ({ h, ...x })).filter(x => x.cad > 0); if (!horas.length) return null;
+  const ini = Math.min(...horas.map(x => x.h)), fim = Math.max(...horas.map(x => x.h)); const faixa = H.slice(ini, fim + 1).map((x, k) => ({ h: ini + k, ...x }));
+  const mx = Math.max(1, ...faixa.map(x => x.cad)); const tot = faixa.reduce((t, x) => ({ cad: t.cad + x.cad, vend: t.vend + x.vend }), { cad: 0, vend: 0 });
+  const relevantes = faixa.filter(x => x.cad >= Math.max(5, tot.cad * 0.02));
+  const pico = faixa.reduce((a, b) => (b.cad > a.cad ? b : a));
+  const melhorConv = relevantes.length ? relevantes.reduce((a, b) => (b.vend / b.cad > a.vend / a.cad ? b : a)) : null;
+  return <div className="panel">
+    <h3>⏰ Melhor horário <small>(hora em que o cliente foi cadastrado no 360 — o horário do contato · o Reportei só traz o investimento por dia)</small></h3>
+    <div className="an-aviso" style={{ marginBottom: 8 }}>📈 Pico de leads: <b>{pico.h}h–{pico.h + 1}h</b> ({n0(pico.cad)} cadastros){melhorConv ? <> · melhor conversão em venda: <b>{melhorConv.h}h–{melhorConv.h + 1}h</b> ({pctTxt(melhorConv.vend / melhorConv.cad)})</> : null}</div>
+    <div className="an-horas">{faixa.map(x => <div key={x.h} className={"an-hora" + (melhorConv && x.h === melhorConv.h ? " top" : "")} title={x.h + "h: " + n0(x.cad) + " cadastros · " + n0(x.vend) + " vendas (" + (pctTxt(div(x.vend, x.cad))) + ")"}>
+      <div className="an-hbar"><i className="c" style={{ height: (x.cad / mx * 100) + "%" }} /><i className="v" style={{ height: (x.vend / mx * 100) + "%" }} /></div>
+      <span>{x.h}h</span><small>{x.cad ? pctTxt(x.vend / x.cad) : ""}</small></div>)}</div>
+    <div className="an-semleg"><span><i className="c" /> cadastros</span><span><i className="v" /> viraram venda</span><span className="hint">embaixo: % que comprou</span></div>
+  </div>;
+}
+
+// ---------- 🗺️ mapa das cidades (Curitiba e região): bolha do tamanho do nº de clientes ----------
+const COORD: Record<string, [number, number]> = {
+  "CURITIBA": [-25.43, -49.27], "SAO JOSE DOS PINHAIS": [-25.53, -49.21], "COLOMBO": [-25.29, -49.22], "FAZENDA RIO GRANDE": [-25.66, -49.31], "ARAUCARIA": [-25.59, -49.40],
+  "ALMIRANTE TAMANDARE": [-25.32, -49.31], "PINHAIS": [-25.44, -49.19], "CAMPO LARGO": [-25.46, -49.53], "PIRAQUARA": [-25.44, -49.06], "CAMPINA GRANDE DO SUL": [-25.30, -49.05],
+  "QUATRO BARRAS": [-25.37, -49.08], "RIO BRANCO DO SUL": [-25.19, -49.31], "CAMPO MAGRO": [-25.37, -49.45], "MANDIRITUBA": [-25.78, -49.33], "CONTENDA": [-25.68, -49.53],
+  "BALSA NOVA": [-25.58, -49.63], "ITAPERUCU": [-25.22, -49.35], "BOCAIUVA DO SUL": [-25.21, -49.11], "LAPA": [-25.77, -49.72], "QUITANDINHA": [-25.87, -49.50],
+  "TIJUCAS DO SUL": [-25.93, -49.20], "AGUDOS DO SUL": [-25.99, -49.33], "RIO NEGRO": [-26.10, -49.80], "PARANAGUA": [-25.52, -48.51], "MATINHOS": [-25.82, -48.54],
+  "GUARATUBA": [-25.88, -48.57], "PONTAL DO PARANA": [-25.67, -48.51], "ANTONINA": [-25.43, -48.71], "MORRETES": [-25.47, -48.83], "PONTA GROSSA": [-25.09, -50.16],
+};
+const semAcento = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+function MapaCidades({ rank }: { rank: [string, { n: number; fat: number }][] }) {
+  const pts = rank.map(([k, g]) => ({ k, g, c: COORD[semAcento(k)] })).filter(p => p.c);
+  if (pts.length < 2) return null;
+  const lats = pts.map(p => p.c[0]), lons = pts.map(p => p.c[1]);
+  const la0 = Math.min(...lats) - 0.06, la1 = Math.max(...lats) + 0.06, lo0 = Math.min(...lons) - 0.08, lo1 = Math.max(...lons) + 0.08;
+  const W = 640, Hh = Math.max(260, Math.min(460, W * (la1 - la0) / (lo1 - lo0)));
+  const X = (lo: number) => (lo - lo0) / (lo1 - lo0) * W, Y = (la: number) => (la1 - la) / (la1 - la0) * Hh;
+  const mx = Math.max(...pts.map(p => p.g.n)); const r = (n: number) => 6 + Math.sqrt(n / mx) * 34;
+  const fora = rank.length - pts.length;
+  return <div className="an-mapa">
+    <svg viewBox={`0 0 ${W} ${Hh}`} role="img" aria-label="Mapa das cidades dos clientes">
+      {pts.sort((a, b) => b.g.n - a.g.n).map(p => <g key={p.k}><circle cx={X(p.c[1])} cy={Y(p.c[0])} r={r(p.g.n)} fill="var(--primary)" fillOpacity={0.28} stroke="var(--primary)" strokeWidth={1.5}><title>{p.k}: {p.g.n} cliente(s){p.g.fat ? " · " + fmtMoeda(p.g.fat) : ""}</title></circle>
+        <text x={X(p.c[1])} y={Y(p.c[0]) - r(p.g.n) - 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--ink)">{p.k.length > 18 ? p.k.slice(0, 17) + "…" : p.k} · {p.g.n}</text></g>)}
+    </svg>
+    <div className="pb-per">Bolha = nº de clientes. Posição aproximada de cada cidade (Curitiba e região){fora ? " · " + fora + " cidade(s) fora do mapa, veja na tabela" : ""}.</div>
   </div>;
 }
