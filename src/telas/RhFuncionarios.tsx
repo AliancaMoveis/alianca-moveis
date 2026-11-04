@@ -108,14 +108,15 @@ function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dado
 }
 
 function AnexoRh({ id, tipo, rotulo, docs, recDocs, uid, toast }: { id: string | null; tipo: string; rotulo: string; docs: Doc[] | null; recDocs: () => void; uid: string; toast: (m: string) => void }) {
-  const inp = useRef<HTMLInputElement>(null); const [sub, setSub] = useState(false);
+  const inp = useRef<HTMLInputElement>(null), cam = useRef<HTMLInputElement>(null); const [sub, setSub] = useState(false);
   const meus = (docs || []).filter(d => d.tipo === tipo);
   const subir = async (fs: FileList) => { if (!id) return; setSub(true); try { for (const f of Array.from(fs)) await subirDoc(id, tipo, "", null, f, uid); } catch (e: any) { toast(e.message); } finally { setSub(false); recDocs(); } };
   return <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 10px", border: "1px dashed var(--line)", borderRadius: 8 }}>
     <span style={{ flex: "1 1 220px", fontSize: 13 }}>📎 <b>{rotulo}</b> {meus.length ? <span className="pill" style={{ background: "var(--tn-green)", color: "var(--tn-green-i)" }}>{meus.length} anexado(s)</span> : <span className="hint">nada anexado</span>}</span>
     {meus.map(d => <button key={d.id} type="button" className="btn sm" title={d.titulo} onClick={() => abrirDoc(d.arquivo).catch((e: any) => toast(e.message))}>👁 {d.titulo.slice(0, 18)}</button>)}
     <input ref={inp} type="file" accept="image/*,.pdf" multiple style={{ display: "none" }} onChange={e => { if (e.target.files?.length) subir(e.target.files); if (inp.current) inp.current.value = ""; }} />
-    {id ? <button type="button" className="btn sm" disabled={sub} onClick={() => inp.current?.click()}>{sub ? "Enviando…" : "Anexar"}</button> : <span className="hint">salve o cadastro para anexar</span>}
+    <input ref={cam} type="file" accept="image/*" capture={tipo === "foto" ? "user" : "environment"} style={{ display: "none" }} onChange={e => { if (e.target.files?.length) subir(e.target.files); if (cam.current) cam.current.value = ""; }} />
+    {id ? <><button type="button" className="btn sm" disabled={sub} onClick={() => cam.current?.click()}>📷 {tipo === "foto" ? "Selfie" : "Foto"}</button><button type="button" className="btn sm" disabled={sub} onClick={() => inp.current?.click()}>{sub ? "Enviando…" : "📎 Anexar"}</button></> : <span className="hint">salve o cadastro para anexar</span>}
   </div>;
 }
 

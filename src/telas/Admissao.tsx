@@ -38,7 +38,7 @@ export default function Admissao() {
     <Caixa>
       <h2>Admissão · Aliança Móveis</h2>
       <p>Olá{info.nome ? <b>, {info.nome.split(" ")[0]}</b> : null}! Preencha seus dados e anexe os documentos — tudo vai direto para o RH, com segurança.</p>
-      <CamposFicha f={d} set={setD} publico anexo={(k, rotulo) => <Anexo key={k} rotulo={rotulo} dica="foto ou PDF" lista={arqs[k] || []} muda={l => setArqs({ ...arqs, [k]: l })} />} />
+      <CamposFicha f={d} set={setD} publico anexo={(k, rotulo) => <Anexo key={k} selfie={k === "foto"} rotulo={rotulo} dica={k === "foto" ? "uma selfie de rosto, de frente, num lugar claro" : "tire a foto do documento ou escolha do celular (foto ou PDF)"} lista={arqs[k] || []} muda={l => setArqs({ ...arqs, [k]: l })} />} />
       <h3>Outros documentos</h3>
       <Anexo rotulo="Outros (diploma, certificados…)" dica="opcional" lista={arqs.outro || []} muda={l => setArqs({ ...arqs, outro: l })} />
       {c("obs", "Alguma observação para o RH? (opcional)")}
@@ -49,18 +49,32 @@ export default function Admissao() {
   );
 }
 
-function Anexo({ rotulo, dica, lista, muda }: { rotulo: string; dica: string; lista: File[]; muda: (l: File[]) => void }) {
-  const inp = useRef<HTMLInputElement>(null);
+function Anexo({ rotulo, dica, lista, muda, selfie }: { rotulo: string; dica: string; lista: File[]; muda: (l: File[]) => void; selfie?: boolean }) {
+  const arq = useRef<HTMLInputElement>(null), cam = useRef<HTMLInputElement>(null);
+  const add = (fs: FileList | null, el: HTMLInputElement | null) => { if (fs?.length) muda([...lista, ...Array.from(fs)]); if (el) el.value = ""; };
   return (
     <div className="card" style={{ padding: 12, marginBottom: 10 }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 240px" }}><b>{rotulo}</b>{dica ? <div className="hint">{dica}</div> : null}</div>
-        <input ref={inp} type="file" accept="image/*,.pdf" multiple style={{ display: "none" }} onChange={e => { if (e.target.files?.length) muda([...lista, ...Array.from(e.target.files)]); if (inp.current) inp.current.value = ""; }} />
-        <button className="btn sm" type="button" onClick={() => inp.current?.click()}>📎 Anexar</button>
+      <div><b>{rotulo}</b>{dica ? <div className="hint">{dica}</div> : null}</div>
+      {/* câmera: selfie abre a câmera da frente; documentos, a de trás */}
+      <input ref={cam} type="file" accept="image/*" capture={selfie ? "user" : "environment"} style={{ display: "none" }} onChange={e => add(e.target.files, cam.current)} />
+      <input ref={arq} type="file" accept="image/*,.pdf" multiple style={{ display: "none" }} onChange={e => add(e.target.files, arq.current)} />
+      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button className="btn primary" type="button" style={{ flex: "1 1 150px", padding: "10px 12px" }} onClick={() => cam.current?.click()}>📷 {selfie ? "Tirar selfie" : "Tirar foto"}</button>
+        <button className="btn" type="button" style={{ flex: "1 1 150px", padding: "10px 12px" }} onClick={() => arq.current?.click()}>📎 Escolher do celular</button>
       </div>
-      {lista.length > 0 && <div style={{ marginTop: 8 }}>{lista.map((f, i) => <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5 }}><span>📄 {f.name}</span><button className="btn sm" type="button" onClick={() => muda(lista.filter((_x, j) => j !== i))}>✕</button></div>)}</div>}
+      {lista.length > 0 && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>{lista.map((f, i) => <Miniatura key={i} f={f} tirar={() => muda(lista.filter((_x, j) => j !== i))} />)}</div>}
     </div>
   );
+}
+
+function Miniatura({ f, tirar }: { f: File; tirar: () => void }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => { if (!f.type.startsWith("image/")) return; const u = URL.createObjectURL(f); setUrl(u); return () => URL.revokeObjectURL(u); }, [f]);
+  return <div style={{ position: "relative", width: 86, textAlign: "center", fontSize: 11 }}>
+    {url ? <img src={url} alt="" style={{ width: 86, height: 86, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }} /> : <div style={{ width: 86, height: 86, borderRadius: 8, border: "1px solid var(--line)", display: "grid", placeItems: "center", fontSize: 28 }}>📄</div>}
+    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+    <button type="button" onClick={tirar} title="Tirar" style={{ position: "absolute", top: -6, right: -6, width: 24, height: 24, borderRadius: 12, border: 0, background: "var(--danger)", color: "#fff", cursor: "pointer" }}>✕</button>
+  </div>;
 }
 
 function Caixa({ children }: { children: any }) {
