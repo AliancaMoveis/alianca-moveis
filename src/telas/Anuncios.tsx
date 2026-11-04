@@ -171,7 +171,7 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
       {semDados > 0 && <div className="pb-per">{semDados} dia(s) do período sem dados no Reportei.</div>}
     </div>
 
-    <DiaSemana linhas={dados.linhas} mk={mk360} de={cl(de)} ate={ate} />
+    <DiaSemana linhas={dados.linhas} mk={mk360} de={de} de360={cl(de)} ate={ate} />
     <Horario mk={mk360} de={cl(de)} ate={ate} />
     <OrigemClientes mk={mk360} de={cl(de)} ate={ate} />
 
@@ -186,44 +186,45 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
   </div>;
 }
 
-// ---------- 📅 melhor dia da semana: investimento e contatos (Reportei) × cadastros, agendamentos e vendas (360) pelo dia em que o lead chegou ----------
+// ---------- 📅 melhor dia da semana: o que se avalia é GERAR CONVERSA (contatos e custo por contato, do Reportei) ----------
+// cadastros e agendamentos do 360 entram como apoio (pelo dia em que o lead chegou); valor de venda não entra
 const DIAS_SEM = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const diaLocal = (v: any) => { const d = new Date(String(v).length <= 10 ? v + "T12:00" : v); return isNaN(+d) ? null : d; };
-function DiaSemana({ linhas, mk, de, ate }: { linhas: Linha[]; mk: any[]; de: string; ate: string }) {
+function DiaSemana({ linhas, mk, de, ate, de360 }: { linhas: Linha[]; mk: any[]; de: string; ate: string; de360: string }) {
   if (de > ate) return null;
-  const L = Array.from({ length: 7 }, () => ({ dias: 0, gasto: 0, contatos: 0, cad: 0, loja: 0, vend: 0, fat: 0 }));
+  const L = Array.from({ length: 7 }, () => ({ dias: 0, gasto: 0, contatos: 0, meta: 0, google: 0, cad: 0, loja: 0, vend: 0 }));
   for (let d = new Date(de + "T12:00"); d <= new Date(ate + "T12:00"); d.setDate(d.getDate() + 1)) L[d.getDay()].dias++;
-  linhas.filter(l => l.dia >= de && l.dia <= ate).forEach(l => { const d = diaLocal(l.dia); if (!d) return; const x = L[d.getDay()]; x.gasto += l.gasto; x.contatos += l.conversas + l.conversoes; });
-  mk.forEach((c: any) => { const d = diaLocal(c.criadoEm); if (!d) return; const iso = isoLocal(d); if (iso < de || iso > ate) return;
-    const x = L[d.getDay()]; x.cad++; if (c.dataLoja) x.loja++; if (vendaContaVolume(c.venda)) { x.vend++; x.fat += Number(c.venda.valorNum) || 0; } });
+  linhas.filter(l => l.dia >= de && l.dia <= ate).forEach(l => { const d = diaLocal(l.dia); if (!d) return; const x = L[d.getDay()]; x.gasto += l.gasto; x.contatos += l.conversas + l.conversoes; x[l.plataforma] += l.conversas + l.conversoes; });
+  mk.forEach((c: any) => { const d = diaLocal(c.criadoEm); if (!d) return; const iso = isoLocal(d); if (iso < de360 || iso > ate) return;
+    const x = L[d.getDay()]; x.cad++; if (c.dataLoja) x.loja++; if (vendaContaVolume(c.venda)) x.vend++; });
   const ordem = [1, 2, 3, 4, 5, 6, 0];
-  const tot = L.reduce((t, x) => ({ gasto: t.gasto + x.gasto, contatos: t.contatos + x.contatos, cad: t.cad + x.cad, loja: t.loja + x.loja, vend: t.vend + x.vend, fat: t.fat + x.fat }), { gasto: 0, contatos: 0, cad: 0, loja: 0, vend: 0, fat: 0 });
-  const comVenda = ordem.filter(i => L[i].vend > 0);
-  const melhorVenda = comVenda.length ? comVenda.reduce((a, b) => (L[b].gasto / L[b].vend < L[a].gasto / L[a].vend ? b : a)) : -1;
+  const tot = L.reduce((t, x) => ({ gasto: t.gasto + x.gasto, contatos: t.contatos + x.contatos, cad: t.cad + x.cad, loja: t.loja + x.loja, vend: t.vend + x.vend }), { gasto: 0, contatos: 0, cad: 0, loja: 0, vend: 0 });
+  const cpc = (i: number) => div(L[i].gasto, L[i].contatos); const porDia = (i: number) => L[i].dias ? L[i].contatos / L[i].dias : 0;
   const comCont = ordem.filter(i => L[i].contatos > 0);
-  const melhorCont = comCont.length ? comCont.reduce((a, b) => (L[b].gasto / L[b].contatos < L[a].gasto / L[a].contatos ? b : a)) : -1;
-  const mxV = Math.max(1, ...L.map(x => x.dias ? x.vend / x.dias : 0));
+  const barato = comCont.length ? comCont.reduce((a, b) => ((cpc(b) as number) < (cpc(a) as number) ? b : a)) : -1;
+  const caro = comCont.length ? comCont.reduce((a, b) => ((cpc(b) as number) > (cpc(a) as number) ? b : a)) : -1;
+  const volume = comCont.length ? comCont.reduce((a, b) => (porDia(b) > porDia(a) ? b : a)) : -1;
+  const mxD = Math.max(1, ...ordem.map(porDia)); const cs = comCont.map(i => cpc(i) as number); const mxC = Math.max(1, ...cs);
   return <div className="panel">
-    <h3>📅 Melhor dia da semana <small>(de {fmtDate(de)} a {fmtDate(ate)} · cadastros, agendamentos e vendas contados pelo dia em que o lead chegou)</small></h3>
-    {melhorVenda >= 0 && <div className="an-aviso" style={{ marginBottom: 8 }}>🏆 Menor investimento por venda: <b>{DIAS_SEM[melhorVenda]}</b> ({din(L[melhorVenda].gasto / L[melhorVenda].vend)} por venda){melhorCont >= 0 ? <> · contato mais barato: <b>{DIAS_SEM[melhorCont]}</b> ({din(L[melhorCont].gasto / L[melhorCont].contatos)})</> : null}</div>}
-    <div className="an-semgraf">{ordem.map(i => { const x = L[i]; const cc = div(x.gasto, x.contatos); const mxC = Math.max(1, ...L.map(y => y.contatos));
-      return <div key={i} className={"an-semcol" + (i === melhorVenda ? " top" : "")} title={DIAS_SEM[i] + ": " + n0(x.contatos) + " contatos · " + n0(x.vend) + " vendas · " + din(div(x.gasto, x.vend)) + " por venda"}>
-        <div className="an-sembar"><i className="c" style={{ height: (x.contatos / mxC * 100) + "%" }} /><i className="v" style={{ height: ((x.dias ? x.vend / x.dias : 0) / mxV * 100) + "%" }} /></div>
-        <b>{DIAS_SEM[i].slice(0, 3)}</b><small>{n0(x.vend)} venda(s)</small><small>{cc == null ? "—" : din(cc) + "/contato"}</small></div>; })}
-      <div className="an-semleg"><span><i className="c" /> contatos</span><span><i className="v" /> vendas por dia</span></div></div>
-    <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>Dia</th><th>Investido</th><th>Contatos</th><th>Custo/contato</th><th>Cadastros</th><th>Agendaram loja</th><th>Compraram</th><th>Conversão</th><th>Investido/venda</th><th>Vendas por dia</th></tr></thead>
-      <tbody>{ordem.map(i => { const x = L[i]; const vd = x.dias ? x.vend / x.dias : 0; return <tr key={i} style={i === melhorVenda ? { background: "var(--tn-green)" } : undefined}>
-        <td><b>{DIAS_SEM[i]}</b> <small className="hint">({x.dias}×)</small></td><td>{din(x.gasto)}</td><td>{n0(x.contatos)}</td><td>{din(div(x.gasto, x.contatos))}</td>
-        <td>{n0(x.cad)}</td><td>{n0(x.loja)} <small className="hint">{pctTxt(div(x.loja, x.cad))}</small></td><td><b>{n0(x.vend)}</b></td><td>{pctTxt(div(x.vend, x.cad))}</td><td>{din(div(x.gasto, x.vend))}</td>
-        <td style={{ minWidth: 110 }}><div style={{ height: 8, borderRadius: 4, background: "var(--surface-2)" }}><div style={{ height: 8, borderRadius: 4, width: (vd / mxV * 100) + "%", background: "var(--st-concluida)" }} /></div><small className="hint">{vd.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}/dia</small></td></tr>; })}</tbody>
-      <tfoot><tr><td>Total</td><td>{din(tot.gasto)}</td><td>{n0(tot.contatos)}</td><td>{din(div(tot.gasto, tot.contatos))}</td><td>{n0(tot.cad)}</td><td>{n0(tot.loja)}</td><td>{n0(tot.vend)}</td><td>{pctTxt(div(tot.vend, tot.cad))}</td><td>{din(div(tot.gasto, tot.vend))}</td><td></td></tr></tfoot></table></div>
-    <div className="pb-per">“Compraram” = leads que chegaram naquele dia da semana e já têm venda (em qualquer data). Leads recentes ainda podem comprar, então os últimos dias tendem a aparecer menores.</div>
+    <h3>📅 Melhor dia da semana <small>(de {fmtDate(de)} a {fmtDate(ate)} · contatos gerados pelos anúncios e custo por contato)</small></h3>
+    {barato >= 0 && <div className="an-aviso" style={{ marginBottom: 8 }}>🏆 Contato mais barato: <b>{DIAS_SEM[barato]}</b> ({din(cpc(barato))}) · mais contatos por dia: <b>{DIAS_SEM[volume]}</b> ({n0(porDia(volume))}/dia){caro >= 0 && caro !== barato ? <> · contato mais caro: <b>{DIAS_SEM[caro]}</b> ({din(cpc(caro))})</> : null}</div>}
+    <div className="an-semgraf">{ordem.map(i => { const x = L[i]; const c = cpc(i);
+      return <div key={i} className={"an-semcol" + (i === barato ? " top" : "")} title={DIAS_SEM[i] + ": " + n0(porDia(i)) + " contatos por dia · " + din(c) + " por contato"}>
+        <div className="an-sembar"><i className="c" style={{ height: (porDia(i) / mxD * 100) + "%" }} /><i className="k" style={{ height: ((c || 0) / mxC * 100) + "%" }} /></div>
+        <b>{DIAS_SEM[i].slice(0, 3)}</b><small>{n0(porDia(i))} contatos/dia</small><small>{c == null ? "—" : din(c) + "/contato"}</small></div>; })}
+      <div className="an-semleg"><span><i className="c" /> contatos por dia</span><span><i className="k" /> custo por contato</span></div></div>
+    <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>Dia</th><th>Investido</th><th>Contatos</th><th>Contatos/dia</th><th>Custo/contato</th><th>Ⓜ Meta</th><th>Ⓖ Google</th><th>Cadastros no 360</th><th>Agendaram loja</th><th>Compraram</th></tr></thead>
+      <tbody>{ordem.map(i => { const x = L[i]; return <tr key={i} style={i === barato ? { background: "var(--tn-green)" } : undefined}>
+        <td><b>{DIAS_SEM[i]}</b> <small className="hint">({x.dias}×)</small></td><td>{din(x.gasto)}</td><td><b>{n0(x.contatos)}</b></td><td>{n0(porDia(i))}</td><td><b>{din(cpc(i))}</b></td>
+        <td>{n0(x.meta)}</td><td>{n0(x.google)}</td><td>{n0(x.cad)}</td><td>{n0(x.loja)} <small className="hint">{pctTxt(div(x.loja, x.cad))}</small></td><td>{n0(x.vend)}</td></tr>; })}</tbody>
+      <tfoot><tr><td>Total</td><td>{din(tot.gasto)}</td><td>{n0(tot.contatos)}</td><td></td><td>{din(div(tot.gasto, tot.contatos))}</td><td></td><td></td><td>{n0(tot.cad)}</td><td>{n0(tot.loja)}</td><td>{n0(tot.vend)}</td></tr></tfoot></table></div>
+    <div className="pb-per">Contatos = conversas (Meta) + conversões (Google), pelo Reportei. Cadastros, agendamentos e compras são do 360 (a partir de {fmtDate(de360)}), contados pelo dia em que o lead chegou — domingo quase não tem cadastro porque as meninas cadastram na segunda.</div>
   </div>;
 }
 
 // ---------- 📍 de onde vêm os clientes: cidade e bairro (pela base de clientes: nº da venda ou telefone) ----------
 function OrigemClientes({ mk, de, ate }: { mk: any[]; de: string; ate: string }) {
-  const [quem, setQuem] = useState<"vend" | "cad">("vend"); const [nivel, setNivel] = useState<"cidade" | "bairro">("cidade");
+  const [quem, setQuem] = useState<"vend" | "cad">("cad"); const [nivel, setNivel] = useState<"cidade" | "bairro">("cidade");
   const lista = useMemo(() => de > ate ? [] : mk.filter((c: any) => { const d = diaLocal(c.criadoEm); if (!d) return false; const iso = isoLocal(d); return iso >= de && iso <= ate && (quem === "cad" || vendaContaVolume(c.venda)); }), [mk, de, ate, quem]);
   const [loc, setLoc] = useState<Record<string, { cidade: string; bairro: string }> | null>(null);
   useEffect(() => { let vivo = true; setLoc(null);
@@ -239,19 +240,19 @@ function OrigemClientes({ mk, de, ate }: { mk: any[]; de: string; ate: string })
   if (de > ate) return null;
   const grupos: Record<string, { n: number; fat: number }> = {}; let sem = 0;
   lista.forEach((c: any) => { const l = loc?.[c.id]; if (!l || !l.cidade) { sem++; return; } const k = nivel === "cidade" ? l.cidade : (l.bairro || "(sem bairro)") + " · " + l.cidade;
-    const g = (grupos[k] = grupos[k] || { n: 0, fat: 0 }); g.n++; g.fat += vendaContaVolume(c.venda) ? Number(c.venda.valorNum) || 0 : 0; });
+    const g = (grupos[k] = grupos[k] || { n: 0, fat: 0 }); g.n++; if (vendaContaVolume(c.venda)) g.fat++; });
   const rank = Object.entries(grupos).sort((a, b) => b[1].n - a[1].n || b[1].fat - a[1].fat); const mx = Math.max(1, ...rank.map(([, g]) => g.n));
   const achados = lista.length - sem;
   return <div className="panel">
-    <h3>📍 De onde vêm os clientes <small>(clientes do marketing que chegaram de {fmtDate(de)} a {fmtDate(ate)} · cidade e bairro da base de clientes)</small></h3>
+    <h3>📍 De onde vêm os leads <small>(clientes do marketing que chegaram de {fmtDate(de)} a {fmtDate(ate)} · cidade e bairro da base de clientes)</small></h3>
     <div className="an-per" style={{ marginBottom: 8 }}>
-      {([["vend", "Que compraram"], ["cad", "Todos os cadastros"]] as const).map(([k, l]) => <button key={k} className={"chip" + (quem === k ? " on" : "")} onClick={() => setQuem(k)}>{l}</button>)}
+      {([["cad", "Todos os leads (cadastros)"], ["vend", "Só os que compraram"]] as const).map(([k, l]) => <button key={k} className={"chip" + (quem === k ? " on" : "")} onClick={() => setQuem(k)}>{l}</button>)}
       <span style={{ width: 10 }} />{([["cidade", "Por cidade"], ["bairro", "Por bairro"]] as const).map(([k, l]) => <button key={k} className={"chip" + (nivel === k ? " on" : "")} onClick={() => setNivel(k)}>{l}</button>)}
     </div>
     {loc === null ? <div className="dn-vazio">Cruzando com a base de clientes…</div> : !rank.length ? <div className="dn-vazio">Nenhum cliente do período encontrado na base de clientes.</div> : <>
       {nivel === "cidade" && <MapaCidades rank={rank} />}
-      <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>#</th><th>{nivel === "cidade" ? "Cidade" : "Bairro · cidade"}</th><th>Clientes</th><th>% do total</th>{quem === "vend" && <th>Vendido</th>}<th></th></tr></thead>
-        <tbody>{rank.slice(0, nivel === "cidade" ? 15 : 25).map(([k, g], i) => <tr key={k}><td>{i + 1}</td><td><b>{k}</b></td><td>{n0(g.n)}</td><td>{pctTxt(g.n / achados)}</td>{quem === "vend" && <td>{din(g.fat)}</td>}
+      <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>#</th><th>{nivel === "cidade" ? "Cidade" : "Bairro · cidade"}</th><th>{quem === "cad" ? "Leads" : "Clientes"}</th><th>% do total</th>{quem === "cad" && <th>Compraram</th>}<th></th></tr></thead>
+        <tbody>{rank.slice(0, nivel === "cidade" ? 15 : 25).map(([k, g], i) => <tr key={k}><td>{i + 1}</td><td><b>{k}</b></td><td>{n0(g.n)}</td><td>{pctTxt(g.n / achados)}</td>{quem === "cad" && <td>{n0(g.fat)}</td>}
           <td style={{ minWidth: 120 }}><div style={{ height: 8, borderRadius: 4, background: "var(--surface-2)" }}><div style={{ height: 8, borderRadius: 4, width: (g.n / mx * 100) + "%", background: "var(--primary)" }} /></div></td></tr>)}</tbody></table></div>
       <div className="pb-per">{n0(achados)} de {n0(lista.length)} clientes localizados na base (pelo nº da venda ou pelo telefone){sem ? " · " + n0(sem) + " sem endereço na base" : ""}.</div>
     </>}
@@ -300,9 +301,9 @@ function MapaCidades({ rank }: { rank: [string, { n: number; fat: number }][] })
   const fora = rank.length - pts.length;
   return <div className="an-mapa">
     <svg viewBox={`0 0 ${W} ${Hh}`} role="img" aria-label="Mapa das cidades dos clientes">
-      {pts.sort((a, b) => b.g.n - a.g.n).map(p => <g key={p.k}><circle cx={X(p.c[1])} cy={Y(p.c[0])} r={r(p.g.n)} fill="var(--primary)" fillOpacity={0.28} stroke="var(--primary)" strokeWidth={1.5}><title>{p.k}: {p.g.n} cliente(s){p.g.fat ? " · " + fmtMoeda(p.g.fat) : ""}</title></circle>
+      {pts.sort((a, b) => b.g.n - a.g.n).map(p => <g key={p.k}><circle cx={X(p.c[1])} cy={Y(p.c[0])} r={r(p.g.n)} fill="var(--primary)" fillOpacity={0.28} stroke="var(--primary)" strokeWidth={1.5}><title>{p.k}: {p.g.n} lead(s)</title></circle>
         <text x={X(p.c[1])} y={Y(p.c[0]) - r(p.g.n) - 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--ink)">{p.k.length > 18 ? p.k.slice(0, 17) + "…" : p.k} · {p.g.n}</text></g>)}
     </svg>
-    <div className="pb-per">Bolha = nº de clientes. Posição aproximada de cada cidade (Curitiba e região){fora ? " · " + fora + " cidade(s) fora do mapa, veja na tabela" : ""}.</div>
+    <div className="pb-per">Bolha = nº de leads. Posição aproximada de cada cidade (Curitiba e região){fora ? " · " + fora + " cidade(s) fora do mapa, veja na tabela" : ""}.</div>
   </div>;
 }

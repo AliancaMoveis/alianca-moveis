@@ -2041,3 +2041,4 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .an-hora{flex:1 0 34px;display:flex;flex-direction:column;align-items:center;font-size:11px;border-radius:8px;padding:4px 2px}.an-hora.top{background:var(--tn-green)}
 .an-hora small{color:var(--st-concluida);font-weight:700;font-size:10px;min-height:12px}.an-hbar{height:120px}
 .an-mapa{border:1px solid var(--line-soft);border-radius:12px;padding:8px;margin-bottom:10px;background:var(--surface-2)}.an-mapa svg{width:100%;height:auto;display:block}
+.an-sembar i.k,.an-semleg i.k{background:#e3a008}
