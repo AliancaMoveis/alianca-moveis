@@ -145,7 +145,6 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
   const m = x?.mont, m0 = x?.mont0, q1 = x?.montQ1, q2 = x?.montQ2;
   // q0 = paga dia 10 (10–24 do mês anterior) · q1 = paga dia 25 (25 do mês anterior a 9 deste) · q2/q3 = quinzenas que correm neste mês
   const q0 = x?.montQ0, q3 = x?.montQ3;
-  const q2Fechada = h > ym + "-24", q3Fechada = h > ymProx(ym) + "-09";
   // montagem paga no mês: dia 10 (quinzena 16–fim do mês anterior) e dia 25 (quinzena 01–15 do mês)
   const pago10 = !atual || +h.slice(8, 10) >= 10, pago25 = !atual || +h.slice(8, 10) >= 25;
   const aval = (x?.aval || []).filter((a: any) => a.nps != null); const npsMed = aval.length ? aval.reduce((s: number, a: any) => s + Number(a.nps), 0) / aval.length : null;
@@ -257,9 +256,9 @@ export default function PainelGeral({ movel }: { movel?: boolean }) {
 
         <Sec ic="🚚🔧" t="Custo de entregar e montar" />
         <div className="pg-grid">
-          <Card big hl t={"Montagem · quinzenas de " + nomeYm(ym)} v={fmtMoeda(nn(q2?.ef_total) + nn(q3?.ef_total))} d={<span className="pg-d neu">{n0(nn(q2?.ef_qtd) + nn(q3?.ef_qtd))} montagens</span>} ir="montagem_pag">
-            <div className="pg-split"><i style={{ background: q2Fechada ? "var(--st-concluida-bg)" : "var(--warn-bg)", color: q2Fechada ? "var(--st-concluida)" : "var(--warn)" }}>{q2Fechada ? "✓" : "⏳"} 1ª quinzena (10 a 24/{ym.slice(5, 7)}) · <b>{q2Fechada ? "fechada" : "em andamento"}</b> {fmtMoeda(nn(q2?.ef_total))} <small>· paga dia 10/{ymProx(ym).slice(5, 7)}</small></i>
-              <i style={{ background: q3Fechada ? "var(--st-concluida-bg)" : "var(--warn-bg)", color: q3Fechada ? "var(--st-concluida)" : "var(--warn)" }}>{q3Fechada ? "✓" : "⏳"} 2ª quinzena (25/{ym.slice(5, 7)} a 09/{ymProx(ym).slice(5, 7)}) · <b>{q3Fechada ? "fechada" : "em andamento"}</b> {fmtMoeda(nn(q3?.ef_total))} <small>· paga dia 25/{ymProx(ym).slice(5, 7)}</small></i></div>
+          <Card big hl t={"Montagem paga em " + nomeYm(ym)} v={fmtMoeda(nn(q0?.ef_total) + nn(q1?.ef_total))} d={<span className="pg-d neu">{n0(nn(q0?.ef_qtd) + nn(q1?.ef_qtd))} montagens</span>} ir="montagem_pag">
+            <div className="pg-split"><i style={{ background: pago10 ? "var(--st-concluida-bg)" : "var(--warn-bg)", color: pago10 ? "var(--st-concluida)" : "var(--warn)" }}>{pago10 ? "✓" : "⏳"} Dia 10 · quinzena 10/{ymA.slice(5, 7)} a 24/{ymA.slice(5, 7)} · <b>{pago10 ? "paga" : "prevista"}</b> {fmtMoeda(nn(q0?.ef_total))}</i>
+              <i style={{ background: pago25 ? "var(--st-concluida-bg)" : "var(--warn-bg)", color: pago25 ? "var(--st-concluida)" : "var(--warn)" }}>{pago25 ? "✓" : "⏳"} Dia 25 · quinzena 25/{ymA.slice(5, 7)} a 09/{ym.slice(5, 7)} · <b>{pago25 ? "paga" : "prevista"}</b> {fmtMoeda(nn(q1?.ef_total))}</i></div>
           </Card>
           <Card hl t={"Frete de " + nomeYm(ym) + (x?.freteOf != null ? " (relatório oficial)" : atual ? " (previsto)" : "")} v={fmtMoeda(freteMes)} d={<span className="pg-d neu">{x?.freteOf != null ? "digitado nos romaneios: " + fmtMoeda(freteLanc) : "lançado nos romaneios"}</span>} ir="fretes_fech" />
           <Card t={"Romaneios de " + nomeYm(ym)} v={n0(fAtual.length)} d={<span className="pg-d neu">{fAberto} a conferir{freteAssist ? " · + " + fmtMoeda(freteAssist) + " de frete pago na montagem" : ""}</span>} ir="fretes_fech" />
