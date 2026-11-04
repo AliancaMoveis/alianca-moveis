@@ -306,7 +306,8 @@ function MapaCidades({ rank }: { rank: [string, { n: number; fat: number }][] })
     if (!ref.current || !pts.length) return;
     const escuro = document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     const mapa = L.map(ref.current, { scrollWheelZoom: false, attributionControl: true });
-    L.tileLayer(`https://{s}.basemaps.cartocdn.com/${escuro ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`, { maxZoom: 17, subdomains: "abcd", attribution: "© OpenStreetMap · © CARTO" }).addTo(mapa);
+    // OpenStreetMap (sem chave); no modo escuro o fundo é escurecido por filtro
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap", className: escuro ? "an-tiles-escuro" : "" }).addTo(mapa);
     const mx = Math.max(...pts.map(p => p.g.n));
     pts.slice().sort((a, b) => b.g.n - a.g.n).forEach((p, i) => {
       const m = L.circleMarker(p.c, { radius: 7 + Math.sqrt(p.g.n / mx) * 30, color: "#284b8f", weight: 2, fillColor: "#3b6fd8", fillOpacity: 0.35 }).addTo(mapa);
