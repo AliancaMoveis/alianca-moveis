@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { podeRh } from "../lib/ponto";
 import { abrirDoc, apagarDoc, apagarFuncionario, aprovarEnvio, criarLink, fmtCpf, listarDocs, listarFuncionarios, listarLinks, mudarLink, salvarFuncionario, subirDoc, urlAdmissao, STATUS_FUNC, TIPOS_DOC, EMPRESAS, nomeEmpresa, type Doc, type Envio, type Funcionario, type Link } from "../lib/rh";
+import { CamposFicha, abrirFicha, separarFicha, FICHA_PADRAO } from "../lib/rhFicha";
 
 const br = (s?: string | null) => (s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "—");
 const stCor: Record<string, string> = { ativo: "var(--tn-green-i)", ferias: "var(--tn-blue-i)", afastado: "var(--tn-amber-i)", desligado: "var(--tn-red-i)" };
@@ -55,7 +56,7 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
 }
 
 function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dados: Funcionario | null; fechar: () => void; rec: () => any; uid: string; toast: (m: string) => void }) {
-  const [f, setF] = useState<any>(dados || { nome: "", cpf: "", rg: "", nascimento: null, telefone: "", email: "", endereco: "", estado_civil: "", escolaridade: "", pis: "", ctps: "", cargo: "", setor: "", admissao: null, empresa: "", folha: "", identificador: "", horario: "", salario: null, recebe_vt: false, vt_dia: 0, va_dia: 0, banco: "", agencia: "", conta: "", pix: "", emergencia_nome: "", emergencia_tel: "", dependentes: [], status: "ativo", desligamento: null, obs: "" });
+  const [f, setF] = useState<any>(abrirFicha(dados || { nome: "", cpf: "", rg: "", nascimento: null, telefone: "", email: "", endereco: "", estado_civil: "", escolaridade: "", pis: "", ctps: "", cargo: "", setor: "", admissao: null, empresa: "", folha: "", identificador: "", horario: "", salario: null, recebe_vt: false, vt_dia: 0, va_dia: 0, banco: "", agencia: "", conta: "", pix: "", emergencia_nome: "", emergencia_tel: "", dependentes: [], status: "ativo", desligamento: null, obs: "" }));
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [salvando, setSalvando] = useState(false);
   const recDocs = () => { if (id) listarDocs(id).then(setDocs).catch(() => setDocs([])); };
@@ -68,6 +69,7 @@ function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dado
     setSalvando(true);
     try {
       const p = { ...f, salario: f.salario === "" || f.salario == null ? null : Number(String(f.salario).replace(/\./g, "").replace(",", ".")), vt_dia: Number(String(f.vt_dia || 0).replace(",", ".")), va_dia: Number(String(f.va_dia || 0).replace(",", ".")) };
+      const { col, ficha } = separarFicha(f); Object.assign(p, col, { ficha }); Object.keys(FICHA_PADRAO).forEach(k => delete (p as any)[k]);
       delete p.id; delete p.criado_em; delete (p as any).criado_por; delete (p as any).atualizado_em; delete (p as any).origem;
       await salvarFuncionario(id, p, uid); await rec(); toast(id ? "Funcionário atualizado" : "Funcionário cadastrado"); if (!id) fechar();
     } catch (e: any) { toast(e.message); } finally { setSalvando(false); }
@@ -80,14 +82,7 @@ function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dado
         <h3 style={{ margin: 0 }}>{id ? "✏️ " + f.nome : "＋ Novo funcionário"}</h3>
         <span style={{ display: "flex", gap: 8 }}>{id && <button className="btn sm" onClick={excluir}>🗑 Excluir</button>}<button className="btn sm" onClick={fechar}>Fechar</button><button className="btn primary sm" disabled={salvando} onClick={salvar}>{salvando ? "Salvando…" : "💾 Salvar"}</button></span>
       </div>
-      <h4 style={{ margin: "14px 0 6px" }}>Dados pessoais</h4>
-      <div className="grid3">{c("nome", "Nome completo *")}{c("cpf", "CPF", { inputMode: "numeric" })}{c("rg", "RG")}{c("nascimento", "Nascimento", { type: "date" })}{c("telefone", "Telefone / WhatsApp")}{c("email", "E-mail")}</div>
-      {c("endereco", "Endereço completo")}
-      <div className="grid3">
-        <div className="field"><label>Estado civil</label><select value={f.estado_civil} onChange={e => setF({ ...f, estado_civil: e.target.value })}><option value="">—</option>{["Solteiro(a)", "Casado(a)", "União estável", "Divorciado(a)", "Viúvo(a)"].map(x => <option key={x}>{x}</option>)}</select></div>
-        <div className="field"><label>Escolaridade</label><select value={f.escolaridade} onChange={e => setF({ ...f, escolaridade: e.target.value })}><option value="">—</option>{["Fundamental", "Médio incompleto", "Médio completo", "Superior incompleto", "Superior completo", "Pós-graduação"].map(x => <option key={x}>{x}</option>)}</select></div>
-        {c("pis", "PIS / NIS")}{c("ctps", "Nº da CTPS")}{c("emergencia_nome", "Emergência · nome")}{c("emergencia_tel", "Emergência · telefone")}
-      </div>
+      <CamposFicha f={f} set={setF} anexo={(tipo, rotulo) => <AnexoRh key={tipo} id={id} tipo={tipo} rotulo={rotulo} docs={docs} recDocs={recDocs} uid={uid} toast={toast} />} />
       <h4 style={{ margin: "14px 0 6px" }}>Contrato</h4>
       <div className="grid3">
         <div className="field"><label>Empresa (contratado por)</label><select value={f.empresa || ""} onChange={e => setF({ ...f, empresa: e.target.value })}><option value="">—</option>{EMPRESAS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></div>
@@ -100,19 +95,24 @@ function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dado
         <div className="field"><label>Situação</label><select value={f.status} onChange={e => setF({ ...f, status: e.target.value })}>{STATUS_FUNC.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></div>
         {f.status === "desligado" ? c("desligamento", "Data do desligamento", { type: "date" }) : null}
       </div>
-      <h4 style={{ margin: "14px 0 6px" }}>Pagamento</h4>
-      <div className="grid3">{c("banco", "Banco")}{c("agencia", "Agência")}{c("conta", "Conta")}{c("pix", "Chave Pix")}</div>
-      <h4 style={{ margin: "14px 0 6px" }}>Dependentes</h4>
-      {(f.dependentes || []).map((x: any, i: number) => <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-        <input style={{ flex: "1 1 200px" }} value={x.nome} placeholder="Nome" onChange={e => setF({ ...f, dependentes: f.dependentes.map((y: any, j: number) => j === i ? { ...y, nome: e.target.value } : y) })} />
-        <input type="date" value={x.nascimento || ""} onChange={e => setF({ ...f, dependentes: f.dependentes.map((y: any, j: number) => j === i ? { ...y, nascimento: e.target.value } : y) })} />
-        <button className="btn sm" onClick={() => setF({ ...f, dependentes: f.dependentes.filter((_y: any, j: number) => j !== i) })}>✕</button>
-      </div>)}
-      <button className="btn sm" onClick={() => setF({ ...f, dependentes: [...(f.dependentes || []), { nome: "", nascimento: "" }] })}>＋ Dependente</button>
+      <h4 style={{ margin: "14px 0 6px" }}>Pix (opcional)</h4>
+      <div className="grid3">{c("pix", "Chave Pix")}</div>
       {c("obs", "Observações")}
       {id ? <Documentos id={id} docs={docs} recDocs={recDocs} uid={uid} toast={toast} /> : <p className="hint" style={{ marginTop: 12 }}>Salve o cadastro para poder anexar os documentos.</p>}
     </div>
   );
+}
+
+function AnexoRh({ id, tipo, rotulo, docs, recDocs, uid, toast }: { id: string | null; tipo: string; rotulo: string; docs: Doc[] | null; recDocs: () => void; uid: string; toast: (m: string) => void }) {
+  const inp = useRef<HTMLInputElement>(null); const [sub, setSub] = useState(false);
+  const meus = (docs || []).filter(d => d.tipo === tipo);
+  const subir = async (fs: FileList) => { if (!id) return; setSub(true); try { for (const f of Array.from(fs)) await subirDoc(id, tipo, "", null, f, uid); } catch (e: any) { toast(e.message); } finally { setSub(false); recDocs(); } };
+  return <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 10px", border: "1px dashed var(--line)", borderRadius: 8 }}>
+    <span style={{ flex: "1 1 220px", fontSize: 13 }}>📎 <b>{rotulo}</b> {meus.length ? <span className="pill" style={{ background: "var(--tn-green)", color: "var(--tn-green-i)" }}>{meus.length} anexado(s)</span> : <span className="hint">nada anexado</span>}</span>
+    {meus.map(d => <button key={d.id} type="button" className="btn sm" title={d.titulo} onClick={() => abrirDoc(d.arquivo).catch((e: any) => toast(e.message))}>👁 {d.titulo.slice(0, 18)}</button>)}
+    <input ref={inp} type="file" accept="image/*,.pdf" multiple style={{ display: "none" }} onChange={e => { if (e.target.files?.length) subir(e.target.files); if (inp.current) inp.current.value = ""; }} />
+    {id ? <button type="button" className="btn sm" disabled={sub} onClick={() => inp.current?.click()}>{sub ? "Enviando…" : "Anexar"}</button> : <span className="hint">salve o cadastro para anexar</span>}
+  </div>;
 }
 
 function Documentos({ id, docs, recDocs, uid, toast }: { id: string; docs: Doc[] | null; recDocs: () => void; uid: string; toast: (m: string) => void }) {

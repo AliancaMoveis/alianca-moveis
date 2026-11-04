@@ -1,5 +1,6 @@
 // RH · Funcionários, documentos e admissão por link. Só o Bruno e a Patrícia (RLS confere no banco).
 import { sb } from "./supabase";
+import { separarFicha } from "./rhFicha";
 export { PODE_RH, podeRh } from "./ponto";
 
 export type Funcionario = {
@@ -8,7 +9,7 @@ export type Funcionario = {
   empresa: string; folha: string; identificador: string; horario: string;
   salario: number | null; recebe_vt: boolean; vt_dia: number; va_dia: number; jornada_min: number;
   banco: string; agencia: string; conta: string; pix: string; emergencia_nome: string; emergencia_tel: string;
-  dependentes: { nome: string; nascimento: string }[]; status: string; desligamento: string | null; obs: string; origem: string; criado_em: string;
+  dependentes: { nome: string; nascimento: string; cpf?: string }[]; ficha?: Record<string, any>; status: string; desligamento: string | null; obs: string; origem: string; criado_em: string;
 };
 /** empresas do grupo (nome como vem no Secullum) → nome curto */
 export const EMPRESAS: [string, string][] = [
@@ -22,7 +23,8 @@ export type Doc = { id: number; funcionario_id: string; tipo: string; titulo: st
 export type Link = { token: string; nome: string; cargo: string; setor: string; status: string; expira_em: string; criado_em: string };
 export type Envio = { id: number; token: string; dados: any; docs: { campo: string; nome: string; caminho: string }[]; enviado_em: string; revisado_em: string | null; funcionario_id: string | null };
 
-export const TIPOS_DOC: [string, string][] = [["rg_cpf", "RG / CPF"], ["ctps", "Carteira de trabalho"], ["residencia", "Comprovante de residência"], ["atestado", "Atestado médico"], ["contrato", "Contrato / termo assinado"], ["certidao", "Certidão (nascimento/casamento)"], ["reservista", "Reservista"], ["titulo", "Título de eleitor"], ["foto", "Foto"], ["outro", "Outro"]];
+export const TIPOS_DOC: [string, string][] = [["rg_cpf", "RG / CPF"], ["ctps", "Carteira de trabalho"], ["pis", "PIS"], ["residencia", "Comprovante de residência"], ["atestado", "Atestado médico"], ["contrato", "Contrato / termo assinado"], ["certidao", "Certidão (casamento/divórcio)"], ["reservista", "Reservista"], ["titulo", "Título de eleitor"], ["cnh", "Carteira de motorista"],
+  ["dep_rg_certidao", "Dependente · RG / certidão"], ["dep_cpf", "Dependente · CPF"], ["dep_matricula", "Dependente · matrícula"], ["dep_vacina", "Dependente · vacinação"], ["pcd", "Laudo PCD"], ["banco", "Conta Santander"], ["foto", "Foto"], ["outro", "Outro"]];
 export const STATUS_FUNC: [string, string][] = [["ativo", "Ativo"], ["ferias", "Em férias"], ["afastado", "Afastado"], ["desligado", "Desligado"]];
 export const soDig = (v: any) => String(v || "").replace(/\D/g, "");
 export const fmtCpf = (v: string) => { const d = soDig(v).slice(0, 11); return d.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, (_m, a, b, c, x) => a + "." + b + "." + c + (x ? "-" + x : "")); };
@@ -72,9 +74,10 @@ export async function aprovarEnvio(envio: Envio, link: Link | undefined, ajustes
   const fid = await salvarFuncionario(null, {
     nome: d.nome || link?.nome || "—", cpf: d.cpf || "", rg: d.rg || "", nascimento: d.nascimento || null, telefone: d.telefone || "", email: d.email || "",
     endereco: d.endereco || "", estado_civil: d.estado_civil || "", escolaridade: d.escolaridade || "", pis: d.pis || "", ctps: d.ctps || "",
-    banco: d.banco || "", agencia: d.agencia || "", conta: d.conta || "", pix: d.pix || "",
+    banco: d.santander === "sim" ? "Santander (033)" : d.banco || "", agencia: d.agencia || "", conta: d.conta || "", pix: d.pix || "",
     emergencia_nome: d.emergencia_nome || "", emergencia_tel: d.emergencia_tel || "", dependentes: d.dependentes || [],
     cargo: ajustes.cargo, setor: ajustes.setor, admissao: ajustes.admissao, empresa: ajustes.empresa || "", origem: "link", obs: d.obs || "",
+    ficha: separarFicha(d).ficha,
   } as any, uid);
   for (const doc of envio.docs || []) {
     const r = await sb.from("rh_docs").insert({ funcionario_id: fid, tipo: doc.campo || "outro", titulo: doc.nome || "Documento", arquivo: doc.caminho, criado_por: uid }); erro(r);
