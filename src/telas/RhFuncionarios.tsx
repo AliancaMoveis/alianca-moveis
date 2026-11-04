@@ -12,7 +12,7 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
   const { R, toast } = useApp() as any;
   const [aba, setAba] = useState(abaInicial);
   const [lista, setLista] = useState<Funcionario[] | null>(null);
-  const [erro, setErro] = useState(""); const [busca, setBusca] = useState(""); const [fSt, setFSt] = useState("ativos"); const [fEmp, setFEmp] = useState("");
+  const [erro, setErro] = useState(""); const [busca, setBusca] = useState(""); const [fSt, setFSt] = useState("ativos"); const [fEmp, setFEmp] = useState(""); const [fFun, setFFun] = useState("");
   const [aberto, setAberto] = useState<string | "novo" | "">("");
   const rec = () => listarFuncionarios().then(setLista).catch(e => setErro(e.message));
   useEffect(() => { rec(); }, []);
@@ -20,7 +20,11 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
 
   const l = (lista || []).filter(f => (fSt === "todos" || (fSt === "ativos" ? f.status !== "desligado" : f.status === fSt)))
     .filter(f => !fEmp || f.empresa === fEmp)
+    .filter(f => !fFun || (f.cargo || "").trim().toLowerCase() === fFun)
     .filter(f => !busca.trim() || (f.nome + " " + f.cpf + " " + f.cargo + " " + f.setor + " " + f.folha + " " + f.pis + " " + nomeEmpresa(f.empresa)).toLowerCase().includes(busca.toLowerCase()));
+  // funções existentes (para o filtro), com a quantidade de quem não está desligado
+  const funcoes = Object.values((lista || []).filter(f => (f.cargo || "").trim()).reduce((m: Record<string, [string, string, number]>, f) => { const k = f.cargo.trim().toLowerCase(); m[k] = m[k] || [k, f.cargo.trim(), 0]; if (f.status !== "desligado") m[k][2]++; return m; }, {})).sort((a, b) => a[1].localeCompare(b[1]));
+  const ficha = (id: string | null) => <Ficha key={id || "novo"} id={id} dados={id ? (lista || []).find(f => f.id === id) || null : null} fechar={() => setAberto("")} rec={rec} uid={R.currentUserId} toast={toast} />;
   return (
     <section className="view active">
       <div className="view-head"><div><h2>👥 RH · Funcionários</h2><p>Cadastro, documentos anexados e admissão por link — só você e a Patrícia têm acesso.</p></div></div>
@@ -33,23 +37,23 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
             <div className="field" style={{ flex: "1 1 220px" }}><label>Buscar</label><input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Nome, CPF, nº folha, PIS, função, departamento…" /></div>
             <div className="field"><label>Empresa</label><select value={fEmp} onChange={e => setFEmp(e.target.value)}><option value="">Todas</option>{EMPRESAS.map(([k, n]) => <option key={k} value={k}>{n} ({(lista || []).filter(f => f.empresa === k && f.status !== "desligado").length})</option>)}</select></div>
+            <div className="field"><label>Função</label><select value={fFun} onChange={e => setFFun(e.target.value)}><option value="">Todas</option>{funcoes.map(([k, n, q]) => <option key={k} value={k}>{n} ({q})</option>)}</select></div>
             <div className="field"><label>Situação</label><select value={fSt} onChange={e => setFSt(e.target.value)}><option value="ativos">Todos menos desligados</option>{STATUS_FUNC.map(([k, n]) => <option key={k} value={k}>{n}</option>)}<option value="todos">Todos</option></select></div>
             <button className="btn primary" onClick={() => setAberto("novo")}>＋ Novo funcionário</button>
           </div>
         </div>
         {erro ? <div className="empty">{erro}</div> : !lista ? <div className="empty">Carregando…</div> : !l.length ? <div className="empty" style={{ padding: 24 }}>Nenhum funcionário. Cadastre pelo botão acima ou mande o link de admissão.</div> :
-          <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
+          <>{aberto === "novo" && ficha(null)}<div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
             <div className="hint" style={{ padding: "8px 12px" }}>{l.length} funcionário{l.length === 1 ? "" : "s"}</div>
-            <table className="ma-tab" style={{ minWidth: 900 }}>
-              <thead><tr><th>Nº folha</th><th>Funcionário</th><th>Função · departamento</th><th>Empresa</th><th>CPF</th><th>PIS</th><th>Horário</th><th>Admissão</th><th>Situação</th></tr></thead>
-              <tbody>{l.map(f => <tr key={f.id} className="ma-lin" onClick={() => setAberto(f.id)}>
-                <td>{f.folha || "—"}</td><td><b>{f.nome}</b>{f.origem === "link" ? <span className="pill" style={{ marginLeft: 6 }}>pelo link</span> : null}</td>
-                <td>{[f.cargo, f.setor].filter(Boolean).join(" · ") || "—"}</td><td>{nomeEmpresa(f.empresa)}</td><td>{f.cpf || "—"}</td><td>{f.pis || "—"}</td><td style={{ fontSize: 12.5 }}>{f.horario || "—"}</td><td>{br(f.admissao)}</td>
+            <table className="ma-tab rh-tab">
+              <thead><tr><th>Nº folha</th><th>Funcionário</th><th>Função · departamento</th><th>Empresa</th><th>CPF · PIS</th><th className="rh-col-h">Horário</th><th>Admissão</th><th>Situação</th></tr></thead>
+              <tbody>{l.map(f => [<tr key={f.id} className={"ma-lin" + (aberto === f.id ? " on" : "")} onClick={() => setAberto(aberto === f.id ? "" : f.id)}>
+                <td>{f.folha || "—"}</td><td><b>{f.nome}</b> <span className="hint">{aberto === f.id ? "▾" : "▸"}</span>{f.origem === "link" ? <span className="pill" style={{ marginLeft: 6 }}>pelo link</span> : null}</td>
+                <td>{[f.cargo, f.setor].filter(Boolean).join(" · ") || "—"}</td><td>{nomeEmpresa(f.empresa)}</td><td style={{ fontSize: 12.5 }}>{f.cpf || "—"}<br /><span className="hint">PIS {f.pis || "—"}</span></td><td className="rh-col-h" style={{ fontSize: 12 }}>{f.horario || "—"}</td><td>{br(f.admissao)}</td>
                 <td><b style={{ color: stCor[f.status] || "var(--tn-grey-i)" }}>{(STATUS_FUNC.find(x => x[0] === f.status) || ["", f.status])[1]}</b></td>
-              </tr>)}</tbody>
+              </tr>, aberto === f.id && <tr key={f.id + "-ficha"} className="rh-ficha-lin"><td colSpan={8}>{ficha(f.id)}</td></tr>])}</tbody>
             </table>
-          </div>}
-        {aberto && <Ficha id={aberto === "novo" ? null : aberto} dados={aberto === "novo" ? null : (lista || []).find(f => f.id === aberto) || null} fechar={() => setAberto("")} rec={rec} uid={R.currentUserId} toast={toast} />}
+          </div></>}
       </>}
     </section>
   );
@@ -76,7 +80,7 @@ function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dado
   };
   const excluir = async () => { if (!id) return; if (!confirm("Excluir " + f.nome + " e TODOS os documentos anexados? (para quem saiu da empresa, prefira a situação Desligado)")) return; try { await apagarFuncionario(id); await rec(); fechar(); toast("Excluído"); } catch (e: any) { toast(e.message); } };
   return (
-    <div className="card" style={{ marginTop: 14, padding: 16 }}>
+    <div className="card rh-ficha" style={{ marginTop: 14, padding: 16 }}>
       <style>{".grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}@media(max-width:760px){.grid3{grid-template-columns:1fr}}"}</style>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <h3 style={{ margin: 0 }}>{id ? "✏️ " + f.nome : "＋ Novo funcionário"}</h3>

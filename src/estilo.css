@@ -2020,3 +2020,11 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .rf-res{border:1px solid var(--line);border-radius:8px;overflow:hidden}.rf-res>div{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line-soft);font-size:12.5px}
 .rf-res>div span{font-weight:700;color:var(--ink-soft)}.rf-res>div.tot{background:var(--tn-green);color:var(--tn-green-i)}.rf-res>div.tot span{color:inherit}.rf-res small{display:block;padding:6px 10px}
 @media(max-width:760px){.rf-corpo{grid-template-columns:1fr}.rf-res{order:-1}}
+
+/* RH · funcionários: tabela cabe na tela (sem cortar em telas menores) e a ficha abre logo abaixo do nome */
+.rh-tab{min-width:0;table-layout:auto}.rh-tab td,.rh-tab th{white-space:normal;word-break:break-word;vertical-align:top}
+.rh-ficha-lin>td{padding:0 6px 10px!important;background:var(--surface-2)}.rh-ficha-lin .rh-ficha{margin-top:6px!important;box-shadow:var(--shadow)}
+.rh-ficha .field label{white-space:normal}.rh-ficha .field input,.rh-ficha .field select,.rh-ficha .field textarea{max-width:100%;min-width:0;box-sizing:border-box}
+.rhf .g3>*,.rhf .g2>*{min-width:0}
+@media(max-width:1280px){.rh-col-h{display:none}}
+.rh-ficha .grid3>*{min-width:0}
