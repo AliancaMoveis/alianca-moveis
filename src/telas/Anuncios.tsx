@@ -1,7 +1,9 @@
 // 📣 Anúncios: investimento e resultado das campanhas (Meta e Google, via Reportei) cruzados com o 360.
 // Os números vêm da tabela anuncios_dia, que uma tarefa agendada atualiza a partir do Reportei.
 // Só Gestão e proprietário leem (RLS _ve_anuncios).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { sb } from "../lib/supabase";
 import { MOCK } from "../lib/chat";
 import { useApp } from "../estado";
@@ -232,7 +234,7 @@ function OrigemClientes({ mk, de, ate, contatos, deAn }: { mk: any[]; de: string
       const m: Record<string, any> = {}; lista.forEach((c: any, i: number) => (m[c.id] = { cidade: cs[i % cs.length], bairro: bs[i % bs.length] })); setLoc(m); return; }
     (async () => { const m: Record<string, any> = {};
       for (let i = 0; i < lista.length; i += 800) {
-        const { data } = await sb.rpc("anuncios_origem_clientes", { p: lista.slice(i, i + 800).map((c: any) => ({ k: c.id, venda: c.venda?.numero || "", tel: c.telefone || "" })) });
+        const { data } = await sb.rpc("anuncios_origem_clientes", { p: lista.slice(i, i + 800).map((c: any) => ({ k: c.id, venda: c.venda?.numero || "", tel: c.telefone || "", end: c.endereco || "" })) });
         (data || []).forEach((r: any) => (m[r.k] = { cidade: r.cidade || "", bairro: r.bairro || "" }));
       }
       if (vivo) setLoc(m); })().catch(() => vivo && setLoc({}));
@@ -244,13 +246,13 @@ function OrigemClientes({ mk, de, ate, contatos, deAn }: { mk: any[]; de: string
   const rank = Object.entries(grupos).sort((a, b) => b[1].n - a[1].n || b[1].fat - a[1].fat); const mx = Math.max(1, ...rank.map(([, g]) => g.n));
   const achados = lista.length - sem;
   return <div className="panel">
-    <h3>📍 De onde vêm os leads <small>(clientes do marketing que chegaram de {fmtDate(de)} a {fmtDate(ate)} · cidade e bairro da base de clientes)</small></h3>
+    <h3>📍 De onde vêm os leads <small>(clientes do marketing que chegaram de {fmtDate(de)} a {fmtDate(ate)} · cidade e bairro pelo endereço do cadastro ou pela base de clientes)</small></h3>
     <div className="an-funil-o">
       <div><b>{n0(contatos)}</b><span>contatos dos anúncios<br /><small>{fmtDate(deAn)} a {fmtDate(ate)} · Reportei</small></span></div><i>→</i>
       <div><b>{n0(mk.filter((c: any) => { const d = diaLocal(c.criadoEm); const iso = d ? isoLocal(d) : ""; return iso >= de && iso <= ate; }).length)}</b><span>cadastrados no 360<br /><small>{fmtDate(de)} a {fmtDate(ate)}{deAn < de ? " · o 360 começou em 15/10" : ""}</small></span></div><i>→</i>
-      <div><b>{loc === null ? "…" : n0(Object.keys(loc).length)}</b><span>com cidade conhecida<br /><small>achados na base de clientes</small></span></div>
+      <div><b>{loc === null ? "…" : n0(Object.keys(loc).length)}</b><span>com cidade conhecida<br /><small>pelo endereço do cadastro ou pela base</small></span></div>
     </div>
-    <div className="hint" style={{ marginBottom: 8 }}>O ranking abaixo soma só os que têm cidade conhecida — por isso não bate com o total de contatos. Nem todo contato vira cadastro, e só quem já está na base de clientes (já comprou alguma vez) tem endereço.</div>
+    <div className="hint" style={{ marginBottom: 8 }}>O ranking soma só os que têm cidade conhecida — por isso não bate com o total de contatos. Nem todo contato vira cadastro; a cidade vem do endereço digitado no cadastro (visitas dos consultores) ou, sem endereço (agendamento na loja), da base de clientes.</div>
     <div className="an-per" style={{ marginBottom: 8 }}>
       {([["cad", "Todos os leads (cadastros)"], ["vend", "Só os que compraram"]] as const).map(([k, l]) => <button key={k} className={"chip" + (quem === k ? " on" : "")} onClick={() => setQuem(k)}>{l}</button>)}
       <span style={{ width: 10 }} />{([["cidade", "Por cidade"], ["bairro", "Por bairro"]] as const).map(([k, l]) => <button key={k} className={"chip" + (nivel === k ? " on" : "")} onClick={() => setNivel(k)}>{l}</button>)}
@@ -260,7 +262,7 @@ function OrigemClientes({ mk, de, ate, contatos, deAn }: { mk: any[]; de: string
       <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>#</th><th>{nivel === "cidade" ? "Cidade" : "Bairro · cidade"}</th><th>{quem === "cad" ? "Leads" : "Clientes"}</th><th>% do total</th>{quem === "cad" && <th>Compraram</th>}<th></th></tr></thead>
         <tbody>{rank.slice(0, nivel === "cidade" ? 15 : 25).map(([k, g], i) => <tr key={k}><td>{i + 1}</td><td><b>{k}</b></td><td>{n0(g.n)}</td><td>{pctTxt(g.n / achados)}</td>{quem === "cad" && <td>{n0(g.fat)}</td>}
           <td style={{ minWidth: 120 }}><div style={{ height: 8, borderRadius: 4, background: "var(--surface-2)" }}><div style={{ height: 8, borderRadius: 4, width: (g.n / mx * 100) + "%", background: "var(--primary)" }} /></div></td></tr>)}</tbody></table></div>
-      <div className="pb-per">{n0(achados)} de {n0(lista.length)} clientes localizados na base (pelo nº da venda ou pelo telefone){sem ? " · " + n0(sem) + " sem endereço na base" : ""}.</div>
+      <div className="pb-per">{n0(achados)} de {n0(lista.length)} leads com cidade conhecida (endereço do cadastro, nº da venda ou telefone na base){sem ? " · " + n0(sem) + " sem endereço na base" : ""}.</div>
     </>}
   </div>;
 }
@@ -297,19 +299,26 @@ const COORD: Record<string, [number, number]> = {
 };
 const semAcento = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
 function MapaCidades({ rank }: { rank: [string, { n: number; fat: number }][] }) {
+  const ref = useRef<HTMLDivElement>(null);
   const pts = rank.map(([k, g]) => ({ k, g, c: COORD[semAcento(k)] })).filter(p => p.c);
-  if (pts.length < 2) return null;
-  const lats = pts.map(p => p.c[0]), lons = pts.map(p => p.c[1]);
-  const la0 = Math.min(...lats) - 0.06, la1 = Math.max(...lats) + 0.06, lo0 = Math.min(...lons) - 0.08, lo1 = Math.max(...lons) + 0.08;
-  const W = 640, Hh = Math.max(260, Math.min(460, W * (la1 - la0) / (lo1 - lo0)));
-  const X = (lo: number) => (lo - lo0) / (lo1 - lo0) * W, Y = (la: number) => (la1 - la) / (la1 - la0) * Hh;
-  const mx = Math.max(...pts.map(p => p.g.n)); const r = (n: number) => 6 + Math.sqrt(n / mx) * 34;
+  const chave = pts.map(p => p.k + p.g.n).join("|");
+  useEffect(() => {
+    if (!ref.current || !pts.length) return;
+    const escuro = document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const mapa = L.map(ref.current, { scrollWheelZoom: false, attributionControl: true });
+    L.tileLayer(`https://{s}.basemaps.cartocdn.com/${escuro ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`, { maxZoom: 17, subdomains: "abcd", attribution: "© OpenStreetMap · © CARTO" }).addTo(mapa);
+    const mx = Math.max(...pts.map(p => p.g.n));
+    pts.slice().sort((a, b) => b.g.n - a.g.n).forEach((p, i) => {
+      const m = L.circleMarker(p.c, { radius: 7 + Math.sqrt(p.g.n / mx) * 30, color: "#284b8f", weight: 2, fillColor: "#3b6fd8", fillOpacity: 0.35 }).addTo(mapa);
+      m.bindTooltip(`<b>${p.k}</b><br>${p.g.n} lead(s)${p.g.fat ? " · " + p.g.fat + " compraram" : ""}`, { permanent: i < 3, direction: "top", className: "an-map-tip" });
+    });
+    mapa.fitBounds(L.latLngBounds(pts.map(p => p.c)).pad(0.15));
+    return () => { mapa.remove(); };
+  }, [chave]);
+  if (!pts.length) return null;
   const fora = rank.length - pts.length;
   return <div className="an-mapa">
-    <svg viewBox={`0 0 ${W} ${Hh}`} role="img" aria-label="Mapa das cidades dos clientes">
-      {pts.sort((a, b) => b.g.n - a.g.n).map(p => <g key={p.k}><circle cx={X(p.c[1])} cy={Y(p.c[0])} r={r(p.g.n)} fill="var(--primary)" fillOpacity={0.28} stroke="var(--primary)" strokeWidth={1.5}><title>{p.k}: {p.g.n} lead(s)</title></circle>
-        <text x={X(p.c[1])} y={Y(p.c[0]) - r(p.g.n) - 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--ink)">{p.k.length > 18 ? p.k.slice(0, 17) + "…" : p.k} · {p.g.n}</text></g>)}
-    </svg>
-    <div className="pb-per">Bolha = nº de leads. Posição aproximada de cada cidade (Curitiba e região){fora ? " · " + fora + " cidade(s) fora do mapa, veja na tabela" : ""}.</div>
+    <div ref={ref} style={{ height: 380, borderRadius: 10 }} />
+    <div className="pb-per">Bolha = nº de leads de cada cidade (Curitiba e região){fora ? " · " + fora + " cidade(s) fora do mapa, veja na tabela" : ""}.</div>
   </div>;
 }
