@@ -173,7 +173,7 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
 
     <DiaSemana linhas={dados.linhas} mk={mk360} de={de} de360={cl(de)} ate={ate} />
     <Horario mk={mk360} de={cl(de)} ate={ate} />
-    <OrigemClientes mk={mk360} de={cl(de)} ate={ate} />
+    <OrigemClientes mk={mk360} de={cl(de)} ate={ate} contatos={somar(dados.linhas.filter(l => l.dia >= de && l.dia <= ate)).contatos} deAn={de} />
 
     <div className="panel">
       <h3>Campanhas no período</h3>
@@ -223,7 +223,7 @@ function DiaSemana({ linhas, mk, de, ate, de360 }: { linhas: Linha[]; mk: any[];
 }
 
 // ---------- 📍 de onde vêm os clientes: cidade e bairro (pela base de clientes: nº da venda ou telefone) ----------
-function OrigemClientes({ mk, de, ate }: { mk: any[]; de: string; ate: string }) {
+function OrigemClientes({ mk, de, ate, contatos, deAn }: { mk: any[]; de: string; ate: string; contatos: number; deAn: string }) {
   const [quem, setQuem] = useState<"vend" | "cad">("cad"); const [nivel, setNivel] = useState<"cidade" | "bairro">("cidade");
   const lista = useMemo(() => de > ate ? [] : mk.filter((c: any) => { const d = diaLocal(c.criadoEm); if (!d) return false; const iso = isoLocal(d); return iso >= de && iso <= ate && (quem === "cad" || vendaContaVolume(c.venda)); }), [mk, de, ate, quem]);
   const [loc, setLoc] = useState<Record<string, { cidade: string; bairro: string }> | null>(null);
@@ -245,6 +245,12 @@ function OrigemClientes({ mk, de, ate }: { mk: any[]; de: string; ate: string })
   const achados = lista.length - sem;
   return <div className="panel">
     <h3>📍 De onde vêm os leads <small>(clientes do marketing que chegaram de {fmtDate(de)} a {fmtDate(ate)} · cidade e bairro da base de clientes)</small></h3>
+    <div className="an-funil-o">
+      <div><b>{n0(contatos)}</b><span>contatos dos anúncios<br /><small>{fmtDate(deAn)} a {fmtDate(ate)} · Reportei</small></span></div><i>→</i>
+      <div><b>{n0(mk.filter((c: any) => { const d = diaLocal(c.criadoEm); const iso = d ? isoLocal(d) : ""; return iso >= de && iso <= ate; }).length)}</b><span>cadastrados no 360<br /><small>{fmtDate(de)} a {fmtDate(ate)}{deAn < de ? " · o 360 começou em 15/10" : ""}</small></span></div><i>→</i>
+      <div><b>{loc === null ? "…" : n0(Object.keys(loc).length)}</b><span>com cidade conhecida<br /><small>achados na base de clientes</small></span></div>
+    </div>
+    <div className="hint" style={{ marginBottom: 8 }}>O ranking abaixo soma só os que têm cidade conhecida — por isso não bate com o total de contatos. Nem todo contato vira cadastro, e só quem já está na base de clientes (já comprou alguma vez) tem endereço.</div>
     <div className="an-per" style={{ marginBottom: 8 }}>
       {([["cad", "Todos os leads (cadastros)"], ["vend", "Só os que compraram"]] as const).map(([k, l]) => <button key={k} className={"chip" + (quem === k ? " on" : "")} onClick={() => setQuem(k)}>{l}</button>)}
       <span style={{ width: 10 }} />{([["cidade", "Por cidade"], ["bairro", "Por bairro"]] as const).map(([k, l]) => <button key={k} className={"chip" + (nivel === k ? " on" : "")} onClick={() => setNivel(k)}>{l}</button>)}
