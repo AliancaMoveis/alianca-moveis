@@ -226,7 +226,7 @@ function DiaSemana({ linhas, mk, de, ate, de360 }: { linhas: Linha[]; mk: any[];
 
 // ---------- 📍 de onde vêm os clientes: cidade e bairro (pela base de clientes: nº da venda ou telefone) ----------
 function OrigemClientes({ mk, de, ate, contatos, deAn }: { mk: any[]; de: string; ate: string; contatos: number; deAn: string }) {
-  const [quem, setQuem] = useState<"vend" | "cad">("cad"); const [nivel, setNivel] = useState<"cidade" | "bairro">("cidade");
+  const [quem, setQuem] = useState<"vend" | "cad">("cad"); const [nivel, setNivel] = useState<"cidade" | "bairro">("cidade"); const [cidSel, setCidSel] = useState("CURITIBA"); const [todas, setTodas] = useState(false);
   const lista = useMemo(() => de > ate ? [] : mk.filter((c: any) => { const d = diaLocal(c.criadoEm); if (!d) return false; const iso = isoLocal(d); return iso >= de && iso <= ate && (quem === "cad" || vendaContaVolume(c.venda)); }), [mk, de, ate, quem]);
   const [loc, setLoc] = useState<Record<string, { cidade: string; bairro: string }> | null>(null);
   useEffect(() => { let vivo = true; setLoc(null);
@@ -241,10 +241,16 @@ function OrigemClientes({ mk, de, ate, contatos, deAn }: { mk: any[]; de: string
     return () => { vivo = false; }; }, [lista]);
   if (de > ate) return null;
   const grupos: Record<string, { n: number; fat: number }> = {}; let sem = 0;
-  lista.forEach((c: any) => { const l = loc?.[c.id]; if (!l || !l.cidade) { sem++; return; } const k = nivel === "cidade" ? l.cidade : (l.bairro || "(sem bairro)") + " · " + l.cidade;
+  // por bairro: um município de cada vez, para a soma dos bairros bater com o total da cidade
+  const porCid: Record<string, number> = {};
+  lista.forEach((c: any) => { const l = loc?.[c.id]; if (l && l.cidade) porCid[l.cidade] = (porCid[l.cidade] || 0) + 1; });
+  const cidades = Object.entries(porCid).sort((a, b) => b[1] - a[1]);
+  const cid = porCid[cidSel] ? cidSel : (cidades[0]?.[0] || "");
+  lista.forEach((c: any) => { const l = loc?.[c.id]; if (!l || !l.cidade) { sem++; return; } if (nivel === "bairro" && l.cidade !== cid) return; const k = nivel === "cidade" ? l.cidade : (l.bairro || "(bairro não identificado)");
     const g = (grupos[k] = grupos[k] || { n: 0, fat: 0 }); g.n++; if (vendaContaVolume(c.venda)) g.fat++; });
   const rank = Object.entries(grupos).sort((a, b) => b[1].n - a[1].n || b[1].fat - a[1].fat); const mx = Math.max(1, ...rank.map(([, g]) => g.n));
-  const achados = lista.length - sem;
+  const achados = lista.length - sem; const base = nivel === "bairro" ? (porCid[cid] || 0) : achados;
+  const lim = todas ? rank.length : nivel === "cidade" ? 15 : 30; const resto = rank.slice(lim).reduce((t, [, g]) => ({ n: t.n + g.n, fat: t.fat + g.fat }), { n: 0, fat: 0 });
   return <div className="panel">
     <h3>📍 De onde vêm os leads <small>(clientes do marketing que chegaram de {fmtDate(de)} a {fmtDate(ate)} · cidade e bairro pelo endereço do cadastro ou pela base de clientes)</small></h3>
     <div className="an-funil-o">
@@ -255,13 +261,16 @@ function OrigemClientes({ mk, de, ate, contatos, deAn }: { mk: any[]; de: string
     <div className="hint" style={{ marginBottom: 8 }}>O ranking soma só os que têm cidade conhecida — por isso não bate com o total de contatos. Nem todo contato vira cadastro; a cidade vem do endereço digitado no cadastro (visitas dos consultores) ou, sem endereço (agendamento na loja), da base de clientes.</div>
     <div className="an-per" style={{ marginBottom: 8 }}>
       {([["cad", "Todos os leads (cadastros)"], ["vend", "Só os que compraram"]] as const).map(([k, l]) => <button key={k} className={"chip" + (quem === k ? " on" : "")} onClick={() => setQuem(k)}>{l}</button>)}
-      <span style={{ width: 10 }} />{([["cidade", "Por cidade"], ["bairro", "Por bairro"]] as const).map(([k, l]) => <button key={k} className={"chip" + (nivel === k ? " on" : "")} onClick={() => setNivel(k)}>{l}</button>)}
+      <span style={{ width: 10 }} />{([["cidade", "Por cidade"], ["bairro", "Por bairro"]] as const).map(([k, l]) => <button key={k} className={"chip" + (nivel === k ? " on" : "")} onClick={() => { setNivel(k); setTodas(false); }}>{l}</button>)}
+      {nivel === "bairro" && cidades.length > 0 && <select value={cid} onChange={e => { setCidSel(e.target.value); setTodas(false); }} style={{ marginLeft: 6 }}>{cidades.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}</select>}
     </div>
     {loc === null ? <div className="dn-vazio">Cruzando com a base de clientes…</div> : !rank.length ? <div className="dn-vazio">Nenhum cliente do período encontrado na base de clientes.</div> : <>
       {nivel === "cidade" && <MapaCidades rank={rank} />}
-      <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>#</th><th>{nivel === "cidade" ? "Cidade" : "Bairro · cidade"}</th><th>{quem === "cad" ? "Leads" : "Clientes"}</th><th>% do total</th>{quem === "cad" && <th>Compraram</th>}<th></th></tr></thead>
-        <tbody>{rank.slice(0, nivel === "cidade" ? 15 : 25).map(([k, g], i) => <tr key={k}><td>{i + 1}</td><td><b>{k}</b></td><td>{n0(g.n)}</td><td>{pctTxt(g.n / achados)}</td>{quem === "cad" && <td>{n0(g.fat)}</td>}
-          <td style={{ minWidth: 120 }}><div style={{ height: 8, borderRadius: 4, background: "var(--surface-2)" }}><div style={{ height: 8, borderRadius: 4, width: (g.n / mx * 100) + "%", background: "var(--primary)" }} /></div></td></tr>)}</tbody></table></div>
+      <div className="an-tab-wrap"><table className="an-tab"><thead><tr><th>#</th><th>{nivel === "cidade" ? "Cidade" : "Bairro de " + cid}</th><th>{quem === "cad" ? "Leads" : "Clientes"}</th><th>% do total</th>{quem === "cad" && <th>Compraram</th>}<th></th></tr></thead>
+        <tbody>{rank.slice(0, lim).map(([k, g], i) => <tr key={k}><td>{i + 1}</td><td><b>{k}</b></td><td>{n0(g.n)}</td><td>{pctTxt(g.n / base)}</td>{quem === "cad" && <td>{n0(g.fat)}</td>}
+          <td style={{ minWidth: 120 }}><div style={{ height: 8, borderRadius: 4, background: "var(--surface-2)" }}><div style={{ height: 8, borderRadius: 4, width: (g.n / mx * 100) + "%", background: "var(--primary)" }} /></div></td></tr>)}
+          {resto.n > 0 && <tr><td></td><td><button className="btn ghost sm" onClick={() => setTodas(true)}>+ {rank.length - lim} {nivel === "cidade" ? "cidades" : "bairros"} (ver todos)</button></td><td>{n0(resto.n)}</td><td>{pctTxt(resto.n / base)}</td>{quem === "cad" && <td>{n0(resto.fat)}</td>}<td></td></tr>}</tbody>
+          <tfoot><tr><td></td><td>Total {nivel === "cidade" ? "com cidade conhecida" : "de " + cid}</td><td>{n0(base)}</td><td>100%</td>{quem === "cad" && <td>{n0(rank.reduce((t, [, g]) => t + g.fat, 0))}</td>}<td></td></tr></tfoot></table></div>
       <div className="pb-per">{n0(achados)} de {n0(lista.length)} leads com cidade conhecida (endereço do cadastro, nº da venda ou telefone na base){sem ? " · " + n0(sem) + " sem endereço na base" : ""}.</div>
     </>}
   </div>;
