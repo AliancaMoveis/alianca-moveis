@@ -1,9 +1,10 @@
 // RH · Funcionários — cadastro completo, documentos anexados e admissão por link. Só Bruno e Patrícia.
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
+import { hojeISO } from "../lib/regras";
 import { podeRh } from "../lib/ponto";
 import { abrirDoc, apagarDoc, apagarFuncionario, aprovarEnvio, criarLink, fmtCpf, listarDocs, listarFuncionarios, listarLinks, mudarLink, salvarFuncionario, subirDoc, urlAdmissao, STATUS_FUNC, TIPOS_DOC, EMPRESAS, nomeEmpresa, type Doc, type Envio, type Funcionario, type Link } from "../lib/rh";
-import { CamposFicha, abrirFicha, separarFicha, FICHA_PADRAO } from "../lib/rhFicha";
+import { CamposFicha, abrirFicha, separarFicha, FICHA_PADRAO, MOTIVOS_DESLIG } from "../lib/rhFicha";
 
 const br = (s?: string | null) => (s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "—");
 const stCor: Record<string, string> = { ativo: "var(--tn-green-i)", ferias: "var(--tn-blue-i)", afastado: "var(--tn-amber-i)", desligado: "var(--tn-red-i)" };
@@ -12,7 +13,7 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
   const { R, toast } = useApp() as any;
   const [aba, setAba] = useState(abaInicial);
   const [lista, setLista] = useState<Funcionario[] | null>(null);
-  const [erro, setErro] = useState(""); const [busca, setBusca] = useState(""); const [fSt, setFSt] = useState("ativos"); const [fEmp, setFEmp] = useState(""); const [fFun, setFFun] = useState("");
+  const [erro, setErro] = useState(""); const [busca, setBusca] = useState(""); const [fSt, setFSt] = useState("ativos"); const [fEmp, setFEmp] = useState(""); const [fFun, setFFun] = useState(""); const [ordem, setOrdem] = useState("nome");
   const [aberto, setAberto] = useState<string | "novo" | "">("");
   const rec = () => listarFuncionarios().then(setLista).catch(e => setErro(e.message));
   useEffect(() => { rec(); }, []);
@@ -21,7 +22,16 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
   const l = (lista || []).filter(f => (fSt === "todos" || (fSt === "ativos" ? f.status !== "desligado" : f.status === fSt)))
     .filter(f => !fEmp || f.empresa === fEmp)
     .filter(f => !fFun || (f.cargo || "").trim().toLowerCase() === fFun)
-    .filter(f => !busca.trim() || (f.nome + " " + f.cpf + " " + f.cargo + " " + f.setor + " " + f.folha + " " + f.pis + " " + nomeEmpresa(f.empresa)).toLowerCase().includes(busca.toLowerCase()));
+    .filter(f => !busca.trim() || (f.nome + " " + f.cpf + " " + f.cargo + " " + f.setor + " " + f.folha + " " + f.pis + " " + nomeEmpresa(f.empresa)).toLowerCase().includes(busca.toLowerCase()))
+    .sort((a, b) => {
+      const nf = (x: Funcionario) => { const n = parseInt(String(x.folha || "").replace(/\D/g, ""), 10); return isNaN(n) ? Infinity : n; };
+      if (ordem === "folha") return nf(a) - nf(b) || a.nome.localeCompare(b.nome);
+      if (ordem === "folha_d") return (nf(b) === Infinity ? -1 : nf(a) === Infinity ? 1 : nf(b) - nf(a)) || a.nome.localeCompare(b.nome);
+      if (ordem === "admissao") return String(b.admissao || "").localeCompare(String(a.admissao || "")) || a.nome.localeCompare(b.nome);
+      if (ordem === "funcao") return (a.cargo || "~").localeCompare(b.cargo || "~") || a.nome.localeCompare(b.nome);
+      if (ordem === "desligamento") return String(b.desligamento || "").localeCompare(String(a.desligamento || "")) || a.nome.localeCompare(b.nome);
+      return a.nome.localeCompare(b.nome);
+    });
   // funções existentes (para o filtro), com a quantidade de quem não está desligado
   const funcoes = Object.values((lista || []).filter(f => (f.cargo || "").trim()).reduce((m: Record<string, [string, string, number]>, f) => { const k = f.cargo.trim().toLowerCase(); m[k] = m[k] || [k, f.cargo.trim(), 0]; if (f.status !== "desligado") m[k][2]++; return m; }, {})).sort((a, b) => a[1].localeCompare(b[1]));
   const ficha = (id: string | null) => <Ficha key={id || "novo"} id={id} dados={id ? (lista || []).find(f => f.id === id) || null : null} fechar={() => setAberto("")} rec={rec} uid={R.currentUserId} toast={toast} />;
@@ -37,6 +47,7 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
             <div className="field" style={{ flex: "1 1 220px" }}><label>Buscar</label><input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Nome, CPF, nº folha, PIS, função, departamento…" /></div>
             <div className="field"><label>Empresa</label><select value={fEmp} onChange={e => setFEmp(e.target.value)}><option value="">Todas</option>{EMPRESAS.map(([k, n]) => <option key={k} value={k}>{n} ({(lista || []).filter(f => f.empresa === k && f.status !== "desligado").length})</option>)}</select></div>
+            <div className="field"><label>Ordenar por</label><select value={ordem} onChange={e => setOrdem(e.target.value)}><option value="nome">Nome (A–Z)</option><option value="folha">Nº da folha (crescente)</option><option value="folha_d">Nº da folha (decrescente)</option><option value="admissao">Admissão (mais recente)</option><option value="funcao">Função</option><option value="desligamento">Desligamento (mais recente)</option></select></div>
             <div className="field"><label>Função</label><select value={fFun} onChange={e => setFFun(e.target.value)}><option value="">Todas</option>{funcoes.map(([k, n, q]) => <option key={k} value={k}>{n} ({q})</option>)}</select></div>
             <div className="field"><label>Situação</label><select value={fSt} onChange={e => setFSt(e.target.value)}><option value="ativos">Todos menos desligados</option>{STATUS_FUNC.map(([k, n]) => <option key={k} value={k}>{n}</option>)}<option value="todos">Todos</option></select></div>
             <button className="btn primary" onClick={() => setAberto("novo")}>＋ Novo funcionário</button>
@@ -50,7 +61,7 @@ export default function RhFuncionarios({ abaInicial = "func" }: { abaInicial?: s
               <tbody>{l.map(f => [<tr key={f.id} className={"ma-lin" + (aberto === f.id ? " on" : "")} onClick={() => setAberto(aberto === f.id ? "" : f.id)}>
                 <td>{f.folha || "—"}</td><td><b>{f.nome}</b> <span className="hint">{aberto === f.id ? "▾" : "▸"}</span>{f.origem === "link" ? <span className="pill" style={{ marginLeft: 6 }}>pelo link</span> : null}</td>
                 <td>{[f.cargo, f.setor].filter(Boolean).join(" · ") || "—"}</td><td>{nomeEmpresa(f.empresa)}</td><td style={{ fontSize: 12.5 }}>{f.cpf || "—"}<br /><span className="hint">PIS {f.pis || "—"}</span></td><td className="rh-col-h" style={{ fontSize: 12 }}>{f.horario || "—"}</td><td>{br(f.admissao)}</td>
-                <td><b style={{ color: stCor[f.status] || "var(--tn-grey-i)" }}>{(STATUS_FUNC.find(x => x[0] === f.status) || ["", f.status])[1]}</b></td>
+                <td><b style={{ color: stCor[f.status] || "var(--tn-grey-i)" }}>{(STATUS_FUNC.find(x => x[0] === f.status) || ["", f.status])[1]}</b>{f.status === "desligado" && f.desligamento ? <div className="hint" style={{ fontSize: 11.5 }}>{br(f.desligamento)}{f.ficha?.desligamento_motivo ? " · " + f.ficha.desligamento_motivo : ""}</div> : null}</td>
               </tr>, aberto === f.id && <tr key={f.id + "-ficha"} className="rh-ficha-lin"><td colSpan={8}>{ficha(f.id)}</td></tr>])}</tbody>
             </table>
           </div></>}
@@ -73,6 +84,8 @@ function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dado
     setSalvando(true);
     try {
       const p = { ...f, salario: f.salario === "" || f.salario == null ? null : Number(String(f.salario).replace(/\./g, "").replace(",", ".")), vt_dia: Number(String(f.vt_dia || 0).replace(",", ".")), va_dia: Number(String(f.va_dia || 0).replace(",", ".")) };
+      if (f.desligamento && f.status !== "desligado" && !confirm("Há data de desligamento, mas a situação não está como Desligado. Salvar assim mesmo?")) { setSalvando(false); return; }
+      if (f.status === "desligado" && !f.desligamento) { toast("Informe a data do desligamento"); setSalvando(false); return; }
       const { col, ficha } = separarFicha(f); Object.assign(p, col, { ficha }); Object.keys(FICHA_PADRAO).forEach(k => delete (p as any)[k]);
       delete p.id; delete p.criado_em; delete (p as any).criado_por; delete (p as any).atualizado_em; delete (p as any).origem;
       await salvarFuncionario(id, p, uid); await rec(); toast(id ? "Funcionário atualizado" : "Funcionário cadastrado"); if (!id) fechar();
@@ -97,8 +110,16 @@ function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dado
         {c("va_dia", "Vale-refeição/alimentação por dia (R$)", { inputMode: "decimal" })}
         <div className="field"><label>Vale-transporte</label><div style={{ display: "flex", gap: 8, alignItems: "center" }}><label style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={!!f.recebe_vt} onChange={e => setF({ ...f, recebe_vt: e.target.checked })} /> recebe</label><input style={{ width: 110 }} value={f.vt_dia ?? 0} onChange={e => setF({ ...f, vt_dia: e.target.value })} inputMode="decimal" placeholder="R$ por dia" /></div></div>
         <div className="field"><label>Situação</label><select value={f.status} onChange={e => setF({ ...f, status: e.target.value })}>{STATUS_FUNC.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></div>
-        {f.status === "desligado" ? c("desligamento", "Data do desligamento", { type: "date" }) : null}
       </div>
+      <h4 style={{ margin: "14px 0 6px" }}>🚪 Desligamento</h4>
+      {f.status !== "desligado" && !f.desligamento ? <button type="button" className="btn sm" onClick={() => setF({ ...f, status: "desligado", desligamento: hojeISO() })}>Registrar desligamento</button> : <>
+        <div className="grid3">
+          {c("desligamento", "Data do desligamento", { type: "date" })}
+          <div className="field"><label>Motivo</label><select value={f.desligamento_motivo || ""} onChange={e => setF({ ...f, desligamento_motivo: e.target.value })}><option value="">—</option>{MOTIVOS_DESLIG.map(m => <option key={m}>{m}</option>)}</select></div>
+        </div>
+        <div className="field"><label>Observação do desligamento</label><textarea rows={2} value={f.desligamento_obs || ""} onChange={e => setF({ ...f, desligamento_obs: e.target.value })} placeholder="Detalhes, aviso prévio, quem conduziu…" /></div>
+        {f.status === "desligado" && <button type="button" className="btn sm ghost" onClick={() => { if (confirm("Desfazer o desligamento e voltar para Ativo?")) setF({ ...f, status: "ativo", desligamento: null, desligamento_motivo: "", desligamento_obs: "" }); }}>Desfazer desligamento</button>}
+      </>}
       <h4 style={{ margin: "14px 0 6px" }}>Pix (opcional)</h4>
       <div className="grid3">{c("pix", "Chave Pix")}</div>
       {c("obs", "Observações")}

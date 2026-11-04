@@ -5,6 +5,7 @@ import { fmtCpf } from "./rh";
 
 export const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 export const GRAU_INSTRUCAO = ["Analfabeto", "Fundamental incompleto", "Fundamental completo", "Médio incompleto", "Médio completo", "Técnico", "Superior incompleto", "Superior completo", "Pós-graduação", "Mestrado", "Doutorado"];
+export const MOTIVOS_DESLIG = ["Pedido de demissão", "Dispensa sem justa causa", "Dispensa com justa causa", "Término do contrato de experiência", "Término de contrato determinado", "Acordo entre as partes (art. 484-A)", "Rescisão indireta", "Aposentadoria", "Falecimento", "Abandono de emprego", "Outro"];
 export const ESTADO_CIVIL = ["Solteiro(a)", "Casado(a)", "União estável", "Separado(a)", "Divorciado(a)", "Viúvo(a)"];
 export const COLUNAS = ["nome", "cpf", "rg", "nascimento", "telefone", "email", "endereco", "estado_civil", "escolaridade", "pis", "ctps", "emergencia_nome", "emergencia_tel", "banco", "agencia", "conta", "dependentes"];
 export const FICHA_PADRAO: Record<string, any> = {
@@ -12,7 +13,7 @@ export const FICHA_PADRAO: Record<string, any> = {
   rg_orgao: "", rg_uf: "", rg_emissao: "", titulo_num: "", titulo_zona: "", titulo_secao: "",
   reservista_num: "", reservista_cat: "", cnh_num: "", cnh_cat: "", cnh_venc: "",
   tem_dependentes: "", conjuge_nome: "", pai_nome: "", mae_nome: "", pcd: "", pcd_qual: "",
-  emergencia2_nome: "", emergencia2_tel: "", santander: "",
+  emergencia2_nome: "", emergencia2_tel: "", santander: "", desligamento_motivo: "", desligamento_obs: "",
 };
 /** documentos que se anexam em cada parte da ficha (campo = tipo do documento) */
 export const DOCS_FICHA: [string, string][] = [
