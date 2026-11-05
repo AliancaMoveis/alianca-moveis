@@ -215,7 +215,7 @@ export async function carregarAssist(de: string, ate: string, ids: number[]): Pr
   return (r.data || []).map((x: any) => ({ ...x, km: x.km == null ? null : Number(x.km), valor_entregas: x.valor_entregas == null ? null : Number(x.valor_entregas), valor_km: Number(x.valor_km), total_papel: x.total_papel == null ? null : Number(x.total_papel) }));
 }
 /** cria uma ordem avulsa "Frete de assistência" no pagamento da montagem para cada romaneio e marca o romaneio como enviado */
-export async function enviarAssist(rs: RomTat[], f: Freteiro, uid: string): Promise<number> {
+export async function enviarAssist(rs: RomTat[], f: Freteiro, uid: string, dataPara?: (r: RomTat) => string): Promise<number> {
   if (!f.montador_nome) throw new Error("Informe, no cadastro do freteiro " + f.apelido + ", o nome dele na montagem (ex.: Costa (Assistência))");
   let n = 0;
   for (const r of rs) {
@@ -224,7 +224,10 @@ export async function enviarAssist(rs: RomTat[], f: Freteiro, uid: string): Prom
     const ja = await sb.from("frete_tat_rom").select("envio_chave").eq("id", r.id).maybeSingle();
     if (ja.error) throw new Error(ja.error.message); if ((ja.data as any)?.envio_chave) continue;
     const desc = `${f.tipo === "montador" ? "Frete" : "Frete assistência"} · romaneio ${numRom(r)} · ${r.itens.length} entrega(s)` + (c.km ? ` · ${String(c.km).replace(".", ",")} km` : "");
-    const { data, error } = await sb.rpc("montagem_avulsa_salvar", { p: { montador: f.montador_nome, tipo: f.tipo === "montador" ? "frete" : "frete_assistencia", de: r.data, ate: r.data, prod: Math.round(c.total * 100) / 100, adic: 0, descricao: desc } });
+    // data da ordem avulsa = data que coloca o romaneio na quinzena de pagamento escolhida (a própria data do romaneio quando ele é dessa quinzena)
+    const dt = (dataPara && dataPara(r)) || r.data;
+    const desc2 = desc + (dt !== r.data && r.data ? ` · romaneio de ${r.data.slice(8, 10)}/${r.data.slice(5, 7)}` : "");
+    const { data, error } = await sb.rpc("montagem_avulsa_salvar", { p: { montador: f.montador_nome, tipo: f.tipo === "montador" ? "frete" : "frete_assistencia", de: dt, ate: dt, prod: Math.round(c.total * 100) / 100, adic: 0, descricao: desc2 } });
     if (error) throw new Error(error.message);
     const u = await sb.from("frete_tat_rom").update({ envio_chave: data as string, envio_em: new Date().toISOString(), atualizado_por: uid }).eq("id", r.id); if (u.error) throw new Error(u.error.message);
     n++;
