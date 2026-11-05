@@ -1047,7 +1047,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const ehProjetista = mySetores().includes("atendente_cliente");
     if ((ehGestao() || ehProjetista || (mySetores().includes("suporte_consultores") && !soSuporte)) && !((ehConsultorExterno() || ehMedidor()) && !ehGestao())) ge.push(["financeiro", ehGestao() ? "Financeiro" : ehConsultorExterno() ? "Vendas e comissão" : ehMedidor() ? "Minhas medidas e reembolsos" : ehProjetista ? "Minhas vendas" : "Vendas dos vendedores"]);
     if (verTudo()) ge.push(["relatorios", "Relatórios"]);
-    if (verTudo() || temMarketing()) ge.push(["atividades", "Controle de atividades"]);
+    // supervisores (e gerentes) veem as atividades e a ficha de produtividade de quem está na alçada deles (escopoSetores)
+    if (verTudo() || temMarketing() || ehSupMedidas() || mySetores().some((x: string) => ["supervisao", "marketing_supervisao", "medidas_supervisao", "gerente_loja"].includes(x))) ge.push(["atividades", ehGestao() ? "Controle de atividades" : "Atividades e produtividade da equipe"]);
     if (ge.length && !oculto("gestao")) G.push({ g: (ehConsultorExterno() || ehMedidor()) && !ehGestao() ? "Meu financeiro" : "Gestão", ic: "▣", itens: ge });
     // Pós-venda Projetados: grupo próprio (Vânia, Jurídico e Gestão)
     const pv: string[][] = [];

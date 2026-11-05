@@ -115,6 +115,28 @@ export default function FichaProdutividade({ uid, de0, ate0, voltar }: { uid: st
       { n: pct(N.finalizadas, N.abertas), l: "resolvido (finalizadas ÷ abertas)" }, { n: pct(N.noPrazo, N.finalizadas), l: "finalizados dentro do prazo", cls: N.finalizadas && N.noPrazo / N.finalizadas < .85 ? "ruim" : "bom" });
     if (N.checklist) res.push({ n: String(N.checklist), l: "ações no checklist (confirmações, mensagens, agendas)" });
   }
+  if (ss.includes("marketing_operadora")) {
+    const cad = st.chamados.filter((c: any) => R.domMarketing(c) && c.solicitanteId === u.id && String(c.criadoEm).slice(0, 10) >= de && String(c.criadoEm).slice(0, 10) <= ate);
+    const loja = cad.filter((c: any) => c.dataLoja), vieram = cad.filter((c: any) => R.compareceu(c) || c.venda), vend = cad.filter((c: any) => c.venda && c.venda.status !== "cancelada");
+    res.push({ n: String(cad.length), l: "clientes cadastrados", cls: "bom" }, { n: String(loja.length), l: "agendados na loja · " + pct(loja.length, cad.length) },
+      { n: String(vieram.length), l: "vieram à loja · " + pct(vieram.length, loja.length) + " dos agendados" }, { n: String(vend.length), l: "compraram · " + pct(vend.length, cad.length) + " dos cadastros", cls: "bom" });
+  }
+  if (ss.includes("medidas") || ss.includes("consultor_externo")) {
+    const med = st.chamados.filter((c: any) => c.tipo === "medidas" && c.medidorId === u.id);
+    const feitas = med.filter((c: any) => { const r = c.tratativa?.medida?.realizadaEm; return r && String(r).slice(0, 10) >= de && String(r).slice(0, 10) <= ate; });
+    const pend = med.filter((c: any) => c.status !== "concluida" && !c.tratativa?.medida?.realizadaEm);
+    const atras = pend.filter((c: any) => c.dataMedida && new Date(c.dataMedida) < new Date());
+    if (med.length) res.push({ n: String(feitas.length), l: "medidas realizadas no período", cls: "bom" }, { n: String(pend.length), l: "medidas a fazer" }, { n: String(atras.length), l: "medidas com data já passada", cls: atras.length ? "ruim" : "" });
+    if (ss.includes("consultor_externo")) {
+      const f = R.funilConsultor(u.id, de, ate);
+      res.push({ n: String(f.realizadas), l: "visitas realizadas", cls: "bom" }, { n: String(f.agendadas), l: "agendados na loja" }, { n: String(f.vieram), l: "vieram à loja" }, { n: String(f.vendas), l: "vendas", cls: "bom" });
+    }
+  }
+  if (ss.includes("atendente_cliente")) {
+    const l = st.chamados.filter((c: any) => R.domMarketing(c) && c.atendenteId === u.id && c.dataLoja && String(c.dataLoja).slice(0, 10) >= de && String(c.dataLoja).slice(0, 10) <= ate);
+    const par = l.filter((c: any) => c.tratativa && c.tratativa.parecerEm).length, sem = l.filter((c: any) => R.semParecer(c)).length, vend = l.filter((c: any) => c.venda && c.venda.status !== "cancelada").length;
+    res.push({ n: String(l.length), l: "clientes recebidos na loja", cls: "bom" }, { n: String(par), l: "com parecer" }, { n: String(sem), l: "sem parecer", cls: sem ? "ruim" : "" }, { n: String(vend), l: "vendas · " + pct(vend, l.length), cls: "bom" });
+  }
   // mapa de calor
   const H: Record<string, number> = {}; N.evs.forEach(e => { const k = e.d.getDay() + "|" + e.d.getHours(); H[k] = (H[k] || 0) + 1; });
   const mxH = Math.max(1, ...Object.values(H)); const horas = Array.from({ length: 11 }, (_, i) => 8 + i);
