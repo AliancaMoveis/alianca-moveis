@@ -149,7 +149,7 @@ export default function Shell() {
               {podeTestar && (
                 <select value="" disabled={trocando} onChange={e => trocar(e.target.value)} style={{ ...estiloBtSide, appearance: "auto" }} title="Modo de teste: entrar como outro usuário">
                   <option value="">{trocando ? "Trocando…" : "Entrar como… (teste)"}</option>
-                  {st.usuarios.filter(x => x.ativo && x.id !== R.currentUserId).map(x => <option key={x.id} value={x.id}>{x.nome} · {R.setoresLabel(x)}</option>)}
+                  {st.usuarios.filter(x => x.ativo && x.id !== R.currentUserId).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })).map(x => <option key={x.id} value={x.id}>{x.nome} · {R.setoresLabel(x)}</option>)}
                 </select>
               )}
               {sim && <button onClick={voltar} disabled={trocando} style={{ ...estiloBtSide, color: "#f5d67a", borderColor: "rgba(245,214,122,.4)" }}>← Voltar para {sim.nome}</button>}

@@ -716,7 +716,7 @@ function TrocarUsuario() {
   const [ind, setInd] = useState(false);
   const [q, setQ] = useState("");
   if (!((R.ehGestao() || sim) && st.config.modoTeste !== false)) return null;
-  const lista = st.usuarios.filter((u: any) => u.ativo && u.id !== R.currentUserId && (!q || (u.nome + " " + R.setoresLabel(u)).toLowerCase().includes(q.toLowerCase())));
+  const lista = st.usuarios.filter((u: any) => u.ativo && u.id !== R.currentUserId && (!q || (u.nome + " " + R.setoresLabel(u)).toLowerCase().includes(q.toLowerCase()))).sort((a: any, b: any) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
   const trocar = async (u: any) => { setInd(true); try { await entrarComo(u.id, u.nome, R.me()?.nome || ""); } catch (e: any) { toast(e.message); setInd(false); } };
   return (
     <div className="mv-bloco" style={{ marginTop: 0, marginBottom: 12 }}>
