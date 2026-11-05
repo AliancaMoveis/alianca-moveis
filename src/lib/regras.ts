@@ -405,10 +405,10 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (domMarketing(c)) return temMarketing() || mySetores().includes("presenca") || !!(me() as any)?.editaAgenda || mySetores().includes("suporte_consultores") || mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId || (mySetores().includes("medidas_supervisao") && !!c.consultorId);
     // Supervisão de Medidas consulta o checklist (só leitura) para casar a medida com a venda e ver a data do checklist
     if (c.tipo === "checklist" && mySetores().includes("medidas_supervisao")) return true;
-    if (verTudo()) return true;
+    // supervisão do call center: o que é do call center (não o checklist nem as medidas, que têm supervisão própria)
+    if (verTudo()) return !(mySetores().includes("supervisao") && ["checklist", "medidas"].includes(c.tipo) && !mySetores().includes(c.setorDestino));
     if (mySetores().includes("callcenter")) return true;
-    // gerente de loja acompanha todo o call center (menos os setores com módulo próprio)
-    if (mySetores().includes("gerente_loja") && !["checklist", "medidas", "posvenda"].includes(c.tipo)) return true;
+    // gerente de loja: só o que é da loja/vendedores — no call center, só o que ele mesmo abriu (cai no return abaixo)
     return mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
   }
   // fila de trabalho: o que é do meu setor ou o que eu abri (o call center vê tudo, mas a fila dele é esta)
@@ -1088,12 +1088,31 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (ehGestao()) cd.push(["admin", "Administração"]);
     else if (podeUsuarios()) cd.push(["admin_usuarios", "Usuários"]);
     if (cd.length) G.push({ g: "Cadastros", ic: "⚙", itens: cd });
+    // 🔒 cada setor no seu quadrado: gerente de loja só enxerga loja e vendedores
+    if (ehGerenteLoja()) {
+      const fora = new Set(["acompmkt", "operadoras", "clientes", "consulta", "produtividade", "relatorios"]);
+      G.forEach(g => (g.itens = g.itens.filter(([v]: string[]) => !fora.has(v))));
+      G.forEach(g => { if (g.g === "Marketing") g.g = "Loja e vendedores"; });
+      return G.filter(g => g.itens.length);
+    }
     return G;
+  }
+  /** 🔒 de quem a pessoa pode ver as atividades/produtividade: null = todos (Gestão e donos); senão, os setores do quadrado dela */
+  function escopoSetores(): string[] | null {
+    if (ehGestao() || ehProprietario()) return null;
+    const ms = mySetores(); const out = new Set<string>();
+    if (ms.includes("gerente_loja")) ["atendente_cliente", "gerente_loja", "presenca"].forEach(x => out.add(x));
+    if (ms.includes("supervisao")) ["callcenter", "supervisao"].forEach(x => out.add(x));
+    if (ms.includes("posvenda")) out.add("posvenda");
+    if (ms.includes("marketing_supervisao")) ["marketing_operadora", "marketing_supervisao", "suporte_consultores", "consultor_externo", "anuncios"].forEach(x => out.add(x));
+    if (ms.includes("medidas_supervisao")) ["medidas", "medidas_supervisao"].forEach(x => out.add(x));
+    if (!out.size) ms.forEach((x: string) => out.add(x));
+    return [...out];
   }
 
   return {
     acompAtivo, podeConsultaProduto, podePrePedido, podeNegociacao, podeEditarProduto, podeLiberarMostruario, podeUsuarios, setorRestrito, podeMexerUsuario, ocultaValoresMkt, ehGerenteLoja, podeRemoverAnexo, podeMudarDataVisita, podeEditarCliente, ehProspeccao, gerentesVenda, ehProprietario, ehMedidor, ehSupMedidas, podeEncontrarVendas, etapaMedida, quemMede, medidasDe, reembolsosDe, visitasOficiais, oficiaisPeriodo, totalVisitasPeriodo, cicloDoPeriodo, state, TIPOS, currentUserId, getSetor, setorNome, destinoDe, tipoNome, getUser, me, mySetores, temLib, setoresLabel, getFab, getRep, nomeFab, nomeUser,
-    atendendoAgora, verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
+    atendendoAgora, escopoSetores, verTudo, ehGestao, podeBaseClientes, temCadastros, doCC, prioridade, emAberto, naMinhaFila, ehCallcenter, viaCC, ehFabrica, podeTreinamento, podeAcompanhar, temMarketing, ehSetorMarketing, domMarketing, statusClienteDe, ultimaAtividade, horasSemAtualizar,
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
     msgWhatsMedida, temAcesso, ehDireto, ehPorta, temPresenca, veAnuncios, veQualidade, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,

@@ -32,10 +32,13 @@ export default function Atividades() {
   const usuarioPorNome = (nome: string) => st.usuarios.find(u => u.nome === nome) || null;
 
   let evs: any[] = [];
+  const escopo = R.escopoSetores();
   const soCC = R.soCallCenter();
   st.chamados.filter(c => R.podeVer(c) && !(soCC && R.domMarketing(c))).forEach(c => (c.historico || []).forEach((h: any) => {
     if (soCC && R.acaoDeFora(h.quem)) return;
     const u = usuarioPorNome(h.quem);
+    // 🔒 só as atividades de quem é do quadrado (setor) de quem está vendo
+    if (escopo && !(u && (u.setores || []).some((x: string) => escopo.includes(x)))) return;
     const setorId = u ? ((u.setores || [])[0] || "") : (h.quem === "Sistema" ? "sistema" : "");
     evs.push({ quando: h.quando, quem: h.quem, userId: u ? u.id : null, setorId, setorNome: h.quem === "Sistema" ? "Sistema" : (u ? R.setoresLabel(u) : "—"), texto: h.texto, chamado: c.id, cliente: c.cliente, tipo: classificaAcao(h.texto) });
   }));
@@ -68,8 +71,8 @@ export default function Atividades() {
         <div className="grid">
           <div className="field"><label>De</label><input type="date" value={f.de} onChange={s("de")} /></div>
           <div className="field"><label>Até</label><input type="date" value={f.ate} onChange={s("ate")} /></div>
-          <div className="field"><label>Setor</label><select value={f.se} onChange={s("se")}><option value="">Todos os setores</option>{st.setores.map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}<option value="sistema">Sistema (automático)</option></select></div>
-          <div className="field"><label>Usuário</label><select value={f.us} onChange={s("us")}><option value="">Todos os usuários</option>{st.usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
+          <div className="field"><label>Setor</label><select value={f.se} onChange={s("se")}><option value="">Todos os setores</option>{st.setores.filter((x: any) => !escopo || escopo.includes(x.id)).map(x => <option key={x.id} value={x.id}>{x.nome}</option>)}<option value="sistema">Sistema (automático)</option></select></div>
+          <div className="field"><label>Usuário</label><select value={f.us} onChange={s("us")}><option value="">Todos os usuários</option>{st.usuarios.filter((u: any) => !escopo || (u.setores || []).some((x: string) => escopo.includes(x))).map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>
           <div className="field full"><label>Buscar na ação</label><input placeholder="Ex.: venda, transferência, status, cliente…" value={f.q} onChange={s("q")} /></div>
         </div>
         <div style={{ marginTop: 12, display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
