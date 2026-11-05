@@ -111,7 +111,7 @@ export function quinzenaDe(iso: string): { de: string; ate: string; ref: string 
   const by = base.getUTCFullYear(), bm = base.getUTCMonth();
   return { de: isoU(by, bm, 25), ate: isoU(by, bm + 1, 9), ref: isoU(by, bm, 1).slice(0, 7) + "-2" };
 }
-const quinzenaAntes = (q: { de: string }) => quinzenaDe(somaDias(q.de, -1));
+export const quinzenaAntes = (q: { de: string }) => quinzenaDe(somaDias(q.de, -1));
 const nomeMes = (ref: string) => {
   const mes = MESES[Number(ref.slice(5, 7)) - 1] + "/" + ref.slice(0, 4);
   if (!/-[12]$/.test(ref)) return mes;

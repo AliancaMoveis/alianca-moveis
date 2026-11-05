@@ -2,6 +2,7 @@
 // No fim do mês sai o relatório para o financeiro (freteiro, frete, km, total, conta, descontos, total a pagar).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
+import { quinzenaDe, quinzenaAntes } from "./MontagemPagamento";
 import { baixarXlsxFormatado } from "../lib/planilha";
 import { podeFretes } from "../lib/fretes";
 import { rotuloTipo, carregarAssist, criarManual, desfazerEnvioAssist, ehAssist, ehManual, enviarAssist, mapsEntrega, numRom, TIPOS_MANUAL } from "../lib/fretesTatico";
@@ -444,15 +445,17 @@ function FormManual({ fr, fixo, mes, uid, toast, fechar, feito }: { fr: Freteiro
 function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any }) {
   const assist = fr.filter(ehAssist);
   const hoje = new Date(); const ym = hoje.getFullYear() + "-" + String(hoje.getMonth() + 1).padStart(2, "0");
-  const fimMes = (m: string) => { const x = new Date(+m.slice(0, 4), +m.slice(5, 7), 0); return m + "-" + String(x.getDate()).padStart(2, "0"); };
-  const q1 = hoje.getDate() <= 15;
-  const [de, setDe] = useState(q1 ? ym + "-01" : ym + "-16"); const [ate, setAte] = useState(q1 ? ym + "-15" : fimMes(ym));
+  const hojeIso = ym + "-" + String(hoje.getDate()).padStart(2, "0");
+  // mesmas quinzenas do pagamento da montagem: 1ª = 10 a 24 (paga dia 10 do mês seguinte) · 2ª = 25 a 09 (paga dia 25 do mês seguinte)
+  const qAtual = quinzenaDe(hojeIso), qPagar = quinzenaAntes(qAtual);
+  const [de, setDe] = useState(qPagar.de); const [ate, setAte] = useState(qPagar.ate);
   const [rs, setRs] = useState<RomTat[] | null>(null); const [ocup, setOcup] = useState(false);
   const [sel, setSel] = useState<number | "todos">("todos");
   const rec = () => carregarAssist(de, ate, assist.map(f => f.id)).then(setRs).catch(e => toast?.(e.message));
   useEffect(() => { setRs(null); rec(); }, [de, ate, fr]);
-  const quinzena = (m: string, q: 1 | 2) => { setDe(m + (q === 1 ? "-01" : "-16")); setAte(q === 1 ? m + "-15" : fimMes(m)); };
-  const mAnt = (() => { const x = new Date(+de.slice(0, 4), +de.slice(5, 7) - 2, 1); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0"); })();
+  const ddmm = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+  const pagaEm = (q: { de: string; ref: string }) => { const [y, m] = q.de.split("-").map(Number); const x = new Date(y, m, 1); return (q.ref.endsWith("-1") ? "10/" : "25/") + String(x.getMonth() + 1).padStart(2, "0"); };
+  const quinzenas = (() => { const l = [qAtual]; for (let i = 0; i < 3; i++) l.push(quinzenaAntes(l[l.length - 1])); return l.reverse(); })();
   const enviar = async (f: Freteiro, lista: RomTat[], sem = false) => {
     if (!lista.length) return;
     if (!sem && !confirm(`Fechar e enviar ${lista.length} romaneio(s) de ${f.apelido} (${moeda(lista.reduce((s, r) => s + contaRom(r).total, 0))}) para o pagamento da montagem, em "${f.montador_nome}"?`)) return;
@@ -482,10 +485,7 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
       <b>🛠 Frete de assistência e de montadores — pago na quinzena junto com a montagem</b>
       <div className="hint" style={{ marginTop: 4 }}>Os romaneios destes freteiros não entram no relatório do financeiro. Confira-os na aba Romaneios, depois envie aqui: cada romaneio vira uma <b>ordem avulsa de frete</b> ("Frete de assistência" ou "Frete") no pagamento do montador ligado a ele (ex.: Costa (Assistência), Julio Silva), e entra no fechamento da quinzena da montagem.</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
-        <button className="btn sm" onClick={() => quinzena(mAnt, 1)}>1ª quinzena {mAnt.slice(5, 7)}/{mAnt.slice(0, 4)}</button>
-        <button className="btn sm" onClick={() => quinzena(mAnt, 2)}>2ª quinzena {mAnt.slice(5, 7)}/{mAnt.slice(0, 4)}</button>
-        <button className="btn sm" onClick={() => quinzena(de.slice(0, 7), 1)}>1ª quinzena {de.slice(5, 7)}/{de.slice(0, 4)}</button>
-        <button className="btn sm" onClick={() => quinzena(de.slice(0, 7), 2)}>2ª quinzena {de.slice(5, 7)}/{de.slice(0, 4)}</button>
+        {quinzenas.map(q => <button key={q.de} className={"btn sm" + (q.de === de && q.ate === ate ? " primary" : "")} onClick={() => { setDe(q.de); setAte(q.ate); }}>{q.ref.endsWith("-1") ? "1ª" : "2ª"} quinzena ({ddmm(q.de)} a {ddmm(q.ate)}) · paga {pagaEm(q)}{q.de === qAtual.de ? " · em aberto" : ""}</button>)}
         <div className="field" style={{ margin: 0 }}><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
         <div className="field" style={{ margin: 0 }}><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
         <button className="btn sm" disabled={!rs || !rs.length} onClick={xlsx}>⬇ Excel do período</button>
