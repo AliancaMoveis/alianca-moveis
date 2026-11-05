@@ -308,6 +308,32 @@ function Relatorio({ d, mes, toast, rec }: any) {
       <tr>${td("Total geral", "left", true)}${td(moeda(T("frete")), "right", true)}${td(moeda(T("km")), "right", true)}${td(moeda(T("total")), "right", true)}<td></td><td></td>${td(moeda(T("pagar")), "right", true)}</tr></table></body></html>`;
     const w = window.open("", "_blank"); if (!w) return toast?.("Libere pop-up para imprimir"); w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300);
   };
+  // PDF para o financeiro: freteiro, valores, conta para o pagamento, descontos e total a pagar (o financeiro paga direto pelo PDF)
+  const pdf = async () => {
+    const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const tDesc = linhas.reduce((s, l) => s + l.tDesc, 0);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.text("Aliança Móveis — Pagamento de fretes", 14, 15);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+    doc.text("FRETE " + nomeMes(mes) + (pagto ? "  ·  pagamento em " + br(pagto) : ""), 14, 22);
+    doc.setFont("helvetica", "bold"); doc.text("Total a pagar: " + moeda(T("pagar")) + "  ·  " + linhas.length + " freteiro(s)", 14, 28); doc.setFont("helvetica", "normal");
+    autoTable(doc, {
+      startY: 33,
+      head: [["Freteiro", "Frete (R$)", "KM (R$)", "Valor total", "Favorecido · agência / conta", "Descontos", "TOTAL A PAGAR"]],
+      body: linhas.map(l => [l.f.apelido, moeda(l.frete), moeda(l.km), moeda(l.total),
+        l.f.favorecido || l.f.conta ? `${l.f.favorecido || ""}\nAg. ${l.f.agencia || "—"} / Conta ${l.f.conta || "—"}` : "SEM CONTA CADASTRADA",
+        l.ds.length ? l.ds.map(x => (x.parcela ? x.parcela + " " : "") + moeda(x.valor) + (x.descricao ? " (" + x.descricao + ")" : "")).join("\n") : "", moeda(l.pagar)]),
+      foot: [["TOTAL GERAL", moeda(T("frete")), moeda(T("km")), moeda(T("total")), "", tDesc ? moeda(tDesc) : "", moeda(T("pagar"))]],
+      styles: { fontSize: 9.5, cellPadding: 2.2, valign: "middle" },
+      headStyles: { fillColor: [31, 56, 100], textColor: 255, fontStyle: "bold" },
+      footStyles: { fillColor: [230, 236, 245], textColor: 0, fontStyle: "bold" },
+      columnStyles: { 0: { fontStyle: "bold", cellWidth: 34 }, 1: { halign: "right", cellWidth: 27 }, 2: { halign: "right", cellWidth: 25 }, 3: { halign: "right", cellWidth: 28 }, 4: { cellWidth: 82 }, 5: { halign: "right", cellWidth: 38 }, 6: { halign: "right", fontStyle: "bold", cellWidth: 33 } },
+      didParseCell: (c: any) => { if (c.section === "body" && c.column.index === 4 && c.cell.raw === "SEM CONTA CADASTRADA") { c.cell.styles.textColor = [180, 0, 0]; c.cell.styles.fontStyle = "bold"; } },
+    });
+    const h = doc.internal.pageSize.getHeight(); const n = doc.getNumberOfPages();
+    for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text("Gerado em " + new Date().toLocaleString("pt-BR").slice(0, 17) + " · ALIANÇA 360 · página " + i + " de " + n, 14, h - 6); }
+    doc.save("FRETE_" + nomeMes(mes).replace(" ", "_") + ".pdf");
+  };
   const novoDesc = (fid: number) => { setNd({ fid: String(fid), descricao: "", parcela: "", valor: "" }); setTimeout(() => document.getElementById("form-desc-frete")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); };
   const addDesc = async () => {
     const v = num(nd.valor); if (!nd.fid || !v) return toast?.("Escolha o freteiro e o valor do desconto");
@@ -319,8 +345,8 @@ function Relatorio({ d, mes, toast, rec }: any) {
     {(pend > 0 || semF > 0) && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "var(--tn-amber)" }}>⚠ {pend > 0 && <><b>{pend} romaneio(s) ainda não conferido(s)</b> — entram no relatório com o que já foi digitado. </>}{semF > 0 && <b>{semF} romaneio(s) sem freteiro.</b>}</div>}
     <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 10 }}>
       <div className="field" style={{ margin: 0 }}><label>Data do pagamento</label><input type="date" value={pagto} onChange={e => setPagto(e.target.value)} onBlur={() => salvarPagto(mes, pagto).catch((e: any) => toast?.(e.message))} /></div>
-      <button className="btn primary" disabled={!linhas.length} onClick={xlsx}>⬇ Excel para o financeiro</button>
-      <button className="btn" disabled={!linhas.length} onClick={imprimir}>🖨 Imprimir / PDF</button>
+      <button className="btn primary" disabled={!linhas.length} onClick={() => pdf().catch((e: any) => toast?.(e.message))}>📄 PDF para o financeiro</button>
+      <button className="btn ghost sm" disabled={!linhas.length} onClick={xlsx} title="Planilha com os romaneios, para conferência">Excel (conferência)</button>
     </div>
     <div style={{ overflowX: "auto" }}>
       <table className="ma-tab" style={{ width: "100%", fontSize: 13.5 }}>
