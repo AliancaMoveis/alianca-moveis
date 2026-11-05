@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApp } from "../estado";
 import { corDoSetor, fmtDate, hojeISO, inicial, isoLocal, tempoRel } from "../lib/regras";
 import { Kpi } from "./Dashboard";
+import FichaProdutividade from "./FichaProdutividade";
 
 function classificaAcao(txt: string) {
   const t = (txt || "").toLowerCase();
@@ -28,6 +29,7 @@ export default function Atividades() {
   const { R, st, abrirDetalhe } = useApp();
   const [f, setF] = useState({ de: "", ate: "", se: "", us: "", q: "" });
   const [vista, setVista] = useState("produtividade");
+  const [ficha, setFicha] = useState(""); // 👤 ficha individual aberta (clicar na pessoa)
   const s = (k: string) => (e: any) => setF(x => ({ ...x, [k]: e.target.value }));
   const usuarioPorNome = (nome: string) => st.usuarios.find(u => u.nome === nome) || null;
 
@@ -64,9 +66,10 @@ export default function Atividades() {
   const porSetor: Record<string, any> = {}; evs.forEach(e => { const k = e.setorId || "—"; porSetor[k] = porSetor[k] || { n: 0, users: {} }; porSetor[k].n++; if (e.userId) porSetor[k].users[e.userId] = (porSetor[k].users[e.userId] || 0) + 1; });
   const sr = Object.entries(porSetor).sort((a: any, b: any) => b[1].n - a[1].n); const maxS = Math.max(1, ...sr.map((r: any) => r[1].n));
 
+  if (ficha) return <section className="view active" id="view-atividades"><FichaProdutividade uid={ficha} de0={f.de} ate0={f.ate} voltar={() => setFicha("")} /></section>;
   return (
     <section className="view active" id="view-atividades">
-      <div className="view-head"><div><h2>Controle de atividades</h2><p>Tudo que cada usuário fez no sistema, com hora e setor. Use para acompanhar produtividade e auditar decisões.</p></div></div>
+      <div className="view-head"><div><h2>Controle de atividades</h2><p>Tudo que cada usuário fez no sistema, com hora e setor. <b>Clique na pessoa</b> para abrir a ficha de produtividade individual (jornada, o que fez, resultado e comparativo do setor).</p></div></div>
       <div className="card" style={{ padding: "16px 18px", marginBottom: 16 }}>
         <div className="grid">
           <div className="field"><label>De</label><input type="date" value={f.de} onChange={s("de")} /></div>
@@ -79,6 +82,7 @@ export default function Atividades() {
           <button className="btn ghost sm" onClick={() => setF({ de: "", ate: "", se: "", us: "", q: "" })}>Limpar</button>
           <button className="btn sm" onClick={() => setF(x => ({ ...x, de: hoje, ate: hoje }))}>Só hoje</button>
           <button className="btn sm" onClick={() => { const b = new Date(); b.setDate(b.getDate() - 6); setF(x => ({ ...x, de: isoLocal(b), ate: hoje })); }}>Últimos 7 dias</button>
+          {f.us && <button className="btn primary sm" onClick={() => setFicha(f.us)}>👤 Abrir ficha de {R.nomeUser(f.us)}</button>}
           <span className="live" style={{ marginLeft: "auto" }}><i></i>ao vivo</span>
         </div>
       </div>
@@ -87,7 +91,7 @@ export default function Atividades() {
       {vista === "produtividade" && <div id="atProdutividade">{rows.length ? rows.map(r => {
         const cor = corDoSetor((r.u.setores || [])[0]);
         return (
-          <div className="at-card" key={r.u.id}><div className="top"><div className="av" style={{ background: cor }}>{inicial(r.u.nome)}</div><div><div className="nm">{r.u.nome}</div><div className="sb">{R.setoresLabel(r.u)} · última ação {tempoRel(r.ultima)} atrás</div></div><div className="qt"><b>{r.n}</b><span>ações</span></div></div>
+          <div className="at-card at-clic" key={r.u.id} onClick={() => setFicha(r.u.id)} title="Abrir a ficha de produtividade"><div className="top"><div className="av" style={{ background: cor }}>{inicial(r.u.nome)}</div><div><div className="nm">{r.u.nome} <span className="at-abrir">👤 ver ficha ›</span></div><div className="sb">{R.setoresLabel(r.u)} · última ação {tempoRel(r.ultima)} atrás</div></div><div className="qt"><b>{r.n}</b><span>ações</span></div></div>
             <div className="at-barra"><i style={{ width: r.n / maxN * 100 + "%", background: cor }}></i></div>
             <Producao u={r.u} de={f.de} ate={f.ate} />
             <div className="at-tags">{Object.entries(r.tipos).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5).map(([l, n]: any) => <span key={l} className="at-tag">{l}: {n}</span>)}</div></div>
