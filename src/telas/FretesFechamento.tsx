@@ -456,24 +456,24 @@ function ModalEnvioAssist({ f, lista, so, uid, toast, pronto }: { f: Freteiro; l
   const hoje = new Date(); const hojeIso = hoje.getFullYear() + "-" + String(hoje.getMonth() + 1).padStart(2, "0") + "-" + String(hoje.getDate()).padStart(2, "0");
   const qAtual = quinzenaDe(hojeIso);
   const prontos = lista.filter(r => r.conferido && !r.envio_chave && contaRom(r).total > 0 && r.data).sort((a, b) => (a.data || "").localeCompare(b.data || ""));
-  const [fech, setFech] = useState<Set<string> | null>(null);
-  useEffect(() => { if (MOCK) { setFech(new Set()); return; }
-    sb.from("montagem_fechamentos").select("referencia").eq("ativo", true).then(({ data }) => setFech(new Set((data || []).map((x: any) => x.referencia))), () => setFech(new Set())); }, []);
+  const [fech, setFech] = useState<Map<string, string> | null>(null); // referência da quinzena → quando o pagamento dela foi fechado na montagem
+  useEffect(() => { if (MOCK) { setFech(new Map()); return; }
+    sb.from("montagem_fechamentos").select("referencia,criado_em").eq("ativo", true).then(({ data }) => setFech(new Map((data || []).map((x: any) => [x.referencia, x.criado_em]))), () => setFech(new Map())); }, []);
   // opções: 3 quinzenas antes da atual, a atual (em aberto) e a próxima
   const opcoes = useMemo(() => { const l = [qAtual]; for (let i = 0; i < 3; i++) l.unshift(quinzenaAntes(l[0])); l.push(quinzenaDe(somaD(qAtual.ate, 1))); return l; }, []);
   const fechada = (q: { ref: string }) => !!fech?.has(q.ref);
   const [qSel, setQSel] = useState<string>("");
   useEffect(() => { if (!fech || qSel) return;
     // padrão: a quinzena do romaneio mais antigo, se ainda estiver aberta; senão a primeira quinzena em aberto depois dela
-    const base = prontos.length ? quinzenaDe(prontos[0].data!) : qAtual;
-    const q = opcoes.find(o => o.de >= base.de && !fechada(o)) || opcoes.find(o => !fechada(o)) || qAtual; setQSel(q.de); }, [fech]);
+    // padrão: o próximo pagamento (a data do romaneio não importa — vale o fechamento que vocês fazem do frete)
+    setQSel(quinzenaAntes(qAtual).de); }, [fech]);
   const q = opcoes.find(o => o.de === qSel);
   const [marc, setMarc] = useState<Set<number>>(() => new Set(so ? [so] : prontos.map(r => r.id)));
   const [ok, setOk] = useState(false); const [sal, setSal] = useState(false);
   const podeEntrar = (_r: RomTat) => !!q; // todo romaneio fechado do freteiro entra no pagamento escolhido (inclusive os de datas atrasadas)
   const vai = prontos.filter(r => marc.has(r.id) && podeEntrar(r));
   const tot = vai.reduce((s, r) => s + contaRom(r).total, 0);
-  const dataPara = (r: RomTat) => q && r.data && r.data >= q.de && r.data <= q.ate ? r.data : (r.data && r.data > q!.ate ? q!.ate : q!.de);
+  const dataPara = (_r: RomTat) => q!.de; // a ordem avulsa entra na quinzena escolhida, qualquer que seja a data do romaneio
   const ir = async () => {
     if (!q || !vai.length || !ok) return; setSal(true);
     try { const n = await enviarAssist(vai, f, uid, dataPara); toast?.(`${n} romaneio(s) de ${f.apelido} enviados para o pagamento de ${pagaEmQ(q)} · ${f.montador_nome}`); setModal(null); pronto(); }
@@ -482,16 +482,17 @@ function ModalEnvioAssist({ f, lista, so, uid, toast, pronto }: { f: Freteiro; l
   return <Modal titulo={"🛠 Enviar " + f.apelido + " para o pagamento da montagem"} onFechar={() => setModal(null)}>
     <div className="hint" style={{ marginBottom: 8 }}>Só os romaneios <b>deste freteiro</b>. Entram como ordem avulsa de {f.tipo === "montador" ? "frete" : "frete de assistência"} no pagamento do montador <b>{f.montador_nome || "⚠ sem nome — cadastre em Freteiros e contas"}</b>.</div>
     <div className="field"><label>Para qual pagamento? *</label>
-      {!fech ? <div className="hint">Carregando quinzenas…</div> : <div style={{ display: "grid", gap: 6 }}>{opcoes.map(o => { const fe = fechada(o); return <label key={o.de} style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, background: qSel === o.de ? "var(--tn-green)" : undefined, opacity: fe ? .55 : 1, cursor: fe ? "not-allowed" : "pointer" }}>
-        <input type="radio" name="qenv" disabled={fe} checked={qSel === o.de} onChange={() => { setQSel(o.de); setOk(false); }} />
-        <span><b>Pagamento do dia {pagaEmQ(o)}</b> · {rotQ(o)}{o.de === qAtual.de ? " · em aberto" : ""}{fe ? " · 🔒 já fechada" : ""}</span></label>; })}</div>}
+      {!fech ? <div className="hint">Carregando quinzenas…</div> : <div style={{ display: "grid", gap: 6 }}>{opcoes.map(o => { const fe = fechada(o); return <label key={o.de} style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, background: qSel === o.de ? "var(--tn-green)" : undefined, cursor: "pointer" }}>
+        <input type="radio" name="qenv" checked={qSel === o.de} onChange={() => { setQSel(o.de); setOk(false); }} />
+        <span><b>Pagamento do dia {pagaEmQ(o)}</b> · {rotQ(o)}{o.de === qAtual.de ? " · em aberto" : ""}{fe ? " · fechamento já gerado em " + br(String(fech!.get(o.ref)).slice(0, 10)).slice(0, 5) : ""}</span></label>; })}</div>}
+      {q && fechada(q) && <div className="hint" style={{ marginTop: 6, color: "var(--tn-amber-i)" }}>⚠ O pagamento desta quinzena já foi fechado na Montagem. Depois de enviar, abra 💰 Montagem → filtre a quinzena {rotQ(q)} → <b>🔒 Fechar pagamento da quinzena</b> de novo (o fechamento anterior fica guardado no histórico) para o frete entrar no relatório do financeiro.</div>}
     </div>
     <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8 }}><table className="ma-tab" style={{ width: "100%", fontSize: 13, margin: 0 }}>
       <thead><tr><th></th><th>Romaneio</th><th>Data</th><th style={{ textAlign: "center" }}>Entregas</th><th style={{ textAlign: "right" }}>Total</th><th>Observação</th></tr></thead>
       <tbody>{prontos.map(r => { const pe = podeEntrar(r), dentro = q && r.data! >= q.de && r.data! <= q.ate; return <tr key={r.id} style={{ opacity: pe ? 1 : .5 }}>
         <td><input type="checkbox" disabled={!pe} checked={pe && marc.has(r.id)} onChange={e => setMarc(s => { const n = new Set(s); e.target.checked ? n.add(r.id) : n.delete(r.id); setOk(false); return n; })} /></td>
         <td><b>{numRom(r)}</b></td><td>{br(r.data).slice(0, 5)}</td><td style={{ textAlign: "center" }}>{r.itens.length}</td><td style={{ textAlign: "right" }}>{moeda(contaRom(r).total)}</td>
-        <td className="hint">{!q ? "" : !pe ? "" : dentro ? "desta quinzena" : <span style={{ color: "var(--tn-blue-i)" }}>📥 data de outra quinzena — entra neste pagamento</span>}</td></tr>; })}
+        <td className="hint">{!q ? "" : !pe ? "" : dentro ? "" : <span className="hint">entra neste pagamento</span>}</td></tr>; })}
         {!prontos.length && <tr><td colSpan={6} className="hint" style={{ padding: 12 }}>Nenhum romaneio conferido com valor para enviar. Confira os romaneios antes.</td></tr>}</tbody>
     </table></div>
     {q && <div className="card" style={{ padding: 10, marginTop: 10, background: "var(--tn-amber)" }}>
