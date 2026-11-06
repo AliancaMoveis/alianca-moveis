@@ -220,37 +220,44 @@ function Admissoes({ rec }: { rec: () => any }) {
 
 function Revisao({ envio, link, fechar, depois, uid, toast }: { envio: Envio; link?: Link; fechar: () => void; depois: () => void; uid: string; toast: (m: string) => void }) {
   const d = envio.dados || {};
+  // a ficha inteira, exatamente como o candidato preencheu no link (dá para corrigir antes de aprovar)
+  const [fd, setFd] = useState<any>(() => abrirFicha({ ...d, tem_dependentes: d.tem_dependentes || ((d.dependentes || []).length ? "sim" : ""), santander: d.santander || (/santander/i.test(d.banco || "") ? "sim" : "") }));
   const [cargo, setCargo] = useState(link?.cargo || ""); const [setor, setSetor] = useState(link?.setor || ""); const [admissao, setAdmissao] = useState(""); const [empresa, setEmpresa] = useState("");
   const [ok, setOk] = useState(false);
-  const campo = (r: string, v: any) => v ? <div><span className="hint">{r}:</span> <b>{String(v)}</b></div> : null;
+  const docs = envio.docs || [];
+  const usados = new Set<string>();
+  const anexo = (campo: string, rotulo: string) => { usados.add(campo); const l = docs.filter(x => (x.campo || "outro") === campo);
+    return <div key={campo} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", padding: "6px 10px", border: "1px dashed var(--line)", borderRadius: 8 }}>
+      <span style={{ fontSize: 13 }}>{l.length ? "✅" : "—"} {rotulo}</span>
+      {l.length ? l.map((x, i) => <button key={i} type="button" className="btn sm" onClick={() => abrirDoc(x.caminho).catch((e: any) => toast(e.message))}>📄 abrir {l.length > 1 ? i + 1 : ""}</button>) : <span className="hint">não enviado</span>}
+    </div>; };
   const aprovar = async () => {
     setOk(true);
-    try { await aprovarEnvio(envio, link, { cargo, setor, admissao: admissao || null, empresa }, uid); toast("Funcionário cadastrado a partir do envio ✅"); depois(); }
+    try { await aprovarEnvio({ ...envio, dados: { ...d, ...fd } }, link, { cargo, setor, admissao: admissao || null, empresa }, uid); toast("Funcionário cadastrado a partir do envio ✅"); depois(); }
     catch (e: any) { toast(e.message); setOk(false); }
   };
+  const ficha = <CamposFicha f={fd} set={setFd} anexo={anexo} />;
+  const outros = docs.filter(x => !usados.has(x.campo || "outro"));
   return (
     <div className="card" style={{ marginTop: 14, padding: 16, borderLeft: "4px solid var(--st-concluida)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <h3 style={{ margin: 0 }}>Revisão · {d.nome || link?.nome}</h3>
+        <h3 style={{ margin: 0 }}>Revisão · {fd.nome || link?.nome}</h3>
         <span style={{ display: "flex", gap: 8 }}><button className="btn sm" onClick={fechar}>Fechar</button><button className="btn primary sm" disabled={ok} onClick={aprovar}>✅ Aprovar e cadastrar</button></span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: "4px 16px", margin: "12px 0" }}>
-        {campo("CPF", d.cpf)}{campo("RG", d.rg)}{campo("Nascimento", d.nascimento && br(d.nascimento))}{campo("Telefone", d.telefone)}{campo("E-mail", d.email)}{campo("Endereço", d.endereco)}
-        {campo("Estado civil", d.estado_civil)}{campo("Escolaridade", d.escolaridade)}{campo("PIS", d.pis)}{campo("CTPS", d.ctps)}
-        {campo("Banco", d.banco)}{campo("Agência", d.agencia)}{campo("Conta", d.conta)}{campo("Pix", d.pix)}
-        {campo("Emergência", [d.emergencia_nome, d.emergencia_tel].filter(Boolean).join(" · "))}
-        {campo("Dependentes", (d.dependentes || []).map((x: any) => x.nome + (x.nascimento ? " (" + br(x.nascimento) + ")" : "")).join(", "))}
-        {campo("Observação", d.obs)}
-      </div>
-      <b>Documentos enviados ({(envio.docs || []).length}):</b>
-      <div style={{ margin: "6px 0 12px" }}>{(envio.docs || []).map((x, i) => <button key={i} className="btn sm" style={{ margin: "0 6px 6px 0" }} onClick={() => abrirDoc(x.caminho).catch((e: any) => toast(e.message))}>📄 {x.nome}</button>)}</div>
+      <p className="hint" style={{ margin: "6px 0 0" }}>Enviado em {new Date(envio.enviado_em).toLocaleString("pt-BR")} · {docs.length} documento(s). Abaixo está tudo o que o candidato preencheu no link, com os documentos em cada parte — corrija aqui se precisar, antes de aprovar.</p>
+      {ficha}
+      {outros.length > 0 && <><h4 className="rhf-h">Outros documentos</h4><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{outros.map((x, i) => <button key={i} className="btn sm" onClick={() => abrirDoc(x.caminho).catch((e: any) => toast(e.message))}>📄 {x.nome}</button>)}</div></>}
+      {d.obs && <><h4 className="rhf-h">Observação do candidato</h4><div style={{ whiteSpace: "pre-wrap" }}>{d.obs}</div></>}
+      {d.pix && <div style={{ marginTop: 8 }}><span className="hint">Pix:</span> <b>{d.pix}</b></div>}
+      <h4 className="rhf-h">Dados da contratação (RH)</h4>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
         <div className="field"><label>Cargo</label><input value={cargo} onChange={e => setCargo(e.target.value)} /></div>
         <div className="field"><label>Setor</label><input value={setor} onChange={e => setSetor(e.target.value)} /></div>
         <div className="field"><label>Data de admissão</label><input type="date" value={admissao} onChange={e => setAdmissao(e.target.value)} /></div>
         <div className="field"><label>Empresa</label><select value={empresa} onChange={e => setEmpresa(e.target.value)}><option value="">—</option>{EMPRESAS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></div>
       </div>
-      <p className="hint">Ao aprovar, o funcionário entra no cadastro com todos os dados e documentos do envio.</p>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}><button className="btn primary" disabled={ok} onClick={aprovar}>✅ Aprovar e cadastrar</button></div>
+      <p className="hint">Ao aprovar, o funcionário entra no cadastro com todos os dados da ficha e todos os documentos do envio.</p>
     </div>
   );
 }

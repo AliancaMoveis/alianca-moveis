@@ -20,7 +20,7 @@ export const DOCS_FICHA: [string, string][] = [
   ["rg_cpf", "Identidade (RG) e CPF"], ["titulo", "Título de eleitor"], ["reservista", "Carteira de reservista"], ["cnh", "Carteira de motorista (CNH)"],
   ["ctps", "Carteira de trabalho (CTPS)"], ["pis", "Comprovante do PIS"], ["certidao", "Certidão de casamento / divórcio"],
   ["dep_rg_certidao", "Dependente · RG ou certidão de nascimento"], ["dep_cpf", "Dependente · CPF"], ["dep_matricula", "Dependente · comprovante de matrícula atualizado"], ["dep_vacina", "Dependente · carteirinha de vacinação"],
-  ["pcd", "Laudo / comprovante da deficiência"], ["residencia", "Comprovante de residência"], ["banco", "Comprovante da conta Santander"], ["foto", "Foto de rosto (3×4)"],
+  ["antecedentes", "Certidão de antecedentes criminais"], ["pcd", "Laudo / comprovante da deficiência"], ["residencia", "Comprovante de residência"], ["banco", "Comprovante da conta Santander"], ["foto", "Foto de rosto (3×4)"],
 ];
 
 /** junta colunas + ficha num objeto só (para o formulário) */
@@ -79,6 +79,10 @@ export function CamposFicha({ f, set, anexo, publico }: Props) {
       {H("Carteira de trabalho e PIS")}
       <div className="g3">{T("ctps", "Número da carteira profissional (CTPS)")}{T("pis", "Número do PIS")}</div>
       <div className="rhf-docs">{anexo("ctps", "Carteira de trabalho (física ou digital)")}{anexo("pis", "Comprovante do PIS")}</div>
+
+      {H("Antecedentes criminais")}
+      <p className="hint" style={{ margin: "0 0 6px" }}>Emita a certidão de antecedentes criminais (gratuita, pela internet) no <a href="https://www.gov.br/pt-br/servicos/emitir-certidao-de-antecedentes-criminais" target="_blank" rel="noreferrer">gov.br (Polícia Federal)</a> e anexe o PDF ou uma foto.</p>
+      <div className="rhf-docs">{anexo("antecedentes", "Certidão de antecedentes criminais")}</div>
 
       {H("Família")}
       <div className="g3">{S("estado_civil", "Estado civil", ESTADO_CIVIL)}{casado ? T("conjuge_nome", "Nome do cônjuge") : <div />}<div />{T("pai_nome", "Nome do pai")}{T("mae_nome", "Nome da mãe")}</div>

@@ -23,7 +23,7 @@ export type Doc = { id: number; funcionario_id: string; tipo: string; titulo: st
 export type Link = { token: string; nome: string; cargo: string; setor: string; status: string; expira_em: string; criado_em: string };
 export type Envio = { id: number; token: string; dados: any; docs: { campo: string; nome: string; caminho: string }[]; enviado_em: string; revisado_em: string | null; funcionario_id: string | null };
 
-export const TIPOS_DOC: [string, string][] = [["rg_cpf", "RG / CPF"], ["ctps", "Carteira de trabalho"], ["pis", "PIS"], ["residencia", "Comprovante de residência"], ["atestado", "Atestado médico"], ["contrato", "Contrato / termo assinado"], ["certidao", "Certidão (casamento/divórcio)"], ["reservista", "Reservista"], ["titulo", "Título de eleitor"], ["cnh", "Carteira de motorista"],
+export const TIPOS_DOC: [string, string][] = [["rg_cpf", "RG / CPF"], ["antecedentes", "Antecedentes criminais"], ["ctps", "Carteira de trabalho"], ["pis", "PIS"], ["residencia", "Comprovante de residência"], ["atestado", "Atestado médico"], ["contrato", "Contrato / termo assinado"], ["certidao", "Certidão (casamento/divórcio)"], ["reservista", "Reservista"], ["titulo", "Título de eleitor"], ["cnh", "Carteira de motorista"],
   ["dep_rg_certidao", "Dependente · RG / certidão"], ["dep_cpf", "Dependente · CPF"], ["dep_matricula", "Dependente · matrícula"], ["dep_vacina", "Dependente · vacinação"], ["pcd", "Laudo PCD"], ["banco", "Conta Santander"], ["foto", "Foto"], ["outro", "Outro"]];
 export const STATUS_FUNC: [string, string][] = [["ativo", "Ativo"], ["ferias", "Em férias"], ["afastado", "Afastado"], ["desligado", "Desligado"]];
 export const soDig = (v: any) => String(v || "").replace(/\D/g, "");
