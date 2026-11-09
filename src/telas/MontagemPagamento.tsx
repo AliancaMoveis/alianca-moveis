@@ -14,6 +14,7 @@ import { col, lerArquivo } from "./Medidas";
 import { Kpi } from "./Dashboard";
 import { podeMontagemAgend } from "./MontagemAgend";
 import { Modal } from "../comp/Modal";
+import { pagaDia10 } from "../lib/montagemDia10";
 
 type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number; origem?: string; descricao?: string | null; criado_por?: string | null; tipo?: string | null; aprovado_em?: string | null; aprovado_por?: string | null };
 // ordem avulsa: serviço dentro da loja, frete ou outro pagamento manual — entra no total do montador
@@ -191,7 +192,13 @@ export default function MontagemPagamento() {
   };
 
   const dataDe = (e: Ef) => (pelo === "fin" ? e.data_finalizacao || e.data_montagem : e.data_montagem) || "";
-  const lista = (dados?.ef || []).filter(e => conta(e) && (fs === "todos" || (fs === "aprov" ? aprovado(e) : aguardando(e)))).filter(e => { const d = dataDe(e); return d >= de && d <= ate; });
+  // quem recebe só no dia 10: na 1ª quinzena (paga dia 10) entra também a quinzena retrasada (25 a 09); na 2ª (paga dia 25) não entra
+  const qzP = quinzenaDe(de), ehQzP = qzP.de === de && qzP.ate === ate;
+  const q1P = ehQzP && qzP.ref.endsWith("-1"), q2P = ehQzP && qzP.ref.endsWith("-2"), deRetrasada = q1P ? quinzenaAntes(qzP).de : de;
+  const noPeriodo = (e: Ef) => { const d = dataDe(e); if ((q1P || q2P) && pagaDia10(cadDe(e.montador)?.conta)) return q2P ? false : d >= deRetrasada && d <= ate; return d >= de && d <= ate; };
+  const fora10 = q2P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= de && dataDe(e) <= ate).map(e => cadDe(e.montador)?.nome || e.montador))) : [];
+  const com10 = q1P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= deRetrasada && dataDe(e) < de).map(e => cadDe(e.montador)?.nome || e.montador))) : [];
+  const lista = (dados?.ef || []).filter(e => conta(e) && (fs === "todos" || (fs === "aprov" ? aprovado(e) : aguardando(e)))).filter(noPeriodo);
   const outros = (dados?.ef || []).filter(e => !conta(e)).filter(e => { const d = dataDe(e); return d >= de && d <= ate; }).length;
   // agrupa pelo cadastro do montador: a ordem avulsa (lançada com o nome do cadastro) cai na mesma linha das O.S. do Exact
   const grupos: G[] = Object.values(lista.reduce((m: Record<string, G>, e) => {
@@ -284,6 +291,8 @@ export default function MontagemPagamento() {
         <Kpi n={fmtMoeda(soma(g => g.aprov))} l={"✅ Aprovado p/ pagamento (" + soma(g => g.aprovN) + ")"} fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.agu))} l={"⏳ Aguardando aprovação (" + soma(g => g.aguN) + ")"} fs={20} cls={soma(g => g.agu) ? "alert" : ""} />
       </div>
+      {com10.length > 0 && <div className="ro-note" style={{ marginTop: 12 }}>📅 <b>Recebe só no dia 10:</b> {com10.join(", ")} — neste pagamento entram também as montagens da quinzena retrasada ({br(deRetrasada)} a {br(somaDias(de, -1))}).</div>}
+      {fora10.length > 0 && <div className="ro-note" style={{ marginTop: 12 }}>📅 <b>Fora deste pagamento (recebe só no dia 10):</b> {fora10.join(", ")} — as montagens desta quinzena entram no pagamento do dia 10.</div>}
       {semConta.length > 0 && <div className="alerta" style={{ marginTop: 12 }}>⚠️ <b>{semConta.length} montador(es) sem conta cadastrada ou sem vínculo com o cadastro:</b> {semConta.map(g => g.nome).join(", ")}. Vincule na tabela abaixo ou cadastre em <b>Cadastros → Montadores → 🔒 Contas para pagamento</b>.</div>}
       {outros > 0 && <div className="hint" style={{ marginTop: 6 }}>{outros} O.S. no período com outro status (ex.: aguardando montagem, cancelado) não entram no pagamento.</div>}
 

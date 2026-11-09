@@ -1,5 +1,6 @@
 // Pós-venda Projetados — números de qualidade (ocorrências, custos, montadores e impacto do checklist) e cadastro de montadores.
 import { useState } from "react";
+import { pagaDia10, obsSemTag, obsComTag } from "../lib/montagemDia10";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { PV_DESC, PV_DESFECHO, PV_ORIGEM, PV_REEMB, PV_RESP, PV_SITUACAO, PV_TIPOS, STATUS, fmtDateTime, fmtMoeda, inicial, pvPrazo } from "../lib/regras";
@@ -294,7 +295,7 @@ export function ContasMontadores() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead><tr>{["Montador", "Titular", "CPF / CNPJ", "Banco", "Agência", "Conta", "Pix", ""].map(h => <th key={h} style={{ textAlign: "left", padding: "8px", fontSize: 12, color: "var(--ink-soft)", borderBottom: "2px solid var(--line)", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
           <tbody>{lista.map((m: any) => { const c = m.conta || {}; const td: React.CSSProperties = { padding: "7px 8px", borderBottom: "1px solid var(--line-soft)" };
-            return <tr key={m.id}><td style={td}><b>{m.nome}</b></td><td style={td}>{c.titular || <span className="hint">—</span>}</td><td style={td}>{c.docTitular || <span className="hint" style={{ color: "var(--warn)" }}>falta</span>}</td>
+            return <tr key={m.id}><td style={td}><b>{m.nome}</b>{pagaDia10(c) && <div className="hint">📅 só dia 10</div>}</td><td style={td}>{c.titular || <span className="hint">—</span>}</td><td style={td}>{c.docTitular || <span className="hint" style={{ color: "var(--warn)" }}>falta</span>}</td>
               <td style={td}>{c.banco || <span className="hint">—</span>}</td><td style={td}>{c.agencia || "—"}</td><td style={{ ...td, whiteSpace: "nowrap" }}>{c.conta || "—"}</td><td style={td}>{c.pixChave ? c.pixTipo + ": " + c.pixChave : "—"}</td>
               <td style={td}><button className="btn ghost sm" onClick={() => setModal(<EditConta id={m.id} />)}>Editar</button></td></tr>; })}</tbody>
         </table>
@@ -320,7 +321,9 @@ function EditConta({ id }: { id: string }) {
         <div className="field"><label>Conta (com dígito)</label><input value={ct.conta} onChange={c("conta")} /></div>
         <div className="field"><label>Tipo de chave Pix</label><select value={ct.pixTipo} onChange={c("pixTipo")}><option value="">Sem Pix</option><option value="cpf">CPF</option><option value="cnpj">CNPJ</option><option value="telefone">Telefone</option><option value="email">E-mail</option><option value="aleatoria">Chave aleatória</option></select></div>
         {ct.pixTipo && <div className="field"><label>Chave Pix</label><input value={ct.pixChave} onChange={c("pixChave")} /></div>}
-        <div className="field full"><label>Observação</label><input value={ct.obs} onChange={c("obs")} /></div>
+        <div className="field full"><label>Observação</label><input value={obsSemTag(ct.obs)} onChange={e => setCt((x: any) => ({ ...x, obs: obsComTag(e.target.value, pagaDia10(x)) }))} /></div>
+        <label className="field full" style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 600 }}><input type="checkbox" style={{ width: "auto" }} checked={pagaDia10(ct)} onChange={e => setCt((x: any) => ({ ...x, obs: obsComTag(x.obs, e.target.checked) }))} />
+          Recebe só no pagamento do dia 10 <span className="hint" style={{ fontWeight: 400 }}>(no dia 10 recebe a quinzena passada + a retrasada; não entra no pagamento do dia 25)</span></label>
       </div>
       {m.conta && m.conta.atualizadoPor && <div className="hint" style={{ marginTop: 6 }}>Atualizada por {m.conta.atualizadoPor} em {fmtDateTime(m.conta.atualizadoEm)}</div>}
       <div style={{ marginTop: 18 }}><button className="btn primary" onClick={async () => { if (await executar(() => A.montadorSalvar({ id, nome: m.nome, telefone: m.telefone, regiao: m.regiao, conta: ct }), "Conta salva")) fechar(); }}>Salvar</button></div>
