@@ -3,7 +3,7 @@
 // "AGUARDANDO APROVAÇÃO DE PAGAMENTO" conta, mas fica como aguardando; "PAGAMENTO EFETUADO" = aprovado para pagamento.
 // O relatório para o financeiro leva o total de cada montador com a conta cadastrada (Cadastros → Montadores → Contas).
 // Não guardamos nome nem endereço do cliente: só o código da O.S.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { sb } from "../lib/supabase";
 import { MOCK } from "../lib/chat";
@@ -62,6 +62,31 @@ async function carregarPagas(): Promise<{ por: Map<string, string>; desde: strin
       por.set(o.chave || chOrd(o.os, o.mont, o.total), r); if (o.chave) por.set(chOrd(o.os, o.mont, o.total), r); }));
   }
   return { por, desde: (fs || []).map((f: any) => String(f.de)).sort()[0] || "" };
+}
+// descontos do montador no pagamento (compras na loja etc.) — por referência da quinzena
+type Desc = { id: number; referencia: string; montador_id: string; descricao: string; parcela: string; valor: number };
+let mockDesc: Desc[] = [];
+async function listaDesc(ref: string): Promise<Desc[]> {
+  if (MOCK) return mockDesc.filter(d => d.referencia === ref);
+  const { data, error } = await sb.from("montagem_descontos").select("*").eq("referencia", ref).order("id"); if (error) throw new Error(error.message);
+  return (data || []).map((d: any) => ({ ...d, valor: Number(d.valor) }));
+}
+async function criarDesc(d: Omit<Desc, "id">, quem: string) {
+  if (MOCK) { mockDesc.push({ ...d, id: Date.now() }); return; }
+  const { error } = await sb.from("montagem_descontos").insert({ ...d, criado_por: quem }); if (error) throw new Error(error.message);
+}
+async function apagarDesc(id: number) {
+  if (MOCK) { mockDesc = mockDesc.filter(d => d.id !== id); return; }
+  const { error } = await sb.from("montagem_descontos").delete().eq("id", id); if (error) throw new Error(error.message);
+}
+// parcela "2/5" continua no mês seguinte, na mesma quinzena (1ª → 1ª, 2ª → 2ª) como "3/5"
+const refMesAnt = (ref: string) => { const [y, m, q] = ref.split("-").map(Number); const d = new Date(Date.UTC(y, m - 2, 1)); return d.toISOString().slice(0, 7) + "-" + q; };
+async function trazerParcelasMont(ref: string, quem: string): Promise<number> {
+  const ant = await listaDesc(refMesAnt(ref)), ja = await listaDesc(ref); let n = 0;
+  for (const d of ant) { const m = String(d.parcela).match(/^(\d+)\s*\/\s*(\d+)$/); if (!m || +m[1] >= +m[2]) continue; const parcela = (+m[1] + 1) + "/" + m[2];
+    if (ja.some(x => x.montador_id === d.montador_id && x.descricao === d.descricao && x.parcela === parcela)) continue;
+    await criarDesc({ referencia: ref, montador_id: d.montador_id, descricao: d.descricao, parcela, valor: d.valor }, quem); n++; }
+  return n;
 }
 async function carregar(): Promise<{ ef: Ef[]; vinc: Record<string, string | null> }> {
   if (MOCK) return { ef: mockEf, vinc: { ...mockVinc } };
@@ -174,6 +199,7 @@ export default function MontagemPagamento() {
   const { setModal } = useApp() as any;
   const [pagas, setPagas] = useState<{ por: Map<string, string>; desde: string } | null>(null);
   const [incluirPend, setIncluirPend] = useState(true);
+  const [descs, setDescs] = useState<Desc[]>([]);
   const recarregar = () => { carregarPagas().then(setPagas).catch(() => setPagas({ por: new Map(), desde: "" })); return carregar().then(setDados).catch(e => setErro(e.message)); };
   const [nfs, setNfs] = useState<Nf[]>([]);
   const recNf = () => listaNf().then(setNfs).catch(() => setNfs([]));
@@ -188,6 +214,8 @@ export default function MontagemPagamento() {
   };
 
   const gest = podeMontagemAgend(R), fin = R.mySetores().includes("financeiro");
+  const refQ0 = (() => { const q = quinzenaDe(de); return q.de === de && q.ate === ate ? q.ref : ""; })();
+  useEffect(() => { if (refQ0) listaDesc(refQ0).then(setDescs).catch(() => setDescs([])); else setDescs([]); }, [refQ0]);
   if (!gest && !fin) return <section className="view active"><div className="empty">Só a Gestão e o Financeiro veem esta tela.</div></section>;
   const abas = <div className="subnav" style={{ margin: "0 0 14px" }}><button className={tela === "periodo" ? "on" : ""} onClick={() => setTela("periodo")}>📋 Montagens e pagamento</button><button className={tela === "hist" ? "on" : ""} onClick={() => setTela("hist")}>📚 Histórico de pagamentos (fechamentos)</button></div>;
   if (tela === "hist") return <section className="view active"><div className="view-head"><div><h2>💰 Montagem · Histórico de pagamentos</h2><p>Cada fechamento guarda o que foi gerado para o financeiro naquele mês (valores, contas e as O.S.). Se um mês for fechado de novo, o anterior fica guardado como “substituído” — nada se perde.</p></div></div>{abas}<Historico podeEnviar={gest} /></section>;
@@ -215,6 +243,9 @@ export default function MontagemPagamento() {
   const fora10 = q2P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= de && dataDe(e) <= ate).map(e => cadDe(e.montador)?.nome || e.montador))) : [];
   // já paga em OUTRO fechamento (o da própria quinzena pode ser refeito) — nunca entra de novo
   const refAtual = ehQzP ? qzP.ref : "";
+  const recDesc = () => refAtual ? listaDesc(refAtual).then(setDescs).catch(() => setDescs([])) : setDescs([]);
+  const descDe = (g: G) => g.cad ? descs.filter(d => d.montador_id === g.cad.id) : [];
+  const totDesc = (g: G) => r2(descDe(g).reduce((s, d) => s + d.valor, 0));
   const pagaEm = (e: Ef) => { const r = pagas?.por.get(e.chave) || pagas?.por.get(chOrd(e.os, e.data_montagem, e.total)); return r && r !== refAtual ? r : ""; };
   // pendentes de quinzenas anteriores: fechadas fora do prazo ou aprovadas depois — ainda não pagas em nenhum fechamento
   const pendente = (e: Ef) => { const d = dataDe(e); if (!pagas?.desde || d >= de || d < pagas.desde) return false; if (q2P && pagaDia10(cadDe(e.montador)?.conta)) return false; return !noPeriodo(e) && !pagaEm(e); };
@@ -261,7 +292,7 @@ export default function MontagemPagamento() {
 
   const relFinanceiro = () => {
     const qz = quinzenaDe(de), ehQ = qz.de === de && qz.ate === ate;
-    const linhas = grupos.slice().sort(cmp).map(g => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipoConta: k.tipoConta, pixTipo: k.pixTipo, pixChave: k.pixChave, total: r2(g.total) }; });
+    const linhas = grupos.slice().sort((a, b) => nomeG(a).localeCompare(nomeG(b), "pt-BR")).map(g => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipoConta: k.tipoConta, pixTipo: k.pixTipo, pixChave: k.pixChave, total: r2(g.total - totDesc(g)) }; });
     pdfFinanceiro("pagamento_montadores_" + de + "_a_" + ate + ".pdf", ehQ ? nomeMes(qz.ref) : "Período personalizado", per + " · " + stTxt, linhas).catch(e => toast("Não foi possível gerar o PDF: " + e.message));
   };
   const relDetalhado = () => {
@@ -310,7 +341,9 @@ export default function MontagemPagamento() {
         <Kpi n={soma(g => g.n)} l={"Montagens efetivadas (" + stTxt + ")"} />
         <Kpi n={fmtMoeda(soma(g => g.prod))} l="Total dos produtos (serviço)" fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.adic))} l="Adicionais" fs={20} />
-        <Kpi n={fmtMoeda(soma(g => g.total))} l={"Total a pagar · " + grupos.length + " montadores"} fs={20} />
+        <Kpi n={fmtMoeda(soma(g => g.total))} l={"Total das montagens · " + grupos.length + " montadores"} fs={20} />
+        {soma(totDesc) > 0 && <Kpi n={fmtMoeda(soma(totDesc))} l={"➖ Descontos (" + descs.length + ")"} fs={20} />}
+        {soma(totDesc) > 0 && <Kpi n={fmtMoeda(r2(soma(g => g.total) - soma(totDesc)))} l="💰 Líquido a pagar" fs={20} />}
         <Kpi n={fmtMoeda(r2(lista.filter(e => e.origem === "avulsa").reduce((s, e) => s + e.total, 0)))} l={"Ordens avulsas (" + lista.filter(e => e.origem === "avulsa").length + ") · já no total"} fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.aprov))} l={"✅ Aprovado p/ pagamento (" + soma(g => g.aprovN) + ")"} fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.agu))} l={"⏳ Aguardando aprovação (" + soma(g => g.aguN) + ")"} fs={20} cls={soma(g => g.agu) ? "alert" : ""} />
@@ -335,8 +368,9 @@ export default function MontagemPagamento() {
           <button className="btn primary sm" onClick={relFinanceiro} disabled={!grupos.length}>⬇ Relatório para o financeiro (PDF)</button>
           <button className="btn sm" onClick={relDetalhado} disabled={!grupos.length}>⬇ Detalhado por O.S.</button>
           {gest && <button className="btn sm" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={de} ate={ate} />)}>＋ Ordem avulsa</button>}
+          {(gest || fin) && refAtual && <button className="btn sm" title={"Parcelas de descontos (ex.: 2/5) do mesmo pagamento do mês anterior"} onClick={async () => { try { const n = await trazerParcelasMont(refAtual, R.nomeUser?.(R.currentUserId) || ""); toast(n ? n + " parcela(s) de desconto trazida(s)" : "Nenhuma parcela de desconto para trazer"); recDesc(); } catch (e: any) { toast(e.message); } }}>↪ Trazer parcelas de desconto</button>}
           {gest && aguTodas.length > 0 && <button className="btn sm" onClick={() => setSel(sel.size === aguTodas.length ? new Set() : new Set(aguTodas.map(e => e.chave)))}>{sel.size === aguTodas.length ? "Limpar seleção" : "☑ Selecionar todas aguardando (" + aguTodas.length + ")"}</button>}
-          {gest && <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} mapa={Object.fromEntries(grupos.flatMap(g => Array.from(new Set([g.nome, ...g.itens.map(e => e.montador)])).map(n => [n, g.cad?.id || ""])))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento da quinzena</button>}
+          {gest && <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} totDescontos={r2(grupos.reduce((s, g) => s + totDesc(g), 0))} mapa={Object.fromEntries(grupos.flatMap(g => Array.from(new Set([g.nome, ...g.itens.map(e => e.montador)])).map(n => [n, g.cad?.id || ""])))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento da quinzena</button>}
         </div>
         {selItens.length > 0 && <div className="ma-aprovar">
           <span><b>{selItens.length} O.S. selecionada(s)</b> · {fmtMoeda(r2(selItens.reduce((s, e) => s + e.total, 0)))} · {new Set(selItens.map(e => e.montador)).size} montador(es)</span>
@@ -346,6 +380,7 @@ export default function MontagemPagamento() {
           <table className="ma-tab"><thead><tr><th style={{ width: 28 }}></th><Th k="nome" l="Montador" /><Th k="n" l="Montagens" n /><Th k="prod" l="Produtos" n /><Th k="adic" l="Adicionais" n /><Th k="total" l="Total a pagar" n /><Th k="aprov" l="✅ Aprovado" n /><Th k="agu" l="⏳ Aguardando" n /><th>Conta para pagamento</th><th>Nota fiscal</th></tr></thead>
             <tbody>{vis.map(g => <Linha key={g.nome} g={g} recarregar={recarregar} sel={sel} alternar={alternar} aberto={aberto === g.nome} abrir={() => setAberto(aberto === g.nome ? "" : g.nome)} cadastro={cadastro} temConta={temConta(g)}
               gest={gest} nf={nfs.find(x => x.chave === chaveNf(g) && x.de === de && x.ate === ate) || null} de={de} ate={ate} recNf={recNf}
+              descs={descDe(g)} refQ={refAtual} recDesc={recDesc} podeDesc={gest || fin} quem={R.nomeUser?.(R.currentUserId) || ""}
               vincular={async (id: string | null) => { try { await vincular(g.nome, id); await recarregar(); toast("Vínculo salvo"); } catch (e: any) { toast(e.message); } }} dataDe={dataDe} />)}</tbody>
             <tfoot><tr><td></td><td>Total</td><td className="n">{soma(g => g.n)}</td><td className="n">{fmtMoeda(soma(g => g.prod))}</td><td className="n">{fmtMoeda(soma(g => g.adic))}</td><td className="n">{fmtMoeda(soma(g => g.total))}</td><td className="n">{fmtMoeda(soma(g => g.aprov))}</td><td className="n">{fmtMoeda(soma(g => g.agu))}</td><td></td></tr></tfoot>
           </table>}
@@ -362,7 +397,11 @@ function msgNf(nome: string, de: string, ate: string, valor: number) {
   const pn = prim ? prim.charAt(0).toUpperCase() + prim.slice(1).toLowerCase() : "";
   return `Olá${pn ? ", " + pn : ""}! Tudo bem?\n\nO fechamento da ${ehQ ? nomeMes(qz.ref) : "período de " + br(de) + " a " + br(ate)} está pronto e precisamos da *nota fiscal* para enviar ao financeiro.\n\n*Valor total da nota: ${fmtMoeda(valor)}*\n\nPor favor, emita a nota só com o valor total (sem discriminar produtos ou adicionais) e envie para o e-mail da empresa.\n\nObrigado!\nAliança Móveis`;
 }
-function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarregar, sel, alternar, gest, nf, de, ate, recNf }: any) {
+function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarregar, sel, alternar, gest, nf, de, ate, recNf, descs = [], refQ = "", recDesc, podeDesc, quem }: any) {
+  const tDesc = r2(descs.reduce((s: number, d: Desc) => s + d.valor, 0));
+  const [nd, setNd] = useState({ descricao: "", parcela: "", valor: "" });
+  const addDesc = async () => { const v = Number(String(nd.valor).replace(/\./g, "").replace(",", ".")); if (!g.cad) { toast("Vincule o montador ao cadastro antes"); return; } if (!(v > 0)) { toast("Informe o valor do desconto"); return; } if (!nd.descricao.trim()) { toast("Descreva o desconto"); return; }
+    try { await criarDesc({ referencia: refQ, montador_id: g.cad.id, descricao: nd.descricao.trim(), parcela: nd.parcela.trim(), valor: r2(v) }, quem); setNd({ descricao: "", parcela: "", valor: "" }); recDesc(); toast("Desconto lançado"); } catch (e: any) { toast(e.message); } };
   const agu: Ef[] = g.itens.filter((e: Ef) => aguardando(e));
   const nSel = agu.filter(e => sel.has(e.chave)).length;
   const desfazerAprov = async (e: Ef) => { if (!confirm("Desfazer a aprovação no 360 da " + (e.origem === "avulsa" ? "ordem avulsa" : e.os) + "? Ela volta para ⏳ Aguardando.")) return; try { await aprovarOS([e.chave], true); toast("Aprovação desfeita"); await recarregar(); } catch (x: any) { toast(x.message); } };
@@ -377,7 +416,7 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
       <td onClick={e => e.stopPropagation()}>{gest && agu.length > 0 && <input type="checkbox" title={"Selecionar as " + agu.length + " O.S. aguardando deste montador"} checked={nSel === agu.length} ref={el => { if (el) el.indeterminate = nSel > 0 && nSel < agu.length; }} onChange={e => alternar(agu.map(x => x.chave), e.target.checked)} />}</td>
       <td><b>{g.cad?.nome || g.nome}</b>{g.cad && g.cad.nome !== g.nome ? <small className="hint"> · Exact: {g.nome}</small> : null}</td>
       <td className="n">{g.n}</td><td className="n">{fmtMoeda(g.prod)}</td><td className="n">{fmtMoeda(g.adic)}</td>
-      <td className="n"><b>{fmtMoeda(g.total)}</b></td>
+      <td className="n"><b>{fmtMoeda(g.total)}</b>{tDesc > 0 && <div style={{ fontSize: 12 }}><span style={{ color: "var(--danger)" }}>➖ {fmtMoeda(tDesc)}</span><br /><b>= {fmtMoeda(r2(g.total - tDesc))}</b></div>}</td>
       <td className="n">{g.aprovN ? fmtMoeda(g.aprov) : "—"}</td>
       <td className="n">{g.aguN ? fmtMoeda(g.agu) : "—"}</td>
       <td onClick={e => e.stopPropagation()} style={{ minWidth: 220 }}>
@@ -394,6 +433,18 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
         {gest && <button className="btn sm primary" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={dataDe(g.itens[0]) || hoje()} ate={hoje()} inicial={{ montador: nomeAv }} />)}>＋ Incluir ordem avulsa</button>}
         <span className="hint">Serviço dentro da loja, frete ou outro pagamento manual — entra no total deste montador.</span>
       </div>
+      {refQ && podeDesc && <div className="resp-box" style={{ margin: "0 0 10px", padding: "8px 12px" }}>
+        <b>➖ Descontos neste pagamento</b> <span className="hint">(compras na loja, adiantamentos… — saem do valor a pagar · parcela no formato 2/5)</span>
+        {descs.map((d: Desc) => <div key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}><span>{d.parcela && <span className="hint">{d.parcela} </span>}{d.descricao}</span><b style={{ color: "var(--danger)" }}>– {fmtMoeda(d.valor)}</b>
+          <button className="btn ghost sm" style={{ padding: "0 6px" }} onClick={async () => { if (!confirm("Apagar este desconto?")) return; try { await apagarDesc(d.id); recDesc(); } catch (e: any) { toast(e.message); } }}>✕</button></div>)}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end", marginTop: 6 }}>
+          <div className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}><label>Descrição</label><input value={nd.descricao} onChange={e => setNd({ ...nd, descricao: e.target.value })} placeholder="ex.: compra na loja (pedido 123)" /></div>
+          <div className="field" style={{ margin: 0, width: 70 }}><label>Parcela</label><input value={nd.parcela} onChange={e => setNd({ ...nd, parcela: e.target.value })} placeholder="1/3" /></div>
+          <div className="field" style={{ margin: 0, width: 110 }}><label>Valor</label><input inputMode="decimal" value={nd.valor} onChange={e => setNd({ ...nd, valor: e.target.value })} placeholder="250,00" /></div>
+          <button className="btn sm primary" onClick={addDesc}>＋ Desconto</button>
+          {tDesc > 0 && <span style={{ marginLeft: "auto" }}>Líquido: <b>{fmtMoeda(r2(g.total - tDesc))}</b></span>}
+        </div>
+      </div>}
       <table className="ma-os"><thead><tr><th style={{ width: 26 }}>{agu.length > 0 && <input type="checkbox" title="Selecionar todas aguardando" checked={nSel === agu.length} onChange={e => alternar(agu.map(x => x.chave), e.target.checked)} />}</th><th>O.S.</th><th>Montagem</th><th>Finalização</th><th>Status</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th></tr></thead>
         <tbody>{g.itens.slice().sort((a: any, b: any) => dataDe(a).localeCompare(dataDe(b))).map((e: any) => <tr key={e.chave} className={sel.has(e.chave) ? "ma-sel" : ""}><td>{aguardando(e) && <input type="checkbox" checked={sel.has(e.chave)} onChange={x => alternar([e.chave], x.target.checked)} />}</td><td>{e.origem === "avulsa" ? <><span className="pill" style={{ background: "var(--primary)", color: "#fff", fontSize: 10.5 }}>AVULSA</span> {rotAv(e)}{e.data_finalizacao && e.data_finalizacao !== e.data_montagem ? <small className="hint"> · período {br(e.data_montagem)} a {br(e.data_finalizacao)}</small> : null} <a href="#" onClick={x => { x.preventDefault(); editar(e); }}>editar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); excluirAv(e); }}>excluir</a></> : e.os}</td><td>{br(e.data_montagem)}{dataDe(e) < de && <span title="De quinzena anterior, ainda não paga" style={{ color: "var(--tn-blue-i)" }}> 📥</span>}</td><td>{br(e.data_finalizacao)}</td>
           <td>{aprovado(e) ? <><span className="vinda ok">✅ Aprovado{e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? " (360)" : ""}</span>{e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? <small className="hint" title={"por " + (e.aprovado_por || "") + " em " + new Date(e.aprovado_em).toLocaleString("pt-BR").slice(0, 16)}> <a href="#" onClick={x => { x.preventDefault(); desfazerAprov(e); }}>desfazer</a></small> : null}</> : <span className="vinda pend">⏳ Aguardando</span>}</td><td className="n">{fmtMoeda(e.produtos)}</td><td className="n">{e.adicionais ? fmtMoeda(e.adicionais) : "—"}</td><td className="n"><b>{fmtMoeda(e.total)}</b></td></tr>)}</tbody></table>
@@ -402,7 +453,7 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
 }
 
 // ---------- fechar o pagamento do mês: guarda uma foto do que foi gerado para o financeiro ----------
-function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto }: any) {
+function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto, totDescontos = 0 }: any) {
   const { setModal, toast } = useApp() as any;
   // período igual a uma quinzena → referência da quinzena; senão, o mês
   const qz = quinzenaDe(de), ehQ = qz.de === de && qz.ate === ate;
@@ -412,7 +463,7 @@ function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto }: any) {
   const _itens = grupos.map((g: any) => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, nome_exact: g.nome, montador_id: g.cad?.id || null, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipo_conta: k.tipoConta, pix_tipo: k.pixTipo, pix_chave: k.pixChave, montagens: g.n, produtos: r2(g.prod), adicionais: r2(g.adic), total: r2(g.total), aprovado: r2(g.aprov), aguardando: r2(g.agu), ordens: g.itens.map((e: any) => ({ chave: e.chave, os: e.os, desc: e.descricao, origem: e.origem, tipo: e.tipo, status: e.status, mont: e.data_montagem, fin: e.data_finalizacao, prod: e.produtos, adic: e.adicionais, total: e.total })) }; });
   const ir = async (substituir: boolean) => {
     setInd(true);
-    try { await fechar({ referencia: ref, de, ate, pelo, filtro: fs, obs, mapa, substituir, _itens }); toast("Pagamento de " + nomeMes(ref) + " fechado e guardado no histórico"); setModal(null); pronto(); }
+    try { await fechar({ referencia: ref, de, ate, pelo, filtro: fs, obs, mapa, substituir, _itens, chaves: grupos.flatMap((g: any) => g.itens.map((e: any) => e.chave)) }); toast("Pagamento de " + nomeMes(ref) + " fechado e guardado no histórico"); setModal(null); pronto(); }
     catch (e: any) { if (/já existe/i.test(e.message) && !substituir) { if (confirm("Já existe um fechamento de " + nomeMes(ref) + ".\n\nSubstituir? O fechamento anterior NÃO é apagado: fica guardado no histórico como “substituído”.")) { setInd(false); return ir(true); } } else toast(e.message); }
     finally { setInd(false); }
   };
@@ -420,7 +471,7 @@ function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto }: any) {
     <p style={{ marginTop: 0 }}>Guarda uma foto deste relatório (valores por montador, contas e as O.S.) no histórico, para consultar depois.</p>
     <div className="field"><label>Referência do pagamento</label><select value={ref} onChange={e => setRef(e.target.value)}>{opRef.map(r => <option key={r} value={r}>{nomeMes(r)}</option>)}</select>
       {!ehQ && <span className="hint">O período escolhido não é uma quinzena exata ({br(de)} a {br(ate)}). Confira a referência.</span>}</div>
-    <div className="resp-box" style={{ margin: "10px 0" }}>Período {br(de)} a {br(ate)} · pela data de {pelo === "fin" ? "finalização" : "montagem"} · {fs === "aprov" ? "só aprovados" : fs === "agu" ? "só aguardando" : "aprovados + aguardando"}<br /><b>{grupos.length} montadores · {n} O.S. · {fmtMoeda(tot)}</b></div>
+    <div className="resp-box" style={{ margin: "10px 0" }}>Período {br(de)} a {br(ate)} · pela data de {pelo === "fin" ? "finalização" : "montagem"} · {fs === "aprov" ? "só aprovados" : fs === "agu" ? "só aguardando" : "aprovados + aguardando"}<br /><b>{grupos.length} montadores · {n} O.S. · {fmtMoeda(tot)}</b>{totDescontos > 0 && <><br />➖ Descontos: {fmtMoeda(totDescontos)} · <b>A pagar: {fmtMoeda(r2(tot - totDescontos))}</b></>}</div>
     <div className="field"><label>Observação (opcional)</label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: enviado ao financeiro em 05/11" /></div>
     <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" disabled={ind || !ref} onClick={() => ir(false)}>{ind ? "Guardando…" : "Fechar e guardar"}</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
   </Modal>;
@@ -435,7 +486,7 @@ export function Historico({ soEnviados = false, podeEnviar = false }: { soEnviad
   const enviarFin = async (x: any) => {
     if (!confirm("Enviar o pagamento " + nomeMes(x.referencia) + " (" + fmtMoeda(Number(x.total)) + ") para o financeiro? A Salete e a Patrícia passam a ver e são avisadas.")) return;
     const { error } = await sb.rpc("montagem_enviar_fin", { p_id: x.id }); if (error) { toast?.(error.message); return; } toast?.("Enviado para o financeiro ✅"); recL(); };
-  useEffect(() => { if (ab) itensFech(ab).then(setItens).catch(() => setItens([])); }, [ab]);
+  useEffect(() => { if (ab) itensFech(ab).then(l => setItens(l.slice().sort((a: any, b: any) => String(a.montador || "").localeCompare(String(b.montador || ""), "pt-BR")))).catch(() => setItens([])); }, [ab]);
   if (erro) return <div className="empty">{erro}</div>;
   if (!l) return <div className="empty">Carregando…</div>;
   if (!l.length && soEnviados) return <div className="empty" style={{ padding: 24 }}>Nenhum pagamento de montagem enviado para o financeiro ainda.</div>;
@@ -444,27 +495,31 @@ export function Historico({ soEnviados = false, podeEnviar = false }: { soEnviad
   const per = (x: any) => br(x.de) + " a " + br(x.ate);
   const baixarFin = () => { if (!f) return;
     pdfFinanceiro("pagamento_montadores_" + f.referencia + (f.ativo ? "" : "_substituido_" + f.id) + ".pdf", nomeMes(f.referencia), per(f),
-      itens.map(x => ({ montador: x.montador, titular: x.titular, doc: x.doc, banco: x.banco, agencia: x.agencia, conta: x.conta, tipoConta: x.tipo_conta, pixTipo: x.pix_tipo, pixChave: x.pix_chave, total: Number(x.total) })),
+      itens.map(x => ({ montador: x.montador, titular: x.titular, doc: x.doc, banco: x.banco, agencia: x.agencia, conta: x.conta, tipoConta: x.tipo_conta, pixTipo: x.pix_tipo, pixChave: x.pix_chave, total: Number(x.a_pagar ?? x.total) })),
       f.ativo ? "" : "FECHAMENTO SUBSTITUÍDO — não usar para pagamento").catch(e => alert("Não foi possível gerar o PDF: " + e.message)); };
   const baixarFinXls = () => { if (!f) return; const linhas = itens.map(x => [x.montador, x.nome_exact, x.titular || "", x.doc || "", x.banco || "", x.agencia || "", x.conta || "", x.tipo_conta || "", x.pix_tipo || "", x.pix_chave || "", x.montagens, Number(x.produtos), Number(x.adicionais), Number(x.total), Number(x.aprovado), Number(x.aguardando), per(f), (x.conta || x.pix_chave) ? "" : "SEM CONTA CADASTRADA"]);
     linhas.push(["TOTAL", "", "", "", "", "", "", "", "", "", f.n_os, "", "", Number(f.total), Number(f.aprovado), Number(f.aguardando), per(f), f.ativo ? "" : "FECHAMENTO SUBSTITUÍDO"]);
     baixarXlsx("pagamento_montadores_" + f.referencia + (f.ativo ? "" : "_substituido_" + f.id) + ".xlsx", CAB_FIN, linhas, "Pagamento " + f.referencia); };
   const baixarDet = () => { if (!f) return; const linhas = itens.flatMap(x => (x.ordens || []).map((o: any) => [x.montador, o.origem === "avulsa" ? "Avulsa · " + (TIPOS_AV[o.tipo || "outro"] || "").replace(/^\S+ /, "") + (o.desc ? ": " + o.desc : "") : o.os, /efetuado/i.test(o.status) ? "Aprovado p/ pagamento" : "Aguardando aprovação", br(o.mont), br(o.fin), Number(o.prod), Number(o.adic), Number(o.total)]));
     baixarXlsx("montagens_" + f.referencia + ".xlsx", ["Montador", "O.S.", "Status", "Data montagem", "Data finalização", "Total produtos", "Adicionais", "Total O.S."], linhas, "Montagens " + f.referencia); };
+  // dia do pagamento: 1ª quinzena (10 a 24) → dia 10 do mês seguinte · 2ª (25 a 09) → dia 25 do mês seguinte
+  const pagaEm = (ref: string) => { const m = ref.match(/^(\d{4})-(\d{2})-([12])$/); if (!m) return ""; const d = new Date(Date.UTC(+m[1], +m[2], 1)); return (m[3] === "1" ? "10" : "25") + "/" + String(d.getUTCMonth() + 1).padStart(2, "0") + "/" + d.getUTCFullYear(); };
+  const detalhe = f && <div style={{ overflowX: "auto", background: "var(--surface)", border: "2px solid var(--primary)", borderRadius: 10, margin: "4px 0 10px" }}>
+      <div className="ma-cab"><b>{pagaEm(f.referencia) ? "Pagamento de " + pagaEm(f.referencia) + " · " : ""}{nomeMes(f.referencia)}{f.ativo ? "" : " (substituído)"} · {per(f)}</b><button className="btn primary sm" onClick={baixarFin}>⬇ Relatório para o financeiro (PDF)</button><button className="btn sm" onClick={baixarDet}>⬇ Detalhado por O.S.</button></div>
+      <table className="ma-tab"><thead><tr><th>Montador</th><th>Conta</th><th className="n">Montagens</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th><th className="n">Descontos</th><th className="n">A pagar</th></tr></thead>
+        <tbody>{itens.map(x => <tr key={x.id || x.nome_exact}><td><b>{x.montador}</b></td><td><small>{x.conta || x.pix_chave ? [x.banco, x.agencia && "ag " + x.agencia, x.conta && "cc " + x.conta, x.pix_chave && "PIX " + x.pix_chave].filter(Boolean).join(" · ") : <span style={{ color: "var(--warn)" }}>sem conta</span>}</small></td><td className="n">{x.montagens}</td><td className="n">{fmtMoeda(Number(x.produtos))}</td><td className="n">{fmtMoeda(Number(x.adicionais))}</td><td className="n">{fmtMoeda(Number(x.total))}</td><td className="n" title={(x.descontos_det || []).map((d: any) => (d.parcela ? d.parcela + " " : "") + d.descricao + ": " + fmtMoeda(Number(d.valor))).join("\n")}>{Number(x.descontos) ? <span style={{ color: "var(--danger)" }}>– {fmtMoeda(Number(x.descontos))}</span> : "—"}</td><td className="n"><b>{fmtMoeda(Number(x.a_pagar ?? x.total))}</b></td></tr>)}
+          {!itens.length && <tr><td colSpan={8} className="hint" style={{ padding: 12 }}>Carregando…</td></tr>}</tbody></table>
+    </div>;
   return <>
-    <div className="card" style={{ padding: 0 }}>
-      <table className="ma-tab"><thead><tr><th>Referência</th><th>Período</th><th className="n">Montadores</th><th className="n">O.S.</th><th className="n">Total</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Fechado por · envio</th><th></th></tr></thead>
-        <tbody>{l.map(x => <tr key={x.id} className={"ma-lin" + (ab === x.id ? " on" : "")} style={x.ativo ? undefined : { opacity: .55 }} onClick={() => setAb(ab === x.id ? null : x.id)}>
-          <td><b>{nomeMes(x.referencia)}</b>{!x.ativo && <span className="pill" style={{ marginLeft: 6 }}>substituído</span>}</td><td>{per(x)}</td><td className="n">{x.n_montadores}</td><td className="n">{x.n_os}</td><td className="n"><b>{fmtMoeda(Number(x.total))}</b></td><td className="n">{fmtMoeda(Number(x.aprovado))}</td><td className="n">{fmtMoeda(Number(x.aguardando))}</td>
+    <div className="card" style={{ padding: 0, overflowX: "auto" }}>
+      <table className="ma-tab"><thead><tr><th>Pagamento em</th><th>Referência</th><th>Período</th><th className="n">Montadores</th><th className="n">O.S.</th><th className="n">A pagar</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Fechado por · envio</th><th></th></tr></thead>
+        <tbody>{l.map(x => <Fragment key={x.id}><tr className={"ma-lin" + (ab === x.id ? " on" : "")} style={x.ativo ? undefined : { opacity: .55 }} onClick={() => { setItens([]); setAb(ab === x.id ? null : x.id); }}>
+          <td><b>{pagaEm(x.referencia) || "—"}</b></td><td>{nomeMes(x.referencia)}{!x.ativo && <span className="pill" style={{ marginLeft: 6 }}>substituído</span>}</td><td>{per(x)}</td><td className="n">{x.n_montadores}</td><td className="n">{x.n_os}</td><td className="n"><b>{fmtMoeda(Number(x.a_pagar ?? x.total))}</b>{Number(x.descontos) ? <div className="hint">desc. {fmtMoeda(Number(x.descontos))}</div> : null}</td><td className="n">{fmtMoeda(Number(x.aprovado))}</td><td className="n">{fmtMoeda(Number(x.aguardando))}</td>
           <td><small>{x.criado_por || ""} · {new Date(x.criado_em).toLocaleString("pt-BR").slice(0, 16)}{x.obs ? " · " + x.obs : ""}{x.substituido_em ? " · substituído em " + new Date(x.substituido_em).toLocaleDateString("pt-BR") : ""}</small>
             {x.ativo && (x.enviado_fin_em ? <div style={{ color: "var(--tn-green-i)", fontSize: 12 }}>📨 enviado ao financeiro {new Date(x.enviado_fin_em).toLocaleDateString("pt-BR")}{x.enviado_fin_por ? " · " + x.enviado_fin_por : ""}</div>
-              : podeEnviar ? <button className="btn primary sm" style={{ marginTop: 4 }} onClick={e => { e.stopPropagation(); enviarFin(x); }}>📨 Enviar para o financeiro</button> : null)}</td><td className="g">ver ›</td></tr>)}</tbody></table>
+              : podeEnviar ? <button className="btn primary sm" style={{ marginTop: 4 }} onClick={e => { e.stopPropagation(); enviarFin(x); }}>📨 Enviar para o financeiro</button> : null)}</td><td className="g">{ab === x.id ? "fechar ▴" : "ver ›"}</td></tr>
+          {ab === x.id && <tr><td colSpan={10} style={{ padding: "0 8px" }}>{detalhe}</td></tr>}</Fragment>)}</tbody></table>
     </div>
-    {f && <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
-      <div className="ma-cab"><b>{nomeMes(f.referencia)}{f.ativo ? "" : " (substituído)"} · {per(f)}</b><button className="btn primary sm" onClick={baixarFin}>⬇ Relatório para o financeiro (PDF)</button><button className="btn sm" onClick={baixarDet}>⬇ Detalhado por O.S.</button></div>
-      <table className="ma-tab"><thead><tr><th>Montador</th><th>Conta</th><th className="n">Montagens</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th></tr></thead>
-        <tbody>{itens.map(x => <tr key={x.id || x.nome_exact}><td><b>{x.montador}</b></td><td><small>{x.conta || x.pix_chave ? [x.banco, x.agencia && "ag " + x.agencia, x.conta && "cc " + x.conta, x.pix_chave && "PIX " + x.pix_chave].filter(Boolean).join(" · ") : <span style={{ color: "var(--warn)" }}>sem conta</span>}</small></td><td className="n">{x.montagens}</td><td className="n">{fmtMoeda(Number(x.produtos))}</td><td className="n">{fmtMoeda(Number(x.adicionais))}</td><td className="n"><b>{fmtMoeda(Number(x.total))}</b></td></tr>)}</tbody></table>
-    </div>}
   </>;
 }
 
