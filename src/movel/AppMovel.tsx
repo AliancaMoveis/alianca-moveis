@@ -379,7 +379,13 @@ function Painel({ perfil, abrir }: any) {
     const F = R.funilConsultor(eu, P.de, P.ate);
     const aConfirmar = st.chamados.filter((c: any) => c.consultorId === eu && c.venda && ["registrada"].includes(c.venda.status) && R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, P.de, P.ate));
     const doPer = R.clientesConsultor(eu, P.de, P.ate);
-    if (lista === "visitas") { itens = ex.visitas; tituloLista = "Visitas realizadas (pagas)"; }
+    const AT = R.atividadeConsultor(eu, P.de, P.ate);
+    if (lista === "visitas") { itens = AT.visitadas; tituloLista = "Visitas realizadas"; }
+    if (lista === "avisitar") { itens = AT.aVisitar; tituloLista = "Clientes para visitar"; }
+    if (lista === "atrasadas") { itens = AT.atrasadas; tituloLista = "Visitas atrasadas"; }
+    if (lista === "vieram") { itens = AT.vieram; tituloLista = "Clientes que vieram na loja"; }
+    if (lista === "naloja") { itens = AT.naLoja; tituloLista = "Agendados na loja"; }
+    if (lista === "faltaloja") { itens = AT.faltaLoja; tituloLista = "Visitados sem agendamento na loja"; }
     if (lista === "vendas") { itens = ex.vendas; tituloLista = "Vendas efetivadas"; }
     if (lista === "confirmar") { itens = aConfirmar; tituloLista = "Vendas aguardando confirmação"; }
     if (lista === "futura") { itens = ex.pendentes; tituloLista = "Vendas com promissória em aberto (comissão quando pagar)"; }
@@ -387,8 +393,15 @@ function Painel({ perfil, abrir }: any) {
     if (lista === "medidas") { itens = ex.medidas; tituloLista = "Medidas feitas (pagas, sem comissão)"; }
     conteudo = <>
       <div className="mv-receber"><span>Previsão a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.visitas.length} visita(s) + {ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + comissão {String(cfg.comissaoPct).replace(".", ",")}% das vendas efetivadas{ex.totalReembolsos ? " + reembolsos " + fmtMoeda(ex.totalReembolsos) : ""}{ex.auxilio ? " + auxílio fixo " + fmtMoeda(ex.auxilio) + " (dia " + (cfg.diaAuxilio || 15) + ")" : ""}</small></div>
+      <div className="mv-sec">📋 Suas atividades · {off === 0 ? P.nome + " (até hoje)" : P.nome}</div>
       <div className="mv-tiles">
-        <Tile k="visitas" n={ex.visitas.length} l="Visitas realizadas" on={() => alternar("visitas")} /><Tile n={fmtMoeda(ex.pagamentoVisitas)} l="Pagamento por visitas" />
+        <Tile k="avisitar" n={AT.aVisitar.length} l="Para visitar" cor="var(--primary)" on={() => alternar("avisitar")} /><Tile k="atrasadas" n={AT.atrasadas.length} l="Visitas atrasadas" cor={AT.atrasadas.length ? "var(--danger)" : undefined} on={() => alternar("atrasadas")} />
+        <Tile k="visitas" n={AT.visitadas.length} l="Visitas realizadas" cor="var(--st-respondida)" on={() => alternar("visitas")} /><Tile k="faltaloja" n={AT.faltaLoja.length} l="Visitados sem loja agendada" cor={AT.faltaLoja.length ? "var(--warn)" : undefined} on={() => alternar("faltaloja")} />
+        <Tile k="naloja" n={AT.naLoja.length} l="Agendados na loja" on={() => alternar("naloja")} /><Tile k="vieram" n={AT.vieram.length} l="Vieram na loja" cor="var(--st-concluida)" on={() => alternar("vieram")} />
+      </div>
+      <div className="mv-sec">💰 Previsão de pagamento (até a autorização da Gestão)</div>
+      <div className="mv-tiles">
+        <Tile n={ex.qtdVisitas} l="Visitas que contam para pagamento" /><Tile n={fmtMoeda(ex.pagamentoVisitas)} l="Pagamento por visitas" />
         <Tile k="medidas" n={ex.medidas.length} l="📐 Medidas feitas" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
         <Tile k="vendas" n={ex.vendas.length} l="Vendas efetivadas" cor="var(--st-concluida)" on={() => alternar("vendas")} /><Tile n={fmtMoeda(ex.totalVendido)} l="Total vendido" />
         <Tile n={fmtMoeda(ex.comissao)} l={"Previsão de comissão (" + String(cfg.comissaoPct).replace(".", ",") + "%)"} cor="var(--st-concluida)" /><Tile k="futura" n={fmtMoeda(ex.comissaoFutura)} l={"Comissão futura · " + ex.pendentes.length + " promissória(s)"} cor={ex.pendentes.length ? "var(--warn)" : undefined} on={() => alternar("futura")} /><Tile k="confirmar" n={aConfirmar.length} l="Vendas a confirmar" cor={aConfirmar.length ? "var(--warn)" : undefined} on={() => alternar("confirmar")} />

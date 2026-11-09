@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { sb } from "../lib/supabase";
 import { useApp } from "../estado";
-import { TIPO_REEMBOLSO, fmtDate, fmtDateTime, fmtMoeda, parseMoeda, vendaContaVolume } from "../lib/regras";
+import { STATUS_CLIENTE, TIPO_REEMBOLSO, fmtDate, fmtDateTime, fmtMoeda, parseMoeda, vendaContaVolume } from "../lib/regras";
 import { valorPendente, promAbertas, vendasDoPeriodo } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { PromissoriasAbertas } from "../comp/VendaValidar";
@@ -92,6 +92,32 @@ function MeuCiclo({ r, de, ate, nome }: { r: any; de: string; ate: string; nome?
       {bloco("✅", "Total previsto", fmtMoeda(r.total), "a confirmar no fechamento", "var(--st-concluida)")}
     </div>
     {r.comissaoFutura > 0 && <div className="hint" style={{ marginTop: 8 }}>🧾 Comissão futura: {fmtMoeda(r.comissaoFutura)} em promissórias — entra no ciclo em que forem pagas.</div>}
+  </div>;
+}
+
+/** O que o consultor está fazendo — aparece mesmo antes da Gestão autorizar o pagamento (o pagamento é previsão) */
+function AtividadesConsultor({ uid, de, ate }: { uid: string; de: string; ate: string }) {
+  const { R, abrirDetalhe } = useApp() as any;
+  const [ab, setAb] = useState("");
+  if (!uid || !(R.getUser(uid)?.setores || []).includes("consultor_externo")) return null;
+  const A = R.atividadeConsultor(uid, de, ate);
+  const blocos: [string, string, any[], string, (c: any) => string][] = [
+    ["avisitar", "🧭 Para visitar", A.aVisitar, "var(--primary)", c => c.dataVisita ? "visita " + fmtDateTime(c.dataVisita) : "sem data de visita"],
+    ["atrasadas", "⏰ Visitas atrasadas", A.atrasadas, "var(--danger)", c => "era " + fmtDateTime(c.dataVisita)],
+    ["visitadas", "✅ Visitas realizadas", A.visitadas, "var(--st-respondida)", c => (c.dataVisita ? "visita " + fmtDateTime(c.dataVisita) : "visitado") + (c.dataLoja ? " · loja " + fmtDateTime(c.dataLoja) : " · sem loja agendada")],
+    ["faltaloja", "📌 Visitados sem loja agendada", A.faltaLoja, "var(--warn)", c => c.dataVisita ? "visita " + fmtDateTime(c.dataVisita) : ""],
+    ["naloja", "🏬 Agendados na loja", A.naLoja, "var(--ink)", c => "loja " + fmtDateTime(c.dataLoja)],
+    ["vieram", "🙋 Vieram na loja", A.vieram, "var(--st-concluida)", c => "veio " + fmtDateTime(c.dataLoja) + (c.venda ? " · venda " + c.venda.numero : "")],
+  ];
+  const sel = blocos.find(b => b[0] === ab);
+  return <div className="panel" style={{ marginBottom: 14 }}>
+    <h3>📋 Atividades {R.currentUserId === uid ? "" : "de " + R.nomeUser(uid)} <span className="hint" style={{ marginLeft: 6 }}>o que foi feito no período (independe da autorização do pagamento) · clique para ver os clientes</span></h3>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 8 }}>
+      {blocos.map(([k, l, li, cor]) => <button key={k} className="card" onClick={() => setAb(ab === k ? "" : k)} style={{ padding: "10px 12px", textAlign: "left", cursor: "pointer", border: ab === k ? "2px solid var(--primary)" : undefined }}>
+        <div style={{ fontSize: 24, fontWeight: 800, color: li.length ? cor : "var(--ink-faint)" }}>{li.length}</div><div className="hint" style={{ fontWeight: 700 }}>{l}</div></button>)}
+    </div>
+    {sel && <div style={{ marginTop: 10 }}>{sel[2].length ? sel[2].map((c: any) => <div className="fin-item" key={c.id} style={{ cursor: "pointer" }} onClick={() => abrirDetalhe(c.id)}><div><div className="nm">{c.cliente}</div><div className="sub">{sel[4](c)}{c.produto ? " · " + c.produto : ""}</div></div><div className="val" style={{ fontSize: 12 }}>{STATUS_CLIENTE[R.statusClienteDe(c)] || ""}</div></div>)
+      : <div className="empty" style={{ padding: "16px 10px" }}>Nenhum cliente aqui.</div>}</div>}
   </div>;
 }
 
@@ -249,6 +275,7 @@ function FinConsultor() {
   const pagOrd = r.pagamentos.slice().sort((a: any, b: any) => +new Date(b.data) - +new Date(a.data));
   return (
     <section className="view active" id="view-financeiro">{cab}
+      <AtividadesConsultor uid={alvo} de={de} ate={ate} />
       <MeuCiclo r={r} de={de} ate={ate} nome={souGestor ? R.nomeUser(alvo) : undefined} />
       <div className="kpis" id="finKpis"><Kpi n={r.qtdVisitas} l={"Visitas pagas" + (r.oficial && r.oficial.papel !== "medidor" ? " (oficial)" : "")} /><Kpi n={r.qtdMedidas} l={"Medidas feitas" + (r.oficial && r.oficial.papel === "medidor" ? " (oficial)" : "")} /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas com pagamento" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" />{r.auxilio > 0 && <Kpi fs={22} n={fmtMoeda(r.auxilio)} l={"Auxílio fixo · pago dia " + r.datasAuxilio.map((d: string) => d.slice(8) + "/" + d.slice(5, 7)).join(", ")} />}<Kpi fs={22} n={fmtMoeda(r.total)} l={"Previsão a receber no período (a confirmar)"} cor="var(--st-concluida)" /><Kpi fs={22} n={fmtMoeda(r.comissaoFutura)} l={`Comissão futura (${r.pendentes.length} em promissória)`} cor="var(--warn)" /></div>
       <PrevisaoCiclos ids={[alvo]} />

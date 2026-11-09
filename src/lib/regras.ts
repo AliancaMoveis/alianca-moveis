@@ -668,6 +668,21 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // importados sem visita no mês: vendas da planilha sem visita e agendamentos na loja cuja visita foi no mês anterior
   const vendaSemVisita = (c: Chamado) => !!(c.tratativa && ((c.tratativa.importado && !c.tratativa.realizada) || c.tratativa.semVisita));
   const visitaFeita = (c: Chamado) => !vendaSemVisita(c) && !!((c.tratativa && c.tratativa.realizada) || c.dataLoja || c.venda);
+  // atividade do consultor externo (independe da aprovação do pagamento): a visitar, atrasadas, visitadas, vieram na loja, agendados na loja
+  function atividadeConsultor(uid: string, de: string, ate: string) {
+    const agora = new Date(); const hojeD = hojeISO();
+    const meus = state.chamados.filter(c => c.consultorId === uid && TIPOS[c.tipo] && TIPOS[c.tipo].presale && !(c.tratativa && (c.tratativa.importadoVisita || c.tratativa.visitaImportada)));
+    const feita = (c: Chamado) => !!(c.tratativa && c.tratativa.realizada);
+    const cancelado = (c: Chamado) => ["visita_cancelada", "loja_cancelada", "nao_vai_comprar"].includes(statusClienteDe(c) as string);
+    const pendVis = meus.filter(c => c.setorDestino === "consultor_externo" && !feita(c) && !cancelado(c));
+    const aVisitar = pendVis.filter(c => !c.dataVisita || String(c.dataVisita).slice(0, 10) >= hojeD).sort((a, b) => String(a.dataVisita || "9").localeCompare(String(b.dataVisita || "9")));
+    const atrasadas = pendVis.filter(c => c.dataVisita && String(c.dataVisita).slice(0, 10) < hojeD).sort((a, b) => String(a.dataVisita).localeCompare(String(b.dataVisita)));
+    const visitadas = meus.filter(c => feita(c) && (dentroPeriodo(c.dataVisita || c.dataLoja || c.criadoEm, de, ate) || (!de && !ate))).sort((a, b) => String(b.dataVisita || b.dataLoja || "").localeCompare(String(a.dataVisita || a.dataLoja || "")));
+    const vieram = meus.filter(c => c.dataLoja && new Date(c.dataLoja) <= agora && compareceu(c) && (dentroPeriodo(c.dataLoja, de, ate) || (!de && !ate))).sort((a, b) => String(b.dataLoja).localeCompare(String(a.dataLoja)));
+    const naLoja = meus.filter(c => c.dataLoja && new Date(c.dataLoja) > agora && !c.venda && !cancelado(c)).sort((a, b) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
+    const faltaLoja = meus.filter(c => feita(c) && !c.dataLoja && !c.venda && !cancelado(c));
+    return { aVisitar, atrasadas, visitadas, vieram, naLoja, faltaLoja };
+  }
   const compareceu = (c: Chamado) => !!c.venda || ["orcamento", "sem_resposta", "reprovado", "nao_vai_comprar", "atendido"].includes(statusClienteDe(c));
   function funil(lista: Chamado[]) {
     const pct = cfg().comissaoPct;
@@ -1118,7 +1133,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     clienteCriticoInatividade, podeVer, podeTratar, podeAnexar, podeCriarTipo, podeCriarCC, podeCriarMkt, operacionais, setoresVisiveis,
     funil, funilConsultor, clientesConsultor, visitaFeita, ehImportado, compareceu, ancoraVisita,
     msgWhatsMedida, temAcesso, ehDireto, ehPorta, temPresenca, veAnuncios, veQualidade, oculto, podeIniciarAtend, precisaDefinirVendedor, origemLoja, semAnexo, semParecer, parecerCobrado, souRespLoja, vendedores: projetistas, cienteDe, vendAgenda, folgaDia, dispVendedor, soCallCenter, acaoDeFora, ehJuridico,
-    podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, dentroPeriodo,
+    podeVerValor, ehConsultorExterno, ehPosvenda, podeVerPosvenda, podeMontadores, responsaveisChecklist, medidores, nomeMontador, podeEditarAgenda, podeMudarDataLoja, consultores, projetistas, cfg, extratoConsultor, atividadeConsultor, dentroPeriodo,
     podeChecklist, alguemCiente, cancelouSemCiente, ordenar, waLink, waLinkCliente, mapsLink, wazeLink, pendenciasGestao, pendentesDirecionamento, minhasPendencias, statsPessoa, menuPerfil,
   };
 }
