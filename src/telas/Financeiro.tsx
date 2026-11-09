@@ -222,7 +222,7 @@ function FinConsultor() {
   let sub = souGestor ? "Visitas, medidas, comissão e reembolsos de cada consultor e medidor. Filtre por período." : "Suas visitas, medidas, vendas, comissão e reembolsos.";
   const cab = (
     <>
-      <div className="view-head"><div><h2 id="finTitulo">{souGestor ? "Financeiro — Consultores e medidores" : "Financeiro"}</h2><p id="finSub">{souGestor && alvo ? "Extrato de " + R.nomeUser(alvo) + ". Filtre por período." : sub}</p></div></div>
+      <div className="view-head"><div><h2 id="finTitulo">{souGestor ? "Financeiro — Consultores e medidores" : "💰 Meu financeiro"}</h2><p id="finSub">{souGestor && alvo ? "Extrato de " + R.nomeUser(alvo) + ". Filtre por período." : sub}</p></div></div>
       <div className="card" style={{ padding: "16px 18px", marginBottom: 16 }}>
         <PeriodosCiclo de={de} ate={ate} setDe={setDe} setAte={setAte} />
         <div className="grid">

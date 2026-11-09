@@ -2062,3 +2062,13 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 /* rota do consultor */
 .mv-mini{padding:4px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:700;cursor:pointer}
 .mv-mini:disabled{opacity:.35}
+/* Meu financeiro dentro do app do celular (consultor/medidor) */
+.mv-fin .view-head h2{font-size:20px}.mv-fin .view-head p{font-size:13px}
+.mv-fin .panel-grid{display:block}.mv-fin .panel{margin-bottom:12px}
+.mv-fin .kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.mv-fin .grid{grid-template-columns:1fr 1fr}
+.mv-fin table{font-size:12px}
+.mv-fin .chips{flex-wrap:wrap}
+.mv-fin .grid{gap:8px}.mv-fin .grid input{width:100%;min-width:0;box-sizing:border-box}.mv-fin .card{max-width:100%;box-sizing:border-box}
+.mv-fin .panel h3{flex-wrap:wrap}.mv-fin .panel h3 .hint{display:block;width:100%;margin:2px 0 0!important}
+.mv-fin .panel > div[style*="minmax(160px"]{grid-template-columns:1fr 1fr!important}

@@ -21,6 +21,7 @@ import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
 import { CancelouLoja, ConfirmarVinda, ReabilitarVisita, SeloVinda, SituacaoConsultor, VisitaRealizada, vindaConfirmada } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
+import Financeiro from "../telas/Financeiro";
 import { RotaVisitas } from "./RotaVisitas";
 import { RemarcarData } from "../comp/Remarcar";
 import Agenda from "../telas/Agenda";
@@ -98,8 +99,8 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
     : perfil === "juridico" ? [...(R.temPresenca() ? [["presenca", "Presença", "✅"], ["porta", "Novo cliente", "＋"]] as [string, string, string][] : []), ["jur", "Jurídico", "⚖"], ...((R.me() as any)?.editaAgenda ? [["loja", "Agenda", "🏬"], ["distribuir", "Vendedor", "🔀"]] as [string, string, string][] : []), ["eu", "Mais", "☰"]]
     : perfil === "posvenda" ? [...(R.temPresenca() ? [["presenca", "Presença", "✅"], ["porta", "Novo cliente", "＋"]] as [string, string, string][] : []), ["pv", "Pós-venda", "🛠"], ["pvnova", "Nova", "＋"], ["eu", "Mais", "☰"]]
     : perfil === "produtos" ? [["produto", "Produto", "🏷"], ["eu", "Mais", "☰"]]
-    : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
-    : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["cagenda", "Agenda", "📅"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
+    : perfil === "medidor" ? [["hoje", "Hoje", "☀"], ["medidas", "Medidas", "📐"], ["painel", "Painel", "📊"], ["fin", "Financeiro", "💰"], ["eu", "Eu", "👤"]]
+    : perfil === "consultor" ? [["hoje", "Hoje", "☀"], ["clientes", "Clientes", "👥"], ["novo", "Novo", "＋"], ["cagenda", "Agenda", "📅"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["fin", "Financeiro", "💰"], ["eu", "Eu", "👤"]]
     : perfil === "vendedor" ? [["hoje", "Hoje", "☀"], ["urgente", "Urgente", "🚨"], ["clientes", "Clientes", "👥"], ["loja", "Loja", "🏬"], ["painel", "Painel", "📊"], ["eu", "Eu", "👤"]]
     : !R.ehGestao() && R.mySetores().includes("marketing_supervisao") ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ...(gerAnuncios ? [] : [["time", "Time", "🎯"]] as [string, string, string][]), ["equipe", "Equipe", "👥"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
     : podeDistribuir(R) ? [["resumo", "Painel", "📊"], ["distribuir", "Distribuir", "🔀"], ["equipe", "Equipe", "👥"], ["acao", "Ação", "⚑"], ...(R.veAnuncios() ? [["anuncios", "Anúncios", "📣"]] as [string, string, string][] : []), ["loja", "Loja", "🏬"], ["eu", "Mais", "☰"]]
@@ -158,6 +159,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
         {perfil === "marketing" && aba === "ganhos" && <MktGanhos abrir={abrirDetalhe} />}
         {podeRegistrar && aba === "novo" && <>{perfil === "gestor" && <button className="mv-voltar" onClick={() => setAba("resumo")}>‹ Voltar</button>}<MktNovo pronto={id => { if (perfil === "consultor") { setAba("clientes"); setAberto(id); return; } setAba(perfil === "marketing" ? "clientes" : "resumo"); abrirDetalhe(id); }} /></>}
         {(perfil === "consultor" || perfil === "vendedor" || perfil === "medidor") && aba === "painel" && <Painel perfil={perfil} abrir={setAberto} />}
+        {(perfil === "consultor" || perfil === "medidor") && aba === "fin" && <div className="mv-fin"><Financeiro /></div>}
         {perfil === "gestor" && aba === "resumo" && <GestResumo ir={k => abas.some(x => x[0] === k) && setAba(k)} />}
         {perfil === "gestor" && aba === "equipe" && <GestEquipe irTime={gereMkt ? () => setAba("time") : undefined} irVend={podeGerirVendedores(R) ? () => setAba("vendedores") : undefined} />}
         {perfil === "gestor" && aba === "time" && <GestTime voltar={!abas.some(x => x[0] === "time") ? () => setAba("equipe") : undefined} />}
@@ -213,7 +215,8 @@ function consDados(R: any, st: any) {
   const aFazer = meus.filter((c: any) => c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.realizada)).sort((a: any, b: any) => String(a.dataVisita || "9").localeCompare(String(b.dataVisita || "9")));
   const faltaLoja = meus.filter((c: any) => c.setorDestino === "consultor_externo" && c.tratativa && c.tratativa.realizada && !c.dataLoja);
   const deHoje = aFazer.filter((c: any) => dia(c.dataVisita) === hoje);
-  const atrasadas = aFazer.filter((c: any) => c.dataVisita && dia(c.dataVisita) < hoje);
+  // atrasada: a data da visita passou e não foi realizada (cliente em espera/obra ou que cancelou não conta)
+  const atrasadas = aFazer.filter((c: any) => c.dataVisita && dia(c.dataVisita) < hoje && !["standby", "em_obras", "visita_cancelada", "nao_vai_comprar"].includes(R.statusClienteDe(c)));
   const semAnexo = meus.filter((c: any) => R.semAnexo(c));
   const naLoja = meus.filter((c: any) => c.dataLoja && dia(c.dataLoja) >= hoje && !c.venda).sort((a: any, b: any) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
   // cancelaram a visita (últimos 60 dias): dá para reabilitar e marcar nova data

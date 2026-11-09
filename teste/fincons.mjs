@@ -1,0 +1,10 @@
+import { chromium } from "playwright";
+const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+const p = await b.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148" });
+const erros = []; p.on("pageerror", e => erros.push(e.message));
+await p.goto("http://localhost:5199/mock.html?uid=00000000-0000-4000-a000-000000000011");
+await p.waitForSelector(".mv-tabs button", { timeout: 10000 });
+await p.locator(".mv-tabs button", { hasText: "Financeiro" }).click(); await p.waitForTimeout(600);
+await p.screenshot({ path: "/tmp/claude-0/fincons.png", fullPage: false });
+const w = await p.evaluate(() => document.documentElement.scrollWidth); console.log("largura", w, "erros", erros);
+await b.close();
