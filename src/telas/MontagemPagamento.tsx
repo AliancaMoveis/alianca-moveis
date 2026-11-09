@@ -250,6 +250,8 @@ export default function MontagemPagamento() {
   // pendentes de quinzenas anteriores: fechadas fora do prazo ou aprovadas depois — ainda não pagas em nenhum fechamento
   const pendente = (e: Ef) => { const d = dataDe(e); if (!pagas?.desde || d >= de || d < pagas.desde) return false; if (q2P && pagaDia10(cadDe(e.montador)?.conta)) return false; return !noPeriodo(e) && !pagaEm(e); };
   const com10 = q1P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= deRetrasada && dataDe(e) < de && !pagaEm(e)).map(e => cadDe(e.montador)?.nome || e.montador))) : [];
+  // quem recebe só no dia 10 e já teve a retrasada paga em outro fechamento (não paga de novo)
+  const dia10Pago = q1P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= deRetrasada && dataDe(e) < de && pagaEm(e)).map(e => (cadDe(e.montador)?.nome || e.montador) + " (já pago no fechamento " + nomeMes(pagaEm(e)) + ")"))) : [];
   const pendTodas = (dados?.ef || []).filter(e => conta(e) && pendente(e));
   const pendCh = new Set(pendTodas.map(e => e.chave));
   const lista = (dados?.ef || []).filter(e => conta(e) && (fs === "todos" || (fs === "aprov" ? aprovado(e) : aguardando(e)))).filter(e => (noPeriodo(e) && !pagaEm(e)) || (incluirPend && pendCh.has(e.chave)));
@@ -357,6 +359,7 @@ export default function MontagemPagamento() {
       {jaPagasNoPer.length > 0 && <div className="hint" style={{ marginTop: 6 }}>{jaPagasNoPer.length} O.S. deste período já foram pagas em outro fechamento e não entram de novo ({fmtMoeda(r2(jaPagasNoPer.reduce((s, e) => s + e.total, 0)))}).</div>}
       {ehQzP && soma(g => g.aguN) > 0 && <div className="hint" style={{ marginTop: 6, color: "var(--tn-amber-i)" }}>⏳ Ao fechar com “só aprovados”, {soma(g => g.aguN)} O.S. aguardando aprovação ({fmtMoeda(soma(g => g.agu))}) ficam pendentes e aparecem no próximo pagamento quando forem aprovadas.</div>}
       {com10.length > 0 && <div className="ro-note" style={{ marginTop: 12 }}>📅 <b>Recebe só no dia 10:</b> {com10.join(", ")} — neste pagamento entram também as montagens da quinzena retrasada ({br(deRetrasada)} a {br(somaDias(de, -1))}).</div>}
+      {dia10Pago.length > 0 && <div className="ro-note" style={{ marginTop: 12 }}>📅 <b>Recebe só no dia 10 — retrasada já paga:</b> {dia10Pago.join(", ")}. Por isso entra só a quinzena passada.</div>}
       {fora10.length > 0 && <div className="ro-note" style={{ marginTop: 12 }}>📅 <b>Fora deste pagamento (recebe só no dia 10):</b> {fora10.join(", ")} — as montagens desta quinzena entram no pagamento do dia 10.</div>}
       {semConta.length > 0 && <div className="alerta" style={{ marginTop: 12 }}>⚠️ <b>{semConta.length} montador(es) sem conta cadastrada ou sem vínculo com o cadastro:</b> {semConta.map(g => g.nome).join(", ")}. Vincule na tabela abaixo ou cadastre em <b>Cadastros → Montadores → 🔒 Contas para pagamento</b>.</div>}
       {outros > 0 && <div className="hint" style={{ marginTop: 6 }}>{outros} O.S. no período com outro status (ex.: aguardando montagem, cancelado) não entram no pagamento.</div>}
