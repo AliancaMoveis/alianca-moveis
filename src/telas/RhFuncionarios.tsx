@@ -4,6 +4,7 @@ import { useApp } from "../estado";
 import { hojeISO } from "../lib/regras";
 import { podeRh } from "../lib/ponto";
 import { abrirDoc, apagarDoc, apagarFuncionario, aprovarEnvio, criarLink, fmtCpf, listarDocs, listarFuncionarios, listarLinks, mudarLink, salvarFuncionario, subirDoc, urlAdmissao, STATUS_FUNC, TIPOS_DOC, EMPRESAS, nomeEmpresa, type Doc, type Envio, type Funcionario, type Link } from "../lib/rh";
+import { pdfFicha } from "../lib/rhPdf";
 import { CamposFicha, abrirFicha, separarFicha, FICHA_PADRAO, MOTIVOS_DESLIG } from "../lib/rhFicha";
 
 const br = (s?: string | null) => (s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "—");
@@ -97,7 +98,7 @@ function Ficha({ id, dados, fechar, rec, uid, toast }: { id: string | null; dado
       <style>{".grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}@media(max-width:760px){.grid3{grid-template-columns:1fr}}"}</style>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <h3 style={{ margin: 0 }}>{id ? "✏️ " + f.nome : "＋ Novo funcionário"}</h3>
-        <span style={{ display: "flex", gap: 8 }}>{id && <button className="btn sm" onClick={excluir}>🗑 Excluir</button>}<button className="btn sm" onClick={fechar}>Fechar</button><button className="btn primary sm" disabled={salvando} onClick={salvar}>{salvando ? "Salvando…" : "💾 Salvar"}</button></span>
+        <span style={{ display: "flex", gap: 8 }}>{id && <button className="btn sm" onClick={() => { toast("Gerando o PDF…"); pdfFicha({ ...f }, (docs || []).map((x: any) => ({ campo: x.tipo, nome: x.titulo || x.arquivo, caminho: x.arquivo }))).catch((e: any) => toast(e.message)); }}>🖨 Gerar PDF</button>}{id && <button className="btn sm" onClick={excluir}>🗑 Excluir</button>}<button className="btn sm" onClick={fechar}>Fechar</button><button className="btn primary sm" disabled={salvando} onClick={salvar}>{salvando ? "Salvando…" : "💾 Salvar"}</button></span>
       </div>
       <CamposFicha f={f} set={setF} anexo={(tipo, rotulo) => <AnexoRh key={tipo} id={id} tipo={tipo} rotulo={rotulo} docs={docs} recDocs={recDocs} uid={uid} toast={toast} />} />
       <h4 style={{ margin: "14px 0 6px" }}>Contrato</h4>
@@ -242,7 +243,7 @@ function Revisao({ envio, link, fechar, depois, uid, toast }: { envio: Envio; li
     <div className="card" style={{ marginTop: 14, padding: 16, borderLeft: "4px solid var(--st-concluida)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <h3 style={{ margin: 0 }}>Revisão · {fd.nome || link?.nome}</h3>
-        <span style={{ display: "flex", gap: 8 }}><button className="btn sm" onClick={fechar}>Fechar</button><button className="btn primary sm" disabled={ok} onClick={aprovar}>✅ Aprovar e cadastrar</button></span>
+        <span style={{ display: "flex", gap: 8 }}><button className="btn sm" onClick={() => { toast("Gerando o PDF…"); pdfFicha({ ...d, ...fd, cargo, setor, admissao, empresa }, docs.map(x => ({ campo: x.campo || "outro", nome: x.nome, caminho: x.caminho })), "Ficha do candidato").catch((e: any) => toast(e.message)); }}>🖨 Gerar PDF</button><button className="btn sm" onClick={fechar}>Fechar</button><button className="btn primary sm" disabled={ok} onClick={aprovar}>✅ Aprovar e cadastrar</button></span>
       </div>
       <p className="hint" style={{ margin: "6px 0 0" }}>Enviado em {new Date(envio.enviado_em).toLocaleString("pt-BR")} · {docs.length} documento(s). Abaixo está tudo o que o candidato preencheu no link, com os documentos em cada parte — corrija aqui se precisar, antes de aprovar.</p>
       {ficha}

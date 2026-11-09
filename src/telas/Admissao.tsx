@@ -5,6 +5,24 @@ import { CamposFicha, abrirFicha } from "../lib/rhFicha";
 
 
 
+// Foto do celular: reduz (máx. 1800 px, JPEG) e guarda uma cópia na memória na hora em que é escolhida.
+// Evita o "Failed to fetch" (arquivo da câmera que o Android deixa de liberar depois) e deixa o envio rápido no 4G.
+async function prepararArq(f: File): Promise<File> {
+  try {
+    if (f.type.startsWith("image/") && !/gif|svg/.test(f.type)) {
+      const bmp: any = await (window as any).createImageBitmap(f).catch(() => null);
+      const img: any = bmp || await new Promise((ok, no) => { const i = new Image(); const u = URL.createObjectURL(f); i.onload = () => { ok(i); URL.revokeObjectURL(u); }; i.onerror = no; i.src = u; });
+      const w0 = img.width, h0 = img.height, k = Math.min(1, 1800 / Math.max(w0, h0));
+      const cv = document.createElement("canvas"); cv.width = Math.round(w0 * k); cv.height = Math.round(h0 * k);
+      cv.getContext("2d")!.drawImage(img, 0, 0, cv.width, cv.height);
+      const blob: Blob | null = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.82));
+      if (blob) return new File([blob], (f.name || "foto").replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+    }
+    return new File([await f.arrayBuffer()], f.name || "arquivo", { type: f.type || "application/octet-stream" });
+  } catch { return f; }
+}
+const espera = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 export default function Admissao() {
   const token = new URLSearchParams(location.search).get("t") || "";
   const [info, setInfo] = useState<any>(undefined);
@@ -12,6 +30,7 @@ export default function Admissao() {
   const [erro, setErro] = useState("");
   const [d, setD] = useState<any>(abrirFicha({ nome: "", cpf: "", rg: "", nascimento: "", telefone: "", email: "", endereco: "", estado_civil: "", escolaridade: "", pis: "", ctps: "", banco: "", agencia: "", conta: "", emergencia_nome: "", emergencia_tel: "", obs: "" }));
   const [arqs, setArqs] = useState<Record<string, File[]>>({});
+  const enviados = useRef(new Map<File, any>()); // o que já subiu não sobe de novo ao tentar outra vez
   useEffect(() => { document.title = "Admissão · Aliança Móveis"; if (!token) { setInfo(null); return; } admissaoInfo(token).then(setInfo).catch(() => setInfo(null)); }, []);
 
   if (info === undefined) return <Caixa><p style={{ textAlign: "center" }}>Carregando…</p></Caixa>;
@@ -27,7 +46,14 @@ export default function Admissao() {
     if (!arqs.rg_cpf?.length) { setErro("Anexe a foto do seu RG e CPF."); return; }
     try {
       const docs: any[] = []; let n = 0; const total = Object.values(arqs).reduce((s, l) => s + l.length, 0);
-      for (const [campo, lista] of Object.entries(arqs)) for (const f of lista) { n++; setEnviando("Enviando documento " + n + " de " + total + "…"); docs.push(await admissaoSubirDoc(token, campo, f)); }
+      for (const [campo, lista] of Object.entries(arqs)) for (const f of lista) {
+        n++; setEnviando("Enviando documento " + n + " de " + total + "…");
+        const ja = enviados.current.get(f); if (ja) { docs.push(ja); continue; }
+        let feito: any = null, ult: any = null;
+        for (let t = 0; t < 3 && !feito; t++) { try { feito = await admissaoSubirDoc(token, campo, f); } catch (e: any) { ult = e; if (/muito grande/i.test(e.message || "")) break; await espera(1500 * (t + 1)); } }
+        if (!feito) throw new Error(/fetch|network|rede/i.test(String(ult?.message || "")) ? "A internet falhou ao enviar o documento " + n + " de " + total + ". Confira a conexão (Wi-Fi ou 4G) e toque em Enviar de novo — o que já foi enviado não precisa subir outra vez." : (ult?.message || "Não foi possível enviar o documento " + n));
+        enviados.current.set(f, feito); docs.push(feito);
+      }
       setEnviando("Enviando os dados…");
       await admissaoEnviar(token, { ...d, dependentes: d.tem_dependentes === "sim" ? (d.dependentes || []).filter((x: any) => String(x.nome || "").trim()) : [] }, docs);
       setOk(true);
@@ -51,7 +77,8 @@ export default function Admissao() {
 
 function Anexo({ rotulo, dica, lista, muda, selfie }: { rotulo: string; dica: string; lista: File[]; muda: (l: File[]) => void; selfie?: boolean }) {
   const arq = useRef<HTMLInputElement>(null), cam = useRef<HTMLInputElement>(null);
-  const add = (fs: FileList | null, el: HTMLInputElement | null) => { if (fs?.length) muda([...lista, ...Array.from(fs)]); if (el) el.value = ""; };
+  const [prep, setPrep] = useState(false);
+  const add = async (fs: FileList | null, el: HTMLInputElement | null) => { const l = fs ? Array.from(fs) : []; if (el) el.value = ""; if (!l.length) return; setPrep(true); try { const novos = await Promise.all(l.map(prepararArq)); muda([...lista, ...novos]); } finally { setPrep(false); } };
   return (
     <div className="card" style={{ padding: 12, marginBottom: 10 }}>
       <div><b>{rotulo}</b>{dica ? <div className="hint">{dica}</div> : null}</div>
@@ -62,6 +89,7 @@ function Anexo({ rotulo, dica, lista, muda, selfie }: { rotulo: string; dica: st
         <button className="btn primary" type="button" style={{ flex: "1 1 150px", padding: "10px 12px" }} onClick={() => cam.current?.click()}>📷 {selfie ? "Tirar selfie" : "Tirar foto"}</button>
         <button className="btn" type="button" style={{ flex: "1 1 150px", padding: "10px 12px" }} onClick={() => arq.current?.click()}>📎 Escolher do celular</button>
       </div>
+      {prep && <div className="hint" style={{ marginTop: 6 }}>Preparando a foto…</div>}
       {lista.length > 0 && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>{lista.map((f, i) => <Miniatura key={i} f={f} tirar={() => muda(lista.filter((_x, j) => j !== i))} />)}</div>}
     </div>
   );
