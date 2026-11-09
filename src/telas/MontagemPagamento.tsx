@@ -419,7 +419,7 @@ function msgNf(nome: string, de: string, ate: string, valor: number) {
   const qz = quinzenaDe(de), ehQ = qz.de === de && qz.ate === ate;
   const prim = String(nome || "").replace(/\s*\(.*\)\s*/g, " ").replace(/[._]/g, " ").trim().split(/\s+/)[0] || "";
   const pn = prim ? prim.charAt(0).toUpperCase() + prim.slice(1).toLowerCase() : "";
-  return `Olá${pn ? ", " + pn : ""}! Tudo bem?\n\nO fechamento da ${ehQ ? nomeMes(qz.ref) : "período de " + br(de) + " a " + br(ate)} está pronto e precisamos da *nota fiscal* para enviar ao financeiro.\n\n*Valor total da nota: ${fmtMoeda(valor)}*\n\nPor favor, emita a nota só com o valor total (sem discriminar produtos ou adicionais) e envie para o e-mail da empresa.\n\nObrigado!\nAliança Móveis`;
+  return `Olá${pn ? ", " + pn : ""}! Tudo bem?\n\nO fechamento da ${ehQ ? nomeMes(qz.ref) : "período de " + br(de) + " a " + br(ate)} está pronto e precisamos da *nota fiscal* para enviar ao financeiro.\n*Valor total da nota: ${fmtMoeda(valor)}*\n\nPor favor, emita a nota com o valor total e envie para o e-mail contasapagar@aliancamoveis.com.br\n\nObrigada!`;
 }
 function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarregar, sel, alternar, gest, nf, de, ate, recNf, descs = [], refQ = "", recDesc, podeDesc, quem }: any) {
   const tDesc = r2(descs.reduce((s: number, d: Desc) => s + d.valor, 0));
