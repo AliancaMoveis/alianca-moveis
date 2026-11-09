@@ -174,7 +174,7 @@ export default function MontagemPagamento() {
   const gest = podeMontagemAgend(R), fin = R.mySetores().includes("financeiro");
   if (!gest && !fin) return <section className="view active"><div className="empty">Só a Gestão e o Financeiro veem esta tela.</div></section>;
   const abas = <div className="subnav" style={{ margin: "0 0 14px" }}><button className={tela === "periodo" ? "on" : ""} onClick={() => setTela("periodo")}>📋 Montagens e pagamento</button><button className={tela === "hist" ? "on" : ""} onClick={() => setTela("hist")}>📚 Histórico de pagamentos (fechamentos)</button></div>;
-  if (tela === "hist") return <section className="view active"><div className="view-head"><div><h2>💰 Montagem · Histórico de pagamentos</h2><p>Cada fechamento guarda o que foi gerado para o financeiro naquele mês (valores, contas e as O.S.). Se um mês for fechado de novo, o anterior fica guardado como “substituído” — nada se perde.</p></div></div>{abas}<Historico /></section>;
+  if (tela === "hist") return <section className="view active"><div className="view-head"><div><h2>💰 Montagem · Histórico de pagamentos</h2><p>Cada fechamento guarda o que foi gerado para o financeiro naquele mês (valores, contas e as O.S.). Se um mês for fechado de novo, o anterior fica guardado como “substituído” — nada se perde.</p></div></div>{abas}<Historico podeEnviar={gest} /></section>;
 
   const subir = async (f: File) => {
     setEnviando("Lendo " + f.name + "…");
@@ -394,12 +394,19 @@ function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto }: any) {
   </Modal>;
 }
 
-function Historico() {
-  const [l, setL] = useState<any[] | null>(null); const [erro, setErro] = useState(""); const [ab, setAb] = useState<number | null>(null); const [itens, setItens] = useState<any[]>([]);
-  useEffect(() => { listaFech().then(setL).catch(e => setErro(e.message)); }, []);
+export function Historico({ soEnviados = false, podeEnviar = false }: { soEnviados?: boolean; podeEnviar?: boolean }) {
+  const { toast } = useApp() as any;
+  const [l0, setL] = useState<any[] | null>(null);
+  const l = l0 && soEnviados ? l0.filter(x => x.ativo && x.enviado_fin_em) : l0; const [erro, setErro] = useState(""); const [ab, setAb] = useState<number | null>(null); const [itens, setItens] = useState<any[]>([]);
+  const recL = () => listaFech().then(setL).catch(e => setErro(e.message));
+  useEffect(() => { recL(); }, []);
+  const enviarFin = async (x: any) => {
+    if (!confirm("Enviar o pagamento " + nomeMes(x.referencia) + " (" + fmtMoeda(Number(x.total)) + ") para o financeiro? A Salete e a Patrícia passam a ver e são avisadas.")) return;
+    const { error } = await sb.rpc("montagem_enviar_fin", { p_id: x.id }); if (error) { toast?.(error.message); return; } toast?.("Enviado para o financeiro ✅"); recL(); };
   useEffect(() => { if (ab) itensFech(ab).then(setItens).catch(() => setItens([])); }, [ab]);
   if (erro) return <div className="empty">{erro}</div>;
   if (!l) return <div className="empty">Carregando…</div>;
+  if (!l.length && soEnviados) return <div className="empty" style={{ padding: 24 }}>Nenhum pagamento de montagem enviado para o financeiro ainda.</div>;
   if (!l.length) return <div className="empty" style={{ padding: 24 }}>Nenhum pagamento fechado ainda. Na aba “Montagens e pagamento”, filtre a quinzena e clique em “🔒 Fechar pagamento da quinzena”.</div>;
   const f = l.find(x => x.id === ab);
   const per = (x: any) => br(x.de) + " a " + br(x.ate);
@@ -414,10 +421,12 @@ function Historico() {
     baixarXlsx("montagens_" + f.referencia + ".xlsx", ["Montador", "O.S.", "Status", "Data montagem", "Data finalização", "Total produtos", "Adicionais", "Total O.S."], linhas, "Montagens " + f.referencia); };
   return <>
     <div className="card" style={{ padding: 0 }}>
-      <table className="ma-tab"><thead><tr><th>Referência</th><th>Período</th><th className="n">Montadores</th><th className="n">O.S.</th><th className="n">Total</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Fechado por</th><th></th></tr></thead>
+      <table className="ma-tab"><thead><tr><th>Referência</th><th>Período</th><th className="n">Montadores</th><th className="n">O.S.</th><th className="n">Total</th><th className="n">✅ Aprovado</th><th className="n">⏳ Aguardando</th><th>Fechado por · envio</th><th></th></tr></thead>
         <tbody>{l.map(x => <tr key={x.id} className={"ma-lin" + (ab === x.id ? " on" : "")} style={x.ativo ? undefined : { opacity: .55 }} onClick={() => setAb(ab === x.id ? null : x.id)}>
           <td><b>{nomeMes(x.referencia)}</b>{!x.ativo && <span className="pill" style={{ marginLeft: 6 }}>substituído</span>}</td><td>{per(x)}</td><td className="n">{x.n_montadores}</td><td className="n">{x.n_os}</td><td className="n"><b>{fmtMoeda(Number(x.total))}</b></td><td className="n">{fmtMoeda(Number(x.aprovado))}</td><td className="n">{fmtMoeda(Number(x.aguardando))}</td>
-          <td><small>{x.criado_por || ""} · {new Date(x.criado_em).toLocaleString("pt-BR").slice(0, 16)}{x.obs ? " · " + x.obs : ""}{x.substituido_em ? " · substituído em " + new Date(x.substituido_em).toLocaleDateString("pt-BR") : ""}</small></td><td className="g">ver ›</td></tr>)}</tbody></table>
+          <td><small>{x.criado_por || ""} · {new Date(x.criado_em).toLocaleString("pt-BR").slice(0, 16)}{x.obs ? " · " + x.obs : ""}{x.substituido_em ? " · substituído em " + new Date(x.substituido_em).toLocaleDateString("pt-BR") : ""}</small>
+            {x.ativo && (x.enviado_fin_em ? <div style={{ color: "var(--tn-green-i)", fontSize: 12 }}>📨 enviado ao financeiro {new Date(x.enviado_fin_em).toLocaleDateString("pt-BR")}{x.enviado_fin_por ? " · " + x.enviado_fin_por : ""}</div>
+              : podeEnviar ? <button className="btn primary sm" style={{ marginTop: 4 }} onClick={e => { e.stopPropagation(); enviarFin(x); }}>📨 Enviar para o financeiro</button> : null)}</td><td className="g">ver ›</td></tr>)}</tbody></table>
     </div>
     {f && <div className="card" style={{ padding: 0, marginTop: 14, overflowX: "auto" }}>
       <div className="ma-cab"><b>{nomeMes(f.referencia)}{f.ativo ? "" : " (substituído)"} · {per(f)}</b><button className="btn primary sm" onClick={baixarFin}>⬇ Relatório para o financeiro (PDF)</button><button className="btn sm" onClick={baixarDet}>⬇ Detalhado por O.S.</button></div>

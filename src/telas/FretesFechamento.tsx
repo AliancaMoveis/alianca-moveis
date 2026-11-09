@@ -314,31 +314,21 @@ function Relatorio({ d, mes, toast, rec }: any) {
       <tr>${td("Total geral", "left", true)}${td(moeda(T("frete")), "right", true)}${td(moeda(T("km")), "right", true)}${td(moeda(T("total")), "right", true)}<td></td><td></td>${td(moeda(T("pagar")), "right", true)}</tr></table></body></html>`;
     const w = window.open("", "_blank"); if (!w) return toast?.("Libere pop-up para imprimir"); w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300);
   };
-  // PDF para o financeiro: freteiro, valores, conta para o pagamento, descontos e total a pagar (o financeiro paga direto pelo PDF)
-  const pdf = async () => {
-    const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const tDesc = linhas.reduce((s, l) => s + l.tDesc, 0);
-    doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.text("Aliança Móveis — Pagamento de fretes", 14, 15);
-    doc.setFont("helvetica", "normal"); doc.setFontSize(11);
-    doc.text("FRETE " + nomeMes(mes) + (pagto ? "  ·  pagamento em " + br(pagto) : ""), 14, 22);
-    doc.setFont("helvetica", "bold"); doc.text("Total a pagar: " + moeda(T("pagar")) + "  ·  " + linhas.length + " freteiro(s)", 14, 28); doc.setFont("helvetica", "normal");
-    autoTable(doc, {
-      startY: 33,
-      head: [["Freteiro", "Frete (R$)", "KM (R$)", "Valor total", "Favorecido · agência / conta", "Descontos", "TOTAL A PAGAR"]],
-      body: linhas.map(l => [l.f.apelido, moeda(l.frete), moeda(l.km), moeda(l.total),
-        l.f.favorecido || l.f.conta ? `${l.f.favorecido || ""}\nAg. ${l.f.agencia || "—"} / Conta ${l.f.conta || "—"}` : "SEM CONTA CADASTRADA",
-        l.ds.length ? l.ds.map(x => (x.parcela ? x.parcela + " " : "") + moeda(x.valor) + (x.descricao ? " (" + x.descricao + ")" : "")).join("\n") : "", moeda(l.pagar)]),
-      foot: [["TOTAL GERAL", moeda(T("frete")), moeda(T("km")), moeda(T("total")), "", tDesc ? moeda(tDesc) : "", moeda(T("pagar"))]],
-      styles: { fontSize: 9.5, cellPadding: 2.2, valign: "middle" },
-      headStyles: { fillColor: [31, 56, 100], textColor: 255, fontStyle: "bold" },
-      footStyles: { fillColor: [230, 236, 245], textColor: 0, fontStyle: "bold" },
-      columnStyles: { 0: { fontStyle: "bold", cellWidth: 34 }, 1: { halign: "right", cellWidth: 27 }, 2: { halign: "right", cellWidth: 25 }, 3: { halign: "right", cellWidth: 28 }, 4: { cellWidth: 82 }, 5: { halign: "right", cellWidth: 38 }, 6: { halign: "right", fontStyle: "bold", cellWidth: 33 } },
-      didParseCell: (c: any) => { if (c.section === "body" && c.column.index === 4 && c.cell.raw === "SEM CONTA CADASTRADA") { c.cell.styles.textColor = [180, 0, 0]; c.cell.styles.fontStyle = "bold"; } },
-    });
-    const h = doc.internal.pageSize.getHeight(); const n = doc.getNumberOfPages();
-    for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text("Gerado em " + new Date().toLocaleString("pt-BR").slice(0, 17) + " · ALIANÇA 360 · página " + i + " de " + n, 14, h - 6); }
-    doc.save("FRETE_" + nomeMes(mes).replace(" ", "_") + ".pdf");
+  // foto do relatório (vai para o financeiro e gera o PDF)
+  const snap: LinhaFrete[] = linhas.map(l => ({ apelido: l.f.apelido, favorecido: l.f.favorecido || "", agencia: l.f.agencia || "", conta: l.f.conta || "", frete: r2f(l.frete), km: r2f(l.km), total: r2f(l.total),
+    descontos: l.ds.map(x => ({ parcela: x.parcela || "", valor: x.valor, descricao: x.descricao || "" })), tDesc: r2f(l.tDesc), pagar: r2f(l.pagar) }));
+  const pdf = () => pdfFretes(mes, pagto, snap);
+  const [envio, setEnvio] = useState<any>(undefined); const [enviando, setEnviando] = useState(false);
+  const recEnvio = () => MOCK ? setEnvio(null) : sb.from("frete_envios_fin").select("*").eq("mes", mes).eq("ativo", true).maybeSingle().then(({ data, error }) => setEnvio(error ? null : data));
+  useEffect(() => { recEnvio(); }, [mes]);
+  // envio registrado sem a foto (outubro, entregue antes do botão): completa com o relatório atual
+  useEffect(() => { if (envio && !envio.linhas && snap.length) sb.rpc("frete_envio_completar", { p_id: envio.id, p_linhas: snap, p_total: r2f(T("pagar")) }).then(() => recEnvio()); }, [envio?.id, snap.length]);
+  const enviarFin = async () => {
+    if (!pagto) return toast?.("Informe a data do pagamento antes de enviar");
+    if (!confirm((envio ? "Reenviar (substitui o envio anterior) " : "Enviar ") + "o relatório de fretes de " + nomeMes(mes).toLowerCase() + " (" + moeda(T("pagar")) + ", pagamento em " + br(pagto) + ") para o financeiro?\n\nA Salete e a Patrícia passam a ver e baixar o PDF, e são avisadas.")) return;
+    setEnviando(true);
+    try { const { error } = await sb.rpc("frete_enviar_fin", { p: { mes, data_pagamento: pagto, total: r2f(T("pagar")), linhas: snap } }); if (error) throw new Error(error.message); toast?.("Enviado para o financeiro ✅"); recEnvio(); }
+    catch (e: any) { toast?.(e.message); } finally { setEnviando(false); }
   };
   const novoDesc = (fid: number) => { setNd({ fid: String(fid), descricao: "", parcela: "", valor: "" }); setTimeout(() => document.getElementById("form-desc-frete")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); };
   const addDesc = async () => {
@@ -351,9 +341,12 @@ function Relatorio({ d, mes, toast, rec }: any) {
     {(pend > 0 || semF > 0) && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "var(--tn-amber)" }}>⚠ {pend > 0 && <><b>{pend} romaneio(s) ainda não conferido(s)</b> — entram no relatório com o que já foi digitado. </>}{semF > 0 && <b>{semF} romaneio(s) sem freteiro.</b>}</div>}
     <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 10 }}>
       <div className="field" style={{ margin: 0 }}><label>Data do pagamento</label><input type="date" value={pagto} onChange={e => setPagto(e.target.value)} onBlur={() => salvarPagto(mes, pagto).catch((e: any) => toast?.(e.message))} /></div>
-      <button className="btn primary" disabled={!linhas.length} onClick={() => pdf().catch((e: any) => toast?.(e.message))}>📄 PDF para o financeiro</button>
+      <button className="btn primary" disabled={!linhas.length || enviando} onClick={enviarFin}>{envio ? "📨 Reenviar para o financeiro" : "📨 Enviar para o financeiro"}</button>
+      <button className="btn" disabled={!linhas.length} onClick={() => pdf().catch((e: any) => toast?.(e.message))}>📄 PDF</button>
       <button className="btn ghost sm" disabled={!linhas.length} onClick={xlsx} title="Planilha com os romaneios, para conferência">Excel (conferência)</button>
     </div>
+    {envio && <div className="card" style={{ padding: "8px 12px", marginBottom: 10, background: "var(--tn-green)" }}>📨 <b>Enviado para o financeiro</b> em {new Date(envio.enviado_em).toLocaleDateString("pt-BR")}{envio.enviado_por ? " · " + envio.enviado_por : ""}{envio.total != null ? " · " + moeda(Number(envio.total)) : ""}{envio.data_pagamento ? " · pagamento em " + br(envio.data_pagamento) : ""}
+      {envio.total != null && Math.abs(Number(envio.total) - T("pagar")) > 0.009 && <div style={{ color: "var(--tn-amber-i)", marginTop: 4 }}>⚠ O relatório mudou depois do envio ({moeda(T("pagar"))} agora). Reenvie para o financeiro ver a versão nova.</div>}</div>}
     <div style={{ overflowX: "auto" }}>
       <table className="ma-tab" style={{ width: "100%", fontSize: 13.5 }}>
         <thead><tr><th colSpan={7} style={{ textAlign: "center", fontSize: 15 }}>FRETE {nomeMes(mes)}</th></tr>
@@ -585,4 +578,33 @@ function PagAssist({ fr, uid, toast }: { fr: Freteiro[]; uid: string; toast: any
     })}
     {rs && !rs.length && <div className="empty">Nenhum romaneio de frete de assistência neste período.</div>}
   </>;
+}
+
+// ---------------- relatório de fretes para o financeiro (foto enviada) e o PDF ----------------
+export type LinhaFrete = { apelido: string; favorecido: string; agencia: string; conta: string; frete: number; km: number; total: number; descontos: { parcela: string; valor: number; descricao: string }[]; tDesc: number; pagar: number };
+const r2f = (n: number) => Math.round((n || 0) * 100) / 100;
+export async function pdfFretes(mes: string, pagto: string, linhas: LinhaFrete[]) {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const S = (k: "frete" | "km" | "total" | "tDesc" | "pagar") => linhas.reduce((s, l) => s + (l[k] || 0), 0);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.text("Aliança Móveis — Pagamento de fretes", 14, 15);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+  doc.text("FRETE " + nomeMes(mes) + (pagto ? "  ·  pagamento em " + br(pagto) : ""), 14, 22);
+  doc.setFont("helvetica", "bold"); doc.text("Total a pagar: " + moeda(S("pagar")) + "  ·  " + linhas.length + " freteiro(s)", 14, 28); doc.setFont("helvetica", "normal");
+  autoTable(doc, {
+    startY: 33,
+    head: [["Freteiro", "Frete (R$)", "KM (R$)", "Valor total", "Favorecido · agência / conta", "Descontos", "TOTAL A PAGAR"]],
+    body: linhas.map(l => [l.apelido, moeda(l.frete), moeda(l.km), moeda(l.total),
+      l.favorecido || l.conta ? `${l.favorecido || ""}\nAg. ${l.agencia || "—"} / Conta ${l.conta || "—"}` : "SEM CONTA CADASTRADA",
+      (l.descontos || []).length ? l.descontos.map(x => (x.parcela ? x.parcela + " " : "") + moeda(x.valor) + (x.descricao ? " (" + x.descricao + ")" : "")).join("\n") : "", moeda(l.pagar)]),
+    foot: [["TOTAL GERAL", moeda(S("frete")), moeda(S("km")), moeda(S("total")), "", S("tDesc") ? moeda(S("tDesc")) : "", moeda(S("pagar"))]],
+    styles: { fontSize: 9.5, cellPadding: 2.2, valign: "middle" },
+    headStyles: { fillColor: [31, 56, 100], textColor: 255, fontStyle: "bold" },
+    footStyles: { fillColor: [230, 236, 245], textColor: 0, fontStyle: "bold" },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 34 }, 1: { halign: "right", cellWidth: 27 }, 2: { halign: "right", cellWidth: 25 }, 3: { halign: "right", cellWidth: 28 }, 4: { cellWidth: 82 }, 5: { halign: "right", cellWidth: 38 }, 6: { halign: "right", fontStyle: "bold", cellWidth: 33 } },
+    didParseCell: (c: any) => { if (c.section === "body" && c.column.index === 4 && c.cell.raw === "SEM CONTA CADASTRADA") { c.cell.styles.textColor = [180, 0, 0]; c.cell.styles.fontStyle = "bold"; } },
+  });
+  const h = doc.internal.pageSize.getHeight(); const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text("Gerado em " + new Date().toLocaleString("pt-BR").slice(0, 17) + " · ALIANÇA 360 · página " + i + " de " + n, 14, h - 6); }
+  doc.save("FRETE_" + nomeMes(mes).replace(" ", "_") + ".pdf");
 }

@@ -19,6 +19,7 @@ import Qualidade from "./Qualidade";
 import AgendaConsultores from "./AgendaConsultores";
 import VisitasRealizadas from "./VisitasRealizadas";
 import MontagemPagamento from "./MontagemPagamento";
+import FinPagamentos from "./FinPagamentos";
 import Fretes from "./Fretes";
 import FretesGestao from "./FretesGestao";
 import FretesLancamento from "./FretesLancamento";
@@ -200,6 +201,7 @@ export default function Shell() {
             {atual.startsWith("md_") && <Medidas key={atual} aba={atual.slice(3)} />}
             {atual === "encontrar_vendas" && R.podeEncontrarVendas() && <EncontrarVendas />}
             {atual === "montagem_agend" && <MontagemAgend />}
+            {atual === "fin_pag" && <FinPagamentos />}
             {atual === "rh_ponto" && <RhPonto />}
             {atual === "rh_funcionarios" && <RhFuncionarios />}
             {atual === "rh_admissao" && <RhFuncionarios abaInicial="adm" />}
