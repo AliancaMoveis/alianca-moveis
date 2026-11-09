@@ -2,9 +2,13 @@
 import { hojeISO } from "./regras";
 import { vindaConfirmada } from "../comp/Situacao";
 
+/** status de quem já veio à loja e foi atendido (sem venda) */
+export const VEIO_LOJA = ["atendido", "orcamento", "em_analise", "em_obras", "venda_cancelada"];
 export const RESGATAR = ["visita_cancelada", "loja_cancelada", "nao_compareceu", "sem_resposta", "reprovado", "nao_vai_comprar", "ausente_endereco"];
-export type CorCli = { k: "canc" | "conf" | "loja" | "real" | "ctt" | "dir"; cor: string; fundo: string; txt: string };
+export type CorCli = { k: "vend" | "veio" | "canc" | "conf" | "loja" | "real" | "ctt" | "dir"; cor: string; fundo: string; txt: string };
 export const CORES_CLI: Record<CorCli["k"], { cor: string; fundo: string; txt: string }> = {
+  vend: { cor: "#15803d", fundo: "color-mix(in srgb, #15803d 16%, var(--surface))", txt: "💰 Vendido" },
+  veio: { cor: "#7c3aed", fundo: "color-mix(in srgb, #7c3aed 14%, var(--surface))", txt: "🏬 Veio na loja" },
   canc: { cor: "#c0392b", fundo: "color-mix(in srgb, #c0392b 14%, var(--surface))", txt: "🔄 Resgatar" },
   conf: { cor: "#0f8a5f", fundo: "color-mix(in srgb, #0f8a5f 14%, var(--surface))", txt: "✅ Confirmado" },
   loja: { cor: "#1f6fd6", fundo: "color-mix(in srgb, #1f6fd6 14%, var(--surface))", txt: "🏬 Agendado loja" },
@@ -17,6 +21,9 @@ export function corCliente(R: any, c: any, eu?: string): CorCli {
   const sc = R.statusClienteDe(c); const t = c.tratativa || {};
   const futuraLoja = !!c.dataLoja && String(c.dataLoja).slice(0, 10) >= hojeISO() && !c.venda && !["loja_cancelada", "nao_compareceu", "reprovado", "nao_vai_comprar", "visita_cancelada", "atendido"].includes(sc);
   const ctt = eu && c.atendenteId === eu ? !!t.emContato : !!t.contatoIniciado;
-  const k: CorCli["k"] = RESGATAR.includes(sc) && !c.venda ? "canc" : futuraLoja && vindaConfirmada(c) ? "conf" : futuraLoja ? "loja" : t.realizada ? "real" : ctt ? "ctt" : "dir";
+  // o status real manda: vendido → veio na loja (atendido/orçamento/em análise/obra) → resgatar → loja → visita → contato
+  const vendido = !!c.venda && c.venda.status !== "cancelada" && String(sc).startsWith("vendido");
+  const veio = !c.venda && (VEIO_LOJA.includes(sc) || (!!t.emAtendimento && !RESGATAR.includes(sc)));
+  const k: CorCli["k"] = vendido ? "vend" : veio ? "veio" : RESGATAR.includes(sc) && !c.venda ? "canc" : futuraLoja && vindaConfirmada(c) ? "conf" : futuraLoja ? "loja" : t.realizada ? "real" : ctt ? "ctt" : "dir";
   return { k, ...CORES_CLI[k] };
 }

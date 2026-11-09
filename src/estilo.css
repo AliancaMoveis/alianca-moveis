@@ -2072,3 +2072,5 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .mv-fin .grid{gap:8px}.mv-fin .grid input{width:100%;min-width:0;box-sizing:border-box}.mv-fin .card{max-width:100%;box-sizing:border-box}
 .mv-fin .panel h3{flex-wrap:wrap}.mv-fin .panel h3 .hint{display:block;width:100%;margin:2px 0 0!important}
 .mv-fin .panel > div[style*="minmax(160px"]{grid-template-columns:1fr 1fr!important}
+.mv-card.cor-vend{border-left:6px solid #15803d;background:linear-gradient(90deg,rgba(21,128,61,.12),var(--surface) 40%)}
+.mv-card.cor-veio{border-left:6px solid #7c3aed;background:linear-gradient(90deg,rgba(124,58,237,.10),var(--surface) 40%)}

@@ -213,7 +213,7 @@ function consDados(R: any, st: any) {
   const eu = R.currentUserId, hoje = hojeISO();
   const meus = st.chamados.filter((c: any) => R.domMarketing(c) && c.consultorId === eu);
   const aFazer = meus.filter((c: any) => c.setorDestino === "consultor_externo" && !(c.tratativa && c.tratativa.realizada)).sort((a: any, b: any) => String(a.dataVisita || "9").localeCompare(String(b.dataVisita || "9")));
-  const faltaLoja = meus.filter((c: any) => c.setorDestino === "consultor_externo" && c.tratativa && c.tratativa.realizada && !c.dataLoja);
+  const faltaLoja = meus.filter((c: any) => c.setorDestino === "consultor_externo" && c.tratativa && c.tratativa.realizada && !c.dataLoja && !c.venda && !["vendido", "vendido_entrada", "vendido_promissoria", "vendido_revisao", "nao_vai_comprar", "visita_cancelada"].includes(R.statusClienteDe(c)));
   const deHoje = aFazer.filter((c: any) => dia(c.dataVisita) === hoje);
   // atrasada: a data da visita passou e não foi realizada (cliente em espera/obra ou que cancelou não conta)
   const atrasadas = aFazer.filter((c: any) => c.dataVisita && dia(c.dataVisita) < hoje && !["standby", "em_obras", "visita_cancelada", "nao_vai_comprar"].includes(R.statusClienteDe(c)));

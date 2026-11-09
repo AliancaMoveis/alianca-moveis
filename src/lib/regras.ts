@@ -677,10 +677,11 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const pendVis = meus.filter(c => c.setorDestino === "consultor_externo" && !feita(c) && !cancelado(c));
     const aVisitar = pendVis.filter(c => !c.dataVisita || String(c.dataVisita).slice(0, 10) >= hojeD).sort((a, b) => String(a.dataVisita || "9").localeCompare(String(b.dataVisita || "9")));
     const atrasadas = pendVis.filter(c => c.dataVisita && String(c.dataVisita).slice(0, 10) < hojeD && !["standby", "em_obras"].includes(statusClienteDe(c) as string)).sort((a, b) => String(a.dataVisita).localeCompare(String(b.dataVisita)));
-    const visitadas = meus.filter(c => feita(c) && (dentroPeriodo(c.dataVisita || c.dataLoja || c.criadoEm, de, ate) || (!de && !ate))).sort((a, b) => String(b.dataVisita || b.dataLoja || "").localeCompare(String(a.dataVisita || a.dataLoja || "")));
+    // visitado: visita marcada como realizada OU o cliente já veio à loja / comprou (a visita aconteceu)
+    const visitadas = meus.filter(c => (feita(c) || compareceu(c)) && (dentroPeriodo(c.dataVisita || c.dataLoja || c.criadoEm, de, ate) || (!de && !ate))).sort((a, b) => String(b.dataVisita || b.dataLoja || "").localeCompare(String(a.dataVisita || a.dataLoja || "")));
     const vieram = meus.filter(c => c.dataLoja && new Date(c.dataLoja) <= agora && compareceu(c) && (dentroPeriodo(c.dataLoja, de, ate) || (!de && !ate))).sort((a, b) => String(b.dataLoja).localeCompare(String(a.dataLoja)));
     const naLoja = meus.filter(c => c.dataLoja && new Date(c.dataLoja) > agora && !c.venda && !cancelado(c)).sort((a, b) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
-    const faltaLoja = meus.filter(c => feita(c) && !c.dataLoja && !c.venda && !cancelado(c));
+    const faltaLoja = meus.filter(c => feita(c) && !c.dataLoja && !c.venda && !cancelado(c) && !String(statusClienteDe(c)).startsWith("vendido"));
     return { aVisitar, atrasadas, visitadas, vieram, naLoja, faltaLoja };
   }
   const compareceu = (c: Chamado) => !!c.venda || ["orcamento", "sem_resposta", "reprovado", "nao_vai_comprar", "atendido"].includes(statusClienteDe(c));
