@@ -529,7 +529,7 @@ function Anexar({ c }: any) {
   const imgs = anexos.filter((a: any) => a.tipo === "img");
   return (
     <div className="mv-bloco">
-      <div className="mv-bloco-t">Planta, fotos e vídeos {qtd ? <small>({qtd} anexado{qtd > 1 ? "s" : ""})</small> : <small style={{ color: "#b07a00" }}>⚠️ sem anexo</small>}</div>
+      <div className="mv-bloco-t">Planta, fotos e vídeos {qtd ? <small>({qtd} anexado{qtd > 1 ? "s" : ""})</small> : c.consultorId && !(c.tratativa && c.tratativa.realizada) ? <small>(anexe na visita)</small> : <small style={{ color: "#b07a00" }}>⚠️ sem anexo</small>}</div>
       {qtd > 0 && <div className="mv-anx-g">{anexos.map((a: any) => <div key={a.id} className="mv-anx-i">
         {a.tipo === "img" ? <img src={a.url} alt="" onClick={() => openImg(imgs.map((x: any) => x.url), imgs.indexOf(a))} /> : <a className="arq" href={a.url} target="_blank" rel="noopener">{a.tipo === "pdf" ? "📄" : a.tipo === "video" ? "🎬" : "🔗"}</a>}
         {R.podeRemoverAnexo(a) && <button className="mv-anx-del" title="Apagar" onClick={() => apagar(a)}>🗑</button>}</div>)}</div>}

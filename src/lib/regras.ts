@@ -499,7 +499,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // "Em atendimento" só enquanto não há venda nem desfecho (venda registrada ou parecer final encerram o atendimento)
   const atendendoAgora = (c: any) => !!(c && c.tratativa && c.tratativa.emAtendimento) && !c.venda && !c.tratativa.atendimentoFim && ![...statusFinalCliente, "vendido_revisao", "orcamento", "sem_resposta", "em_obras", "standby", "em_analise"].includes(statusClienteDe(c));
   const semAnexo = (c: Chamado) => domMarketing(c) && !(c.tratativa && c.tratativa.importadoVisita) && !(c.anexos || []).length && !c.venda && !statusFinalCliente.includes(statusClienteDe(c))
-    && (!!c.dataLoja || !!(c.tratativa && c.tratativa.realizada));
+    // cliente do consultor externo: só cobra anexo depois da VISITA REALIZADA (agendado ainda não tem planta/fotos)
+    && (c.consultorId ? !!(c.tratativa && c.tratativa.realizada) : (!!c.dataLoja || !!(c.tratativa && c.tratativa.realizada)));
   // o cliente já veio (data/hora da loja passou) e o vendedor ainda não deu parecer depois disso
   function semParecer(c: Chamado) {
     if (!domMarketing(c) || c.setorDestino !== "atendente_cliente" || c.venda || !c.dataLoja) return false;
