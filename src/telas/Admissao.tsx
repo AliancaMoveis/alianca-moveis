@@ -1,7 +1,7 @@
 // Página pública de admissão (sem login): o candidato recebe o link do RH, preenche os dados e anexa os documentos.
 import { useEffect, useRef, useState } from "react";
 import { admissaoEnviar, admissaoInfo, admissaoSubirDoc } from "../lib/rh";
-import { CamposFicha, abrirFicha } from "../lib/rhFicha";
+import { CamposFicha, abrirFicha, DOCS_FICHA } from "../lib/rhFicha";
 
 
 
@@ -31,6 +31,11 @@ export default function Admissao() {
   const [d, setD] = useState<any>(abrirFicha({ nome: "", cpf: "", rg: "", nascimento: "", telefone: "", email: "", endereco: "", estado_civil: "", escolaridade: "", pis: "", ctps: "", banco: "", agencia: "", conta: "", emergencia_nome: "", emergencia_tel: "", obs: "" }));
   const [arqs, setArqs] = useState<Record<string, File[]>>({});
   const enviados = useRef(new Map<File, any>()); // o que já subiu não sobe de novo ao tentar outra vez
+  // rascunho no próprio celular: os dados e os documentos que já chegaram ao RH ficam guardados — ao reabrir o link, é só mandar o que falta
+  const CH = "a360-admissao-" + token;
+  const [ja, setJa] = useState<any[]>([]); const [parcial, setParcial] = useState<string[] | null>(null);
+  useEffect(() => { try { const r = JSON.parse(localStorage.getItem(CH) || "null"); if (r) { if (r.d) setD((x: any) => ({ ...x, ...r.d })); if (Array.isArray(r.ja)) setJa(r.ja); if (Array.isArray(r.faltando) && r.faltando.length) setParcial(r.faltando); } } catch { /* sem rascunho */ } }, []);
+  useEffect(() => { const t = setTimeout(() => { try { localStorage.setItem(CH, JSON.stringify({ d, ja, faltando: parcial || [] })); } catch { /* sem espaço */ } }, 600); return () => clearTimeout(t); }, [d, ja, parcial]);
   useEffect(() => { document.title = "Admissão · Aliança Móveis"; if (!token) { setInfo(null); return; } admissaoInfo(token).then(setInfo).catch(() => setInfo(null)); }, []);
 
   if (info === undefined) return <Caixa><p style={{ textAlign: "center" }}>Carregando…</p></Caixa>;
@@ -43,45 +48,57 @@ export default function Admissao() {
     if (!d.nome.trim()) { setErro("Preencha seu nome completo."); return; }
     if (d.cpf.replace(/\D/g, "").length !== 11) { setErro("Confira o CPF (11 números)."); return; }
     if (!d.telefone.trim()) { setErro("Preencha seu telefone com DDD."); return; }
-    if (!arqs.rg_cpf?.length) { setErro("Anexe a foto do seu RG e CPF."); return; }
+    if (!arqs.rg_cpf?.length && !ja.some(x => x.campo === "rg_cpf")) { setErro("Anexe a foto do seu RG e CPF."); return; }
+    const rot = (k: string) => (DOCS_FICHA.find(x => x[0] === k) || [k, k === "outro" ? "Outros documentos" : k])[1];
     try {
-      const docs: any[] = []; let n = 0; const total = Object.values(arqs).reduce((s, l) => s + l.length, 0);
+      const novos: any[] = []; const falhou: { campo: string; f: File }[] = []; let n = 0; const total = Object.values(arqs).reduce((s2, l) => s2 + l.length, 0);
       for (const [campo, lista] of Object.entries(arqs)) for (const f of lista) {
         n++; setEnviando("Enviando documento " + n + " de " + total + "…");
-        const ja = enviados.current.get(f); if (ja) { docs.push(ja); continue; }
-        let feito: any = null, ult: any = null;
-        for (let t = 0; t < 3 && !feito; t++) { try { feito = await admissaoSubirDoc(token, campo, f); } catch (e: any) { ult = e; if (/muito grande/i.test(e.message || "")) break; await espera(1500 * (t + 1)); } }
-        if (!feito) throw new Error(/fetch|network|rede/i.test(String(ult?.message || "")) ? "A internet falhou ao enviar o documento " + n + " de " + total + ". Confira a conexão (Wi-Fi ou 4G) e toque em Enviar de novo — o que já foi enviado não precisa subir outra vez." : (ult?.message || "Não foi possível enviar o documento " + n));
-        enviados.current.set(f, feito); docs.push(feito);
+        const jaFoi = enviados.current.get(f); if (jaFoi) { novos.push(jaFoi); continue; }
+        let feito: any = null;
+        for (let t = 0; t < 3 && !feito; t++) { try { feito = await admissaoSubirDoc(token, campo, f); } catch (e: any) { if (/muito grande/i.test(e.message || "")) { setErro(e.message); break; } await espera(1500 * (t + 1)); } }
+        if (feito) { enviados.current.set(f, feito); novos.push(feito); } else falhou.push({ campo, f });
       }
+      // manda os dados mesmo se alguma foto não subiu — o RH já recebe o que chegou e vê o que falta
+      const docs = [...ja, ...novos];
+      const faltando = Array.from(new Set(falhou.map(x => rot(x.campo))));
       setEnviando("Enviando os dados…");
-      await admissaoEnviar(token, { ...d, dependentes: d.tem_dependentes === "sim" ? (d.dependentes || []).filter((x: any) => String(x.nome || "").trim()) : [] }, docs);
-      setOk(true);
-    } catch (e: any) { setErro(e.message || "Não foi possível enviar. Tente de novo."); }
+      await admissaoEnviar(token, { ...d, _faltando: faltando, dependentes: d.tem_dependentes === "sim" ? (d.dependentes || []).filter((x: any) => String(x.nome || "").trim()) : [] }, docs);
+      setJa(docs);
+      // tira da tela o que já foi; fica só o que falhou
+      const resto: Record<string, File[]> = {}; falhou.forEach(x => { (resto[x.campo] = resto[x.campo] || []).push(x.f); }); setArqs(resto);
+      if (faltando.length) { setParcial(faltando); setErro(""); window.scrollTo({ top: 0, behavior: "smooth" }); }
+      else { setParcial(null); try { localStorage.removeItem(CH); } catch { /* */ } setOk(true); }
+    } catch (e: any) { setErro((/fetch|network|rede/i.test(String(e?.message || "")) ? "A internet falhou. Seus dados ficaram salvos neste celular — confira a conexão e toque em Enviar de novo." : e.message) || "Não foi possível enviar. Tente de novo."); }
     finally { setEnviando(""); }
   };
   return (
     <Caixa>
       <h2>Admissão · Aliança Móveis</h2>
       <p>Olá{info.nome ? <b>, {info.nome.split(" ")[0]}</b> : null}! Preencha seus dados e anexe os documentos — tudo vai direto para o RH, com segurança.</p>
-      <CamposFicha f={d} set={setD} publico anexo={(k, rotulo) => <Anexo key={k} selfie={k === "foto"} rotulo={rotulo} dica={k === "foto" ? "uma selfie de rosto, de frente, num lugar claro" : "tire a foto do documento ou escolha do celular (foto ou PDF)"} lista={arqs[k] || []} muda={l => setArqs({ ...arqs, [k]: l })} />} />
+      {parcial && <div className="card" style={{ padding: 12, marginBottom: 12, background: "var(--tn-amber)", borderColor: "#e0a84a" }}>
+        <b>✅ O RH já recebeu seus dados{ja.length ? " e " + ja.length + " documento(s)" : ""}.</b>
+        <div style={{ marginTop: 4 }}>⚠️ Ainda falta enviar: <b>{parcial.join(", ")}</b>. Anexe de novo {arqs && Object.keys(arqs).length ? "(as fotos que falharam já estão aqui embaixo) " : ""}e toque em <b>Enviar o que falta</b>. Se precisar, pode fechar e abrir este link depois — seus dados continuam preenchidos neste celular.</div>
+      </div>}
+      {!parcial && ja.length > 0 && <div className="card" style={{ padding: 12, marginBottom: 12, background: "var(--tn-green)" }}>Seus dados estão preenchidos e {ja.length} documento(s) já chegaram ao RH. Confira e envie o que faltar.</div>}
+      <CamposFicha f={d} set={setD} publico anexo={(k, rotulo) => <Anexo key={k} jaN={ja.filter(x => x.campo === k).length} selfie={k === "foto"} rotulo={rotulo} dica={k === "foto" ? "uma selfie de rosto, de frente, num lugar claro" : "tire a foto do documento ou escolha do celular (foto ou PDF)"} lista={arqs[k] || []} muda={l => setArqs({ ...arqs, [k]: l })} />} />
       <h3>Outros documentos</h3>
-      <Anexo rotulo="Outros (diploma, certificados…)" dica="opcional" lista={arqs.outro || []} muda={l => setArqs({ ...arqs, outro: l })} />
+      <Anexo jaN={ja.filter(x => x.campo === "outro").length} rotulo="Outros (diploma, certificados…)" dica="opcional" lista={arqs.outro || []} muda={l => setArqs({ ...arqs, outro: l })} />
       {c("obs", "Alguma observação para o RH? (opcional)")}
       {erro && <p style={{ color: "#b32424", fontWeight: 700 }}>{erro}</p>}
-      <button className="btn primary" style={{ width: "100%", padding: 14, fontSize: 16, marginTop: 10 }} disabled={!!enviando} onClick={enviar}>{enviando || "📨 Enviar para o RH"}</button>
+      <button className="btn primary" style={{ width: "100%", padding: 14, fontSize: 16, marginTop: 10 }} disabled={!!enviando} onClick={enviar}>{enviando || (parcial || ja.length ? "📨 Enviar o que falta" : "📨 Enviar para o RH")}</button>
       <p className="hint" style={{ marginTop: 10 }}>Seus dados e documentos são enviados com segurança e só o RH da Aliança Móveis tem acesso.</p>
     </Caixa>
   );
 }
 
-function Anexo({ rotulo, dica, lista, muda, selfie }: { rotulo: string; dica: string; lista: File[]; muda: (l: File[]) => void; selfie?: boolean }) {
+function Anexo({ rotulo, dica, lista, muda, selfie, jaN = 0 }: { rotulo: string; dica: string; lista: File[]; muda: (l: File[]) => void; selfie?: boolean; jaN?: number }) {
   const arq = useRef<HTMLInputElement>(null), cam = useRef<HTMLInputElement>(null);
   const [prep, setPrep] = useState(false);
   const add = async (fs: FileList | null, el: HTMLInputElement | null) => { const l = fs ? Array.from(fs) : []; if (el) el.value = ""; if (!l.length) return; setPrep(true); try { const novos = await Promise.all(l.map(prepararArq)); muda([...lista, ...novos]); } finally { setPrep(false); } };
   return (
     <div className="card" style={{ padding: 12, marginBottom: 10 }}>
-      <div><b>{rotulo}</b>{dica ? <div className="hint">{dica}</div> : null}</div>
+      <div><b>{rotulo}</b>{dica ? <div className="hint">{dica}</div> : null}{jaN > 0 && <div style={{ color: "var(--st-concluida)", fontWeight: 700, fontSize: 13, marginTop: 2 }}>✅ {jaN} arquivo(s) já enviado(s) ao RH</div>}</div>
       {/* câmera: selfie abre a câmera da frente; documentos, a de trás */}
       <input ref={cam} type="file" accept="image/*" capture={selfie ? "user" : "environment"} style={{ display: "none" }} onChange={e => add(e.target.files, cam.current)} />
       <input ref={arq} type="file" accept="image/*,.pdf" multiple style={{ display: "none" }} onChange={e => add(e.target.files, arq.current)} />
