@@ -15,7 +15,7 @@ export function RemarcarData({ c, tipo, movel }: { c: any; tipo: "visita" | "loj
   if (!pode) return null;
   const agoraL = (() => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); })();
   const salvar = () => {
-    if (!nova || nova.length < 16) { toast("Informe a nova data e horário"); return; }
+    if (!nova || nova.length < 16) { toast("Escolha o dia e a hora da nova data"); return; }
     if (nova === val) { toast("A data já é essa"); return; }
     if (nova < agoraL) { toast("Essa data já passou — escolha uma data a partir de hoje (confira o dia e o mês)"); return; }
     const f = tipo === "visita" ? A.reagendarVisita : A.reagendarLoja;
@@ -28,7 +28,13 @@ export function RemarcarData({ c, tipo, movel }: { c: any; tipo: "visita" | "loj
       <div style={{ fontWeight: 700, marginBottom: 6 }}>{tipo === "visita" ? "Nova data da visita" : "Nova data na loja"}</div>
       {atual && <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 6 }}>Atual: {fmtDateTime(atual)}{val < agoraL ? " (já passou)" : ""}</div>}
       {nova && <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6, color: nova < agoraL ? "var(--danger)" : "var(--st-concluida)" }}>{nova < agoraL ? "⚠ Data no passado: " : "Nova data: "}{fmtDateTime(nova)}</div>}
-      <input type="datetime-local" value={nova} min={agoraL} onChange={e => setNova(e.target.value)} style={{ width: "100%" }} />
+      {/* dia e hora separados: o seletor de data+hora junto do iPhone confunde (mudava só a hora e mantinha o dia antigo) */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>{[0, 1, 2, 3].map(k => { const d0 = new Date(); d0.setDate(d0.getDate() + k); const iso = d0.getFullYear() + "-" + String(d0.getMonth() + 1).padStart(2, "0") + "-" + String(d0.getDate()).padStart(2, "0");
+        return <button key={k} type="button" className="btn sm" style={nova.slice(0, 10) === iso ? { background: "var(--primary)", color: "#fff", borderColor: "var(--primary)" } : undefined} onClick={() => setNova(iso + "T" + (nova.slice(11, 16) || "09:00"))}>{k === 0 ? "Hoje" : k === 1 ? "Amanhã" : String(d0.getDate()).padStart(2, "0") + "/" + String(d0.getMonth() + 1).padStart(2, "0")}</button>; })}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 8 }}>
+        <label style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>Dia<input type="date" value={nova.slice(0, 10)} min={agoraL.slice(0, 10)} onChange={e => setNova(e.target.value ? e.target.value + "T" + (nova.slice(11, 16) || "09:00") : "")} style={{ width: "100%", boxSizing: "border-box", fontSize: 16, display: "block" }} /></label>
+        <label style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>Hora<input type="time" step={900} value={nova.slice(11, 16)} onChange={e => setNova((nova.slice(0, 10) || agoraL.slice(0, 10)) + "T" + (e.target.value || "09:00"))} style={{ width: "100%", boxSizing: "border-box", fontSize: 16, display: "block" }} /></label>
+      </div>
       <input placeholder="Motivo (ex.: cliente pediu outro dia)" value={mot} onChange={e => setMot(e.target.value)} style={{ width: "100%", marginTop: 8 }} />
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}><button className={movel ? "mv-principal" : "btn primary sm"} onClick={salvar}>Salvar nova data</button><button className="btn ghost sm" onClick={() => setAberto(false)}>Cancelar</button></div>
       <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 6 }}>Fica no histórico e {tipo === "visita" ? "o consultor / a supervisão do marketing são avisados" : "o vendedor e o consultor são avisados"}.</div>
