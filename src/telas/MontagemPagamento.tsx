@@ -49,6 +49,20 @@ function converter(linhas: any[]): Ef[] {
 }
 
 let mockEf: Ef[] = []; const mockVinc: Record<string, string | null> = {};
+// O.S. já pagas: as que estão como "aprovado" num fechamento ativo (chave → referência do fechamento)
+const chOrd = (os: string, mont: string, total: number) => os + "|" + String(mont || "").slice(0, 10) + "|" + (Math.round((Number(total) || 0) * 100) / 100).toFixed(2);
+async function carregarPagas(): Promise<{ por: Map<string, string>; desde: string }> {
+  if (MOCK) return { por: new Map(), desde: "" };
+  const { data: fs, error } = await sb.from("montagem_fechamentos").select("id,referencia,de").eq("ativo", true); if (error) throw new Error(error.message);
+  const ref: Record<number, string> = {}; (fs || []).forEach((f: any) => (ref[f.id] = f.referencia));
+  const por = new Map<string, string>(); const ids = (fs || []).map((f: any) => f.id);
+  for (let i = 0; i < ids.length; i += 4) {
+    const { data, error: e2 } = await sb.from("montagem_fech_itens").select("fechamento_id,ordens").in("fechamento_id", ids.slice(i, i + 4)); if (e2) throw new Error(e2.message);
+    (data || []).forEach((it: any) => (it.ordens || []).forEach((o: any) => { if (!/efetuado/i.test(o.status || "")) return; const r = ref[it.fechamento_id];
+      por.set(o.chave || chOrd(o.os, o.mont, o.total), r); if (o.chave) por.set(chOrd(o.os, o.mont, o.total), r); }));
+  }
+  return { por, desde: (fs || []).map((f: any) => String(f.de)).sort()[0] || "" };
+}
 async function carregar(): Promise<{ ef: Ef[]; vinc: Record<string, string | null> }> {
   if (MOCK) return { ef: mockEf, vinc: { ...mockVinc } };
   const ef: Ef[] = [];
@@ -158,7 +172,9 @@ export default function MontagemPagamento() {
   const [ord, setOrd] = useState<{ k: string; desc: boolean }>({ k: "nome", desc: false });
   const [sel, setSel] = useState<Set<string>>(new Set()); const [aprovando, setAprovando] = useState(false);
   const { setModal } = useApp() as any;
-  const recarregar = () => carregar().then(setDados).catch(e => setErro(e.message));
+  const [pagas, setPagas] = useState<{ por: Map<string, string>; desde: string } | null>(null);
+  const [incluirPend, setIncluirPend] = useState(true);
+  const recarregar = () => { carregarPagas().then(setPagas).catch(() => setPagas({ por: new Map(), desde: "" })); return carregar().then(setDados).catch(e => setErro(e.message)); };
   const [nfs, setNfs] = useState<Nf[]>([]);
   const recNf = () => listaNf().then(setNfs).catch(() => setNfs([]));
   useEffect(() => { recarregar(); recNf(); }, []);
@@ -197,8 +213,16 @@ export default function MontagemPagamento() {
   const q1P = ehQzP && qzP.ref.endsWith("-1"), q2P = ehQzP && qzP.ref.endsWith("-2"), deRetrasada = q1P ? quinzenaAntes(qzP).de : de;
   const noPeriodo = (e: Ef) => { const d = dataDe(e); if ((q1P || q2P) && pagaDia10(cadDe(e.montador)?.conta)) return q2P ? false : d >= deRetrasada && d <= ate; return d >= de && d <= ate; };
   const fora10 = q2P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= de && dataDe(e) <= ate).map(e => cadDe(e.montador)?.nome || e.montador))) : [];
-  const com10 = q1P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= deRetrasada && dataDe(e) < de).map(e => cadDe(e.montador)?.nome || e.montador))) : [];
-  const lista = (dados?.ef || []).filter(e => conta(e) && (fs === "todos" || (fs === "aprov" ? aprovado(e) : aguardando(e)))).filter(noPeriodo);
+  // já paga em OUTRO fechamento (o da própria quinzena pode ser refeito) — nunca entra de novo
+  const refAtual = ehQzP ? qzP.ref : "";
+  const pagaEm = (e: Ef) => { const r = pagas?.por.get(e.chave) || pagas?.por.get(chOrd(e.os, e.data_montagem, e.total)); return r && r !== refAtual ? r : ""; };
+  // pendentes de quinzenas anteriores: fechadas fora do prazo ou aprovadas depois — ainda não pagas em nenhum fechamento
+  const pendente = (e: Ef) => { const d = dataDe(e); if (!pagas?.desde || d >= de || d < pagas.desde) return false; if (q2P && pagaDia10(cadDe(e.montador)?.conta)) return false; return !noPeriodo(e) && !pagaEm(e); };
+  const com10 = q1P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= deRetrasada && dataDe(e) < de && !pagaEm(e)).map(e => cadDe(e.montador)?.nome || e.montador))) : [];
+  const pendTodas = (dados?.ef || []).filter(e => conta(e) && pendente(e));
+  const pendCh = new Set(pendTodas.map(e => e.chave));
+  const lista = (dados?.ef || []).filter(e => conta(e) && (fs === "todos" || (fs === "aprov" ? aprovado(e) : aguardando(e)))).filter(e => (noPeriodo(e) && !pagaEm(e)) || (incluirPend && pendCh.has(e.chave)));
+  const jaPagasNoPer = (dados?.ef || []).filter(e => conta(e) && noPeriodo(e) && pagaEm(e));
   const outros = (dados?.ef || []).filter(e => !conta(e)).filter(e => { const d = dataDe(e); return d >= de && d <= ate; }).length;
   // agrupa pelo cadastro do montador: a ordem avulsa (lançada com o nome do cadastro) cai na mesma linha das O.S. do Exact
   const grupos: G[] = Object.values(lista.reduce((m: Record<string, G>, e) => {
@@ -291,6 +315,14 @@ export default function MontagemPagamento() {
         <Kpi n={fmtMoeda(soma(g => g.aprov))} l={"✅ Aprovado p/ pagamento (" + soma(g => g.aprovN) + ")"} fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.agu))} l={"⏳ Aguardando aprovação (" + soma(g => g.aguN) + ")"} fs={20} cls={soma(g => g.agu) ? "alert" : ""} />
       </div>
+      {pendTodas.length > 0 && <div className="card" style={{ marginTop: 12, padding: "10px 14px", background: "var(--tn-blue)" }}>
+        📥 <b>{pendTodas.length} O.S. de quinzenas anteriores ainda não pagas · {fmtMoeda(r2(pendTodas.reduce((s, e) => s + e.total, 0)))}</b>
+        <span> — ✅ {pendTodas.filter(aprovado).length} aprovada(s) ({fmtMoeda(r2(pendTodas.filter(aprovado).reduce((s, e) => s + e.total, 0)))}) · ⏳ {pendTodas.filter(aguardando).length} aguardando aprovação ({fmtMoeda(r2(pendTodas.filter(aguardando).reduce((s, e) => s + e.total, 0)))})</span>
+        <div className="hint" style={{ marginTop: 4 }}>O montador fechou fora do prazo ou a aprovação veio depois. {incluirPend ? "Estão somadas neste pagamento (marcadas com 📥 na lista do montador). As que estão aguardando, aprove aqui para entrarem no fechamento." : "Não estão somadas neste pagamento."}</div>
+        <label style={{ display: "inline-flex", gap: 6, alignItems: "center", marginTop: 6, fontWeight: 600 }}><input type="checkbox" checked={incluirPend} onChange={e => setIncluirPend(e.target.checked)} /> Incluir neste pagamento</label>
+      </div>}
+      {jaPagasNoPer.length > 0 && <div className="hint" style={{ marginTop: 6 }}>{jaPagasNoPer.length} O.S. deste período já foram pagas em outro fechamento e não entram de novo ({fmtMoeda(r2(jaPagasNoPer.reduce((s, e) => s + e.total, 0)))}).</div>}
+      {ehQzP && soma(g => g.aguN) > 0 && <div className="hint" style={{ marginTop: 6, color: "var(--tn-amber-i)" }}>⏳ Ao fechar com “só aprovados”, {soma(g => g.aguN)} O.S. aguardando aprovação ({fmtMoeda(soma(g => g.agu))}) ficam pendentes e aparecem no próximo pagamento quando forem aprovadas.</div>}
       {com10.length > 0 && <div className="ro-note" style={{ marginTop: 12 }}>📅 <b>Recebe só no dia 10:</b> {com10.join(", ")} — neste pagamento entram também as montagens da quinzena retrasada ({br(deRetrasada)} a {br(somaDias(de, -1))}).</div>}
       {fora10.length > 0 && <div className="ro-note" style={{ marginTop: 12 }}>📅 <b>Fora deste pagamento (recebe só no dia 10):</b> {fora10.join(", ")} — as montagens desta quinzena entram no pagamento do dia 10.</div>}
       {semConta.length > 0 && <div className="alerta" style={{ marginTop: 12 }}>⚠️ <b>{semConta.length} montador(es) sem conta cadastrada ou sem vínculo com o cadastro:</b> {semConta.map(g => g.nome).join(", ")}. Vincule na tabela abaixo ou cadastre em <b>Cadastros → Montadores → 🔒 Contas para pagamento</b>.</div>}
@@ -363,7 +395,7 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
         <span className="hint">Serviço dentro da loja, frete ou outro pagamento manual — entra no total deste montador.</span>
       </div>
       <table className="ma-os"><thead><tr><th style={{ width: 26 }}>{agu.length > 0 && <input type="checkbox" title="Selecionar todas aguardando" checked={nSel === agu.length} onChange={e => alternar(agu.map(x => x.chave), e.target.checked)} />}</th><th>O.S.</th><th>Montagem</th><th>Finalização</th><th>Status</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th></tr></thead>
-        <tbody>{g.itens.slice().sort((a: any, b: any) => dataDe(a).localeCompare(dataDe(b))).map((e: any) => <tr key={e.chave} className={sel.has(e.chave) ? "ma-sel" : ""}><td>{aguardando(e) && <input type="checkbox" checked={sel.has(e.chave)} onChange={x => alternar([e.chave], x.target.checked)} />}</td><td>{e.origem === "avulsa" ? <><span className="pill" style={{ background: "var(--primary)", color: "#fff", fontSize: 10.5 }}>AVULSA</span> {rotAv(e)}{e.data_finalizacao && e.data_finalizacao !== e.data_montagem ? <small className="hint"> · período {br(e.data_montagem)} a {br(e.data_finalizacao)}</small> : null} <a href="#" onClick={x => { x.preventDefault(); editar(e); }}>editar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); excluirAv(e); }}>excluir</a></> : e.os}</td><td>{br(e.data_montagem)}</td><td>{br(e.data_finalizacao)}</td>
+        <tbody>{g.itens.slice().sort((a: any, b: any) => dataDe(a).localeCompare(dataDe(b))).map((e: any) => <tr key={e.chave} className={sel.has(e.chave) ? "ma-sel" : ""}><td>{aguardando(e) && <input type="checkbox" checked={sel.has(e.chave)} onChange={x => alternar([e.chave], x.target.checked)} />}</td><td>{e.origem === "avulsa" ? <><span className="pill" style={{ background: "var(--primary)", color: "#fff", fontSize: 10.5 }}>AVULSA</span> {rotAv(e)}{e.data_finalizacao && e.data_finalizacao !== e.data_montagem ? <small className="hint"> · período {br(e.data_montagem)} a {br(e.data_finalizacao)}</small> : null} <a href="#" onClick={x => { x.preventDefault(); editar(e); }}>editar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); excluirAv(e); }}>excluir</a></> : e.os}</td><td>{br(e.data_montagem)}{dataDe(e) < de && <span title="De quinzena anterior, ainda não paga" style={{ color: "var(--tn-blue-i)" }}> 📥</span>}</td><td>{br(e.data_finalizacao)}</td>
           <td>{aprovado(e) ? <><span className="vinda ok">✅ Aprovado{e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? " (360)" : ""}</span>{e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? <small className="hint" title={"por " + (e.aprovado_por || "") + " em " + new Date(e.aprovado_em).toLocaleString("pt-BR").slice(0, 16)}> <a href="#" onClick={x => { x.preventDefault(); desfazerAprov(e); }}>desfazer</a></small> : null}</> : <span className="vinda pend">⏳ Aguardando</span>}</td><td className="n">{fmtMoeda(e.produtos)}</td><td className="n">{e.adicionais ? fmtMoeda(e.adicionais) : "—"}</td><td className="n"><b>{fmtMoeda(e.total)}</b></td></tr>)}</tbody></table>
     </td></tr>}
   </>;
@@ -377,7 +409,7 @@ function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto }: any) {
   const [ref, setRef] = useState(ehQ ? qz.ref : ate.slice(0, 7)); const [obs, setObs] = useState(""); const [ind, setInd] = useState(false);
   const opRef = (() => { const l = [quinzenaDe(hoje())]; for (let k = 0; k < 7; k++) l.push(quinzenaAntes(l[l.length - 1])); const r = l.map(q => q.ref); if (!r.includes(ref)) r.unshift(ref); return r; })();
   const tot = grupos.reduce((s: number, g: any) => s + g.total, 0), n = grupos.reduce((s: number, g: any) => s + g.n, 0);
-  const _itens = grupos.map((g: any) => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, nome_exact: g.nome, montador_id: g.cad?.id || null, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipo_conta: k.tipoConta, pix_tipo: k.pixTipo, pix_chave: k.pixChave, montagens: g.n, produtos: r2(g.prod), adicionais: r2(g.adic), total: r2(g.total), aprovado: r2(g.aprov), aguardando: r2(g.agu), ordens: g.itens.map((e: any) => ({ os: e.os, desc: e.descricao, origem: e.origem, tipo: e.tipo, status: e.status, mont: e.data_montagem, fin: e.data_finalizacao, prod: e.produtos, adic: e.adicionais, total: e.total })) }; });
+  const _itens = grupos.map((g: any) => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, nome_exact: g.nome, montador_id: g.cad?.id || null, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipo_conta: k.tipoConta, pix_tipo: k.pixTipo, pix_chave: k.pixChave, montagens: g.n, produtos: r2(g.prod), adicionais: r2(g.adic), total: r2(g.total), aprovado: r2(g.aprov), aguardando: r2(g.agu), ordens: g.itens.map((e: any) => ({ chave: e.chave, os: e.os, desc: e.descricao, origem: e.origem, tipo: e.tipo, status: e.status, mont: e.data_montagem, fin: e.data_finalizacao, prod: e.produtos, adic: e.adicionais, total: e.total })) }; });
   const ir = async (substituir: boolean) => {
     setInd(true);
     try { await fechar({ referencia: ref, de, ate, pelo, filtro: fs, obs, mapa, substituir, _itens }); toast("Pagamento de " + nomeMes(ref) + " fechado e guardado no histórico"); setModal(null); pronto(); }
