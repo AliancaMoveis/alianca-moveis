@@ -370,6 +370,12 @@ function Painel({ perfil, abrir }: any) {
   const alternar = (k: string) => setLista(lista === k ? "" : k);
   const meses = <div className="mv-seg">{[0, 1, 2].map(o => <button key={o} className={off === o ? "on" : ""} onClick={() => { setOff(o); setLista(""); }}>{o === 0 ? "Este mês" : mesPeriodo(o).nome}</button>)}</div>;
   let conteudo: any, itens: any[] = [], tituloLista = "";
+  // a lista abre logo abaixo do quadro tocado (antes ficava lá no fim da tela)
+  const inline = new Set<string>();
+  const listaUI = (keys?: string[]) => { if (!lista || (keys && !keys.includes(lista))) return null; keys?.forEach(k => inline.add(k));
+    return <div className="mv-lista-painel" style={{ border: "2px solid var(--primary)", borderRadius: 12, padding: "4px 8px 8px", margin: "8px 0 12px" }}>
+      <div className="mv-sec" style={{ display: "flex", alignItems: "center" }}>{tituloLista} <i>{itens.length}</i><button className="mv-mini" style={{ marginLeft: "auto" }} onClick={() => setLista("")}>fechar ✕</button></div>
+      {itens.length ? itens.map((c: any) => c.tipo === "medidas" ? <CartaoMedida key={c.id} c={c} abrir={abrir} /> : <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: c.venda ? "" : hora(c.dataLoja || c.dataVisita), dia: c.venda ? fmtDate(c.venda.dataVenda || c.venda.quando).slice(0, 5) : diaCurto(c.dataLoja || c.dataVisita), sub: c.venda ? "venda " + c.venda.numero + " · " + fmtMoeda(parseMoeda(c.venda.valor)) : (c.produto || "—") }} />) : <Vazio t="Nenhum cliente aqui." />}</div>; };
   if (perfil === "medidor") {
     const cfg = R.cfg();
     const ex = R.extratoConsultor(eu, P.de, P.ate);
@@ -409,6 +415,7 @@ function Painel({ perfil, abrir }: any) {
         <Tile k="visitas" n={AT.visitadas.length} l="Visitas realizadas" cor="var(--st-respondida)" on={() => alternar("visitas")} /><Tile k="faltaloja" n={AT.faltaLoja.length} l="Visitados sem loja agendada" cor={AT.faltaLoja.length ? "var(--warn)" : undefined} on={() => alternar("faltaloja")} />
         <Tile k="naloja" n={AT.naLoja.length} l="Agendados na loja" on={() => alternar("naloja")} /><Tile k="vieram" n={AT.vieram.length} l="Vieram na loja" cor="var(--st-concluida)" on={() => alternar("vieram")} />
       </div>
+      {listaUI(["avisitar", "atrasadas", "visitas", "faltaloja", "naloja", "vieram"])}
       <div className="mv-sec">💰 Previsão de pagamento (até a autorização da Gestão)</div>
       <div className="mv-tiles">
         <Tile n={ex.qtdVisitas} l="Visitas que contam para pagamento" /><Tile n={fmtMoeda(ex.pagamentoVisitas)} l="Pagamento por visitas" />
@@ -416,6 +423,7 @@ function Painel({ perfil, abrir }: any) {
         <Tile k="vendas" n={ex.vendas.length} l="Vendas efetivadas" cor="var(--st-concluida)" on={() => alternar("vendas")} /><Tile n={fmtMoeda(ex.totalVendido)} l="Total vendido" />
         <Tile n={fmtMoeda(ex.comissao)} l={"Previsão de comissão (" + String(cfg.comissaoPct).replace(".", ",") + "%)"} cor="var(--st-concluida)" /><Tile k="futura" n={fmtMoeda(ex.comissaoFutura)} l={"Comissão futura · " + ex.pendentes.length + " promissória(s)"} cor={ex.pendentes.length ? "var(--warn)" : undefined} on={() => alternar("futura")} /><Tile k="confirmar" n={aConfirmar.length} l="Vendas a confirmar" cor={aConfirmar.length ? "var(--warn)" : undefined} on={() => alternar("confirmar")} />
       </div>
+      {listaUI(["vendas", "futura", "confirmar", "medidas"])}
       <FechamentoMeu uid={eu} movel />
       <div className="mv-sec">Seus clientes no mês: visita → loja → venda</div>
       <div className="mv-funil" onClick={() => alternar("clientes")}>
@@ -457,8 +465,7 @@ function Painel({ perfil, abrir }: any) {
   return <>
     {meses}
     {conteudo}
-    {lista && <><div className="mv-sec">{tituloLista} <i>{itens.length}</i></div>
-      {itens.length ? itens.map((c: any) => c.tipo === "medidas" ? <CartaoMedida key={c.id} c={c} abrir={abrir} /> : <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: c.venda ? "" : hora(c.dataLoja || c.dataVisita), dia: c.venda ? fmtDate(c.venda.dataVenda || c.venda.quando).slice(0, 5) : diaCurto(c.dataLoja || c.dataVisita), sub: c.venda ? "venda " + c.venda.numero + " · " + fmtMoeda(parseMoeda(c.venda.valor)) : (c.produto || "—") }} />) : <Vazio t="Nada neste mês." />}</>}
+    {lista && !inline.has(lista) && listaUI()}
     {!lista && <div className="mv-dica" style={{ marginTop: 10 }}>Toque nos quadros para ver a lista de clientes.</div>}
   </>;
 }
