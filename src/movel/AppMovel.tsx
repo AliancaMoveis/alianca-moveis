@@ -21,6 +21,7 @@ import { SeloLitoral } from "../comp/Ticket";
 import { LinhasVenda, SeloVenda, conferirLinhas, linhasDoTipo, type Linha } from "../comp/VendaValidar";
 import { CancelouLoja, ConfirmarVinda, ReabilitarVisita, SeloVinda, SituacaoConsultor, VisitaRealizada, vindaConfirmada } from "../comp/Situacao";
 import { FechamentoMeu } from "../comp/Fechamento";
+import { RotaVisitas } from "./RotaVisitas";
 import { RemarcarData } from "../comp/Remarcar";
 import Agenda from "../telas/Agenda";
 import PainelDono from "../telas/PainelDono";
@@ -257,7 +258,7 @@ const Busca = ({ q, setQ }: any) => <input className="mv-busca" type="search" pl
 function ConsClientes({ abrir }: any) {
   const { R, st } = useApp() as any;
   const d = consDados(R, st);
-  const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas" | "resgatar" | "lojaag">("fazer");
+  const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas" | "resgatar" | "lojaag" | "rota">("fazer");
   const md = medDados(R);
   const [q, setQ] = useState("");
   const [ctF, setCtF] = useState<"" | "com" | "sem">("");
@@ -277,14 +278,14 @@ function ConsClientes({ abrir }: any) {
     : c.dataLoja ? "loja " + diaCurto(c.dataLoja) + " " + hora(c.dataLoja) + (c.atendenteId ? " · vendedor " + primeiro(R.nomeUser(c.atendenteId)) : " · sem vendedor") : (c.endereco || c.produto);
   return <>
     <Busca q={q} setQ={setQ} />
-    {!q && <div className="mv-seg">{([["fazer", "🧭 Visitas a fazer", d.aFazer.length], ["loja", "Agendar loja", d.faltaLoja.length], ["lojaag", "🏬 Na loja", d.naLoja.length], ["resgatar", "🔄 Resgatar", resgatar.length], ["todas", "📋 Todos os meus", d.meus.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Venda cancelada", cancel.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
+    {!q && <div className="mv-seg">{([["fazer", "🧭 Visitas a fazer", d.aFazer.length], ["rota", "🗺 Rota do dia", d.aFazer.filter((c: any) => String(c.dataVisita || "").slice(0, 10) === hojeISO()).length], ["loja", "Agendar loja", d.faltaLoja.length], ["lojaag", "🏬 Na loja", d.naLoja.length], ["resgatar", "🔄 Resgatar", resgatar.length], ["todas", "📋 Todos os meus", d.meus.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Venda cancelada", cancel.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
       <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
     {!q && comPeriodo && <FiltroPeriodo p={per} setP={setPer} />}
     {!q && f === "fazer" && d.aFazer.length > 0 && <div className="mv-seg mv-seg-ctt">{([["", "Todos", d.aFazer.length], ["com", "✅ Contato feito", nCom], ["sem", "⏳ Sem contato", d.aFazer.length - nCom]] as [any, string, number][]).map(([k, l, n]) =>
       <button key={k} className={ctF === k ? "on" : ""} onClick={() => setCtF(k)}>{l}<i>{n}</i></button>)}</div>}
     {!q && f === "resgatar" && <div className="mv-resg-dica">Clientes que cancelaram, não vieram ou não responderam. Eles continuam com você até a supervisão passar para outro consultor — tente resgatar e atualize o status.</div>}
     {!q && f === "todas" && <div className="mv-resg-dica" style={{ background: "var(--surface-2)", borderColor: "var(--line)" }}>Todos os clientes que já foram direcionados para você, com o status atual.</div>}
-    {f === "medidas" && !q ? <MedLista abrir={abrir} /> : lista.length ? lista.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: sub(c) }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
+    {f === "rota" && !q ? <RotaVisitas clientes={d.meus.filter((c: any) => !c.venda && !["visita_cancelada", "loja_cancelada", "nao_vai_comprar"].includes(R.statusClienteDe(c)))} abrir={abrir} /> : f === "medidas" && !q ? <MedLista abrir={abrir} /> : lista.length ? lista.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: sub(c) }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
   </>;
 }
 
