@@ -101,9 +101,11 @@ export async function carregar(mes: string) {
     sb.from("frete_fechamento").select("*").eq("mes", mes).maybeSingle(),
   ]);
   for (const x of [a, b, c, d]) if (x.error) throw new Error(x.error.message);
+  // freteiros marcados como "ignorar" (ex.: veículos da própria Aliança, sem valor): não aparecem em lugar nenhum
+  const ign = new Set((a.data || []).filter((x: any) => x.tipo === "ignorar").map((x: any) => x.id));
   return {
-    fr: (a.data || []).map((x: any) => ({ ...x, valor_km: Number(x.valor_km) })) as Freteiro[],
-    rom: (b.data || []).map((x: any) => ({ ...x, km: num(x.km), valor_entregas: num(x.valor_entregas), valor_km: Number(x.valor_km), total_papel: num(x.total_papel) })) as RomTat[],
+    fr: (a.data || []).filter((x: any) => !ign.has(x.id)).map((x: any) => ({ ...x, valor_km: Number(x.valor_km) })) as Freteiro[],
+    rom: (b.data || []).filter((x: any) => !ign.has(x.freteiro_id)).map((x: any) => ({ ...x, km: num(x.km), valor_entregas: num(x.valor_entregas), valor_km: Number(x.valor_km), total_papel: num(x.total_papel) })) as RomTat[],
     desc: (c.data || []).map((x: any) => ({ ...x, valor: Number(x.valor) })) as Desconto[],
     pagto: (d.data as any)?.data_pagamento || "",
   };
