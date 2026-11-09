@@ -246,7 +246,8 @@ export default function MontagemPagamento() {
   const recDesc = () => refAtual ? listaDesc(refAtual).then(setDescs).catch(() => setDescs([])) : setDescs([]);
   const descDe = (g: G) => g.cad ? descs.filter(d => d.montador_id === g.cad.id) : [];
   const totDesc = (g: G) => r2(descDe(g).reduce((s, d) => s + d.valor, 0));
-  const pagaEm = (e: Ef) => { const r = pagas?.por.get(e.chave) || pagas?.por.get(chOrd(e.os, e.data_montagem, e.total)); return r && r !== refAtual ? r : ""; };
+  // quem recebe só no dia 10 não recebe no pagamento do dia 25: o que ficou num fechamento de 2ª quinzena não conta como pago
+  const pagaEm = (e: Ef) => { const r = pagas?.por.get(e.chave) || pagas?.por.get(chOrd(e.os, e.data_montagem, e.total)); if (!r || r === refAtual) return ""; if (r.endsWith("-2") && pagaDia10(cadDe(e.montador)?.conta)) return ""; return r; };
   // pendentes de quinzenas anteriores: fechadas fora do prazo ou aprovadas depois — ainda não pagas em nenhum fechamento
   const pendente = (e: Ef) => { const d = dataDe(e); if (!pagas?.desde || d >= de || d < pagas.desde) return false; if (q2P && pagaDia10(cadDe(e.montador)?.conta)) return false; return !noPeriodo(e) && !pagaEm(e); };
   const com10 = q1P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= deRetrasada && dataDe(e) < de && !pagaEm(e)).map(e => cadDe(e.montador)?.nome || e.montador))) : [];
