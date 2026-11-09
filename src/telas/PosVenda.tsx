@@ -225,7 +225,7 @@ function Encaminhadas() {
 function CadastroMontadores() {
   const { R } = useApp() as any;
   const [sub, setSub] = useState("cadastro");
-  if (!R.podeMontadores()) return <div className="empty">Só a Gestão acessa o cadastro de montadores.</div>;
+  if (!R.podeMontadores()) return <div className="empty">Só a Gestão e o controle da montagem acessam o cadastro de montadores.</div>;
   return <>
     <div className="subnav" style={{ marginTop: 10 }}><button className={sub === "cadastro" ? "on" : ""} onClick={() => setSub("cadastro")}>Cadastro</button><button className={sub === "contas" ? "on" : ""} onClick={() => setSub("contas")}>🔒 Contas para pagamento</button></div>
     {sub === "contas" ? <ContasMontadores /> : <Montadores />}

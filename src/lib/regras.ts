@@ -475,7 +475,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const podeChecklist = () => ehGestao() || mySetores().includes("checklist");
   const podeVerPosvenda = () => ehGestao() || ehPosvenda() || ehJuridico();
   // cadastro de montadores e contas de pagamento: só a Gestão (Cadastros)
-  const podeMontadores = () => ehGestao();
+  const podeMontadores = () => ehGestao() || temAcesso("montagem"); // Gestão e quem cuida da montagem (ex.: Patrícia do controle)
   const responsaveisChecklist = () => state.usuarios.filter(u => (u.setores || []).includes("checklist"));
   const medidores = () => state.usuarios.filter(u => (u.setores || []).includes("medidas"));
   const nomeMontador = (id: string) => ((state.montadores || []).find(m => m.id === id) || ({} as any)).nome || "—";
