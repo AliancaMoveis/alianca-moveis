@@ -88,6 +88,20 @@ async function trazerParcelasMont(ref: string, quem: string): Promise<number> {
     await criarDesc({ referencia: ref, montador_id: d.montador_id, descricao: d.descricao, parcela, valor: d.valor }, quem); n++; }
   return n;
 }
+/** maior pagamento recente de cada montador (últimos 6 fechamentos ativos); quem recebe só no dia 10 compara com a soma de duas quinzenas seguidas */
+async function historicoMontadores(): Promise<Record<string, number>> {
+  if (MOCK) return {};
+  const { data: fs, error } = await sb.from("montagem_fechamentos").select("id,referencia").eq("ativo", true).order("referencia", { ascending: false }).limit(7); if (error) throw new Error(error.message);
+  const ids = (fs || []).map((f: any) => f.id); if (!ids.length) return {};
+  const refDe: Record<number, string> = {}; (fs || []).forEach((f: any) => (refDe[f.id] = f.referencia));
+  const { data, error: e2 } = await sb.from("montagem_fech_itens").select("fechamento_id,montador_id,nome_exact,total").in("fechamento_id", ids); if (e2) throw new Error(e2.message);
+  const por: Record<string, Record<string, number>> = {};
+  (data || []).forEach((x: any) => { const k = x.montador_id || "nome:" + x.nome_exact; (por[k] = por[k] || {})[refDe[x.fechamento_id]] = (por[k][refDe[x.fechamento_id]] || 0) + Number(x.total || 0); });
+  const out: Record<string, number> = {};
+  Object.entries(por).forEach(([k, m]) => { let mx = 0; Object.entries(m).forEach(([ref, v]) => { mx = Math.max(mx, v);
+    if (ref.endsWith("-1")) { const [y, mm] = ref.split("-").map(Number); const d = new Date(Date.UTC(y, mm - 2, 1)); const ant = d.toISOString().slice(0, 7) + "-2"; mx = Math.max(mx, v + (m[ant] || 0)); } }); out[k] = mx; });
+  return out;
+}
 async function carregar(): Promise<{ ef: Ef[]; vinc: Record<string, string | null> }> {
   if (MOCK) return { ef: mockEf, vinc: { ...mockVinc } };
   const ef: Ef[] = [];
@@ -250,7 +264,8 @@ export default function MontagemPagamento() {
   const pagaEm = (e: Ef) => { const r = pagas?.por.get(e.chave) || pagas?.por.get(chOrd(e.os, e.data_montagem, e.total)); if (!r || r === refAtual) return ""; if (q1P && r === quinzenaAntes(qzP).ref && pagaDia10(cadDe(e.montador)?.conta)) return ""; return r; };
   // ↑ só a RETRASADA (2ª quinzena imediatamente anterior) volta para quem recebe no dia 10; quinzenas mais antigas já foram pagas
   // pendentes de quinzenas anteriores: fechadas fora do prazo ou aprovadas depois — ainda não pagas em nenhum fechamento
-  const pendente = (e: Ef) => { const d = dataDe(e); if (!pagas?.desde || d >= de || d < pagas.desde) return false; if (q2P && pagaDia10(cadDe(e.montador)?.conta)) return false; return !noPeriodo(e) && !pagaEm(e); };
+  const limitePend = somaDias(de, -60);
+  const pendente = (e: Ef) => { const d = dataDe(e); if (!pagas?.desde || d >= de || d < pagas.desde || d < limitePend) return false; if (q2P && pagaDia10(cadDe(e.montador)?.conta)) return false; return !noPeriodo(e) && !pagaEm(e); };
   const com10 = q1P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= deRetrasada && dataDe(e) < de && !pagaEm(e)).map(e => cadDe(e.montador)?.nome || e.montador))) : [];
   // quem recebe só no dia 10 e já teve a retrasada paga em outro fechamento (não paga de novo)
   const dia10Pago = q1P ? Array.from(new Set((dados?.ef || []).filter(e => conta(e) && pagaDia10(cadDe(e.montador)?.conta) && dataDe(e) >= deRetrasada && dataDe(e) < de && pagaEm(e)).map(e => (cadDe(e.montador)?.nome || e.montador) + " (já pago no fechamento " + nomeMes(pagaEm(e)) + ")"))) : [];
@@ -464,6 +479,17 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
 // ---------- fechar o pagamento do mês: guarda uma foto do que foi gerado para o financeiro ----------
 function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto, totDescontos = 0 }: any) {
   const { setModal, toast } = useApp() as any;
+  // 🛡 trava de segurança: compara cada montador com o histórico dele antes de fechar
+  const [hist, setHist] = useState<Record<string, number> | null>(null); const [ciente, setCiente] = useState(false);
+  useEffect(() => { historicoMontadores().then(setHist).catch(() => setHist({})); }, []);
+  const alertas = !hist ? [] : grupos.flatMap((g: any) => {
+    const nome = g.cad?.nome || g.nome; const base = hist[g.cad?.id || "nome:" + g.nome] || 0; const out: string[] = [];
+    const lim = Math.max(base * 1.6, base + 3000);
+    if (base > 0 && g.total > lim) out.push(nome + ": " + fmtMoeda(g.total) + " — muito acima do maior pagamento recente dele (" + fmtMoeda(base) + ")");
+    const velhas = g.itens.filter((e: any) => String(e.data_finalizacao || e.data_montagem || "") < somaDias(de, -45));
+    if (velhas.length) out.push(nome + ": " + velhas.length + " O.S. com mais de 45 dias antes do período (" + fmtMoeda(r2(velhas.reduce((s2: number, e: any) => s2 + e.total, 0))) + ")");
+    return out;
+  });
   // período igual a uma quinzena → referência da quinzena; senão, o mês
   const qz = quinzenaDe(de), ehQ = qz.de === de && qz.ate === ate;
   const [ref, setRef] = useState(ehQ ? qz.ref : ate.slice(0, 7)); const [obs, setObs] = useState(""); const [ind, setInd] = useState(false);
@@ -482,7 +508,12 @@ function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto, totDescontos = 0
       {!ehQ && <span className="hint">O período escolhido não é uma quinzena exata ({br(de)} a {br(ate)}). Confira a referência.</span>}</div>
     <div className="resp-box" style={{ margin: "10px 0" }}>Período {br(de)} a {br(ate)} · pela data de {pelo === "fin" ? "finalização" : "montagem"} · {fs === "aprov" ? "só aprovados" : fs === "agu" ? "só aguardando" : "aprovados + aguardando"}<br /><b>{grupos.length} montadores · {n} O.S. · {fmtMoeda(tot)}</b>{totDescontos > 0 && <><br />➖ Descontos: {fmtMoeda(totDescontos)} · <b>A pagar: {fmtMoeda(r2(tot - totDescontos))}</b></>}</div>
     <div className="field"><label>Observação (opcional)</label><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: enviado ao financeiro em 05/11" /></div>
-    <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" disabled={ind || !ref} onClick={() => ir(false)}>{ind ? "Guardando…" : "Fechar e guardar"}</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
+    {!hist ? <div className="hint">🛡 Conferindo os valores com o histórico…</div> : alertas.length ? <div className="alerta" style={{ marginTop: 8 }}>
+      <b>🛡 Trava de segurança — valores fora do normal:</b>
+      <ul style={{ margin: "6px 0 6px 18px", padding: 0 }}>{alertas.map((a: string, i: number) => <li key={i}>{a}</li>)}</ul>
+      <label style={{ display: "flex", gap: 6, alignItems: "center", fontWeight: 700 }}><input type="checkbox" checked={ciente} onChange={e => setCiente(e.target.checked)} /> Conferi e esses valores estão certos</label>
+    </div> : <div className="hint" style={{ color: "var(--st-concluida)" }}>🛡 Valores conferidos com o histórico de cada montador — nada fora do normal.</div>}
+    <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn primary" disabled={ind || !ref || !hist || (alertas.length > 0 && !ciente)} onClick={() => ir(false)}>{ind ? "Guardando…" : "Fechar e guardar"}</button><button className="btn ghost" onClick={() => setModal(null)}>Cancelar</button></div>
   </Modal>;
 }
 
