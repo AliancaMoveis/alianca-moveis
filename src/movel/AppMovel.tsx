@@ -258,7 +258,8 @@ const Busca = ({ q, setQ }: any) => <input className="mv-busca" type="search" pl
 function ConsClientes({ abrir }: any) {
   const { R, st } = useApp() as any;
   const d = consDados(R, st);
-  const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas" | "resgatar" | "lojaag" | "rota">("fazer");
+  const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas" | "resgatar" | "lojaag" | "rota" | "atrasados">("fazer");
+  const [dDe, setDDe] = useState(""); const [dAte, setDAte] = useState("");
   const md = medDados(R);
   const [q, setQ] = useState("");
   const [ctF, setCtF] = useState<"" | "com" | "sem">("");
@@ -273,14 +274,22 @@ function ConsClientes({ abrir }: any) {
   const eu = R.currentUserId;
   const nCom = d.aFazer.filter((c: any) => contatoFeito(c, eu)).length;
   const aFazerF = ctF === "com" ? d.aFazer.filter((c: any) => contatoFeito(c, eu)) : ctF === "sem" ? d.aFazer.filter((c: any) => !contatoFeito(c, eu)) : d.aFazer;
-  const lista = busca(q ? tudo : f === "fazer" ? aFazerF : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : f === "resgatar" ? resgatar : f === "lojaag" ? d.naLoja : tudo, q);
+  // filtro por data: visita (a fazer/atrasados), loja (abas da loja) ou a data mais relevante do cliente
+  const dataRef = (c: any) => String((["lojaag", "loja"].includes(f) ? c.dataLoja : ["fazer", "atrasados"].includes(f) ? c.dataVisita : (c.dataVisita || c.dataLoja || c.criadoEm)) || "").slice(0, 10);
+  const porData = (l: any[]) => (!dDe && !dAte) || comPeriodo ? l : l.filter((c: any) => { const x = dataRef(c); return !!x && (!dDe || x >= dDe) && (!dAte || x <= dAte); });
+  const lista = porData(busca(q ? tudo : f === "atrasados" ? d.atrasadas : f === "fazer" ? aFazerF : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : f === "resgatar" ? resgatar : f === "lojaag" ? d.naLoja : tudo, q));
   const sub = (c: any) => f === "resultado" && !q ? ((c.tratativa && c.tratativa.parecer) || (c.venda ? "venda " + c.venda.numero : "—"))
     : c.dataLoja ? "loja " + diaCurto(c.dataLoja) + " " + hora(c.dataLoja) + (c.atendenteId ? " · vendedor " + primeiro(R.nomeUser(c.atendenteId)) : " · sem vendedor") : (c.endereco || c.produto);
   return <>
     <Busca q={q} setQ={setQ} />
-    {!q && <div className="mv-seg">{([["fazer", "🧭 Visitas a fazer", d.aFazer.length], ["rota", "🗺 Rota do dia", d.aFazer.filter((c: any) => String(c.dataVisita || "").slice(0, 10) === hojeISO()).length], ["loja", "Agendar loja", d.faltaLoja.length], ["lojaag", "🏬 Na loja", d.naLoja.length], ["resgatar", "🔄 Resgatar", resgatar.length], ["todas", "📋 Todos os meus", d.meus.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Venda cancelada", cancel.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
+    {!q && <div className="mv-seg">{([["fazer", "🧭 Visitas a fazer", d.aFazer.length], ["atrasados", "⏰ Atrasados", d.atrasadas.length], ["rota", "🗺 Rota do dia", d.aFazer.filter((c: any) => String(c.dataVisita || "").slice(0, 10) === hojeISO()).length], ["loja", "Agendar loja", d.faltaLoja.length], ["lojaag", "🏬 Na loja", d.naLoja.length], ["resgatar", "🔄 Resgatar", resgatar.length], ["todas", "📋 Todos os meus", d.meus.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Venda cancelada", cancel.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
       <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
     {!q && comPeriodo && <FiltroPeriodo p={per} setP={setPer} />}
+    {!q && !comPeriodo && f !== "rota" && f !== "medidas" && <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", margin: "4px 0 8px" }}>
+      <span style={{ fontSize: 13, fontWeight: 700 }}>📅 {["lojaag", "loja"].includes(f) ? "Data da loja" : ["fazer", "atrasados"].includes(f) ? "Data da visita" : "Data"}:</span>
+      <input type="date" value={dDe} onChange={e => setDDe(e.target.value)} style={{ maxWidth: 140 }} /><span>até</span><input type="date" value={dAte} onChange={e => setDAte(e.target.value)} style={{ maxWidth: 140 }} />
+      {(dDe || dAte) && <button className="mv-mini" onClick={() => { setDDe(""); setDAte(""); }}>limpar</button>}</div>}
+    {!q && f === "atrasados" && <div className="mv-resg-dica">Visitas que já passaram da data e ainda não foram marcadas como realizadas. Marque a visita ou combine uma nova data com o cliente.</div>}
     {!q && f === "fazer" && d.aFazer.length > 0 && <div className="mv-seg mv-seg-ctt">{([["", "Todos", d.aFazer.length], ["com", "✅ Contato feito", nCom], ["sem", "⏳ Sem contato", d.aFazer.length - nCom]] as [any, string, number][]).map(([k, l, n]) =>
       <button key={k} className={ctF === k ? "on" : ""} onClick={() => setCtF(k)}>{l}<i>{n}</i></button>)}</div>}
     {!q && f === "resgatar" && <div className="mv-resg-dica">Clientes que cancelaram, não vieram ou não responderam. Eles continuam com você até a supervisão passar para outro consultor — tente resgatar e atualize o status.</div>}
