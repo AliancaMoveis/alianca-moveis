@@ -63,6 +63,9 @@ const temDot = (v: string) => !!DOTS[v] || /^st_.+_(fila|mim|cc)$/.test(v) || v 
 export default function Shell() {
   const { R, st, view, irPara, detalheId, modal, setModal, toast } = useApp();
   const sim = simulacao();
+  // menu do usuário no rodapé da barra lateral: recolhido por padrão (abre clicando no nome)
+  const [peAberto, setPeAberto] = useState(() => { try { return localStorage.getItem("a360-pe") === "1"; } catch { return false; } });
+  const alternaPe = () => setPeAberto(v => { try { localStorage.setItem("a360-pe", v ? "0" : "1"); } catch { /* */ } return !v; });
   const podeTestar = (R.ehGestao() || !!sim) && st.config.modoTeste !== false;
   const [trocando, setTrocando] = useState(false);
   async function trocar(id: string) {
@@ -142,9 +145,14 @@ export default function Shell() {
             })}
           </div>
           <div className="side-pe">
-            <div className="side-av" id="sideAv">{inicial(u.nome.includes("— ") ? u.nome.split("— ")[1] : u.nome)}</div>
+            <div className="side-av" id="sideAv" style={{ cursor: "pointer" }} onClick={alternaPe}>{inicial(u.nome.includes("— ") ? u.nome.split("— ")[1] : u.nome)}</div>
             <div className="side-txt" style={{ flex: 1, minWidth: 0 }}>
-              <b id="sideNome">{u.nome}</b><span id="sideSetor">{R.setoresLabel(u)}</span>
+              <div onClick={alternaPe} title={peAberto ? "Recolher" : "Expandir: meus dados, senha, sair"} style={{ cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 6 }}>
+                <div style={{ flex: 1, minWidth: 0 }}><b id="sideNome">{u.nome}</b><span id="sideSetor">{R.setoresLabel(u)}</span></div>
+                <span style={{ fontSize: 12, opacity: .7, marginTop: 2 }}>{peAberto ? "▾" : "▴"}</span>
+              </div>
+              {sim && !peAberto && <button onClick={voltar} disabled={trocando} style={{ ...estiloBtSide, color: "#f5d67a", borderColor: "rgba(245,214,122,.4)" }}>← Voltar para {sim.nome}</button>}
+              {peAberto && <>
               <button onClick={() => setModal(<MeusDados />)} style={estiloBtSide}>Meus dados{!u.nomeCompleto || !u.telefone ? " ⚠️" : ""}</button>
               <button id="btSair" onClick={() => setModal(<AlterarSenha />)} style={estiloBtSide}>Alterar minha senha</button>
               {podeTestar && (
@@ -155,6 +163,7 @@ export default function Shell() {
               )}
               {sim && <button onClick={voltar} disabled={trocando} style={{ ...estiloBtSide, color: "#f5d67a", borderColor: "rgba(245,214,122,.4)" }}>← Voltar para {sim.nome}</button>}
               <button id="btSair2" className="btSair" onClick={() => sair()} style={estiloBtSide}>← Sair</button>
+              </>}
             </div>
           </div>
         </aside>
