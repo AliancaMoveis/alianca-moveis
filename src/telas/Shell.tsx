@@ -55,7 +55,7 @@ import BaseClientes from "./BaseClientes";
 import { SETORES_MENU } from "../lib/regras";
 import { Cadastros, Admin } from "./Cadastros";
 import Detalhe from "../comp/Detalhe";
-import { AlterarSenha, MeusDados } from "../comp/Modal";
+import { AlterarSenha, Configuracoes, MeusDados } from "../comp/Modal";
 
 const DOTS: Record<string, string> = { definir: "dotDefinir", fila: "dotFila", direcionamento: "dotDirecionamento", aprovacoes: "dotAprovacoes", pendencias: "dotPendencias", md_callcenter: "dotMdCC", pv_clientes: "dotPvCli", pv_montadores: "dotPvMont" };
 
@@ -154,6 +154,7 @@ export default function Shell() {
               {sim && !peAberto && <button onClick={voltar} disabled={trocando} style={{ ...estiloBtSide, color: "#f5d67a", borderColor: "rgba(245,214,122,.4)" }}>← Voltar para {sim.nome}</button>}
               {peAberto && <>
               <button onClick={() => setModal(<MeusDados />)} style={estiloBtSide}>Meus dados{!u.nomeCompleto || !u.telefone ? " ⚠️" : ""}</button>
+              <button onClick={() => setModal(<Configuracoes telas={G.flatMap((g: any) => g.itens.map(([v, l]: string[]) => [v, g.g + " · " + l] as [string, string]))} />)} style={estiloBtSide}>⚙ Configurações</button>
               <button id="btSair" onClick={() => setModal(<AlterarSenha />)} style={estiloBtSide}>Alterar minha senha</button>
               {podeTestar && (
                 <select value="" disabled={trocando} onChange={e => trocar(e.target.value)} style={{ ...estiloBtSide, appearance: "auto" }} title="Modo de teste: entrar como outro usuário">

@@ -1,0 +1,10 @@
+import { chromium } from "playwright";
+const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+const p = await b.newPage({ viewport: { width: 1280, height: 800 } }); const erros = []; p.on("pageerror", e => erros.push(e.message));
+await p.goto("http://localhost:5199/mock.html?uid=00000000-0000-4000-a000-000000000007"); await p.waitForTimeout(2500);
+await p.locator("#sideNome").click(); await p.waitForTimeout(200);
+await p.locator("button", { hasText: "Configurações" }).click(); await p.waitForTimeout(400);
+await p.locator("button", { hasText: "Escuro" }).click(); await p.waitForTimeout(300);
+await p.screenshot({ path: "/tmp/claude-0/config.png" });
+console.log(erros, await p.evaluate(() => document.documentElement.dataset.theme));
+await b.close();

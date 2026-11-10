@@ -13,7 +13,7 @@ import { baixarTodasFotos } from "../comp/Fotos";
 import { numsVenda, EM_ATENDIMENTO, STATUS, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, temCancelamento } from "../lib/regras";
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
-import { AlterarSenha, MeusDados } from "../comp/Modal";
+import { AlterarSenha, Configuracoes, MeusDados } from "../comp/Modal";
 import { fmtTel } from "../lib/baseClientes";
 import { SinoAvisos } from "../comp/Avisos";
 import { ChatMovel } from "../comp/Chat";
@@ -715,6 +715,7 @@ function Eu({ perfil, completa, irTime, irVend }: any) {
     <Instalar />
     <div className="mv-sec">Minha conta</div>
     <button className="mv-linha" onClick={() => setModal(<MeusDados />)} style={!u?.nomeCompleto || !u?.telefone ? { borderLeftColor: "var(--warn)" } : undefined}><b>👤 Meus dados</b><span>{u?.nomeCompleto && u?.telefone ? u.nomeCompleto + " · " + fmtTel(u.telefone) : "Preencha seu nome completo e telefone"}</span></button>
+    <button className="mv-linha" onClick={() => setModal(<Configuracoes telas={[]} />)}><b>⚙ Configurações</b><span>Tema claro ou escuro, tamanho do texto e notificações</span></button>
     <button className="mv-linha" onClick={() => setModal(<AlterarSenha />)}><b>🔑 Alterar minha senha</b><span>Troque a senha inicial por uma só sua</span></button>
     <button className="mv-linha" onClick={completa}><b>Abrir versão completa</b><span>Todas as telas do sistema (melhor no computador)</span></button>
     <button className="mv-linha" onClick={() => sair()} style={{ borderLeftColor: "var(--danger)" }}><b>Sair</b><span>Encerrar a sessão neste aparelho</span></button>

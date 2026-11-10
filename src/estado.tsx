@@ -28,7 +28,7 @@ export function AppProvider({ uid, inicial, children, overlays }: { uid: string;
   const [st, setSt] = useState<Estado>(inicial);
   const [msg, setMsg] = useState(""); const [toastOn, setToastOn] = useState(false);
   const tRef = useRef<any>();
-  const [view, setView] = useState("dashboard");
+  const [view, setView] = useState(() => { try { return localStorage.getItem("a360-inicio") || "dashboard"; } catch { return "dashboard"; } });
   const [preset, setPreset] = useState<any>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [focoDetalhe, setFoco] = useState<string | null>(null);
