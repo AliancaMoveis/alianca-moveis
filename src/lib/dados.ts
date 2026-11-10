@@ -4,7 +4,7 @@ import { sb } from "./supabase";
 
 export type Anexo = { id?: string; tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; path?: string | null; criadoPor?: string | null };
 export type Chamado = any;
-export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean; fazProjeto?: boolean; folga?: number | null; turno?: string | null; nomeCompleto?: string | null; telefone?: string | null; feriasDe?: string | null; feriasAte?: string | null; editaAgenda?: boolean; domingoRef?: string | null; naAgenda?: boolean; acessos?: string[] };
+export type Usuario = { id: string; nome: string; email?: string; setores: string[]; somenteAtribuidos: boolean; ativo: boolean; fazProjeto?: boolean; folga?: number | null; turno?: string | null; nomeCompleto?: string | null; telefone?: string | null; feriasDe?: string | null; feriasAte?: string | null; editaAgenda?: boolean; domingoRef?: string | null; naAgenda?: boolean; acessos?: string[]; avisosOff?: string[] };
 export type Setor = { id: string; nome: string; liberacoes: Record<string, boolean> };
 export type Estado = {
   setores: Setor[];
@@ -208,7 +208,7 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       id: s.id, nome: s.nome,
       liberacoes: { criar: s.lib_criar, verTudo: s.lib_ver_tudo, cadastros: s.lib_cadastros, admin: s.lib_admin, verMarketing: s.lib_ver_marketing, viaCallcenter: !!s.via_callcenter },
     })),
-    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo, fazProjeto: u.faz_projeto !== false, folga: u.folga ?? null, turno: u.turno || null, nomeCompleto: u.nome_completo || null, telefone: u.telefone || null, feriasDe: u.ferias_de || null, feriasAte: u.ferias_ate || null, editaAgenda: !!u.edita_agenda, domingoRef: u.domingo_ref || null, naAgenda: u.na_agenda !== false, menusOcultos: u.menus_ocultos || [], acessos: (uacess as any[]).filter((a: any) => a.usuario_id === u.id).map((a: any) => a.acesso), freelancer: !!u.freelancer, escalaDom: u.escala_dom || null })),
+    usuarios: usuarios.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email, setores: setoresDe[u.id] || [], somenteAtribuidos: u.somente_atribuidos, ativo: u.ativo, fazProjeto: u.faz_projeto !== false, folga: u.folga ?? null, turno: u.turno || null, nomeCompleto: u.nome_completo || null, telefone: u.telefone || null, feriasDe: u.ferias_de || null, feriasAte: u.ferias_ate || null, editaAgenda: !!u.edita_agenda, domingoRef: u.domingo_ref || null, naAgenda: u.na_agenda !== false, menusOcultos: u.menus_ocultos || [], avisosOff: u.avisos_off || [], acessos: (uacess as any[]).filter((a: any) => a.usuario_id === u.id).map((a: any) => a.acesso), freelancer: !!u.freelancer, escalaDom: u.escala_dom || null })),
     representantes: reps.map((r: any) => ({ id: r.id, nome: r.nome, whats: r.whats, email: r.email })).sort((a: any, b: any) => String(a.nome || "").trim().localeCompare(String(b.nome || "").trim(), "pt-BR", { sensitivity: "base", numeric: true })),
     fabricas: fabs.map((f: any) => ({ id: f.id, nome: f.nome, emails: f.emails, repId: f.representante_id || "" })).sort((a: any, b: any) => { const na = /n[aã]o informad/i.test(a.nome) ? 1 : 0, nb = /n[aã]o informad/i.test(b.nome) ? 1 : 0; return na - nb || String(a.nome || "").trim().localeCompare(String(b.nome || "").trim(), "pt-BR", { sensitivity: "base", numeric: true }); }),
     tipos: tiposMap,

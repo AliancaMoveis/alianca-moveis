@@ -56,6 +56,7 @@ import { SETORES_MENU } from "../lib/regras";
 import { Cadastros, Admin } from "./Cadastros";
 import Detalhe from "../comp/Detalhe";
 import { AlterarSenha, Configuracoes, MeusDados } from "../comp/Modal";
+import { menuRecolhido } from "../lib/preferencias";
 
 const DOTS: Record<string, string> = { definir: "dotDefinir", fila: "dotFila", direcionamento: "dotDirecionamento", aprovacoes: "dotAprovacoes", pendencias: "dotPendencias", md_callcenter: "dotMdCC", pv_clientes: "dotPvCli", pv_montadores: "dotPvMont" };
 
@@ -81,7 +82,7 @@ export default function Shell() {
   const atual = existe ? view : "dashboard";
   const grupoDe = (v: string) => (G.find((gr: any) => gr.itens.some(([x]: string[]) => x === v)) || G[0]).g;
   const [abertos, setAbertos] = useState<Set<string>>(() => new Set([grupoDe(atual)]));
-  const [mini, setMini] = useState(false);
+  const [mini, setMini] = useState(() => menuRecolhido());
   const [mob, setMob] = useState(false);
 
   useEffect(() => { if (!existe) irPara("dashboard"); }, [existe]);

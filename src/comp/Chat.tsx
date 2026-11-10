@@ -1,5 +1,6 @@
 // Chat interno: botão flutuante (computador) / tela cheia (celular), lista de conversas e a conversa.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { somLigado } from "../lib/preferencias";
 import { createPortal } from "react-dom";
 import { useApp } from "../estado";
 import { chat, chatExtra, iniciarPresenca, ouvirOnline, abrirChat, EVENTO_CHAT, type Conversa, type Msg, type Anexo } from "../lib/chat";
@@ -16,7 +17,7 @@ const cor = (s: string) => { let h = 0; for (const ch of s || "") h = (h * 31 + 
 const ini = (n: string) => (n || "?").replace(/^(Consultora?|Vendedora?)\s+—\s+/, "").trim().charAt(0).toUpperCase();
 const ICO_SETOR: Record<string, string> = { checklist: "✓", callcenter: "☎", medidas: "📐", medidas_supervisao: "📐", marketing_operadora: "◎", marketing_supervisao: "◎", gestao: "▣", atendente_cliente: "🛒", consultor_externo: "🧭", suporte_consultores: "🧭", posvenda: "✚", montagem: "🔧", assistencia: "🛠", juridico: "⚖", gerente_loja: "🏬", prazo_fabrica: "🏭", supervisao: "☎", proprietario: "★" };
 let bip: AudioContext | null = null;
-function tocar() { try { bip = bip || new (window as any).AudioContext(); const o = bip!.createOscillator(), g = bip!.createGain(); o.frequency.value = 880; g.gain.value = 0.04; o.connect(g); g.connect(bip!.destination); o.start(); o.stop(bip!.currentTime + 0.12); } catch { /* sem som */ } }
+function tocar() { try { if (!somLigado()) return; bip = bip || new (window as any).AudioContext(); const o = bip!.createOscillator(), g = bip!.createGain(); o.frequency.value = 880; g.gain.value = 0.04; o.connect(g); g.connect(bip!.destination); o.start(); o.stop(bip!.currentTime + 0.12); } catch { /* sem som */ } }
 
 /** mensagem nova com o 360 aberto: som + balão na tela (e aviso do navegador se a aba estiver em segundo plano) */
 let balaoSet: ((x: { m: Msg; nome: string } | null) => void) | null = null;

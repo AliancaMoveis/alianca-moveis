@@ -2074,3 +2074,9 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .mv-fin .panel > div[style*="minmax(160px"]{grid-template-columns:1fr 1fr!important}
 .mv-card.cor-vend{border-left:6px solid #15803d;background:linear-gradient(90deg,rgba(21,128,61,.12),var(--surface) 40%)}
 .mv-card.cor-veio{border-left:6px solid #7c3aed;background:linear-gradient(90deg,rgba(124,58,237,.10),var(--surface) 40%)}
+/* preferência: listas compactas */
+html.compacto .ma-tab td,html.compacto .ma-tab th,html.compacto .dl-tab td,html.compacto .ma-os td{padding-top:3px!important;padding-bottom:3px!important}
+html.compacto .ticket{padding-top:6px!important;padding-bottom:6px!important}
+html.compacto .mv-card{padding-top:6px!important;padding-bottom:6px!important;min-height:0!important}
+html.compacto .fin-item{padding-top:4px!important;padding-bottom:4px!important}
+html.compacto .list{gap:4px!important}

@@ -1,6 +1,7 @@
 // 📊 Painel controle geral — a visão do dono: só os números do negócio, sem nada por pessoa. Cada cartão leva à tela de detalhe.
 // Bruno e Washington (acesso extra "painel_geral"). Valor investido em anúncios fica escondido (olho) até ele tocar.
 import { useEffect, useMemo, useState } from "react";
+import { periodoPadrao } from "../lib/preferencias";
 import { useApp } from "../estado";
 import { sb } from "../lib/supabase";
 import { MOCK } from "../lib/chat";
@@ -44,7 +45,7 @@ const fretesMes = async (ym: string): Promise<RomTat[]> => { if (MOCK) return []
 
 export default function PainelGeral({ movel }: { movel?: boolean }) {
   const { R, st, irPara } = useApp() as any;
-  const [per, setPer] = useState<Per>("mes");
+  const [per, setPer] = useState<Per>(() => periodoPadrao() as Per);
   const h = hojeISO();
   const [pDe, setPDe] = useState(h.slice(0, 8) + "01"); const [pAte, setPAte] = useState(h);
   const P = periodo(per, pDe, pAte);

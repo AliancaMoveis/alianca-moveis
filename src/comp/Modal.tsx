@@ -4,7 +4,7 @@ import { sb } from "../lib/supabase";
 import { A } from "../lib/acoes";
 import { fmtTel } from "../lib/baseClientes";
 import Senha from "./Senha";
-import { temaAtual, zoomAtual, telaInicial, salvarTema, salvarZoom, salvarInicio, type Tema } from "../lib/preferencias";
+import { temaAtual, zoomAtual, telaInicial, salvarTema, salvarZoom, salvarInicio, type Tema, somLigado, salvarSom, menuRecolhido, salvarMenuRecolhido, listasCompactas, salvarCompacto, periodoPadrao, salvarPeriodo, type PerPadrao, GRUPOS_AVISO } from "../lib/preferencias";
 import { estadoPush, ativarPush, desativarPush, testarPush, type EstadoPush } from "../lib/push";
 
 export function Modal({ titulo, onFechar, children, tituloNode }: { titulo?: string; tituloNode?: React.ReactNode; onFechar: () => void; children: React.ReactNode }) {
@@ -61,7 +61,16 @@ export function MeusDados() {
 
 /** ⚙ Configurações deste aparelho: tema, tamanho do texto, tela inicial e notificações */
 export function Configuracoes({ telas }: { telas: [string, string][] }) {
-  const { setModal, toast } = useApp() as any;
+  const { setModal, toast, R, recarregar } = useApp() as any;
+  const [som, setSom] = useState(somLigado()); const [mini, setMini] = useState(menuRecolhido()); const [comp, setComp] = useState(listasCompactas()); const [per, setPer] = useState<PerPadrao>(periodoPadrao());
+  const eu = R?.me?.() || {}; const [off, setOff] = useState<string[]>(eu.avisosOff || []);
+  const grupoOn = (chs: string[]) => !chs.every(c => off.includes(c));
+  const alternaGrupo = async (chs: string[]) => { const novo = grupoOn(chs) ? Array.from(new Set([...off, ...chs])) : off.filter(c => !chs.includes(c));
+    setOff(novo); const { error } = await sb.rpc("salvar_avisos_off", { p_off: novo }); if (error) { toast("Não foi possível salvar: " + error.message); setOff(off); } else recarregar?.(); };
+  const chave = (on: boolean, set: (v: boolean) => void, salvar: (v: boolean) => void, rot: string, dica?: string) => <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", cursor: "pointer" }}>
+    <input type="checkbox" checked={on} onChange={e => { set(e.target.checked); salvar(e.target.checked); }} style={{ width: 18, height: 18, marginTop: 2 }} /><span><b style={{ fontWeight: 600 }}>{rot}</b>{dica && <div className="hint">{dica}</div>}</span></label>;
+  const sairTudo = async () => { if (!confirm("Sair do 360 em TODOS os aparelhos (computadores e celulares)? Vai precisar entrar de novo em cada um.")) return;
+    try { await sb.auth.signOut({ scope: "global" } as any); location.reload(); } catch (e: any) { toast(e.message); } };
   const [tema, setTema] = useState<Tema>(temaAtual()); const [zoom, setZoom] = useState(zoomAtual()); const [inicio, setInicio] = useState(telaInicial());
   const [push, setPush] = useState<EstadoPush | null>(null);
   React.useEffect(() => { estadoPush().then(setPush).catch(() => setPush("sem-suporte")); }, []);
@@ -78,6 +87,11 @@ export function Configuracoes({ telas }: { telas: [string, string][] }) {
       {sec("Tamanho do texto", "Para ler melhor no computador da loja ou no celular")}
       <div style={{ display: "flex", gap: 8 }}>{([[0.9, "Menor"], [1, "Normal"], [1.1, "Grande"], [1.2, "Maior"]] as [number, string][]).map(([k, l]) =>
         <button key={k} type="button" style={{ ...op(zoom === k), fontSize: 12 * k }} onClick={() => { setZoom(k); salvarZoom(k); }}>{l}</button>)}</div>
+      {sec("Tela e listas")}
+      {telas.length > 0 && chave(mini, setMini, salvarMenuRecolhido, "Menu lateral sempre recolhido", "Mostra só os ícones — mais espaço para tabelas e agendas (vale ao abrir o 360)")}
+      {chave(comp, setComp, salvarCompacto, "Listas compactas", "Linhas mais baixas para caber mais clientes na tela")}
+      {telas.length > 0 && <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 0" }}><span style={{ flex: 1, minWidth: 180 }}>Período padrão do Painel controle geral</span>
+        <select value={per} onChange={e => { const v = e.target.value as PerPadrao; setPer(v); salvarPeriodo(v); }}><option value="hoje">Hoje</option><option value="semana">Semana</option><option value="mes">Mês atual</option><option value="mesant">Mês anterior</option></select></div>}
       {telas.length > 0 && sec("Tela inicial", "A tela que abre quando você entra no 360")}
       {telas.length > 0 && <select value={inicio} onChange={e => { setInicio(e.target.value); salvarInicio(e.target.value); }} style={{ width: "100%" }}>
         <option value="">Padrão (início)</option>{telas.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>}
@@ -88,6 +102,12 @@ export function Configuracoes({ telas }: { telas: [string, string][] }) {
         {push === "ligado" && <><button className="btn sm" onClick={() => testarPush().then(() => toast("Enviamos um aviso de teste")).catch((e: any) => toast(e.message))}>Testar</button>
           <button className="btn ghost sm" onClick={async () => { try { await desativarPush(); setPush(await estadoPush()); } catch (e: any) { toast(e.message); } }}>Desligar</button></>}
       </div>
+      {chave(som, setSom, salvarSom, "Som ao chegar mensagem no chat", "Desligue no computador da recepção, se incomodar")}
+      {sec("Quais avisos receber", "Desligue os que não ajudam no seu trabalho. Cliente direcionado para você, cliente que chegou, urgentes e chat ficam sempre ligados.")}
+      {GRUPOS_AVISO.map(([k, l, chs]) => <label key={k} style={{ display: "flex", gap: 10, alignItems: "center", padding: "5px 0", cursor: "pointer" }}><input type="checkbox" checked={grupoOn(chs)} onChange={() => alternaGrupo(chs)} style={{ width: 18, height: 18 }} /><span>{l}</span></label>)}
+      {sec("Segurança")}
+      <button className="btn sm" onClick={sairTudo}>🔒 Sair de todos os aparelhos</button>
+      <div className="hint" style={{ marginTop: 4 }}>Use se esqueceu o 360 aberto em outro computador ou trocou de celular.</div>
       <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}><button className="btn primary" onClick={() => setModal(null)}>Pronto</button></div>
     </Modal>
   );

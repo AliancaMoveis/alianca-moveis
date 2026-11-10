@@ -4,7 +4,7 @@ const p = await b.newPage({ viewport: { width: 1280, height: 800 } }); const err
 await p.goto("http://localhost:5199/mock.html?uid=00000000-0000-4000-a000-000000000007"); await p.waitForTimeout(2500);
 await p.locator("#sideNome").click(); await p.waitForTimeout(200);
 await p.locator("button", { hasText: "Configurações" }).click(); await p.waitForTimeout(400);
-await p.locator("button", { hasText: "Escuro" }).click(); await p.waitForTimeout(300);
+await p.locator("text=Listas compactas").click(); await p.waitForTimeout(300); await p.locator(".modal .mb, .modal").first().evaluate(e => e.scrollTop = 9999);
 await p.screenshot({ path: "/tmp/claude-0/config.png" });
 console.log(erros, await p.evaluate(() => document.documentElement.dataset.theme));
 await b.close();
