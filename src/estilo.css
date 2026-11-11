@@ -2154,3 +2154,6 @@ html.compacto .list{gap:4px!important}
 .ag-reag-lin{display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:14px;flex-wrap:wrap}
 .ag-reag-lin span{font-weight:700;min-width:48px}
 .ag-reag-lin em{color:#7a4108;font-style:normal}
+
+.as-env{width:44px;height:44px;border-radius:50%;border:0;background:#0F6E5C;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.as-env:disabled{opacity:.35;cursor:default}
