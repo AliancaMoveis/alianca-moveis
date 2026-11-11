@@ -124,7 +124,7 @@ export async function executarGestao(nome: string, a: any, c: { R: any; st: any 
     const base = todosEsc ? cham : cham.filter(meu);
     const out: any = { periodo: { de, ate }, escopo: todosEsc ? "todos (o que você pode ver)" : "só os seus" };
     // Gestão: exatamente os mesmos números dos cartões do painel (Call center, Agendamentos, Externos, Checklist, Vendas)
-    if (R.ehGestao()) {
+    if (R.ehGestao() || R.ehProprietario?.()) {
       const G = calcGeral(R, st, de, ate); const mapa: Record<string, string> = { callcenter: "cc", marketing: "ag", consultor_externo: "cons", checklist: "ck", vendas: "vendas" };
       const nomes: Record<string, string> = { callcenter: "Call Center", marketing: "Agendamentos (marketing)", consultor_externo: "Externos (visitas dos consultores)", checklist: "Checklist", vendas: "Vendas do marketing" };
       const chaves = area === "todas" ? Object.keys(mapa) : [area, ...(area === "marketing" ? [] : [])].filter(k => mapa[k]);
