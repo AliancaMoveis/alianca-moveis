@@ -49,6 +49,26 @@ Variáveis de ambiente do projeto:
 
 Build: `npm run build` → pasta `dist`.
 
+## Assistente 360 (chat com voz)
+
+Botão "360" no canto da tela, só para usuários liberados. As consultas e alterações rodam **no app, com o login da própria pessoa**
+(mesmas regras de `src/lib/regras.ts` e mesmas funções do banco das telas). Toda alteração mostra um cartão de confirmação antes de gravar
+e deixa uma nota "Feito pelo Assistente 360" no histórico do cliente. Só a conversa com o Claude passa pelo servidor.
+
+| O quê | Onde |
+|---|---|
+| Ponte segura para a API do Claude (guarda a chave, confere o login e a liberação) | `api/assistente.ts` |
+| Ferramentas (consultar, propor e executar alterações) e instruções do assistente | `src/lib/assistente.ts` |
+| Tela do chat, voz e cartões de confirmação | `src/comp/Assistente.tsx` |
+
+Variáveis de ambiente no Vercel (projeto `alianca360`):
+
+- `ANTHROPIC_API_KEY` = chave da API do Claude (**sem** prefixo `VITE_`, para nunca ir ao navegador)
+- `ASSISTENTE_EMAILS` = e-mails liberados, separados por vírgula (opcional; sem ela, só `bruno.fiaron@aliancamoveis.com.br`)
+- `ASSISTENTE_MODELO` = modelo (opcional; padrão `claude-sonnet-5-5`)
+
+Depois de salvar a variável, é preciso fazer um novo deploy (Deployments → Redeploy) para ela valer.
+
 ## Dados de exemplo
 
 Gerados a partir do `seed()` do protótipo (`scripts/gerar-seed.mjs` → `supabase/seed/chamados-seed.json`).

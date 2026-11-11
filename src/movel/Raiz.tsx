@@ -5,6 +5,7 @@ import Shell from "../telas/Shell";
 import AppMovel, { perfilMovel } from "./AppMovel";
 import Freteiro from "./Freteiro";
 import { abrirAviso } from "../comp/Avisos";
+import { Assistente } from "../comp/Assistente";
 
 const CHAVE = "a360-versao";
 const ler = () => { try { return localStorage.getItem(CHAVE) || ""; } catch { return ""; } };
@@ -44,9 +45,10 @@ export default function Raiz() {
   const trocar = (v: string) => { gravar(v); setVersao(v); window.scrollTo(0, 0); };
   // /frete = modo freteiro (celular) — simulação dos fretes
   if (location.pathname.replace(/\/+$/, "") === "/frete" || new URLSearchParams(location.search).has("frete")) return <Freteiro />;
-  if (cel && perfil && versao !== "completa") return <AppMovel perfil={perfil} completa={() => trocar("completa")} />;
+  if (cel && perfil && versao !== "completa") return <><AppMovel perfil={perfil} completa={() => trocar("completa")} /><Assistente /></>;
   return <>
     <Shell />
+    <Assistente />
     {cel && perfil && versao === "completa" && <button className="mv-voltar-app" onClick={() => trocar("app")}>📱 Voltar ao app</button>}
   </>;
 }
