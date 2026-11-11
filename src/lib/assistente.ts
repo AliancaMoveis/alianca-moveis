@@ -9,7 +9,7 @@ import { fmtTel } from "./baseClientes";
 import { sugestaoVendedor } from "../comp/SelVendedor";
 
 type Ctx = { R: any; st: any; uid: string; recarregar: () => Promise<void> };
-export type Cartao = { id: string; cliente: string; quando: string; info: string; aviso: string };
+export type Cartao = { id: string; cliente: string; dow: string; dia: string; sub: string; anexo: "com" | "sem" | "" };
 
 const dia = (v: any) => String(v || "").slice(0, 10);
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -105,9 +105,14 @@ function resumo(c: Ctx, x: any) {
     consultor: x.consultorId ? R.nomeUser(x.consultorId) : null, endereco: x.endereco || "", anexos: (x.anexos || []).length, sem_anexo: !!R.semAnexo(x) };
 }
 function cartao(c: Ctx, x: any): Cartao {
-  const r = resumo(c, x); const q = x.dataLoja && (!x.dataVisita || dia(x.dataLoja) >= dia(x.dataVisita)) ? x.dataLoja : x.dataVisita || x.dataLoja;
-  const info = [x.dataLoja ? "loja" : "visita", r.vendedor && "vend. " + String(r.vendedor).split(" ")[0], r.consultor && "cons. " + String(r.consultor).split(" ")[0]].filter(Boolean).join(" · ");
-  return { id: x.id, cliente: x.cliente, quando: fmtQuando(q), info, aviso: r.sem_anexo ? "sem anexo" : r.anexos ? r.anexos + " anexo(s)" : "" };
+  const r = resumo(c, x);
+  const loja = !!x.dataLoja && (!x.dataVisita || dia(x.dataLoja) >= dia(x.dataVisita));
+  const q = String(loja ? x.dataLoja : x.dataVisita || x.dataLoja || "");
+  const d = q.length >= 10 ? new Date(q.slice(0, 10) + "T12:00") : null;
+  const hora = q.length > 10 ? q.slice(11, 16).replace(":00", "h").replace(/^0/, "") : "";
+  const sub = [hora, x.produto || (loja ? "Vinda à loja" : "Visita"), r.vendedor && "vend. " + String(r.vendedor).split(" ")[0], !loja && r.consultor && "cons. " + String(r.consultor).split(" ")[0]].filter(Boolean).join(" · ");
+  const dow = d ? DIAS[d.getDay()] : "";
+  return { id: x.id, cliente: x.cliente, dow: dow.charAt(0).toUpperCase() + dow.slice(1), dia: q ? String(Number(q.slice(8, 10))) : "—", sub, anexo: r.sem_anexo ? "sem" : r.anexos ? "com" : "" };
 }
 const periodo = (a: any) => { const de = ISO_DIA.test(a.de) ? a.de : hojeISO(); const ate = ISO_DIA.test(a.ate) ? a.ate : de; return { de, ate: ate < de ? de : ate }; };
 const podeDistribuirAqui = (R: any) => R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));

@@ -28,11 +28,25 @@ export function Assistente() {
   const msgs = useRef<any[]>([]);
   const pendRef = useRef<{ results: any[]; pend: Pend[]; cartoes: Cartao[] } | null>(null);
   const fimRef = useRef<HTMLDivElement>(null);
+  const painelRef = useRef<HTMLDivElement>(null);
+  const [grande, setGrande] = useState(false);
   const recRef = useRef<any>(null);
   const finalRef = useRef("");
 
   useEffect(() => { let vivo = true; statusAssistente().then(s => vivo && setStatus(s)); return () => { vivo = false; }; }, []);
   useEffect(() => () => { try { window.speechSynthesis?.cancel(); } catch { /* */ } }, []);
+  useEffect(() => {
+    const el = document.documentElement;
+    if (!aberto) { el.classList.remove("as-aberto"); el.style.removeProperty("--as-alt"); return; }
+    const medir = () => {
+      const p = painelRef.current; if (!p) return;
+      const b = (document.querySelector(".mv-tabs") as HTMLElement | null)?.offsetHeight || 0;
+      p.style.setProperty("--as-base", b + "px");
+      el.style.setProperty("--as-alt", p.offsetHeight + b + "px");
+    };
+    el.classList.add("as-aberto"); medir(); window.addEventListener("resize", medir);
+    return () => { window.removeEventListener("resize", medir); el.classList.remove("as-aberto"); el.style.removeProperty("--as-alt"); };
+  }, [aberto, grande]);
   useEffect(() => { fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [itens, pensando, aberto]);
 
   const ctx = () => { const a = appRef.current; return { R: a.R, st: a.st, uid: a.R.currentUserId, recarregar: a.recarregar }; };
@@ -126,17 +140,19 @@ export function Assistente() {
   }
 
   const nova = () => { calar(); msgs.current = []; pendRef.current = null; setItens([]); setTexto(""); };
-  const abrirFicha = (id: string) => { setAberto(false); appRef.current.abrirDetalhe(id); };
+  const abrirFicha = (id: string) => appRef.current.abrirDetalhe(id);
 
   if (!status || !status.liberado) return null;
   if (!aberto) return <button className="as-fab" aria-label="Abrir o Assistente 360" onClick={() => setAberto(true)}>360</button>;
 
-  return <div className="as-painel" role="dialog" aria-label="Assistente 360">
+  return <div ref={painelRef} className={"as-painel" + (grande ? " grande" : "")} role="dialog" aria-label="Assistente 360">
     <div className="as-topo">
-      <div><b>Assistente 360</b><span>em teste · só você vê</span></div>
-      <button className="as-mini" onClick={alternarVoz} aria-pressed={voz} aria-label={voz ? "Desligar a resposta em voz" : "Ligar a resposta em voz"}>{voz ? "🔊 Voz" : "🔇 Voz"}</button>
+      <div className="as-av" aria-hidden="true">360</div>
+      <div className="as-tt"><b>Assistente 360</b><span>Em teste · só você vê</span></div>
       <button className="as-mini" onClick={nova} disabled={pensando}>Nova</button>
-      <button className="as-x" aria-label="Fechar" onClick={() => { calar(); setAberto(false); }}>✕</button>
+      <button className="as-ic" onClick={alternarVoz} aria-pressed={voz} aria-label={voz ? "Desligar a resposta em voz" : "Ligar a resposta em voz"}>{voz ? "🔊" : "🔇"}</button>
+      <button className="as-ic as-gd" onClick={() => setGrande(g => !g)} aria-label={grande ? "Diminuir o assistente" : "Aumentar o assistente"}>{grande ? "⌄" : "⌃"}</button>
+      <button className="as-ic" aria-label="Fechar" onClick={() => { calar(); setAberto(false); }}>✕</button>
     </div>
     <div className="as-msgs">
       {!status.configurado && <div className="as-aviso">A chave do Claude ainda não foi ligada no Vercel (ANTHROPIC_API_KEY). Assim que ligar, o assistente passa a responder.</div>}
@@ -148,27 +164,30 @@ export function Assistente() {
         : i.k === "erro" ? <div key={n} className="as-erro">{i.t}</div>
         : i.k === "ia" ? <div key={n} className="as-ia">
             <div className="as-txt">{i.t}</div>
-            {!!i.cartoes?.length && <div className="as-cards">{i.cartoes.map(c => <div key={c.id} className="as-card">
-              <div><b>{c.cliente}</b><span>{c.quando}{c.info ? " · " + c.info : ""}{c.aviso ? " · " : ""}{c.aviso && <em className={c.aviso === "sem anexo" ? "no" : "ok"}>{c.aviso}</em>}</span></div>
-              <button onClick={() => abrirFicha(c.id)}>Abrir ficha</button></div>)}</div>}
+            {!!i.cartoes?.length && <div className="as-lista">{i.cartoes.map(c => <button key={c.id} className="as-lin" onClick={() => abrirFicha(c.id)} aria-label={"Abrir a ficha de " + c.cliente}>
+              <span className="as-dt"><span>{c.dow}</span><b>{c.dia}</b></span>
+              <span className="as-in"><b>{c.cliente}</b><span>{c.sub}</span></span>
+              {c.anexo && <i className={"as-chip " + c.anexo}>{c.anexo === "com" ? "Com anexo" : "Sem anexo"}</i>}
+            </button>)}</div>}
           </div>
         : <div key={n} className="as-conf">
             <div className="as-conf-t">{i.pend[0].p.titulo}{i.pend.length > 1 ? ` (+${i.pend.length - 1})` : ""}</div>
             {i.pend.map(p => <div key={p.id} className="as-conf-l">{p.p.linhas.map((l, k) => <div key={k}>{l}</div>)}{p.p.avisos.map((a, k) => <div key={"a" + k} className="as-conf-av">⚠️ {a}</div>)}</div>)}
             {i.estado === "aguardando" ? <div className="as-conf-b">
-              <button className="btn primary" onClick={() => decidir(true)} disabled={pensando}>Confirmar</button>
-              <button className="btn ghost" onClick={() => decidir(false)} disabled={pensando}>Cancelar</button></div>
+              <button className="as-b1" onClick={() => decidir(true)} disabled={pensando}>Confirmar</button>
+              <button className="as-b2" onClick={() => decidir(false)} disabled={pensando}>Cancelar</button></div>
               : <div className="as-conf-r">{i.estado === "feito" ? "✅ " + (i.resultado || "Confirmado") : "Cancelado — nada foi alterado."}</div>}
           </div>)}
       {pensando && <div className="as-pensa">Consultando…</div>}
       <div ref={fimRef} />
     </div>
     <form className="as-entrada" onSubmit={e => { e.preventDefault(); enviar(texto); }}>
-      <input aria-label="Mensagem para o assistente" placeholder={ouvindo ? "Ouvindo…" : "Pergunte ao assistente"} value={texto} onChange={e => setTexto(e.target.value)}
-        disabled={pensando || !!pendRef.current || !status.configurado} />
+      <div className="as-campo"><input aria-label="Mensagem para o assistente" placeholder={ouvindo ? "Ouvindo…" : "Pergunte ao assistente"} value={texto} onChange={e => setTexto(e.target.value)}
+        disabled={pensando || !!pendRef.current || !status.configurado} /></div>
       <button type="button" className={"as-mic" + (ouvindo ? " on" : "")} aria-label={ouvindo ? "Parar de ouvir" : "Falar com o assistente"} onClick={falar}
-        disabled={pensando || !!pendRef.current || !status.configurado}>🎤</button>
-      <button type="submit" className="as-env" aria-label="Enviar" disabled={pensando || !texto.trim() || !!pendRef.current || !status.configurado}>➤</button>
+        disabled={pensando || !!pendRef.current || !status.configurado}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg>
+      </button>
     </form>
   </div>;
 }
