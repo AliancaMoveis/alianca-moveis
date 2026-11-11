@@ -169,7 +169,7 @@ export function Assistente() {
       {!status.configurado && <div className="as-aviso">A chave do Claude ainda não foi ligada no Vercel (ANTHROPIC_API_KEY). Assim que ligar, o assistente passa a responder.</div>}
       {!itens.length && <div className="as-vazio">
         <p>Pergunte ou peça por voz. Eu consulto o sistema com o seu acesso e, antes de alterar qualquer coisa, peço a sua confirmação.</p>
-        {sugestoesPara(R).length > 0 && <div className="as-sug">{sugestoesPara(R).map(s => <button key={s} onClick={() => enviar(s)} disabled={!status.configurado}>{s}</button>)}</div>}
+        {sugestoesPara(app.R).length > 0 && <div className="as-sug">{sugestoesPara(app.R).map(s => <button key={s} onClick={() => enviar(s)} disabled={!status.configurado}>{s}</button>)}</div>}
       </div>}
       {itens.map((i, n) => i.k === "u" ? <div key={n} className="as-u">{i.t}</div>
         : i.k === "erro" ? <div key={n} className="as-erro">{i.t}</div>
