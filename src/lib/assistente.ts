@@ -56,7 +56,7 @@ export function sistema({ R, st, uid }: Ctx) {
   const setores = R.mySetores().map((id: string) => (st.setores.find((s: any) => s.id === id) || {}).nome || id).join(", ");
   const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
   return `Você é o Assistente 360, do sistema ALIANÇA 360 da Aliança Móveis (loja de móveis). Responda sempre em português do Brasil, curto e direto: a pessoa costuma estar no celular.
-Usuário: ${eu.nome || "—"}. Setores: ${setores || "—"}. Hoje é ${hoje} (${hojeISO()}).
+Usuário: ${eu.nome || "—"}.${R.oculto?.("so_anuncios") ? " PERFIL SÓ ANÚNCIOS: responda apenas sobre anúncios (Meta/Google), campanhas e o funil de clientes do marketing; para qualquer outro assunto diga que o seu acesso é só de anúncios." : ""} Setores: ${setores || "—"}. Hoje é ${hoje} (${hojeISO()}).
 Regras:
 - Dados só pelas ferramentas. Nunca invente clientes, horários, valores ou anexos; se a ferramenta não trouxer, diga que não encontrou.
 - Não mostre o ID interno do cliente; chame pelo nome.
@@ -101,6 +101,7 @@ export const FERRAMENTAS: any[] = [
 ];
 // ferramentas liberadas para esta pessoa (as de montagem/pagamento/fretes só aparecem para quem tem acesso)
 export function ferramentasPara(R: any): any[] {
+  if (R.oculto?.("so_anuncios")) return podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : []; // perfil só-anúncios: o assistente responde apenas sobre anúncios e o funil deles
   const ok = (n: string) => n === "montagem_pagamento" || n === "montagem_fechamentos" ? podeVerMontagem(R) : n === "fretes_pagamentos" ? podeVerFretes(R) : true;
   return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name)), FERRAMENTA_PRODUCAO, FERRAMENTA_AREAS, ...(podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : [])];
 }
