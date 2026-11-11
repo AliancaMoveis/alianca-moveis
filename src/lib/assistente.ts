@@ -30,13 +30,19 @@ const MARCO = "2026-10-14"; // mesmo marco da tela de Distribuir
 async function tokenAtual() { const { data } = await sb.auth.getSession(); return data.session?.access_token || ""; }
 
 export async function statusAssistente(): Promise<{ liberado: boolean; configurado: boolean }> {
-  try {
-    const tok = await tokenAtual(); if (!tok) return { liberado: false, configurado: false };
-    const r = await fetch("/api/assistente", { headers: { Authorization: "Bearer " + tok } });
-    if (!r.ok) return { liberado: false, configurado: false };
-    const j = await r.json();
-    return { liberado: !!j.liberado, configurado: !!j.configurado };
-  } catch { return { liberado: false, configurado: false }; }
+  // falha passageira (rede lenta, servidor acordando, sessão ainda carregando) não pode esconder o botão: tenta de novo
+  for (let t = 0; t < 4; t++) {
+    try {
+      const tok = await tokenAtual();
+      if (tok) {
+        const r = await fetch("/api/assistente", { headers: { Authorization: "Bearer " + tok } });
+        if (r.ok) { const j = await r.json(); return { liberado: !!j.liberado, configurado: !!j.configurado }; }
+        if (r.status === 403 || r.status === 405) return { liberado: false, configurado: false };
+      }
+    } catch { /* tenta de novo */ }
+    await new Promise(r => setTimeout(r, 1500 * (t + 1)));
+  }
+  return { liberado: false, configurado: false };
 }
 
 export async function perguntar(messages: any[], system: string, tools: any[] = FERRAMENTAS): Promise<{ content: any[]; stop_reason: string }> {
