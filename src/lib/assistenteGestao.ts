@@ -3,6 +3,7 @@
 // além disso o banco (RLS) continua filtrando as tabelas com o login da pessoa.
 import { sb } from "./supabase";
 import { A } from "./acoes";
+import { calcGeral, concluidoEm } from "./geral";
 import { hojeISO, isoLocal, vendaContaVolume, pagamentosVenda } from "./regras";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -117,11 +118,26 @@ export async function executarGestao(nome: string, a: any, c: { R: any; st: any 
     const meu = (k: any) => k.solicitanteId === uid || k.cadastradoPorId === uid || k.atendenteId === uid || k.consultorId === uid;
     const base = todosEsc ? cham : cham.filter(meu);
     const out: any = { periodo: { de, ate }, escopo: todosEsc ? "todos (o que você pode ver)" : "só os seus" };
+    // Gestão: exatamente os mesmos números dos cartões do painel (Call center, Agendamentos, Externos, Checklist, Vendas)
+    if (R.ehGestao()) {
+      const G = calcGeral(R, st, de, ate); const mapa: Record<string, string> = { callcenter: "cc", marketing: "ag", consultor_externo: "cons", checklist: "ck", vendas: "vendas" };
+      const nomes: Record<string, string> = { callcenter: "Call Center", marketing: "Agendamentos (marketing)", consultor_externo: "Externos (visitas dos consultores)", checklist: "Checklist", vendas: "Vendas do marketing" };
+      const chaves = area === "todas" ? Object.keys(mapa) : [area, ...(area === "marketing" ? [] : [])].filter(k => mapa[k]);
+      chaves.forEach(k => { const c = G.cartoes.find(x => x.k === mapa[k]); if (c) out[k] = { area: nomes[k], principal: c.n + " " + c.l, detalhes: Object.fromEntries(c.linhas.map(([x, y]: any) => [x, y])), pendente_agora: c.pend }; });
+      if (area === "callcenter" || area === "todas") {
+        const dentro = (v: any) => { if (!v) return false; const d = new Date(v); return d >= new Date(de + "T00:00:00") && d <= new Date(ate + "T23:59:59"); };
+        const cc = (st.chamados as any[]).filter(k => R.doCC(k) && dentro(k.criadoEm));
+        const porU: Record<string, number> = {}; cc.forEach(k => { const n = R.nomeUser(k.solicitanteId) || "—"; porU[n] = (porU[n] || 0) + 1; });
+        if (out.callcenter) { out.callcenter.registrados_por_pessoa = Object.entries(porU).map(([pessoa, qtd]) => ({ pessoa, qtd })).sort((x, y) => y.qtd - x.qtd).slice(0, 15); out.callcenter.registrados_por_voce = cc.filter(k => k.solicitanteId === uid).length; }
+      }
+      out.nota = "Mesma conta dos cartões do painel da Gestão. 'Registrados' no Call Center = chamados abertos no período.";
+      return out;
+    }
     if (area === "callcenter" || area === "todas") {
-      const l = base.filter(k => no(k.criadoEm) && (k.setor === "callcenter" || R.mySetores().includes("callcenter") && (k.solicitanteId === uid || k.cadastradoPorId === uid)));
-      const tipos: Record<string, number> = {}; l.forEach(k => { const n = st.tipos?.[k.tipo]?.nome || k.tipo || "—"; tipos[n] = (tipos[n] || 0) + 1; });
-      out.callcenter = { cadastrados_no_periodo: l.length, por_tipo: Object.entries(tipos).map(([tipo, qtd]) => ({ tipo, qtd })).sort((x, y) => y.qtd - x.qtd).slice(0, 8),
-        nota: "Atendimento do Call Center = solicitação cadastrada por ele no 360. Ligação que não virou cadastro não aparece." };
+      const dentro = (v: any) => { if (!v) return false; const d = new Date(v); return d >= new Date(de + "T00:00:00") && d <= new Date(ate + "T23:59:59"); };
+      const l = (st.chamados as any[]).filter(k => R.doCC(k) && R.podeVer(k) && dentro(k.criadoEm) && (todosEsc || k.solicitanteId === uid));
+      const fin = l.filter(k => k.status === "concluida" && concluidoEm(k));
+      out.callcenter = { area: "Call Center", registrados: l.length, finalizados: fin.length, em_aberto_agora: (st.chamados as any[]).filter(k => R.doCC(k) && R.podeVer(k) && k.status !== "concluida" && (todosEsc || k.solicitanteId === uid)).length };
     }
     if (area === "marketing" || area === "todas") {
       const l = base.filter(k => R.domMarketing(k) && no(k.criadoEm));
