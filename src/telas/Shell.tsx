@@ -79,14 +79,14 @@ export default function Shell() {
   async function voltar() { setTrocando(true); try { await voltarGestao(); } catch (e: any) { toast(e.message); setTrocando(false); } }
   const G = R.menuPerfil();
   const existe = G.some((gr: any) => gr.itens.some(([v]: string[]) => v === view));
-  const inicial = R.oculto("so_anuncios") ? (G[0]?.itens[0]?.[0] || "dashboard") : "dashboard";
-  const atual = existe ? view : inicial;
+  const telaInicial = R.oculto("so_anuncios") ? (G[0]?.itens[0]?.[0] || "dashboard") : "dashboard";
+  const atual = existe ? view : telaInicial;
   const grupoDe = (v: string) => (G.find((gr: any) => gr.itens.some(([x]: string[]) => x === v)) || G[0]).g;
   const [abertos, setAbertos] = useState<Set<string>>(() => new Set([grupoDe(atual)]));
   const [mini, setMini] = useState(() => menuRecolhido());
   const [mob, setMob] = useState(false);
 
-  useEffect(() => { if (!existe) irPara(inicial); }, [existe]);
+  useEffect(() => { if (!existe) irPara(telaInicial); }, [existe]);
   useEffect(() => { setAbertos(new Set([grupoDe(atual)])); }, [atual]);
 
   const u = R.me()!;
