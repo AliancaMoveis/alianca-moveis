@@ -8,6 +8,7 @@ import { hojeISO } from "./regras";
 import { fmtTel } from "./baseClientes";
 import { sugestaoVendedor } from "../comp/SelVendedor";
 import { DIRETRIZES } from "./diretrizes";
+import { FERRAMENTAS_GESTAO, NOMES_GESTAO, executarGestao, podeVerMontagem, podeVerFretes } from "./assistenteGestao";
 
 type Ctx = { R: any; st: any; uid: string; recarregar: () => Promise<void> };
 export type Cartao = { id: string; cliente: string; dow: string; dia: string; sub: string; anexo: "com" | "sem" | "" };
@@ -38,12 +39,12 @@ export async function statusAssistente(): Promise<{ liberado: boolean; configura
   } catch { return { liberado: false, configurado: false }; }
 }
 
-export async function perguntar(messages: any[], system: string): Promise<{ content: any[]; stop_reason: string }> {
+export async function perguntar(messages: any[], system: string, tools: any[] = FERRAMENTAS): Promise<{ content: any[]; stop_reason: string }> {
   const tok = await tokenAtual();
   const r = await fetch("/api/assistente", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok },
-    body: JSON.stringify({ messages, system, tools: FERRAMENTAS }),
+    body: JSON.stringify({ messages, system, tools }),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.erro || "Não foi possível falar com o assistente agora.");
@@ -98,6 +99,11 @@ export const FERRAMENTAS: any[] = [
   { name: "adicionar_nota", description: "PROPÕE registrar uma observação no histórico do cliente. A pessoa confirma antes de gravar.",
     input_schema: obj({ id: S("ID do cliente"), texto: S("Texto da observação") }, ["id", "texto"]) },
 ];
+// ferramentas liberadas para esta pessoa (as de montagem/pagamento/fretes só aparecem para quem tem acesso)
+export function ferramentasPara(R: any): any[] {
+  const ok = (n: string) => n === "montagem_pagamento" || n === "montagem_fechamentos" ? podeVerMontagem(R) : n === "fretes_pagamentos" ? podeVerFretes(R) : true;
+  return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name))];
+}
 export const ESCRITAS = ["remarcar_visita", "remarcar_loja", "definir_vendedor", "distribuir_vendedores", "adicionar_nota"];
 
 // ---------- leitura ----------
@@ -121,8 +127,9 @@ function cartao(c: Ctx, x: any): Cartao {
 const periodo = (a: any) => { const de = ISO_DIA.test(a.de) ? a.de : hojeISO(); const ate = ISO_DIA.test(a.ate) ? a.ate : de; return { de, ate: ate < de ? de : ate }; };
 const podeDistribuirAqui = (R: any) => R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
 
-export function executarLeitura(nome: string, a: any, c: Ctx): { dados: any; cartoes: Cartao[] } {
+export async function executarLeitura(nome: string, a: any, c: Ctx): Promise<{ dados: any; cartoes: Cartao[] }> {
   const { R, st, uid } = c; a = a || {};
+  if (NOMES_GESTAO.includes(nome)) { try { return { dados: await executarGestao(nome, a, c), cartoes: [] }; } catch (e: any) { return { dados: { erro: e?.message || "Falha na consulta" }, cartoes: [] }; } }
   const cham: any[] = st.chamados.filter((x: any) => R.podeVer(x));
   if (nome === "listar_clientes") {
     const { de, ate } = periodo(a);

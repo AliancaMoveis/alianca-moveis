@@ -2,7 +2,7 @@
 // Consultas rodam direto; qualquer alteração vira um cartão de confirmação — nada é gravado sem o toque da pessoa.
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
-import { ESCRITAS, executarEscrita, executarLeitura, perguntar, proporEscrita, sistema, statusAssistente, type Cartao, type Proposta } from "../lib/assistente";
+import { ESCRITAS, ferramentasPara, executarEscrita, executarLeitura, perguntar, proporEscrita, sistema, statusAssistente, type Cartao, type Proposta } from "../lib/assistente";
 
 type Pend = { id: string; nome: string; args: any; p: Proposta };
 type Item =
@@ -71,7 +71,7 @@ export function Assistente() {
     setPensando(true);
     try {
       for (let volta = 0; volta < 8; volta++) {
-        const r = await perguntar(msgs.current, sistema(ctx()));
+        const r = await perguntar(msgs.current, sistema(ctx()), ferramentasPara(ctx().R));
         msgs.current.push({ role: "assistant", content: r.content });
         const fala = r.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n").trim();
         const usos = r.content.filter((b: any) => b.type === "tool_use");
@@ -83,7 +83,7 @@ export function Assistente() {
             if (!v.ok) results.push({ type: "tool_result", tool_use_id: u.id, content: v.erro, is_error: true });
             else pend.push({ id: u.id, nome: u.name, args: u.input, p: v.p as Proposta });
           } else {
-            const ex = executarLeitura(u.name, u.input, ctx());
+            const ex = await executarLeitura(u.name, u.input, ctx());
             if (ex.cartoes.length) cartoes = ex.cartoes;
             results.push({ type: "tool_result", tool_use_id: u.id, content: JSON.stringify(ex.dados) });
           }
