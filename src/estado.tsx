@@ -37,6 +37,7 @@ export function AppProvider({ uid, inicial, children, overlays }: { uid: string;
   const [modal, setModal] = useState<React.ReactNode>(null);
   const [, setTick] = useState(0);
 
+  useEffect(() => { const f = () => setSt(x => ({ ...x })); window.addEventListener("a360-fotos", f); return () => window.removeEventListener("a360-fotos", f); }, []);
   const R = useMemo(() => criarRegras(st, uid), [st, uid]);
   const toast = useCallback((m: string) => { setMsg(m); setToastOn(true); clearTimeout(tRef.current); tRef.current = setTimeout(() => setToastOn(false), 2200); }, []);
   // se já está carregando, não descarta o pedido: carrega de novo assim que terminar (senão a tela fica com dados antigos depois de uma ação)

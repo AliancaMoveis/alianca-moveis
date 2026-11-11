@@ -177,7 +177,12 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
   }));
 
   const paths = anexos.filter((a: any) => a.storage_path).map((a: any) => a.storage_path);
-  if (paths.length) await assinar(paths);
+  // as fotos não seguram a abertura do sistema: espera no máximo 2,5 s; o que faltar é assinado em segundo plano e preenchido depois
+  let assinando: Promise<void> | null = null;
+  if (paths.length) {
+    assinando = assinar(paths).catch(() => null) as Promise<void>;
+    await Promise.race([assinando, new Promise(r => setTimeout(r, 2500))]);
+  }
 
   const setoresDe: Record<string, string[]> = {};
   us.forEach((x: any) => (setoresDe[x.usuario_id] = setoresDe[x.usuario_id] || []).push(x.setor_id));
@@ -255,5 +260,10 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
       };
     }).sort((a: any, b: any) => +new Date(b.criadoEm) - +new Date(a.criadoEm)),
   };
+  if (assinando) assinando.then(() => {
+    let mudou = false;
+    estado.chamados.forEach((c: any) => (c.anexos || []).forEach((a: any) => { if (!a.url && a.path) { const u = cacheUrl.get(a.path)?.url; if (u) { a.url = u; mudou = true; } } }));
+    if (mudou) window.dispatchEvent(new Event("a360-fotos"));
+  });
   return estado;
 }
