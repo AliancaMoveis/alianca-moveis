@@ -13,7 +13,7 @@ const MODELO = process.env.ASSISTENTE_MODELO || "claude-sonnet-5-5";
 
 // liberação por permissão: quem tem um destes setores/acessos no 360 também usa o assistente (padrão: "anuncios" = Lucas Santana e "proprietario" = donos).
 // Para liberar outra permissão: variável ASSISTENTE_SETORES (ids separados por vírgula). Vazia = só a lista de e-mails.
-const SETORES = (process.env.ASSISTENTE_SETORES ?? "anuncios,proprietario").split(",").map(s => s.trim()).filter(Boolean);
+const SETORES = (process.env.ASSISTENTE_SETORES ?? "anuncios,proprietario,gerente_loja").split(",").map(s => s.trim()).filter(Boolean);
 async function temSetor(token: string, id: string): Promise<boolean> {
   if (!SETORES.length) return false;
   try {
