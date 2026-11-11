@@ -84,7 +84,7 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
     A.agendaLoja(iso).then(r => { if (vivo) setLoja(r || []); }).catch(() => { if (vivo) { setLoja([]); setFalhou(true); } });
     return () => { vivo = false; };
   }, [resumida, iso, st]);
-  useEffect(() => { let vivo = true; A.agendaLojaReag(iso).then(r => { if (vivo) setReag(r); }).catch(() => null); return () => { vivo = false; }; }, [iso, st]);
+  useEffect(() => { let vivo = true; A.agendaLojaReag(iso).then(r => { if (vivo) setReag(Array.isArray(r) ? r : []); }).catch(() => null); return () => { vivo = false; }; }, [iso, st]);
   const fmtDH = (v: any) => { if (!v) return ""; const t = String(v); const dd = parseData(t.slice(0, 10) + "T12:00"); return DIAS[dd.getDay()] + " " + t.slice(8, 10) + "/" + t.slice(5, 7) + " às " + t.slice(11, 16); };
   const saiu = reag.filter(r => r.tipo === "saiu");
   const meuCliente = (c: any) => c.atendenteId === eu || c.consultorId === eu || c.solicitanteId === eu || c._pedidoVendedor === eu;

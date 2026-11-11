@@ -49,7 +49,7 @@ export default function AgendaPublica() {
   useEffect(() => { document.title = "Agenda da loja · Aliança Móveis"; const t = setInterval(() => setAgora(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
     let vivo = true;
-    const carregar = () => { A.agendaPublicaReag(token, diaIso).then(r => { if (vivo) setReag(r); }).catch(() => null); A.agendaPublicaAnexosQtd(token, diaIso).then(q => { if (vivo) setQtd(q || {}); }).catch(() => null); return A.agendaPublicaDia(token, diaIso).then(r => { if (vivo) { setDados(r); setErro(""); setAtualizado(new Date()); } })
+    const carregar = () => { A.agendaPublicaReag(token, diaIso).then(r => { if (vivo) setReag(Array.isArray(r) ? r : []); }).catch(() => null); A.agendaPublicaAnexosQtd(token, diaIso).then(q => { if (vivo) setQtd(q || {}); }).catch(() => null); return A.agendaPublicaDia(token, diaIso).then(r => { if (vivo) { setDados(r); setErro(""); setAtualizado(new Date()); } })
       .catch((e: any) => { if (vivo) { setErro(e.message || "Não foi possível carregar"); setDados(d => d || []); } }); };
     setDados(null); carregar();
     const t = setInterval(carregar, 60000);

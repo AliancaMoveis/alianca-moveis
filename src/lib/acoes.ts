@@ -132,11 +132,13 @@ export const A = {
   },
   agendaPublicaReag: async (token: string, dia: string): Promise<any[]> => {
     if ((import.meta as any).env?.VITE_MOCK) return [];
-    return (await rpc<any[]>("agenda_publica_reag", { p_token: token, p_dia: dia }).catch(() => [])) || [];
+    const r: any = await rpc<any[]>("agenda_publica_reag", { p_token: token, p_dia: dia }).catch(() => []);
+    return Array.isArray(r) ? r : [];
   },
   agendaLojaReag: async (dia: string): Promise<any[]> => {
     if ((import.meta as any).env?.VITE_MOCK) return [];
-    return (await rpc<any[]>("agenda_loja_reag", { p_dia: dia }).catch(() => [])) || [];
+    const r: any = await rpc<any[]>("agenda_loja_reag", { p_dia: dia }).catch(() => []);
+    return Array.isArray(r) ? r : [];
   },
   agendaPublicaVendedores: async (token: string) => {
     if ((import.meta as any).env?.VITE_MOCK) return [{ id: "v1", nome: "Giovanna" }, { id: "v2", nome: "Lucas" }, { id: "v3", nome: "Roy" }];
