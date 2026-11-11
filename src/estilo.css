@@ -2140,3 +2140,17 @@ html.compacto .list{gap:4px!important}
   .as-gd{display:inline-block}
   html.as-aberto body{padding-bottom:calc(var(--as-alt,0px) + env(safe-area-inset-bottom,0px))}
 }
+
+/* agenda da loja: reagendamentos */
+.ap-reag{display:block;margin-top:3px;font-size:12.5px;color:#7a4108;background:#fbebd9;border-radius:6px;padding:2px 8px;width:fit-content}
+.ap-reag-lista{margin:14px 0;padding:12px 14px;border:1px dashed #d9a35c;border-radius:12px;background:#fff8ee}
+.ap-reag-lista>b{display:block;margin-bottom:8px;color:#7a4108}
+.ap-reag-lin{display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:14px;flex-wrap:wrap}
+.ap-reag-lin span{font-weight:700;min-width:48px}
+.ap-reag-lin em{color:#7a4108;font-style:normal}
+.ag-reag{display:inline-block;font-size:12.5px;color:#7a4108;background:#fbebd9;border-radius:6px;padding:2px 8px}
+.ag-reag-lista{margin:12px 0 4px;padding:12px 14px;border:1px dashed #d9a35c;border-radius:12px;background:#fff8ee}
+.ag-reag-lista>b{display:block;margin-bottom:8px;color:#7a4108}
+.ag-reag-lin{display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:14px;flex-wrap:wrap}
+.ag-reag-lin span{font-weight:700;min-width:48px}
+.ag-reag-lin em{color:#7a4108;font-style:normal}

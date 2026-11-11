@@ -130,6 +130,14 @@ export const A = {
     const m: Record<string, any> = {}; (ex || []).forEach((e: any) => (m[e.id] = e));
     return (l || []).map((x: any) => ({ ...x, telefone: m[x.id]?.telefone || "", obs: m[x.id]?.obs || "" }));
   },
+  agendaPublicaReag: async (token: string, dia: string): Promise<any[]> => {
+    if ((import.meta as any).env?.VITE_MOCK) return [];
+    return (await rpc<any[]>("agenda_publica_reag", { p_token: token, p_dia: dia }).catch(() => [])) || [];
+  },
+  agendaLojaReag: async (dia: string): Promise<any[]> => {
+    if ((import.meta as any).env?.VITE_MOCK) return [];
+    return (await rpc<any[]>("agenda_loja_reag", { p_dia: dia }).catch(() => [])) || [];
+  },
   agendaPublicaVendedores: async (token: string) => {
     if ((import.meta as any).env?.VITE_MOCK) return [{ id: "v1", nome: "Giovanna" }, { id: "v2", nome: "Lucas" }, { id: "v3", nome: "Roy" }];
     return (await rpc<any[]>("agenda_publica_vendedores", { p_token: token })) || [];

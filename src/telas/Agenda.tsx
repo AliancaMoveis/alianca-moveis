@@ -77,12 +77,16 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
   const souVendedor = R.mySetores().includes("atendente_cliente");
   const [loja, setLoja] = useState<any[] | null>(null);
   const [falhou, setFalhou] = useState(false);
+  const [reag, setReag] = useState<any[]>([]); // reagendamentos que tocam este dia
   useEffect(() => {
     if (!resumida) return;
     let vivo = true; setLoja(null); setFalhou(false);
     A.agendaLoja(iso).then(r => { if (vivo) setLoja(r || []); }).catch(() => { if (vivo) { setLoja([]); setFalhou(true); } });
     return () => { vivo = false; };
   }, [resumida, iso, st]);
+  useEffect(() => { let vivo = true; A.agendaLojaReag(iso).then(r => { if (vivo) setReag(r); }).catch(() => null); return () => { vivo = false; }; }, [iso, st]);
+  const fmtDH = (v: any) => { if (!v) return ""; const t = String(v); const dd = parseData(t.slice(0, 10) + "T12:00"); return DIAS[dd.getDay()] + " " + t.slice(8, 10) + "/" + t.slice(5, 7) + " às " + t.slice(11, 16); };
+  const saiu = reag.filter(r => r.tipo === "saiu");
   const meuCliente = (c: any) => c.atendenteId === eu || c.consultorId === eu || c.solicitanteId === eu || c._pedidoVendedor === eu;
   let doDia: any[];
   if (resumida && !falhou) {
@@ -144,6 +148,7 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
                       {vend && t.assumidoFila ? <> <span className="marca-loja assumido">assumido na fila</span></> : null}</div>
                     {R.atendendoAgora(c) ? <div className="dt"><b className="ag-ematd">🟢 Em atendimento</b> desde {new Date(t.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
                       : !alheio && iso === hoje && R.podeIniciarAtend(c) ? <div style={{ marginTop: 6 }}><button className="btn sm ag-iniciar" onClick={e => { e.stopPropagation(); if (confirm("Iniciar o atendimento de " + c.cliente + " com " + (vend || "o vendedor") + "?")) ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado"); }}>▶️ Iniciar atendimento</button></div> : null}
+                    {(() => { const g = reag.find(r => r.id === c.id && r.tipo === "chegou"); return g ? <div className="dt"><span className="ag-reag">🔁 <b>Reagendado</b> — estava em {fmtDH(g.de)} · agora {fmtDH(g.para)}</span></div> : null; })()}
                     {c.produto && <div className="dt">{c.produto}</div>}
                     {!alheio && obsAg(c) ? <div className="dt">📝 {obsAg(c)}</div> : null}
                     {/* vendedor pede para assumir um cliente da fila */}
@@ -160,6 +165,8 @@ function Dia({ iso, resumida, escopo, principal, orig = "" }: { iso: string; res
             })}
           </div></div>
         ))}
+      {saiu.length > 0 && <div className="ag-reag-lista"><b>🔁 Reagendados para outro dia ({saiu.length})</b>
+        {saiu.map((r, i) => <div key={i} className="ag-reag-lin"><span>{r.hora}</span><b>{r.cliente}</b><em>era {fmtDH(r.de)} → agora {fmtDH(r.para)}</em></div>)}</div>}
     </div>
   );
 }

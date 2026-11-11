@@ -13,6 +13,7 @@ const iso = (d: Date) => d.getFullYear() + "-" + String(d.getMonth() + 1).padSta
 const soNome = (n: string) => (n || "").replace(/^(Consultora?|Vendedora?|Projetista|Suporte)\s+—\s+/, "");
 // situação resumida para quem está na loja
 // o banco já devolve a situação resumida (nunca "vendido"): sem_vendedor, com_vendedor, em_atendimento, finalizado, reagendado, nao_compareceu
+const fmtDH = (v: any) => { if (!v) return ""; const s = String(v); const d = new Date(s.slice(0, 10) + "T12:00"); return DIAS[d.getDay()].split("-")[0] + " " + s.slice(8, 10) + "/" + s.slice(5, 7) + " às " + s.slice(11, 16); };
 const SIT: Record<string, [string, string]> = {
   sem_vendedor: ["Aguardando", "agu"], com_vendedor: ["Com vendedor", "com"], em_atendimento: ["Em atendimento", "atd"],
   finalizado: ["Atendimento finalizado", "fin"], reagendado: ["Reagendado", "nao"], nao_compareceu: ["Não compareceu", "nao"],
@@ -37,6 +38,7 @@ export default function AgendaPublica() {
   const [achados, setAchados] = useState<any[] | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [vendedores, setVendedores] = useState<any[]>([]);
+  const [reag, setReag] = useState<any[]>([]);                  // reagendamentos que tocam este dia (chegou / saiu)
   const [qtd, setQtd] = useState<Record<string, number>>({});   // nº de imagens/arquivos por cliente
   const [ver, setVer] = useState<any>(null);                     // "Ver imagens": { x, sel, passo: nome | confirmar | ok, programado, arquivos }
   const [zoom, setZoom] = useState("");
@@ -47,7 +49,7 @@ export default function AgendaPublica() {
   useEffect(() => { document.title = "Agenda da loja · Aliança Móveis"; const t = setInterval(() => setAgora(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
     let vivo = true;
-    const carregar = () => { A.agendaPublicaAnexosQtd(token, diaIso).then(q => { if (vivo) setQtd(q || {}); }).catch(() => null); return A.agendaPublicaDia(token, diaIso).then(r => { if (vivo) { setDados(r); setErro(""); setAtualizado(new Date()); } })
+    const carregar = () => { A.agendaPublicaReag(token, diaIso).then(r => { if (vivo) setReag(r); }).catch(() => null); A.agendaPublicaAnexosQtd(token, diaIso).then(q => { if (vivo) setQtd(q || {}); }).catch(() => null); return A.agendaPublicaDia(token, diaIso).then(r => { if (vivo) { setDados(r); setErro(""); setAtualizado(new Date()); } })
       .catch((e: any) => { if (vivo) { setErro(e.message || "Não foi possível carregar"); setDados(d => d || []); } }); };
     setDados(null); carregar();
     const t = setInterval(carregar, 60000);
@@ -175,6 +177,7 @@ export default function AgendaPublica() {
                 <div className={"ap-origem " + x.origem}>{x.origem === "marketing" ? "Marketing" : "Externo"}</div>
                 <div className="ap-cli"><b>{x.cliente}</b>
                   <span>{x.consultor ? "Consultor: " + soNome(x.consultor) : "Agendado pelo marketing"}{x.telefone ? " · 📞 " + fmtTel(x.telefone) : ""}{x.quer_projeto ? " · 📐 quer projeto" : ""}</span>
+                  {(() => { const g = reag.find(r => r.id === x.id && r.tipo === "chegou"); return g ? <span className="ap-reag">🔁 <b>Reagendado</b> — estava em {fmtDH(g.de)} · agora {fmtDH(g.para)}</span> : null; })()}
                   {x.obs ? <span className="ap-obs">📝 {x.obs}</span> : null}
                   <button className="ap-ver" disabled={!qtd[x.id]} title={qtd[x.id] ? "" : x.origem === "marketing" ? "Nenhuma imagem anexada" : "As imagens deste cliente estão no Minha Visita"} onClick={() => qtd[x.id] && abrirVer(x)}>🖼 {qtd[x.id] ? "Ver imagens (" + qtd[x.id] + ")" : x.origem === "marketing" ? "Sem imagens" : "Imagens no Minha Visita"}</button></div>
                 <div className="ap-vend">{x.vendedor ? <><small>{x.externo ? "Freelancer" : "Vendedor"}</small><b>{soNome(x.vendedor)}</b>{x.assumido ? <span className="ap-assumido">{x.externo ? "sem cadastro · assumiu na fila" : "assumiu na fila"}</span> : null}</>
@@ -194,6 +197,8 @@ export default function AgendaPublica() {
               </div>);
           })}
       </div>
+      {reag.filter(r => r.tipo === "saiu").length > 0 && <div className="ap-reag-lista"><b>🔁 Reagendados para outro dia ({reag.filter(r => r.tipo === "saiu").length})</b>
+        {reag.filter(r => r.tipo === "saiu").map((r, i) => <div key={i} className="ap-reag-lin"><span>{r.hora}</span><b>{r.cliente}</b><em>era {fmtDH(r.de)} → agora {fmtDH(r.para)}</em></div>)}</div>}
       {escolher && <div className="ap-modal" onClick={() => setEscolher(null)}>
         <div className="ap-modal-c" onClick={e => e.stopPropagation()}>
           <b>Assumir o atendimento de {escolher.cliente}</b>
