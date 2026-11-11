@@ -8,7 +8,7 @@ import { hojeISO } from "./regras";
 import { fmtTel } from "./baseClientes";
 import { sugestaoVendedor } from "../comp/SelVendedor";
 import { DIRETRIZES } from "./diretrizes";
-import { FERRAMENTAS_GESTAO, NOMES_GESTAO, executarGestao, podeVerMontagem, podeVerFretes, podeVerAnuncios, FERRAMENTA_ANUNCIOS, FERRAMENTA_PRODUCAO, FERRAMENTA_AREAS } from "./assistenteGestao";
+import { FERRAMENTAS_GESTAO, NOMES_GESTAO, executarGestao, podeVerMontagem, podeVerFretes, podeVerAnuncios, FERRAMENTA_ANUNCIOS, FERRAMENTA_PRODUCAO, FERRAMENTA_AREAS, FERRAMENTA_VENDEDORES } from "./assistenteGestao";
 
 type Ctx = { R: any; st: any; uid: string; recarregar: () => Promise<void> };
 export type Cartao = { id: string; cliente: string; dow: string; dia: string; sub: string; anexo: "com" | "sem" | "" };
@@ -109,7 +109,7 @@ export const FERRAMENTAS: any[] = [
 export function ferramentasPara(R: any): any[] {
   if (R.oculto?.("so_anuncios")) return podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : []; // perfil só-anúncios: o assistente responde apenas sobre anúncios e o funil deles
   const ok = (n: string) => n === "montagem_pagamento" || n === "montagem_fechamentos" ? podeVerMontagem(R) : n === "fretes_pagamentos" ? podeVerFretes(R) : true;
-  return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name)), FERRAMENTA_PRODUCAO, FERRAMENTA_AREAS, ...(podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : [])];
+  return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name)), FERRAMENTA_PRODUCAO, FERRAMENTA_AREAS, FERRAMENTA_VENDEDORES, ...(podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : [])];
 }
 export const ESCRITAS = ["remarcar_visita", "remarcar_loja", "definir_vendedor", "distribuir_vendedores", "adicionar_nota"];
 

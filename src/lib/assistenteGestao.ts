@@ -48,14 +48,16 @@ export const FERRAMENTAS_GESTAO: any[] = [
   { name: "posvenda_resumo", description: "Chamados de pós-venda que a pessoa pode ver: situação, categoria, responsabilidade, prazo, parado em obra. Pode filtrar por situação aberta/concluída.",
     input_schema: { type: "object", properties: { status: { type: "string", enum: ["abertos", "concluidos", "todos"] }, texto: { type: "string", description: "Nome do cliente (parte)" } }, required: [] } },
 ];
-export const FERRAMENTA_PRODUCAO = { name: "producao_cadastros", description: "ATENDIMENTOS/AGENDAMENTOS FEITOS por uma pessoa (quem cadastrou o cliente), por dia: total, quantos para consultor externo e quantos direto na loja, por tipo, quantos já vieram, vendas efetivadas e meta do dia (marketing/call center). Use para 'quantos atendimentos/agendamentos eu fiz hoje'. Sem 'pessoa' é da própria pessoa; Gestão e supervisão marketing podem pedir de outra pessoa ou 'todas' (ranking).",
+export const FERRAMENTA_PRODUCAO = { name: "producao_cadastros", description: "CADASTROS/AGENDAMENTOS FEITOS por uma pessoa do marketing/call center (quem cadastrou o cliente — NÃO é o vendedor da loja; para vendedores use ranking_vendedores), por dia: total, quantos para consultor externo e quantos direto na loja, por tipo, quantos já vieram, vendas efetivadas e meta do dia (marketing/call center). Use para 'quantos atendimentos/agendamentos eu fiz hoje'. Sem 'pessoa' é da própria pessoa; Gestão e supervisão marketing podem pedir de outra pessoa ou 'todas' (ranking).",
   input_schema: { type: "object", properties: { de: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: igual a de)" }, pessoa: { type: "string", description: "Nome (parte) ou 'todas' — só Gestão/supervisão" } }, required: [] } };
+export const FERRAMENTA_VENDEDORES = { name: "ranking_vendedores", description: "VENDEDORES DA LOJA (quem atende o cliente que vem à loja — NÃO são as atendentes/cadastradoras do marketing nem o call center): ranking por vendedor no período, com clientes que ficaram com ele, quantos vieram, vendas registradas e (se a pessoa puder ver valores) o valor. Use para 'quais vendedores mais atenderam', 'quem vendeu mais', 'atendimentos de cada vendedor na loja'. Sempre mostre NOMES de vendedores.",
+  input_schema: { type: "object", properties: { de: { type: "string", description: "YYYY-MM-DD (padrão: 1º dia do mês)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" } }, required: [] } };
 export const FERRAMENTA_AREAS = { name: "atividade_por_area", description: "Números SEPARADOS por área, no período: 'callcenter' (solicitações cadastradas pelo Call Center), 'marketing' (agendamentos do marketing: para consultor externo e direto na loja, e quantos vieram), 'consultor_externo' (visitas: marcadas, realizadas, a realizar, atrasadas, canceladas) e 'checklist' (agendados, realizados, a agendar, aguardando). Sempre cite a área na resposta. Use para: 'quantos atendimentos no call center', 'quantos agendamentos do marketing', 'quantas visitas do externo / realizadas', 'quantos checklists agendados'. 'escopo' meus (padrão) ou todos (só o que a pessoa pode ver).",
   input_schema: { type: "object", properties: { area: { type: "string", description: "Área, em texto livre (aceita erro de digitação e apelidos): call center/cc/central, marketing/agendamentos/agendadoras, externo/consultor/visitas, checklist/ck/projetista, vendas, ou todas. Na dúvida use todas." }, de: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: igual a de)" }, escopo: { type: "string", enum: ["meus", "todos"] } }, required: ["area"] } };
 export const FERRAMENTA_ANUNCIOS = { name: "anuncios_resumo", description: "Anúncios Meta (Instagram/Facebook) e Google Ads (via Reportei) — use para QUALQUER pergunta de anúncios (investimento, hoje, impressões, cliques, CTR, custo, melhor campanha, melhor dia da semana, maior investimento, Meta x Google, vendas por canal, clientes cadastrados/agendados/vieram). Num período: investimento, impressões, cliques, conversas/conversões, custo por contato, comparação com o período anterior de mesmo tamanho, por plataforma, melhores campanhas e o funil do 360 (cadastros do marketing, vieram à loja, vendas, faturamento, custo por cliente na loja e por venda). Só Gestão, proprietário e quem tem a permissão Anúncios.",
   input_schema: { type: "object", properties: { de: { type: "string", description: "YYYY-MM-DD (padrão: início do mês)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, plataforma: { type: "string", enum: ["todas", "meta", "google"] }, campanhas: { type: "number", description: "Quantas campanhas listar (padrão 5, máx 15)" } }, required: [] } };
 export const podeVerAnuncios = (R: any) => !!R.veAnuncios?.();
-export const NOMES_GESTAO = [...FERRAMENTAS_GESTAO.map(f => f.name), "anuncios_resumo", "producao_cadastros", "atividade_por_area"];
+export const NOMES_GESTAO = [...FERRAMENTAS_GESTAO.map(f => f.name), "anuncios_resumo", "producao_cadastros", "atividade_por_area", "ranking_vendedores"];
 
 export async function executarGestao(nome: string, a: any, c: { R: any; st: any }): Promise<any> {
   const { R, st } = c; a = a || {};
@@ -167,6 +169,21 @@ export async function executarGestao(nome: string, a: any, c: { R: any; st: any 
       }
     }
     return out;
+  }
+  if (nome === "ranking_vendedores") {
+    const hj = hojeISO(); const de = ISO.test(a.de) ? a.de : hj.slice(0, 8) + "01"; let ate = ISO.test(a.ate) ? a.ate : hj; if (ate < de) ate = de;
+    const naoVeio = ["agendado_loja", "nao_compareceu", "loja_cancelada", "visita_cancelada"];
+    const por: Record<string, any> = {};
+    (st.chamados as any[]).forEach(x => {
+      if (!x.atendenteId || !x.dataLoja || !R.podeVer(x)) return;
+      const d = String(x.dataLoja).slice(0, 10); if (d < de || d > ate) return;
+      const o = por[x.atendenteId] = por[x.atendenteId] || { vendedor: R.nomeUser(x.atendenteId), clientes: 0, vieram: 0, vendas: 0, valor: 0 };
+      o.clientes++;
+      if (!naoVeio.includes(R.statusClienteDe(x))) o.vieram++;
+      if (x.venda && x.venda.status !== "cancelada") { o.vendas++; if (R.podeVerValor(x) && x.venda.valorNum) o.valor += Number(x.venda.valorNum) || 0; }
+    });
+    const lista = Object.values(por).map((o: any) => ({ ...o, valor: r2(o.valor) })).sort((p: any, q: any) => q.vieram - p.vieram || q.clientes - p.clientes);
+    return { dados: { periodo: de + " a " + ate, aviso: "Só vendedores da loja (quem atende na vinda à loja). Vieram = clientes do vendedor que compareceram.", vendedores: lista.slice(0, 25) } };
   }
   if (nome === "producao_cadastros") {
     const uid = R.currentUserId; const gestor = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
