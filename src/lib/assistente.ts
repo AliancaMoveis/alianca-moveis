@@ -106,6 +106,10 @@ export const FERRAMENTAS: any[] = [
     input_schema: obj({ atribuicoes: { type: "array", maxItems: 20, items: obj({ id: S("ID do cliente"), vendedor_id: S("ID do vendedor") }, ["id", "vendedor_id"]) } }, ["atribuicoes"]) },
   { name: "abrir_chamado", description: "PROPÕE abrir um chamado para um cliente que já existe no sistema: 'assistencia', 'vistoria', 'montagem' ou 'posvenda'. A pessoa confirma num cartão antes de abrir. Primeiro localize o cliente com buscar_cliente (nome, telefone ou CPF) e confirme que é o certo. Se o cliente não existir, NÃO abra: diga que não achou.",
     input_schema: obj({ id: S("ID do cliente (de buscar_cliente)"), tipo: S("assistencia | vistoria | montagem | posvenda"), descricao: S("O que o cliente relatou / o que precisa (claro, com o essencial)"), cpf: S("CPF/CNPJ do cliente, só se o cadastro não tiver") }, ["id", "tipo", "descricao"]) },
+  { name: "chamar_vendedor", description: "PROPÕE chamar um vendedor para a gerência (apita no app dele). Só gerente de loja e Gestão. Use vendedores_do_dia para achar o id. A pessoa confirma antes.",
+    input_schema: obj({ vendedor_id: S("ID do vendedor"), recado: S("Recado curto (opcional)") }, ["vendedor_id"]) },
+  { name: "chamar_vendedores_fila", description: "PROPÕE chamar TODOS os vendedores disponíveis para a fila (urgente; sem folga/almoço/fora do horário). Só gerente de loja e Gestão. A pessoa confirma antes.",
+    input_schema: obj({ recado: S("Recado curto (opcional)") }, []) },
   { name: "adicionar_nota", description: "PROPÕE registrar uma observação no histórico do cliente. A pessoa confirma antes de gravar.",
     input_schema: obj({ id: S("ID do cliente"), texto: S("Texto da observação") }, ["id", "texto"]) },
 ];
@@ -115,7 +119,7 @@ export function ferramentasPara(R: any): any[] {
   const ok = (n: string) => n === "montagem_pagamento" || n === "montagem_fechamentos" ? podeVerMontagem(R) : n === "fretes_pagamentos" ? podeVerFretes(R) : true;
   return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name)), FERRAMENTA_PRODUCAO, FERRAMENTA_AREAS, FERRAMENTA_VENDEDORES, ...(podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : [])];
 }
-export const ESCRITAS = ["remarcar_visita", "remarcar_loja", "definir_vendedor", "distribuir_vendedores", "adicionar_nota", "abrir_chamado"];
+export const ESCRITAS = ["remarcar_visita", "remarcar_loja", "definir_vendedor", "distribuir_vendedores", "adicionar_nota", "abrir_chamado", "chamar_vendedor", "chamar_vendedores_fila"];
 
 // ---------- leitura ----------
 const achar = (c: Ctx, id: any) => { const x = c.st.chamados.find((k: any) => k.id === String(id)); return x && c.R.podeVer(x) ? x : null; };
@@ -136,7 +140,7 @@ function cartao(c: Ctx, x: any): Cartao {
   return { id: x.id, cliente: x.cliente, dow: dow.charAt(0).toUpperCase() + dow.slice(1), dia: q ? String(Number(q.slice(8, 10))) : "—", sub, anexo: r.sem_anexo ? "sem" : r.anexos ? "com" : "" };
 }
 const periodo = (a: any) => { const de = ISO_DIA.test(a.de) ? a.de : hojeISO(); const ate = ISO_DIA.test(a.ate) ? a.ate : de; return { de, ate: ate < de ? de : ate }; };
-const podeDistribuirAqui = (R: any) => R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
+const podeDistribuirAqui = (R: any) => R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores", "gerente_loja"].includes(x));
 
 export async function executarLeitura(nome: string, a: any, c: Ctx): Promise<{ dados: any; cartoes: Cartao[] }> {
   const { R, st, uid } = c; a = a || {};
@@ -227,6 +231,13 @@ function validarEscrita(nome: string, a: any, c: Ctx): { ok: boolean; p?: Propos
     }
     return { ok: true, p: { titulo: `Definir vendedor de ${lista.length} cliente(s)`, linhas, avisos } };
   }
+  if (nome === "chamar_vendedor" || nome === "chamar_vendedores_fila") {
+    if (!(R.ehGestao() || R.mySetores().includes("gerente_loja"))) return { ok: false, erro: "Só o gerente de loja e a Gestão chamam vendedores." };
+    const rec = String(a.recado || "").trim().slice(0, 140);
+    if (nome === "chamar_vendedores_fila") return { ok: true, p: { titulo: "Chamar todos os vendedores disponíveis", linhas: ["Todos os vendedores disponíveis agora vão receber o aviso para a fila." + (rec ? " Recado: " + rec : "")], avisos: [] } };
+    const v = vend(a.vendedor_id); if (!v) return { ok: false, erro: "Vendedor não encontrado na agenda." };
+    return { ok: true, p: { titulo: "Chamar vendedor", linhas: [v.nome + " será chamado(a) para a gerência." + (rec ? " Recado: " + rec : "")], avisos: [] } };
+  }
   if (nome === "abrir_chamado") {
     const x = cli(a.id); if (!x) return { ok: false, erro: "Cliente não encontrado ou sem permissão." };
     const tp = String(a.tipo || ""); if (!["assistencia", "vistoria", "montagem", "posvenda"].includes(tp)) return { ok: false, erro: "Tipo inválido: use assistencia, vistoria, montagem ou posvenda." };
@@ -255,6 +266,8 @@ export async function executarEscrita(nome: string, a: any, c: Ctx): Promise<{ o
     if (nome === "remarcar_visita") { await A.reagendarVisita(a.id, a.nova, String(a.motivo || "Remarcado pelo assistente")); await marcar(a.id, "visita remarcada para " + fmtQuando(a.nova)); }
     else if (nome === "remarcar_loja") { await A.reagendarLoja(a.id, a.nova, String(a.motivo || "Remarcado pelo assistente")); await marcar(a.id, "vinda à loja remarcada para " + fmtQuando(a.nova)); }
     else if (nome === "definir_vendedor") { await A.designarProjetista(a.id, a.vendedor_id); await marcar(a.id, "vendedor definido: " + c.R.nomeUser(a.vendedor_id)); }
+    else if (nome === "chamar_vendedor") { const r: any = await A.chamarVendedor(String(a.vendedor_id), String(a.recado || "")); return { ok: true, texto: (r?.nome || "Vendedor") + " foi chamado(a)." + (r?.motivo ? " Atenção: " + r.motivo : "") }; }
+    else if (nome === "chamar_vendedores_fila") { const r: any = await A.chamarVendedoresFila(String(a.recado || "")); return { ok: true, texto: "Vendedores disponíveis chamados para a fila." + (r?.nomes ? " " + (Array.isArray(r.nomes) ? r.nomes.join(", ") : r.nomes) : "") }; }
     else if (nome === "abrir_chamado") {
       const x = achar(c, a.id); const tp = String(a.tipo);
       const id = await A.criarChamado({ tipo: tp, cliente: x.cliente, clienteDoc: String(x.clienteDoc || a.cpf || ""), telefone: x.telefone || "", email: x.email || "", pedido: x.pedido || "", dataVenda: "", pedidoFabrica: "", produto: x.produto || "", fabrica: "", prazoTatico: "", slaManual: "", motivo: String(a.descricao).trim(), consultorId: "", dataVisita: "", endereco: x.endereco || "", vinculadoA: x.id });

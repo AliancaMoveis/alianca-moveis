@@ -16,7 +16,7 @@ function sugestoesPara(R: any): string[] {
   try {
     if (R.oculto?.("so_anuncios")) return ["Quanto investimos hoje?", "Qual a melhor campanha do mês?", "Quanto foi investido essa semana?"];
     if (R.ehGestao() || R.ehProprietario?.()) return ["Quantos atendimentos o Call Center teve hoje?", "Quanto vou pagar de montadores?", "Como estão os anúncios do mês?"];
-    if (R.mySetores().includes("gerente_loja")) return ["Quem está sem vendedor?", "Quais clientes vêm hoje à loja?", "Quais vendedores estão livres agora?"];
+    if (R.mySetores().includes("gerente_loja")) return ["Quem está sem vendedor?", "Quais clientes vêm hoje à loja?", "Chamar um vendedor"];
     if (R.veAnuncios?.() && !R.mySetores().includes("gerente_loja")) return ["Quanto investimos hoje?", "Qual a melhor campanha do mês?", "Quantos clientes vieram hoje?"];
     if (R.ehConsultorExterno?.()) return ["Quais visitas eu tenho amanhã?", "Quais visitas tenho essa semana?"];
     if (R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x))) return ["Quem está sem vendedor?", "Quais clientes tenho essa semana?"];
