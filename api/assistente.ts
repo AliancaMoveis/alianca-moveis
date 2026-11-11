@@ -45,7 +45,11 @@ export default async function handler(req: any, res: any) {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": String(process.env.ANTHROPIC_API_KEY), "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: MODELO, max_tokens: 1500, system, tools, messages: msgs }),
+      // cache do prompt: regras + ferramentas (a parte grande e igual a cada pergunta) passam a custar ~10% nas chamadas seguintes
+      body: JSON.stringify({ model: MODELO, max_tokens: 900,
+        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+        tools: tools.map((t: any, i: number) => (i === tools.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t)),
+        messages: msgs }),
     });
     const j: any = await r.json().catch(() => ({}));
     if (!r.ok) {

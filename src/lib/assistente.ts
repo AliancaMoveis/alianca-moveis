@@ -41,6 +41,12 @@ export async function statusAssistente(): Promise<{ liberado: boolean; configura
 
 export async function perguntar(messages: any[], system: string, tools: any[] = FERRAMENTAS): Promise<{ content: any[]; stop_reason: string }> {
   const tok = await tokenAtual();
+  // economia: só a última rodada leva os resultados de ferramenta completos; os antigos são encurtados e a conversa fica limitada às últimas 24 mensagens
+  let msgs = messages.length > 24 ? messages.slice(-24) : messages;
+  while (msgs.length > 1 && !(msgs[0].role === "user" && typeof msgs[0].content === "string")) msgs = msgs.slice(1);
+  const corte = msgs.length - 2;
+  messages = msgs.map((m: any, i: number) => i >= corte || !Array.isArray(m.content) ? m : { ...m, content: m.content.map((b: any) =>
+    b.type === "tool_result" && typeof b.content === "string" && b.content.length > 500 ? { ...b, content: b.content.slice(0, 500) + " …(resumido)" } : b) });
   const r = await fetch("/api/assistente", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok },
