@@ -12,6 +12,15 @@ consertarFotosQuebradas();
 instalarAberturaWhats();
 ReactDOM.createRoot(document.getElementById("root")!).render(<ProtecaoTela><App /></ProtecaoTela>);
 
+// arquivo do app que não carregou (versão nova publicada com a aba antiga aberta): recarrega sozinho, no máximo 1 vez por minuto
+const recarregarSePreciso = (msg: string) => {
+  if (!/dynamically imported module|Importing a module script failed|Unexpected token '<'|Loading chunk|error loading dynamically/i.test(msg || "")) return;
+  try { const u = Number(sessionStorage.getItem("recarga_chunk") || 0); if (Date.now() - u < 60000) return; sessionStorage.setItem("recarga_chunk", String(Date.now())); } catch { /* sem storage */ }
+  location.reload();
+};
+window.addEventListener("error", e => recarregarSePreciso(String((e as ErrorEvent).message || "")));
+window.addEventListener("unhandledrejection", e => recarregarSePreciso(String((e.reason && (e.reason.message || e.reason)) || "")));
+
 // aplicativo instalável (PWA)
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js").catch(() => null); });

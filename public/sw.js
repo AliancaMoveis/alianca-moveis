@@ -1,7 +1,7 @@
 // Service worker do ALIANÇA 360: permite instalar como aplicativo e abre rápido.
 // Páginas: rede primeiro (sempre a versão mais nova); arquivos do app (/assets): cache.
 // Dados (Supabase) nunca passam pelo cache.
-const CACHE = "a360-v3";
+const CACHE = "a360-v4"; // v4: descarta caches antigos (podiam guardar uma página no lugar de um arquivo do app → tela branca)
 self.addEventListener("install", e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(["/", "/logo.png", "/icon-192.png"]).catch(() => null))); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {
@@ -14,7 +14,9 @@ self.addEventListener("fetch", e => {
     return;
   }
   if (url.pathname.startsWith("/assets/") || /\.(png|svg|webmanifest)$/.test(url.pathname)) {
-    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); return r; })));
+    // só guarda no cache resposta boa e do tipo certo (nunca um HTML no lugar de .js/.css)
+    const tipoOk = (r) => r.ok && !/text\/html/i.test(r.headers.get("content-type") || "") || /\.(png|svg|webmanifest)$/.test(url.pathname) && r.ok;
+    e.respondWith(caches.match(req).then(hit => (hit && tipoOk(hit)) ? hit : fetch(req).then(r => { if (tipoOk(r)) { const cp = r.clone(); caches.open(CACHE).then(c => c.put(req, cp)); } return r; })));
   }
 });
 
