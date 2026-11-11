@@ -84,8 +84,10 @@ const S = (description: string) => ({ type: "string", description });
 export const FERRAMENTAS: any[] = [
   { name: "listar_clientes", description: "Lista clientes com visita (consultor externo) ou vinda à loja num período. Por padrão só os da própria pessoa; escopo 'todos' traz tudo o que ela tem permissão de ver.",
     input_schema: obj({ de: S("Data inicial YYYY-MM-DD (padrão: hoje)"), ate: S("Data final YYYY-MM-DD (padrão: igual à inicial)"), escopo: { type: "string", enum: ["meus", "todos"] } }) },
-  { name: "buscar_cliente", description: "Procura cliente por nome ou telefone (parte do nome ou dígitos do telefone).",
+  { name: "buscar_cliente", description: "Procura cliente por nome, telefone ou CPF/CNPJ (parte do nome, dígitos do telefone ou o CPF completo). Nunca repita o CPF na resposta.",
     input_schema: obj({ texto: S("Nome ou telefone") }, ["texto"]) },
+  { name: "chamados_do_cliente", description: "Todos os chamados/solicitações de um cliente (assistência, vistoria, montagem, pós-venda, entrega, medidas, checklist, marketing…): tipo, situação, setor, datas (abertura, visita, vinda à loja, medida) e a última movimentação. Use para 'quando é a montagem/assistência do cliente X', 'o que o cliente X tem aberto'. Receba o id de buscar_cliente.",
+    input_schema: obj({ id: S("ID do cliente, obtido em buscar_cliente") }, ["id"]) },
   { name: "ver_cliente", description: "Detalhes de um cliente: datas, vendedor, consultor, endereço, observações e lista de anexos (nomes, sem abrir arquivos).",
     input_schema: obj({ id: S("ID do cliente, obtido em listar_clientes ou buscar_cliente") }, ["id"]) },
   { name: "contagem", description: "Conta os clientes com visita/vinda no período por SITUAÇÃO (agendados, vieram, cancelados…), do que a pessoa pode ver. NÃO mede atendimentos/agendamentos por área: para isso use atividade_por_area.",
@@ -102,6 +104,8 @@ export const FERRAMENTAS: any[] = [
     input_schema: obj({ id: S("ID do cliente"), vendedor_id: S("ID do vendedor, obtido em vendedores_do_dia ou sem_vendedor") }, ["id", "vendedor_id"]) },
   { name: "distribuir_vendedores", description: "PROPÕE definir vários vendedores de uma vez (máx. 20). A pessoa confirma a lista inteira num cartão.",
     input_schema: obj({ atribuicoes: { type: "array", maxItems: 20, items: obj({ id: S("ID do cliente"), vendedor_id: S("ID do vendedor") }, ["id", "vendedor_id"]) } }, ["atribuicoes"]) },
+  { name: "abrir_chamado", description: "PROPÕE abrir um chamado para um cliente que já existe no sistema: 'assistencia', 'vistoria', 'montagem' ou 'posvenda'. A pessoa confirma num cartão antes de abrir. Primeiro localize o cliente com buscar_cliente (nome, telefone ou CPF) e confirme que é o certo. Se o cliente não existir, NÃO abra: diga que não achou.",
+    input_schema: obj({ id: S("ID do cliente (de buscar_cliente)"), tipo: S("assistencia | vistoria | montagem | posvenda"), descricao: S("O que o cliente relatou / o que precisa (claro, com o essencial)"), cpf: S("CPF/CNPJ do cliente, só se o cadastro não tiver") }, ["id", "tipo", "descricao"]) },
   { name: "adicionar_nota", description: "PROPÕE registrar uma observação no histórico do cliente. A pessoa confirma antes de gravar.",
     input_schema: obj({ id: S("ID do cliente"), texto: S("Texto da observação") }, ["id", "texto"]) },
 ];
@@ -111,7 +115,7 @@ export function ferramentasPara(R: any): any[] {
   const ok = (n: string) => n === "montagem_pagamento" || n === "montagem_fechamentos" ? podeVerMontagem(R) : n === "fretes_pagamentos" ? podeVerFretes(R) : true;
   return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name)), FERRAMENTA_PRODUCAO, FERRAMENTA_AREAS, FERRAMENTA_VENDEDORES, ...(podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : [])];
 }
-export const ESCRITAS = ["remarcar_visita", "remarcar_loja", "definir_vendedor", "distribuir_vendedores", "adicionar_nota"];
+export const ESCRITAS = ["remarcar_visita", "remarcar_loja", "definir_vendedor", "distribuir_vendedores", "adicionar_nota", "abrir_chamado"];
 
 // ---------- leitura ----------
 const achar = (c: Ctx, id: any) => { const x = c.st.chamados.find((k: any) => k.id === String(id)); return x && c.R.podeVer(x) ? x : null; };
@@ -149,8 +153,16 @@ export async function executarLeitura(nome: string, a: any, c: Ctx): Promise<{ d
   if (nome === "buscar_cliente") {
     const t = norm(a.texto).trim(); const dg = String(a.texto || "").replace(/\D/g, "");
     if (t.length < 2 && dg.length < 4) return { dados: { erro: "Informe pelo menos 2 letras do nome ou 4 dígitos do telefone." }, cartoes: [] };
-    const lista = cham.filter(x => (t.length >= 2 && norm(x.cliente).includes(t)) || (dg.length >= 4 && String(x.telefone || "").replace(/\D/g, "").includes(dg))).slice(0, 15);
+    const lista = cham.filter(x => (t.length >= 2 && norm(x.cliente).includes(t)) || (dg.length >= 4 && String(x.telefone || "").replace(/\D/g, "").includes(dg)) || (dg.length >= 11 && String(x.clienteDoc || "").replace(/\D/g, "").includes(dg))).slice(0, 15);
     return { dados: { total: lista.length, clientes: lista.map(x => resumo(c, x)) }, cartoes: lista.slice(0, 8).map(x => cartao(c, x)) };
+  }
+  if (nome === "chamados_do_cliente") {
+    const x = achar(c, a.id); if (!x) return { dados: { erro: "Cliente não encontrado ou sem permissão para ver." }, cartoes: [] };
+    const doc = String(x.clienteDoc || "").replace(/\D/g, ""), tel = String(x.telefone || "").replace(/\D/g, "").slice(0, 11), nm = norm(x.cliente);
+    const lista = cham.filter((k: any) => k.id === x.id || (doc.length >= 11 && String(k.clienteDoc || "").replace(/\D/g, "") === doc) || (tel.length >= 10 && String(k.telefone || "").replace(/\D/g, "").includes(tel)) || (nm.length > 6 && norm(k.cliente) === nm) || k.vinculadoA === x.id || x.vinculadoA === k.id)
+      .sort((p: any, q: any) => String(q.criadoEm).localeCompare(String(p.criadoEm))).slice(0, 20);
+    return { dados: { cliente: x.cliente, total: lista.length, chamados: lista.map((k: any) => { const h = (k.historico || [])[k.historico.length - 1];
+      return { id: k.id, tipo: c.R.tipoNome(k.tipo), situacao: k.status === "concluida" ? "concluída" : k.status, setor: k.setorDestino ? c.R.setorNome(k.setorDestino) : "", aberto_em: String(k.criadoEm || "").slice(0, 10), visita: k.dataVisita || null, vinda_loja: k.dataLoja || null, medida: k.dataMedida || null, produto: k.produto || "", ultima: h ? String(h.texto || "").slice(0, 160) : "" }; }) }, cartoes: [] };
   }
   if (nome === "ver_cliente") {
     const x = achar(c, a.id); if (!x) return { dados: { erro: "Cliente não encontrado ou sem permissão para ver." }, cartoes: [] };
@@ -215,6 +227,15 @@ function validarEscrita(nome: string, a: any, c: Ctx): { ok: boolean; p?: Propos
     }
     return { ok: true, p: { titulo: `Definir vendedor de ${lista.length} cliente(s)`, linhas, avisos } };
   }
+  if (nome === "abrir_chamado") {
+    const x = cli(a.id); if (!x) return { ok: false, erro: "Cliente não encontrado ou sem permissão." };
+    const tp = String(a.tipo || ""); if (!["assistencia", "vistoria", "montagem", "posvenda"].includes(tp)) return { ok: false, erro: "Tipo inválido: use assistencia, vistoria, montagem ou posvenda." };
+    if (!R.podeCriarTipo(tp)) return { ok: false, erro: "Você não tem permissão para abrir este tipo de chamado." };
+    const desc = String(a.descricao || "").trim(); if (desc.length < 5) return { ok: false, erro: "Descreva o que o cliente precisa (mín. 5 letras)." };
+    const doc = String(x.clienteDoc || a.cpf || "").replace(/\D/g, ""); if (doc.length < 11) return { ok: false, erro: "Esse cliente não tem CPF/CNPJ no cadastro: peça o CPF à pessoa e informe no campo cpf." };
+    if (String(x.telefone || "").replace(/\D/g, "").length < 10) return { ok: false, erro: "Esse cliente está sem telefone com DDD no cadastro." };
+    return { ok: true, p: { titulo: "Abrir " + R.tipoNome(tp), linhas: [x.cliente + (x.telefone ? " · " + fmtTel(x.telefone) : ""), desc.slice(0, 400)], avisos: [] } };
+  }
   if (nome === "adicionar_nota") {
     const x = cli(a.id); if (!x) return { ok: false, erro: "Cliente não encontrado ou sem permissão." };
     const t = String(a.texto || "").trim(); if (!t) return { ok: false, erro: "Texto vazio." };
@@ -234,6 +255,15 @@ export async function executarEscrita(nome: string, a: any, c: Ctx): Promise<{ o
     if (nome === "remarcar_visita") { await A.reagendarVisita(a.id, a.nova, String(a.motivo || "Remarcado pelo assistente")); await marcar(a.id, "visita remarcada para " + fmtQuando(a.nova)); }
     else if (nome === "remarcar_loja") { await A.reagendarLoja(a.id, a.nova, String(a.motivo || "Remarcado pelo assistente")); await marcar(a.id, "vinda à loja remarcada para " + fmtQuando(a.nova)); }
     else if (nome === "definir_vendedor") { await A.designarProjetista(a.id, a.vendedor_id); await marcar(a.id, "vendedor definido: " + c.R.nomeUser(a.vendedor_id)); }
+    else if (nome === "abrir_chamado") {
+      const x = achar(c, a.id); const tp = String(a.tipo);
+      const id = await A.criarChamado({ tipo: tp, cliente: x.cliente, clienteDoc: String(x.clienteDoc || a.cpf || ""), telefone: x.telefone || "", email: x.email || "", pedido: x.pedido || "", dataVenda: "", pedidoFabrica: "", produto: x.produto || "", fabrica: "", prazoTatico: "", slaManual: "", motivo: String(a.descricao).trim(), consultorId: "", dataVisita: "", endereco: x.endereco || "", vinculadoA: x.id });
+      let extra = "";
+      if (tp === "posvenda") await A.posvendaAbertura(id, { origem: "cliente", peca: "", montadorId: "", paradoObra: false, categoria: "", situacao: "", projetista: "" }).catch((e: any) => { extra = " (aberto, mas a classificação do pós-venda precisa ser completada na ficha: " + (e?.message || "erro") + ")"; });
+      await marcar(id, "chamado aberto pelo assistente");
+      await c.recarregar();
+      return { ok: true, texto: "Chamado " + id + " aberto (" + c.R.tipoNome(tp) + ") para " + x.cliente + "." + extra };
+    }
     else if (nome === "adicionar_nota") { await A.adicionarNota(a.id, String(a.texto).trim()); }
     else if (nome === "distribuir_vendedores") {
       let feitos = 0;
