@@ -143,7 +143,8 @@ export function Assistente() {
   const abrirFicha = (id: string) => appRef.current.abrirDetalhe(id);
 
   if (!status || !status.liberado) return null;
-  if (!aberto) return <button className="as-fab" aria-label="Abrir o Assistente 360" onClick={() => setAberto(true)}>360</button>;
+  if (!aberto) return <button className="as-fab" aria-label="Abrir o Assistente 360" onClick={() => setAberto(true)}>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z" /></svg>Assistente</button>;
 
   return <div ref={painelRef} className={"as-painel" + (grande ? " grande" : "")} role="dialog" aria-label="Assistente 360">
     <div className="as-topo">
