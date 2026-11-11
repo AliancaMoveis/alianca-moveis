@@ -85,7 +85,7 @@ export function Assistente() {
           } else {
             const ex = await executarLeitura(u.name, u.input, ctx());
             if (ex.cartoes.length) cartoes = ex.cartoes;
-            results.push({ type: "tool_result", tool_use_id: u.id, content: JSON.stringify(ex.dados) });
+            results.push({ type: "tool_result", tool_use_id: u.id, content: JSON.stringify(ex.dados).slice(0, 7000) });
           }
         }
         if (pend.length) {
