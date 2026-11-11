@@ -11,6 +11,18 @@ const SUPA_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABA
 const LIBERADOS = (process.env.ASSISTENTE_EMAILS || "bruno.fiaron@aliancamoveis.com.br").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 const MODELO = process.env.ASSISTENTE_MODELO || "claude-sonnet-5-5";
 
+// liberação por permissão: quem tem um destes setores/acessos no 360 também usa o assistente (padrão: "anuncios" = Lucas Santana).
+// Para liberar outra permissão: variável ASSISTENTE_SETORES (ids separados por vírgula). Vazia = só a lista de e-mails.
+const SETORES = (process.env.ASSISTENTE_SETORES ?? "anuncios").split(",").map(s => s.trim()).filter(Boolean);
+async function temSetor(token: string, id: string): Promise<boolean> {
+  if (!SETORES.length) return false;
+  try {
+    const r = await fetch(`${SUPA_URL}/rest/v1/usuario_setores?usuario_id=eq.${encodeURIComponent(id)}&setor_id=in.(${SETORES.map(encodeURIComponent).join(",")})&select=setor_id&limit=1`, { headers: { apikey: SUPA_KEY, Authorization: "Bearer " + token } });
+    if (!r.ok) return false;
+    const j: any = await r.json(); return Array.isArray(j) && j.length > 0;
+  } catch { return false; }
+}
+
 async function quemE(token: string): Promise<{ id: string; email: string } | null> {
   try {
     const r = await fetch(`${SUPA_URL}/auth/v1/user`, { headers: { apikey: SUPA_KEY, Authorization: "Bearer " + token } });
@@ -26,7 +38,7 @@ export default async function handler(req: any, res: any) {
   if (!token) return res.status(401).json({ erro: "Entre no sistema para usar o assistente." });
   const u = await quemE(token);
   if (!u) return res.status(401).json({ erro: "Sessão inválida. Entre de novo no sistema." });
-  const liberado = LIBERADOS.includes(u.email);
+  const liberado = LIBERADOS.includes(u.email) || (await temSetor(token, u.id));
   const configurado = !!process.env.ANTHROPIC_API_KEY;
 
   // o app pergunta aqui se deve mostrar o botão do assistente

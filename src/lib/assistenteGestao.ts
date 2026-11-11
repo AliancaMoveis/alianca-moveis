@@ -52,7 +52,7 @@ export const FERRAMENTA_PRODUCAO = { name: "producao_cadastros", description: "A
   input_schema: { type: "object", properties: { de: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: igual a de)" }, pessoa: { type: "string", description: "Nome (parte) ou 'todas' — só Gestão/supervisão" } }, required: [] } };
 export const FERRAMENTA_AREAS = { name: "atividade_por_area", description: "Números SEPARADOS por área, no período: 'callcenter' (solicitações cadastradas pelo Call Center), 'marketing' (agendamentos do marketing: para consultor externo e direto na loja, e quantos vieram), 'consultor_externo' (visitas: marcadas, realizadas, a realizar, atrasadas, canceladas) e 'checklist' (agendados, realizados, a agendar, aguardando). Sempre cite a área na resposta. Use para: 'quantos atendimentos no call center', 'quantos agendamentos do marketing', 'quantas visitas do externo / realizadas', 'quantos checklists agendados'. 'escopo' meus (padrão) ou todos (só o que a pessoa pode ver).",
   input_schema: { type: "object", properties: { area: { type: "string", description: "Área, em texto livre (aceita erro de digitação e apelidos): call center/cc/central, marketing/agendamentos/agendadoras, externo/consultor/visitas, checklist/ck/projetista, vendas, ou todas. Na dúvida use todas." }, de: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: igual a de)" }, escopo: { type: "string", enum: ["meus", "todos"] } }, required: ["area"] } };
-export const FERRAMENTA_ANUNCIOS = { name: "anuncios_resumo", description: "Anúncios Meta (Instagram/Facebook) e Google Ads (via Reportei) num período: investimento, impressões, cliques, conversas/conversões, custo por contato, comparação com o período anterior de mesmo tamanho, por plataforma, melhores campanhas e o funil do 360 (cadastros do marketing, vieram à loja, vendas, faturamento, custo por cliente na loja e por venda). Só Gestão, proprietário e quem tem a permissão Anúncios.",
+export const FERRAMENTA_ANUNCIOS = { name: "anuncios_resumo", description: "Anúncios Meta (Instagram/Facebook) e Google Ads (via Reportei) — use para QUALQUER pergunta de anúncios (investimento, hoje, impressões, cliques, CTR, custo, melhor campanha, melhor dia da semana, maior investimento, Meta x Google, vendas por canal, clientes cadastrados/agendados/vieram). Num período: investimento, impressões, cliques, conversas/conversões, custo por contato, comparação com o período anterior de mesmo tamanho, por plataforma, melhores campanhas e o funil do 360 (cadastros do marketing, vieram à loja, vendas, faturamento, custo por cliente na loja e por venda). Só Gestão, proprietário e quem tem a permissão Anúncios.",
   input_schema: { type: "object", properties: { de: { type: "string", description: "YYYY-MM-DD (padrão: início do mês)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, plataforma: { type: "string", enum: ["todas", "meta", "google"] }, campanhas: { type: "number", description: "Quantas campanhas listar (padrão 5, máx 15)" } }, required: [] } };
 export const podeVerAnuncios = (R: any) => !!R.veAnuncios?.();
 export const NOMES_GESTAO = [...FERRAMENTAS_GESTAO.map(f => f.name), "anuncios_resumo", "producao_cadastros", "atividade_por_area"];
@@ -220,12 +220,33 @@ export async function executarGestao(nome: string, a: any, c: { R: any; st: any 
       const vend = mk.filter(k => vendaContaVolume(k.venda) && pagamentosVenda(k.venda).some((p: any) => no(p.data, x, y)));
       return { cadastros: mk.filter(k => no(k.criadoEm, x, y)).length, vieram_loja: mk.filter(k => no(k.dataLoja, x, y)).length, vendas: vend.length, faturamento: r2(vend.reduce((sm, k) => sm + (Number(k.venda?.valorNum) || 0), 0)) }; };
     const F = funil(de, ate); const T = soma(atual);
+    // por dia e por dia da semana (investimento e resultado) — "melhor dia", "maior investimento"
+    const DS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+    const porDiaM: Record<string, any[]> = {}; atual.forEach(x => (porDiaM[x.dia] = porDiaM[x.dia] || []).push(x));
+    const dias_ = Object.entries(porDiaM).map(([d, l]) => ({ dia: d, dia_semana: DS[new Date(d + "T12:00:00").getDay()], ...soma(l) }));
+    const porSem = DS.map((nm, i) => { const l = dias_.filter(x => new Date(x.dia + "T12:00:00").getDay() === i); const t = soma(atual.filter(x => new Date(x.dia + "T12:00:00").getDay() === i));
+      return { dia_semana: nm, dias_no_periodo: l.length, ...t, media_gasto_por_dia: l.length ? r2(t.gasto / l.length) : 0, media_contatos_por_dia: l.length ? r2(t.contatos / l.length) : 0 }; }).filter(x => x.dias_no_periodo);
+    const melhorSem = [...porSem].sort((x, y) => y.media_contatos_por_dia - x.media_contatos_por_dia)[0] || null;
+    const hojeAn = soma(ls.filter(x => f(x) && x.dia === hj));
+    const camps2 = Object.values(camp).map((c: any) => ({ plataforma: c.plataforma, campanha: c.campanha, ...soma(c.l) }));
+    const comRes = camps2.filter(c => c.contatos >= 3 && c.custo_por_contato != null);
+    // funil de HOJE e por canal do anúncio (campo "Canal do anúncio" da ficha do cliente)
+    const hojeFunil = { cadastrados_hoje: mk.filter(k => no(k.criadoEm, hj, hj)).length, agendados_loja_hoje: mk.filter(k => no(k.dataLoja, hj, hj)).length, vieram_hoje: mk.filter(k => no(k.dataLoja, hj, hj) && R.compareceu(k)).length,
+      agendados_consultor_externo_hoje: mk.filter(k => !R.ehDireto(k) && no(k.dataVisita, hj, hj)).length };
+    const canalDe = (k: any) => (k.tratativa && k.tratativa.canalAnuncio) || "";
+    const porCanal = (["meta", "google", "outro", ""] as const).map(cn => { const g = (x0: string, y0: string, d: string) => mk.filter(k => canalDe(k) === cn && no(k[d] , x0, y0));
+      const vend = mk.filter(k => canalDe(k) === cn && vendaContaVolume(k.venda) && pagamentosVenda(k.venda).some((p: any) => no(p.data, de, ate)));
+      return { canal: cn || "nao_informado", cadastrados: g(de, ate, "criadoEm").length, agendados_loja: g(de, ate, "dataLoja").length, vieram: g(de, ate, "dataLoja").filter(k => R.compareceu(k)).length, vendas: vend.length, faturamento: r2(vend.reduce((sm, k) => sm + (Number(k.venda?.valorNum) || 0), 0)) }; });
+    const marcados = porCanal.filter(x => x.canal !== "nao_informado").reduce((sm, x) => sm + x.cadastrados, 0);
     return { periodo: { de, ate, dias }, anterior: { de: dePrev, ate: atePrev }, plataforma: plat, atual: T, periodo_anterior: soma(ant),
       por_plataforma: (["meta", "google"] as const).filter(p => plat === "todas" || plat === p).map(p => ({ plataforma: p, ...soma(atual.filter(x => x.plataforma === p)) })),
-      melhores_campanhas_por_gasto: campanhas,
+      hoje_anuncios: hojeAn, hoje_clientes: hojeFunil, melhores_campanhas_por_gasto: campanhas,
+      campanha_mais_contatos: [...camps2].sort((x, y) => y.contatos - x.contatos)[0] || null, campanha_menor_custo_por_contato: [...comRes].sort((x, y) => (x.custo_por_contato as number) - (y.custo_por_contato as number))[0] || null,
+      dia_mais_contatos: [...dias_].sort((x, y) => y.contatos - x.contatos)[0] || null, dia_maior_investimento: [...dias_].sort((x, y) => y.gasto - x.gasto)[0] || null, por_dia_da_semana: porSem, melhor_dia_da_semana_por_contatos: melhorSem,
+      por_dia: dias_.slice(-31), por_canal_do_anuncio: porCanal, canal_informado_em: marcados + " cadastros do período já têm o canal (Meta/Google) marcado na ficha",
       funil_360: F ? { ...F, custo_por_cliente_na_loja: F.vieram_loja ? r2(T.gasto / F.vieram_loja) : null, custo_por_venda: F.vendas ? r2(T.gasto / F.vendas) : null } : null,
       dados_ate: sy.data?.ate || null,
-      aviso: "Anúncios vêm do Reportei, atualizados por tarefa agendada (veja 'dados_ate'). O funil do 360 só conta cadastros feitos no 360 desde 15/10/2026, então períodos anteriores a isso não casam com o investimento." };
+      aviso: "Anúncios vêm do Reportei, atualizados por tarefa agendada (veja 'dados_ate'). Vendas por Meta/Google dependem do campo Canal do anúncio na ficha do cliente (marcado a mão); sem marcação aparece como nao_informado. O funil do 360 só conta cadastros feitos no 360 desde 15/10/2026, então períodos anteriores a isso não casam com o investimento." };
   }
   return { erro: "Ferramenta desconhecida" };
 }

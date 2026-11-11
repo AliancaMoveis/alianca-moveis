@@ -133,6 +133,10 @@ export default function Detalhe({ id }: { id: string }) {
             : <div className="ro-note">Você tem acesso de leitura a este chamado. Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>.{anexar ? " Você pode anexar comprovações acima." : ""}</div>}
           {!presale && <FinalizarAtend c={c} />}
           {!presale && <AcompSupervisao c={c} />}
+          {presale && (R.veAnuncios() || R.ehGestao() || R.temMarketing()) && <div className="resp-box" style={{ marginBottom: 12 }}><h4>📣 Canal do anúncio</h4>
+            <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 6 }}>De qual anúncio este cliente veio? Serve para o relatório de vendas por Meta e Google.</div>
+            <select value={t.canalAnuncio || ""} onChange={e => ex(() => A.definirCanalAnuncio(c.id, e.target.value), "Canal salvo")}>
+              <option value="">Não informado</option><option value="meta">Meta (Instagram/Facebook)</option><option value="google">Google</option><option value="outro">Outro</option></select></div>}
           <div className="hist"><h4>Histórico</h4>{c.historico.slice().reverse().map((x: any, i: number) => <div className="h" key={i}><b>{fmtDateTime(x.quando)}</b> · {x.quem} — {x.texto}</div>)}</div>
           <Vinculados c={c} />
           {c.vinculadoA && <div className="ro-note" style={{ marginTop: 10 }}>Vinculado ao atendimento <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.vinculadoA); }}>{c.vinculadoA}</a>.</div>}

@@ -20,6 +20,7 @@ export const A = {
   definirFabrica: (id: string, fab: string) => rpc("definir_fabrica", { p_id: id, p_fab: fab }),
   alterarPrazo: (id: string, data: string) => rpc("alterar_prazo", { p_id: id, p_data: nz(data) }),
   adicionarNota: (id: string, texto: string) => rpc("adicionar_nota", { p_id: id, p_texto: texto }),
+  definirCanalAnuncio: (id: string, canal: string) => rpc("definir_canal_anuncio", { p_id: id, p_canal: canal }),
   salvarTratativa: (id: string, campos: any) => rpc("salvar_tratativa", { p_id: id, p_campos: campos }),
   alternarMarcacao: (id: string, campo: string) => rpc("alternar_marcacao", { p_id: id, p_campo: campo }),
   entregaParaFabrica: (id: string) => rpc("entrega_para_fabrica", { p_id: id }),

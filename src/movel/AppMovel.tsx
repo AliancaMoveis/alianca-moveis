@@ -111,6 +111,8 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   if (perfil === "dono" && R.temAcesso("painel_geral")) { for (const k of ["painel", "resumo"]) { const i = abas.findIndex(x => x[0] === k); if (i >= 0) abas.splice(i, 1); } } // e o "Ver tudo"
   // 🏷 Consulta de produto (teste, só o Bruno): aba antes da última
   if (R.podeConsultaProduto() && !abas.some(x => x[0] === "produto")) abas.splice(Math.max(0, abas.length - 1), 0, ["produto", "Produto", "🏷"]);
+  // 📣 perfil "só anúncios" (ex.: Lucas Santana): só a aba dos anúncios e o "Eu"
+  if (R.oculto("so_anuncios")) { abas.length = 0; abas.push(["anuncios", "Anúncios", "📣"], ["eu", "Eu", "👤"]); }
   const [aba, setAba] = useState(abas[0][0]);
   const [nPorta, setNPorta] = useState(0); // tocar de novo em "＋ Porta" reabre o formulário
   const [aberto, setAberto] = useState<string | null>(null);

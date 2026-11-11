@@ -1107,6 +1107,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     else if (podeUsuarios()) cd.push(["admin_usuarios", "Usuários"]);
     if (cd.length) G.push({ g: "Cadastros", ic: "⚙", itens: cd });
     // 🔒 cada setor no seu quadrado: gerente de loja só enxerga loja e vendedores
+    // 📣 perfil "só anúncios" (ex.: Lucas Santana): o menu dele é só o dos anúncios — sem pendências, vendedores, consultores, produtividade nem gestão
+    if (oculto("so_anuncios")) return G.filter(g => g.g === "Anúncios");
     if (ehGerenteLoja()) {
       const fora = new Set(["acompmkt", "operadoras", "clientes", "consulta", "produtividade", "relatorios"]);
       G.forEach(g => (g.itens = g.itens.filter(([v]: string[]) => !fora.has(v))));
