@@ -8,7 +8,7 @@ import { hojeISO } from "./regras";
 import { fmtTel } from "./baseClientes";
 import { sugestaoVendedor } from "../comp/SelVendedor";
 import { DIRETRIZES } from "./diretrizes";
-import { FERRAMENTAS_GESTAO, NOMES_GESTAO, executarGestao, podeVerMontagem, podeVerFretes, podeVerAnuncios, FERRAMENTA_ANUNCIOS } from "./assistenteGestao";
+import { FERRAMENTAS_GESTAO, NOMES_GESTAO, executarGestao, podeVerMontagem, podeVerFretes, podeVerAnuncios, FERRAMENTA_ANUNCIOS, FERRAMENTA_PRODUCAO, FERRAMENTA_AREAS } from "./assistenteGestao";
 
 type Ctx = { R: any; st: any; uid: string; recarregar: () => Promise<void> };
 export type Cartao = { id: string; cliente: string; dow: string; dia: string; sub: string; anexo: "com" | "sem" | "" };
@@ -82,7 +82,7 @@ export const FERRAMENTAS: any[] = [
     input_schema: obj({ texto: S("Nome ou telefone") }, ["texto"]) },
   { name: "ver_cliente", description: "Detalhes de um cliente: datas, vendedor, consultor, endereço, observações e lista de anexos (nomes, sem abrir arquivos).",
     input_schema: obj({ id: S("ID do cliente, obtido em listar_clientes ou buscar_cliente") }, ["id"]) },
-  { name: "contagem", description: "Conta os clientes do período por situação (agendados, vieram, não compareceram etc.), só do que a pessoa pode ver.",
+  { name: "contagem", description: "Conta os clientes com visita/vinda no período por SITUAÇÃO (agendados, vieram, cancelados…), do que a pessoa pode ver. NÃO mede atendimentos/agendamentos por área: para isso use atividade_por_area.",
     input_schema: obj({ de: S("YYYY-MM-DD"), ate: S("YYYY-MM-DD") }, ["de", "ate"]) },
   { name: "sem_vendedor", description: "Clientes com vinda à loja que ainda não têm vendedor definido, com a sugestão do sistema. Só para quem distribui vendedores.",
     input_schema: obj({}) },
@@ -102,7 +102,7 @@ export const FERRAMENTAS: any[] = [
 // ferramentas liberadas para esta pessoa (as de montagem/pagamento/fretes só aparecem para quem tem acesso)
 export function ferramentasPara(R: any): any[] {
   const ok = (n: string) => n === "montagem_pagamento" || n === "montagem_fechamentos" ? podeVerMontagem(R) : n === "fretes_pagamentos" ? podeVerFretes(R) : true;
-  return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name)), ...(podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : [])];
+  return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name)), FERRAMENTA_PRODUCAO, FERRAMENTA_AREAS, ...(podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : [])];
 }
 export const ESCRITAS = ["remarcar_visita", "remarcar_loja", "definir_vendedor", "distribuir_vendedores", "adicionar_nota"];
 

@@ -2,7 +2,8 @@
 // Mesma regra das telas: montagem e pagamentos só para Gestão, Financeiro ou quem tem o acesso "montagem" (R.mySetores / R.temAcesso);
 // além disso o banco (RLS) continua filtrando as tabelas com o login da pessoa.
 import { sb } from "./supabase";
-import { hojeISO, vendaContaVolume, pagamentosVenda } from "./regras";
+import { A } from "./acoes";
+import { hojeISO, isoLocal, vendaContaVolume, pagamentosVenda } from "./regras";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -46,10 +47,14 @@ export const FERRAMENTAS_GESTAO: any[] = [
   { name: "posvenda_resumo", description: "Chamados de pós-venda que a pessoa pode ver: situação, categoria, responsabilidade, prazo, parado em obra. Pode filtrar por situação aberta/concluída.",
     input_schema: { type: "object", properties: { status: { type: "string", enum: ["abertos", "concluidos", "todos"] }, texto: { type: "string", description: "Nome do cliente (parte)" } }, required: [] } },
 ];
+export const FERRAMENTA_PRODUCAO = { name: "producao_cadastros", description: "ATENDIMENTOS/AGENDAMENTOS FEITOS por uma pessoa (quem cadastrou o cliente), por dia: total, quantos para consultor externo e quantos direto na loja, por tipo, quantos já vieram, vendas efetivadas e meta do dia (marketing/call center). Use para 'quantos atendimentos/agendamentos eu fiz hoje'. Sem 'pessoa' é da própria pessoa; Gestão e supervisão marketing podem pedir de outra pessoa ou 'todas' (ranking).",
+  input_schema: { type: "object", properties: { de: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: igual a de)" }, pessoa: { type: "string", description: "Nome (parte) ou 'todas' — só Gestão/supervisão" } }, required: [] } };
+export const FERRAMENTA_AREAS = { name: "atividade_por_area", description: "Números SEPARADOS por área, no período: 'callcenter' (solicitações cadastradas pelo Call Center), 'marketing' (agendamentos do marketing: para consultor externo e direto na loja, e quantos vieram), 'consultor_externo' (visitas: marcadas, realizadas, a realizar, atrasadas, canceladas) e 'checklist' (agendados, realizados, a agendar, aguardando). Sempre cite a área na resposta. Use para: 'quantos atendimentos no call center', 'quantos agendamentos do marketing', 'quantas visitas do externo / realizadas', 'quantos checklists agendados'. 'escopo' meus (padrão) ou todos (só o que a pessoa pode ver).",
+  input_schema: { type: "object", properties: { area: { type: "string", enum: ["callcenter", "marketing", "consultor_externo", "checklist", "todas"] }, de: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: igual a de)" }, escopo: { type: "string", enum: ["meus", "todos"] } }, required: ["area"] } };
 export const FERRAMENTA_ANUNCIOS = { name: "anuncios_resumo", description: "Anúncios Meta (Instagram/Facebook) e Google Ads (via Reportei) num período: investimento, impressões, cliques, conversas/conversões, custo por contato, comparação com o período anterior de mesmo tamanho, por plataforma, melhores campanhas e o funil do 360 (cadastros do marketing, vieram à loja, vendas, faturamento, custo por cliente na loja e por venda). Só Gestão, proprietário e quem tem a permissão Anúncios.",
   input_schema: { type: "object", properties: { de: { type: "string", description: "YYYY-MM-DD (padrão: início do mês)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, plataforma: { type: "string", enum: ["todas", "meta", "google"] }, campanhas: { type: "number", description: "Quantas campanhas listar (padrão 5, máx 15)" } }, required: [] } };
 export const podeVerAnuncios = (R: any) => !!R.veAnuncios?.();
-export const NOMES_GESTAO = [...FERRAMENTAS_GESTAO.map(f => f.name), "anuncios_resumo"];
+export const NOMES_GESTAO = [...FERRAMENTAS_GESTAO.map(f => f.name), "anuncios_resumo", "producao_cadastros", "atividade_por_area"];
 
 export async function executarGestao(nome: string, a: any, c: { R: any; st: any }): Promise<any> {
   const { R, st } = c; a = a || {};
@@ -102,6 +107,69 @@ export async function executarGestao(nome: string, a: any, c: { R: any; st: any 
       .filter(x => !t || String(x.cliente).toLowerCase().includes(t));
     return { total: l.length, chamados: l.slice(0, 30).map(x => ({ id: x.id, cliente: x.cliente, status: x.status, categoria: x.posvenda.categoria, responsabilidade: x.posvenda.responsabilidade,
       situacao: x.posvenda.situacao, prazo: x.posvenda.prazo || null, parado_obra: x.posvenda.paradoObra, aberto_em: String(x.criadoEm).slice(0, 10) })) };
+  }
+  if (nome === "atividade_por_area") {
+    const uid = R.currentUserId; const hj = hojeISO(); const de = ISO.test(a.de) ? a.de : hj; let ate = ISO.test(a.ate) ? a.ate : de; if (ate < de) ate = de;
+    const dia = (v: any) => (v ? String(v).slice(0, 10) : ""); const no = (v: any) => { const d = dia(v); return !!d && d >= de && d <= ate; };
+    const todosEsc = a.escopo === "todos"; const area = a.area || "todas";
+    const ck = (k: any) => (k.tratativa && k.tratativa.checklist) || {};
+    const cham = (st.chamados as any[]).filter(k => R.podeVer(k));
+    const meu = (k: any) => k.solicitanteId === uid || k.cadastradoPorId === uid || k.atendenteId === uid || k.consultorId === uid;
+    const base = todosEsc ? cham : cham.filter(meu);
+    const out: any = { periodo: { de, ate }, escopo: todosEsc ? "todos (o que você pode ver)" : "só os seus" };
+    if (area === "callcenter" || area === "todas") {
+      const l = base.filter(k => no(k.criadoEm) && (k.setor === "callcenter" || R.mySetores().includes("callcenter") && (k.solicitanteId === uid || k.cadastradoPorId === uid)));
+      const tipos: Record<string, number> = {}; l.forEach(k => { const n = st.tipos?.[k.tipo]?.nome || k.tipo || "—"; tipos[n] = (tipos[n] || 0) + 1; });
+      out.callcenter = { cadastrados_no_periodo: l.length, por_tipo: Object.entries(tipos).map(([tipo, qtd]) => ({ tipo, qtd })).sort((x, y) => y.qtd - x.qtd).slice(0, 8),
+        nota: "Atendimento do Call Center = solicitação cadastrada por ele no 360. Ligação que não virou cadastro não aparece." };
+    }
+    if (area === "marketing" || area === "todas") {
+      const l = base.filter(k => R.domMarketing(k) && no(k.criadoEm));
+      out.marketing = { agendamentos_cadastrados: l.length, para_consultor_externo: l.filter(k => !R.ehDireto(k)).length, direto_na_loja: l.filter(k => R.ehDireto(k)).length, ja_vieram: l.filter(k => R.compareceu(k)).length,
+        vendas_efetivadas: l.filter(k => k.venda && k.venda.status === "efetivada").length };
+    }
+    if (area === "consultor_externo" || area === "todas") {
+      const l = base.filter(k => k.dataVisita && no(k.dataVisita) && !R.ehDireto(k));
+      const sit = (k: any) => R.statusClienteDe(k); const feita = (k: any) => !!(k.tratativa && k.tratativa.realizada);
+      const hojeMs = hj;
+      out.consultor_externo = { visitas_marcadas: l.length, realizadas: l.filter(feita).length, a_realizar: l.filter(k => !feita(k) && dia(k.dataVisita) >= hojeMs && !/cancel/i.test(sit(k))).length,
+        atrasadas_sem_baixa: l.filter(k => !feita(k) && dia(k.dataVisita) < hojeMs && !/cancel/i.test(sit(k))).length, canceladas: l.filter(k => /cancel/i.test(sit(k))).length, reagendadas: l.filter(k => /reagend/i.test(sit(k))).length };
+    }
+    if (area === "checklist" || area === "todas") {
+      if (!(R.ehGestao() || R.mySetores().includes("checklist") || R.mySetores().includes("medidas_supervisao"))) out.checklist = NEG;
+      else {
+        const l = (st.chamados as any[]).filter(k => k.tipo === "checklist" && R.podeVer(k));
+        const ag = l.filter(k => ck(k).etapa === "agendado" && no(ck(k).agendadoPara));
+        out.checklist = { agendados_no_periodo: ag.length, realizados_no_periodo: l.filter(k => (ck(k).etapa === "realizado" || (!ck(k).etapa && k.status === "concluida")) && no(ck(k).agendadoPara || k.atualizadoEm)).length,
+          a_agendar_agora: l.filter(k => k.status !== "concluida" && (ck(k).etapa || "a_contatar") === "a_contatar").length, aguardando_cliente: l.filter(k => k.status !== "concluida" && ck(k).etapa === "aguardando").length,
+          nota: "Contagem do que você pode ver; confira em Checklist se precisar do número oficial." };
+      }
+    }
+    return out;
+  }
+  if (nome === "producao_cadastros") {
+    const uid = R.currentUserId; const gestor = R.ehGestao() || R.mySetores().includes("marketing_supervisao");
+    const hj = hojeISO(); const de = ISO.test(a.de) ? a.de : hj; let ate = ISO.test(a.ate) ? a.ate : de; if (ate < de) ate = de;
+    const dia = (v: any) => isoLocal(new Date(v));
+    const quem = (st.usuarios as any[]).filter(u => u.ativo);
+    const t = String(a.pessoa || "").trim().toLowerCase();
+    if (t && !gestor && t !== "eu") return { erro: "Você só vê a sua própria produção." };
+    const alvo = !gestor || !t || t === "eu" ? quem.filter(u => u.id === uid) : t === "todas" ? quem : quem.filter(u => String(u.nome).toLowerCase().includes(t));
+    if (!alvo.length) return { erro: "Não achei essa pessoa." };
+    const todos = (st.chamados as any[]).filter(k => R.podeVer(k));
+    const calc = (u: any) => {
+      const l = todos.filter(k => (k.solicitanteId === u.id || k.cadastradoPorId === u.id) && k.criadoEm && dia(k.criadoEm) >= de && dia(k.criadoEm) <= ate);
+      const tipos: Record<string, number> = {}; l.forEach(k => { const n = (st.tipos?.[k.tipo]?.nome) || k.tipo || "—"; tipos[n] = (tipos[n] || 0) + 1; });
+      const mk = l.filter(k => R.domMarketing(k));
+      const vendas = todos.filter(k => (k.solicitanteId === u.id) && R.domMarketing(k) && k.venda && k.venda.status === "efetivada" && String(k.venda.dataVenda || k.venda.quando || "").slice(0, 10) >= de && String(k.venda.dataVenda || k.venda.quando || "").slice(0, 10) <= ate).length;
+      return { pessoa: u.nome, total_cadastrados: l.length, marketing_para_consultor_externo: mk.filter(k => !R.ehDireto(k)).length, marketing_direto_na_loja: mk.filter(k => R.ehDireto(k)).length,
+        outros_tipos: Object.entries(tipos).map(([nome, n]) => ({ tipo: nome, qtd: n })).sort((x, y) => y.qtd - x.qtd).slice(0, 8), marketing_que_ja_vieram: mk.filter(k => R.compareceu(k)).length, vendas_efetivadas_marketing: vendas };
+    };
+    let meta: any = null;
+    if (alvo.length === 1 && de === ate) { try { const m = (await A.listarMetasMkt(de, de)) as any[]; if (m && m[0]) meta = { meta_agendamentos: m[0].meta, bonus: R.ocultaValoresMkt?.() && !gestor ? null : m[0].valor }; } catch { /* sem meta */ } }
+    const r = alvo.map(calc).filter(x => alvo.length === 1 || x.total_cadastrados > 0).sort((x, y) => y.total_cadastrados - x.total_cadastrados);
+    return { periodo: { de, ate }, meta_do_dia: meta, resultado: r.slice(0, 30),
+      aviso: "'Atendimento' aqui = cliente cadastrado/agendado pela pessoa no 360 no período (é o que a tela Produtividade conta). Ligações que não viraram cadastro não aparecem." };
   }
   if (nome === "anuncios_resumo") {
     if (!podeVerAnuncios(R)) return NEG;
