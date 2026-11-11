@@ -105,13 +105,20 @@ export default function AgendaPublica() {
     finally { setEnviando(""); }
   };
   const abrirVer = (x: any) => { const v = vendedores.find(y => soNome(y.nome) === soNome(x.vendedor || "")); setSenha(""); setVer({ x, sel: v ? v.id : "", passo: "nome" }); };
-  const verImagens = async (assumir: boolean) => {
+  // sempre com a senha do vendedor; cliente que já tem vendedor só abre para ele; sem vendedor: abrir = assumir o projeto
+  const seguirVer = () => {
     const v = ver; if (!v || !v.sel) { setAviso({ ok: false, t: "Selecione o seu nome" }); return; }
+    const esc = vendedores.find(y => y.id === v.sel);
+    if (v.x.vendedor && esc && soNome(esc.nome) !== soNome(v.x.vendedor)) { setAviso({ ok: false, t: "Este cliente já está com " + soNome(v.x.vendedor) + ". Só ele vê as imagens." }); return; }
+    setSenha(""); setVer({ ...v, passo: "confirmar" });
+  };
+  const verImagens = async (_assumir?: boolean) => {
+    const v = ver; if (!v || !v.sel) { setAviso({ ok: false, t: "Selecione o seu nome" }); return; }
+    if (!senha) { setAviso({ ok: false, t: "Digite a sua senha do sistema" }); return; }
     setEnviando(v.x.id);
     try {
-      if (assumir && !senha) { setAviso({ ok: false, t: "Digite a sua senha do sistema" }); return; }
-      const r = await A.agendaPublicaImagens(token, v.x.id, v.sel, assumir, assumir ? senha : "");
-      if (r && r.confirmar) { setVer({ ...v, passo: "confirmar", programado: r.programado || "" }); return; }
+      const r = await A.agendaPublicaImagens(token, v.x.id, v.sel, !v.x.vendedor, senha);
+      if (r && r.confirmar) { setVer({ ...v, passo: "confirmar" }); return; }
       setVer({ ...v, passo: "ok", arquivos: r.arquivos || [] }); setSenha("");
       if (r.trocou) {
         setDados(d => (d || []).map(y => y.id === v.x.id ? { ...y, vendedor: r.nome, situacao: y.situacao === "sem_vendedor" ? "com_vendedor" : y.situacao, pedido_vendedor: "" } : y));
@@ -219,20 +226,20 @@ export default function AgendaPublica() {
         <div className={"ap-modal-c" + (ver.passo === "ok" ? " ap-galeria" : "")} onClick={e => e.stopPropagation()}>
           {ver.passo === "nome" && <>
             <b>Imagens de {ver.x.cliente}</b>
-            <span>Confirme quem vai fazer o projeto. {ver.x.vendedor ? <>Projetista programado: <b>{soNome(ver.x.vendedor)}</b>.</> : "Este cliente ainda está sem projetista."}</span>
+            <span>{ver.x.vendedor ? <>Cliente de <b>{soNome(ver.x.vendedor)}</b>: só ele vê as imagens, com a senha dele.</> : "Este cliente ainda está sem projetista: quem abrir as imagens assume o projeto."} Selecione o seu nome.</span>
             <label className="ap-campo">Seu nome
               <select value={ver.sel} onChange={e => setVer({ ...ver, sel: e.target.value })} autoFocus>
                 <option value="">Selecione…</option>
                 {vendedores.map(v => <option key={v.id} value={v.id}>{soNome(v.nome)}</option>)}
               </select></label>
-            <button className="ap-confirmar" disabled={!ver.sel || enviando === ver.x.id} onClick={() => verImagens(false)}>{enviando === ver.x.id ? "Abrindo…" : "🖼 Ver imagens"}</button>
+            <button className="ap-confirmar" disabled={!ver.sel || enviando === ver.x.id} onClick={seguirVer}>Continuar</button>
             <button className="ap-cancelar" onClick={() => setVer(null)}>Cancelar</button>
           </>}
           {ver.passo === "confirmar" && <>
-            <b>Você vai assumir este projeto?</b>
-            <span>{ver.programado ? <>O projetista programado para <b>{ver.x.cliente}</b> é <b>{soNome(ver.programado)}</b>.</> : <><b>{ver.x.cliente}</b> está sem projetista.</>} Se você abrir as imagens, <b>o projeto passa para o seu nome</b>{ver.programado ? " e " + soNome(ver.programado) + " e a coordenação são avisados" : " e a coordenação é avisada"}.</span>
-            <label className="ap-campo">Sua senha do sistema<Senha autoComplete="off" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => { if (e.key === "Enter") verImagens(true); }} placeholder="a mesma do app" autoFocus /></label>
-            <button className="ap-confirmar" disabled={enviando === ver.x.id || !senha} onClick={() => verImagens(true)}>{enviando === ver.x.id ? "Assumindo…" : "✋ Sim, vou assumir o projeto"}</button>
+            <b>{ver.x.vendedor ? "Ver as imagens de " + ver.x.cliente : "Você vai assumir este projeto?"}</b>
+            <span>{ver.x.vendedor ? <>Digite a sua senha do sistema para abrir as imagens.</> : <><b>{ver.x.cliente}</b> está sem projetista. Se você abrir as imagens, <b>o projeto passa para o seu nome</b> e a coordenação é avisada.</>}</span>
+            <label className="ap-campo">Sua senha do sistema<Senha autoComplete="off" value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => { if (e.key === "Enter") verImagens(); }} placeholder="a mesma do app" autoFocus /></label>
+            <button className="ap-confirmar" disabled={enviando === ver.x.id || !senha} onClick={() => verImagens()}>{enviando === ver.x.id ? "Abrindo…" : ver.x.vendedor ? "🖼 Ver imagens" : "✋ Sim, vou assumir o projeto"}</button>
             <button className="ap-cancelar" onClick={() => setVer({ ...ver, passo: "nome" })}>Voltar</button>
           </>}
           {ver.passo === "ok" && <>
