@@ -124,11 +124,14 @@ export default function Anuncios({ de: de0, ate: ate0, movel, resumo }: { de?: s
   const resultado = (c: any) => c.plataforma === "meta" ? (c.conversas ? n0(c.conversas) + " conversas" : "alcance") : n0(c.conversoes) + " conversões";
   const custoRes = (c: any) => { const r = c.plataforma === "meta" ? c.conversas : c.conversoes; return r ? din(c.gasto / r) : "—"; };
 
+  const faltaReportei = !!dados.sync?.ate && ate > dados.sync.ate;
+  const avisoReportei = faltaReportei ? <div className="pb-per" style={{ margin: "8px 0", padding: "8px 12px", borderRadius: 8, background: "rgba(255,180,0,.12)", color: "#e0a800" }}>⏳ O Reportei só entregou os dados <b>até {fmtDate(dados.sync.ate)}</b>. {de > dados.sync.ate ? "Neste período o investimento, as impressões e os cliques ainda não chegaram e aparecem zerados" : "Os últimos dias do período ainda não chegaram do Reportei"} — eles entram quando o Reportei atualizar. Cadastros, agendamentos e compras do 360 são em tempo real. Para ver o investimento, use <b>7 dias</b>, <b>Semana atual</b> ou <b>Mês atual</b>.</div> : null;
   return <div className={"an" + (movel ? " an-movel" : "")}>
     {!de0 && <div className="an-per">{PERIODOS.map(([k, l]) => <button key={k} className={"chip" + (per === k ? " on" : "")} onClick={() => setPer(k)}>{l}</button>)}
       {per === "pers" && <span className="an-pers"><input type="date" value={pDe} max={pAte} onChange={e => setPDe(e.target.value || pDe)} /> até <input type="date" value={pAte} min={pDe} max={hoje} onChange={e => setPAte(e.target.value || pAte)} /></span>}</div>}
     <div className="an-per">{([["todas", "Todas as plataformas"], ["meta", "Ⓜ Meta"], ["google", "Ⓖ Google"]] as const).map(([k, l]) => <button key={k} className={"chip" + (plat === k ? " on" : "")} onClick={() => setPlat(k)}>{l}</button>)}</div>
     <div className="pb-per">Comparando {fmtDate(de)}–{fmtDate(ate)} com {fmtDate(dePrev)}–{fmtDate(atePrev)}</div>
+    {avisoReportei}
 
     <div className="pb-bigs">
       <Grande v={din(T1.gasto)} l="Investido em anúncios" a={T1.gasto} b={T0.gasto} inverso fmt={din} />
