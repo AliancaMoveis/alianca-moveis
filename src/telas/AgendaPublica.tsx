@@ -61,7 +61,8 @@ export default function AgendaPublica() {
   if (!token) return <div className="ap-erro"><img src="/logo.png" alt="" /><b>Link incompleto</b><span>Peça à Gestão o link da agenda da loja.</span></div>;
   if (erro && (!dados || !dados.length) && /inválido|desligado/i.test(erro)) return <div className="ap-erro"><img src="/logo.png" alt="" /><b>Agenda indisponível</b><span>Este link foi trocado ou desligado. Peça à Gestão o link atual.</span></div>;
 
-  const l = dados || [];
+  // cliente reagendado que agora está marcado NESTE dia volta a ser atendido normalmente (com a faixa de reagendamento): não fica travado como "Reagendado"
+  const l = (dados || []).map(x => x.situacao === "reagendado" ? { ...x, situacao: x.vendedor ? "com_vendedor" : "sem_vendedor", _reag: true } : x);
   const hhmm = agora.getHours() * 60 + agora.getMinutes();
   const min = (h: string) => { const [a, b] = (h || "0:0").split(":").map(Number); return a * 60 + b; };
   const ehHoje = off === 0;
