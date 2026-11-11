@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./estilo.css";
 import App from "./App";
+import ProtecaoTela from "./comp/ProtecaoTela";
 
 import { consertarFotosQuebradas } from "./lib/dados";
 import { instalarAberturaWhats } from "./lib/regras";
@@ -9,7 +10,7 @@ import { aplicarPreferencias } from "./lib/preferencias";
 aplicarPreferencias();
 consertarFotosQuebradas();
 instalarAberturaWhats();
-ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")!).render(<ProtecaoTela><App /></ProtecaoTela>);
 
 // aplicativo instalável (PWA)
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
