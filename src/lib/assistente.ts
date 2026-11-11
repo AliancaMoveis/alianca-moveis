@@ -8,7 +8,7 @@ import { hojeISO } from "./regras";
 import { fmtTel } from "./baseClientes";
 import { sugestaoVendedor } from "../comp/SelVendedor";
 import { DIRETRIZES } from "./diretrizes";
-import { FERRAMENTAS_GESTAO, NOMES_GESTAO, executarGestao, podeVerMontagem, podeVerFretes } from "./assistenteGestao";
+import { FERRAMENTAS_GESTAO, NOMES_GESTAO, executarGestao, podeVerMontagem, podeVerFretes, podeVerAnuncios, FERRAMENTA_ANUNCIOS } from "./assistenteGestao";
 
 type Ctx = { R: any; st: any; uid: string; recarregar: () => Promise<void> };
 export type Cartao = { id: string; cliente: string; dow: string; dia: string; sub: string; anexo: "com" | "sem" | "" };
@@ -108,7 +108,7 @@ export const FERRAMENTAS: any[] = [
 // ferramentas liberadas para esta pessoa (as de montagem/pagamento/fretes só aparecem para quem tem acesso)
 export function ferramentasPara(R: any): any[] {
   const ok = (n: string) => n === "montagem_pagamento" || n === "montagem_fechamentos" ? podeVerMontagem(R) : n === "fretes_pagamentos" ? podeVerFretes(R) : true;
-  return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name))];
+  return [...FERRAMENTAS, ...FERRAMENTAS_GESTAO.filter(f => ok(f.name)), ...(podeVerAnuncios(R) ? [FERRAMENTA_ANUNCIOS] : [])];
 }
 export const ESCRITAS = ["remarcar_visita", "remarcar_loja", "definir_vendedor", "distribuir_vendedores", "adicionar_nota"];
 

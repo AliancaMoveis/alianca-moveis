@@ -2,7 +2,7 @@
 // Mesma regra das telas: montagem e pagamentos só para Gestão, Financeiro ou quem tem o acesso "montagem" (R.mySetores / R.temAcesso);
 // além disso o banco (RLS) continua filtrando as tabelas com o login da pessoa.
 import { sb } from "./supabase";
-import { hojeISO } from "./regras";
+import { hojeISO, vendaContaVolume, pagamentosVenda } from "./regras";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -46,7 +46,10 @@ export const FERRAMENTAS_GESTAO: any[] = [
   { name: "posvenda_resumo", description: "Chamados de pós-venda que a pessoa pode ver: situação, categoria, responsabilidade, prazo, parado em obra. Pode filtrar por situação aberta/concluída.",
     input_schema: { type: "object", properties: { status: { type: "string", enum: ["abertos", "concluidos", "todos"] }, texto: { type: "string", description: "Nome do cliente (parte)" } }, required: [] } },
 ];
-export const NOMES_GESTAO = FERRAMENTAS_GESTAO.map(f => f.name);
+export const FERRAMENTA_ANUNCIOS = { name: "anuncios_resumo", description: "Anúncios Meta (Instagram/Facebook) e Google Ads (via Reportei) num período: investimento, impressões, cliques, conversas/conversões, custo por contato, comparação com o período anterior de mesmo tamanho, por plataforma, melhores campanhas e o funil do 360 (cadastros do marketing, vieram à loja, vendas, faturamento, custo por cliente na loja e por venda). Só Gestão, proprietário e quem tem a permissão Anúncios.",
+  input_schema: { type: "object", properties: { de: { type: "string", description: "YYYY-MM-DD (padrão: início do mês)" }, ate: { type: "string", description: "YYYY-MM-DD (padrão: hoje)" }, plataforma: { type: "string", enum: ["todas", "meta", "google"] }, campanhas: { type: "number", description: "Quantas campanhas listar (padrão 5, máx 15)" } }, required: [] } };
+export const podeVerAnuncios = (R: any) => !!R.veAnuncios?.();
+export const NOMES_GESTAO = [...FERRAMENTAS_GESTAO.map(f => f.name), "anuncios_resumo"];
 
 export async function executarGestao(nome: string, a: any, c: { R: any; st: any }): Promise<any> {
   const { R, st } = c; a = a || {};
@@ -99,6 +102,41 @@ export async function executarGestao(nome: string, a: any, c: { R: any; st: any 
       .filter(x => !t || String(x.cliente).toLowerCase().includes(t));
     return { total: l.length, chamados: l.slice(0, 30).map(x => ({ id: x.id, cliente: x.cliente, status: x.status, categoria: x.posvenda.categoria, responsabilidade: x.posvenda.responsabilidade,
       situacao: x.posvenda.situacao, prazo: x.posvenda.prazo || null, parado_obra: x.posvenda.paradoObra, aberto_em: String(x.criadoEm).slice(0, 10) })) };
+  }
+  if (nome === "anuncios_resumo") {
+    if (!podeVerAnuncios(R)) return NEG;
+    const hj = hojeISO(); const de = ISO.test(a.de) ? a.de : hj.slice(0, 8) + "01"; let ate = ISO.test(a.ate) ? a.ate : hj; if (ate < de) ate = de;
+    const dias = Math.max(1, Math.round((+new Date(ate + "T12:00Z") - +new Date(de + "T12:00Z")) / 86400000) + 1);
+    const dePrev = somaDias(de, -dias), atePrev = somaDias(de, -1);
+    const plat = a.plataforma === "meta" || a.plataforma === "google" ? a.plataforma : "todas";
+    const ls: any[] = [];
+    for (let p = 0; p < 20; p++) {
+      const { data, error } = await sb.from("anuncios_dia").select("plataforma,dia,campanha,gasto,impressoes,cliques,conversas,conversoes").gte("dia", dePrev).lte("dia", ate).order("dia").range(p * 1000, p * 1000 + 999);
+      if (error) return { erro: error.message };
+      ls.push(...(data || [])); if (!data || data.length < 1000) break;
+    }
+    const sy = await sb.from("anuncios_sync").select("ate,ultimo").maybeSingle();
+    const f = (x: any) => plat === "todas" || x.plataforma === plat;
+    const soma = (l: any[]) => { const t = { gasto: 0, impressoes: 0, cliques: 0, conversas: 0, conversoes: 0 }; l.forEach(x => { t.gasto += +x.gasto || 0; t.impressoes += +x.impressoes || 0; t.cliques += +x.cliques || 0; t.conversas += +x.conversas || 0; t.conversoes += +x.conversoes || 0; });
+      const contatos = t.conversas + t.conversoes; return { gasto: r2(t.gasto), impressoes: t.impressoes, cliques: t.cliques, conversas: t.conversas, conversoes: t.conversoes, contatos, custo_por_contato: contatos ? r2(t.gasto / contatos) : null, cpc: t.cliques ? r2(t.gasto / t.cliques) : null, ctr_pct: t.impressoes ? r2((t.cliques / t.impressoes) * 100) : null }; };
+    const atual = ls.filter(x => f(x) && x.dia >= de && x.dia <= ate), ant = ls.filter(x => f(x) && x.dia >= dePrev && x.dia <= atePrev);
+    const camp: Record<string, any> = {};
+    atual.forEach(x => { const k = x.plataforma + "|" + x.campanha; (camp[k] = camp[k] || { plataforma: x.plataforma, campanha: x.campanha, l: [] }).l.push(x); });
+    const campanhas = Object.values(camp).map((c: any) => ({ plataforma: c.plataforma, campanha: c.campanha, ...soma(c.l) })).sort((x, y) => y.gasto - x.gasto).slice(0, Math.min(15, Math.max(1, Number(a.campanhas) || 5)));
+    // funil do 360 (marketing) — mesma conta da tela Anúncios; os cadastros pelo 360 só valem a partir de 15/10/2026
+    const INI = "2026-10-15"; const no = (v: any, x: string, y: string) => { const d = String(v || "").slice(0, 10); return !!v && d >= x && d <= y; };
+    const imp = (k: any) => /^Importa/i.test(k.solicitante || "") || !!(k.tratativa && (k.tratativa.agendLojaImportado || k.tratativa.importadoVisita || k.tratativa.visitaImportada));
+    const mk = (st.chamados as any[]).filter(k => R.domMarketing(k) && !imp(k) && String(k.criadoEm).slice(0, 10) >= INI);
+    const funil = (x0: string, y: string) => { const x = x0 < INI ? INI : x0; if (x > y) return null;
+      const vend = mk.filter(k => vendaContaVolume(k.venda) && pagamentosVenda(k.venda).some((p: any) => no(p.data, x, y)));
+      return { cadastros: mk.filter(k => no(k.criadoEm, x, y)).length, vieram_loja: mk.filter(k => no(k.dataLoja, x, y)).length, vendas: vend.length, faturamento: r2(vend.reduce((sm, k) => sm + (Number(k.venda?.valorNum) || 0), 0)) }; };
+    const F = funil(de, ate); const T = soma(atual);
+    return { periodo: { de, ate, dias }, anterior: { de: dePrev, ate: atePrev }, plataforma: plat, atual: T, periodo_anterior: soma(ant),
+      por_plataforma: (["meta", "google"] as const).filter(p => plat === "todas" || plat === p).map(p => ({ plataforma: p, ...soma(atual.filter(x => x.plataforma === p)) })),
+      melhores_campanhas_por_gasto: campanhas,
+      funil_360: F ? { ...F, custo_por_cliente_na_loja: F.vieram_loja ? r2(T.gasto / F.vieram_loja) : null, custo_por_venda: F.vendas ? r2(T.gasto / F.vendas) : null } : null,
+      dados_ate: sy.data?.ate || null,
+      aviso: "Anúncios vêm do Reportei, atualizados por tarefa agendada (veja 'dados_ate'). O funil do 360 só conta cadastros feitos no 360 desde 15/10/2026, então períodos anteriores a isso não casam com o investimento." };
   }
   return { erro: "Ferramenta desconhecida" };
 }
