@@ -11,7 +11,17 @@ type Item =
   | { k: "erro"; t: string }
   | { k: "conf"; pend: Pend[]; estado: "aguardando" | "feito" | "cancelado"; resultado?: string };
 
-const SUGESTOES = ["Quais clientes eu tenho hoje?", "Quais clientes tenho essa semana?", "Quem está sem vendedor?"];
+// sugestões do início do chat: só o que faz sentido para o acesso da pessoa (sem nada, a lista some)
+function sugestoesPara(R: any): string[] {
+  try {
+    if (R.oculto?.("so_anuncios")) return ["Quanto investimos hoje?", "Qual a melhor campanha do mês?", "Quanto foi investido essa semana?"];
+    if (R.ehGestao()) return ["Quantos atendimentos o Call Center teve hoje?", "Quanto vou pagar de montadores?", "Como estão os anúncios do mês?"];
+    if (R.veAnuncios?.() && !R.mySetores().includes("gerente_loja")) return ["Quanto investimos hoje?", "Qual a melhor campanha do mês?", "Quantos clientes vieram hoje?"];
+    if (R.ehConsultorExterno?.()) return ["Quais visitas eu tenho amanhã?", "Quais visitas tenho essa semana?"];
+    if (R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x))) return ["Quem está sem vendedor?", "Quais clientes tenho essa semana?"];
+    return ["Quais clientes eu tenho hoje?", "Quais clientes tenho essa semana?"];
+  } catch { return []; }
+}
 const SR: any = typeof window !== "undefined" ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition : null;
 
 export function Assistente() {
@@ -159,7 +169,7 @@ export function Assistente() {
       {!status.configurado && <div className="as-aviso">A chave do Claude ainda não foi ligada no Vercel (ANTHROPIC_API_KEY). Assim que ligar, o assistente passa a responder.</div>}
       {!itens.length && <div className="as-vazio">
         <p>Pergunte ou peça por voz. Eu consulto o sistema com o seu acesso e, antes de alterar qualquer coisa, peço a sua confirmação.</p>
-        <div className="as-sug">{SUGESTOES.map(s => <button key={s} onClick={() => enviar(s)} disabled={!status.configurado}>{s}</button>)}</div>
+        {sugestoesPara(R).length > 0 && <div className="as-sug">{sugestoesPara(R).map(s => <button key={s} onClick={() => enviar(s)} disabled={!status.configurado}>{s}</button>)}</div>}
       </div>}
       {itens.map((i, n) => i.k === "u" ? <div key={n} className="as-u">{i.t}</div>
         : i.k === "erro" ? <div key={n} className="as-erro">{i.t}</div>
