@@ -174,7 +174,7 @@ export function Assistente() {
       {itens.map((i, n) => i.k === "u" ? <div key={n} className="as-u">{i.t}</div>
         : i.k === "erro" ? <div key={n} className="as-erro">{i.t}</div>
         : i.k === "ia" ? <div key={n} className="as-ia">
-            <div className="as-txt">{i.t}</div>
+            <div className="as-txt">{String(i.t).split(/\*\*(.+?)\*\*/g).map((x, k) => k % 2 ? <b key={k}>{x}</b> : x)}</div>
             {!!i.cartoes?.length && <div className="as-lista">{i.cartoes.map(c => <button key={c.id} className="as-lin" onClick={() => abrirFicha(c.id)} aria-label={"Abrir a ficha de " + c.cliente}>
               <span className="as-dt"><span>{c.dow}</span><b>{c.dia}</b></span>
               <span className="as-in"><b>{c.cliente}</b><span>{c.sub}</span></span>
