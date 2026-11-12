@@ -64,13 +64,46 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, r });
     }
 
+    // ---------- bloqueio do 360 → evento manual no Exact ----------
+    if (b.acao === "bloqueio") {
+      try {
+        if (b.op === "excluir") {
+          if (b.eventId) await exact(token, "DELETE", `/event/${b.eventId}`);
+          await sb.rpc("exact_bloq_ok", { p_id: b.id, p_event: null, p_erro: null });
+          return json({ ok: true });
+        }
+        const { data: pl, error } = await sb.rpc("exact_bloq_plano", { p_id: b.id });
+        if (error) throw new Error(error.message);
+        if (!pl || !pl.agendaId) return json({ ok: true, pulado: "sem agenda no Exact" });
+        const corpo = { start: pl.start, end: pl.end, agendaId: pl.agendaId, description: pl.description, notes: pl.notes };
+        let idEv = pl.eventId;
+        if (idEv) await exact(token, "PUT", `/event/${idEv}`, corpo);
+        else { const r = await exact(token, "POST", "/event", corpo); idEv = r?.id ?? null; }
+        await sb.rpc("exact_bloq_ok", { p_id: b.id, p_event: idEv, p_erro: null });
+        return json({ ok: true, eventId: idEv });
+      } catch (x: any) {
+        await sb.rpc("exact_bloq_ok", { p_id: b.id, p_event: null, p_erro: String(x.message || x).slice(0, 500) });
+        throw x;
+      }
+    }
+
     // ---------- 360 → Exact ----------
     if (b.acao === "push") {
       const { data: plano, error } = await sb.rpc("exact_push_plano", { p_id: b.id });
       if (error) throw new Error(error.message);
       if (!plano || plano.pular) return json({ ok: true, pulado: plano?.motivo || "nada a fazer" });
       const feitos: any[] = []; const erros: string[] = [];
-      const ex: any[] = plano.existentes || []; const de: any[] = plano.desejados || [];
+      const de: any[] = plano.desejados || [];
+      // agendamentos que o ticket tem hoje no Exact (direto do Exact, não da cópia do 360)
+      const diaLocal = (iso: string) => new Date(new Date(iso).getTime() - 3 * 3600e3).toISOString().slice(0, 10);
+      const hojeL = diaLocal(new Date().toISOString());
+      const lerEventos = async () => {
+        const t = await exact(token, "GET", `/ticket/checklist/${plano.ticketId}`);
+        return (t?.events || []).filter((e: any) => diaLocal(e.start) >= hojeL)
+          .map((e: any) => ({ id: e.id, dia: diaLocal(e.start), start: e.start, end: e.end, agendaId: e.agendaId, notes: e.notes, description: e.description }));
+      };
+      let ex: any[] = plano.existentes || [];
+      try { ex = await lerEventos(); } catch { /* usa a cópia do 360 */ }
       for (const d of de) {
         const e = ex.find(x => x.dia === d.dia);
         const corpo = { start: d.start, end: d.end, agendaId: d.agendaId, description: plano.descricao, notes: d.notes ?? e?.notes ?? "", ticketId: plano.ticketId };
@@ -82,7 +115,9 @@ Deno.serve(async (req: Request) => {
       for (const e of ex) if (!de.some(d => d.dia === e.dia)) {
         try { await exact(token, "DELETE", `/event/${e.id}`); feitos.push({ op: "excluir", id: e.id }); } catch (x: any) { erros.push(String(x.message || x)); }
       }
-      await sb.rpc("exact_push_ok", { p_id: b.id, p: { feitos, erros } });
+      let eventos: any[] | null = null;
+      if (feitos.length) { try { eventos = await lerEventos(); } catch { eventos = null; } }
+      await sb.rpc("exact_push_ok", { p_id: b.id, p: { feitos, erros, eventos, ticketId: plano.ticketId } });
       return json({ ok: !erros.length, feitos, erros });
     }
     return json({ erro: "ação desconhecida" }, 400);

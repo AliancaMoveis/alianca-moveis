@@ -110,17 +110,17 @@ begin
       k := coalesce(c.ck, '{}');
       if k ? 'exactPend' then continue; end if;  -- alteração do 360 ainda indo para o Exact
       novos := (select jsonb_agg(jsonb_build_object('t', x->>'t', 'p', coalesce(x->>'p', k->>'projetista'), 'dur', x->'dur') order by x->>'t') from jsonb_array_elements(r.d) x);
-      select string_agg(to_char(t::timestamp,'DD/MM HH24:MI') || coalesce(' ' || p,''), ' + ' order by t) into ant from (
-        select distinct on (left(t,10)) t, p from (
-          select left(k->>'agendadoPara',16) t, k->>'projetista' p where nullif(k->>'agendadoPara','') is not null
+      select string_agg(to_char(t::timestamp,'DD/MM HH24:MI') || coalesce(' ' || pj,''), ' + ' order by t) into ant from (
+        select distinct on (left(t,10)) t, pj from (
+          select left(k->>'agendadoPara',16) t, k->>'projetista' pj where nullif(k->>'agendadoPara','') is not null
           union all select left(e->>'data',16), coalesce(nullif(e->>'projetista',''), k->>'projetista') from jsonb_array_elements(case when jsonb_typeof(k->'diasExtras')='array' then k->'diasExtras' else '[]' end) e
            where nullif(e->>'data','') is not null) y where left(t,10)::date >= hj order by left(t,10), t) z;
       if coalesce(k->>'etapa','') <> 'agendado' then ant := null; end if;
       select string_agg(to_char((x->>'t')::timestamp,'DD/MM HH24:MI') || coalesce(' ' || (x->>'p'),''), ' + ' order by x->>'t') into dep from jsonb_array_elements(novos) x;
       if coalesce(ant,'') = coalesce(dep,'') then continue; end if;
-      with d as (select left(k->>'agendadoPara',16) t, k->>'projetista' p where nullif(k->>'agendadoPara','') is not null
+      with d as (select left(k->>'agendadoPara',16) t, k->>'projetista' pj where nullif(k->>'agendadoPara','') is not null
                  union all select left(e->>'data',16), coalesce(nullif(e->>'projetista',''), k->>'projetista') from jsonb_array_elements(case when jsonb_typeof(k->'diasExtras')='array' then k->'diasExtras' else '[]' end) e where nullif(e->>'data','') is not null)
-      select coalesce(jsonb_agg(jsonb_build_object('t',t,'p',p) order by t),'[]') into passados from (select distinct on (left(t,10)) t,p from d where left(t,10)::date < hj order by left(t,10), t) z;
+      select coalesce(jsonb_agg(jsonb_build_object('t',t,'p',pj) order by t),'[]') into passados from (select distinct on (left(t,10)) t,pj from d where left(t,10)::date < hj order by left(t,10), t) z;
       if coalesce(k->>'etapa','') <> 'agendado' then passados := '[]'; end if;
       select jsonb_agg(x order by x->>'t') into todos from jsonb_array_elements(passados || novos) x;
       dur := coalesce((novos->0->>'dur')::int, (k->>'duracaoMin')::int);
