@@ -89,36 +89,61 @@ Deno.serve(async (req: Request) => {
 
     // ---------- 360 → Exact ----------
     if (b.acao === "push") {
-      const { data: plano, error } = await sb.rpc("exact_push_plano", { p_id: b.id });
-      if (error) throw new Error(error.message);
-      if (!plano || plano.pular) return json({ ok: true, pulado: plano?.motivo || "nada a fazer" });
-      const feitos: any[] = []; const erros: string[] = [];
-      const de: any[] = plano.desejados || [];
-      // agendamentos que o ticket tem hoje no Exact (direto do Exact, não da cópia do 360)
-      const diaLocal = (iso: string) => new Date(new Date(iso).getTime() - 3 * 3600e3).toISOString().slice(0, 10);
-      const hojeL = diaLocal(new Date().toISOString());
-      const lerEventos = async () => {
-        const t = await exact(token, "GET", `/ticket/checklist/${plano.ticketId}`);
-        return (t?.events || []).filter((e: any) => diaLocal(e.start) >= hojeL)
-          .map((e: any) => ({ id: e.id, dia: diaLocal(e.start), start: e.start, end: e.end, agendaId: e.agendaId, notes: e.notes, description: e.description }));
-      };
-      let ex: any[] = plano.existentes || [];
-      try { ex = await lerEventos(); } catch { /* usa a cópia do 360 */ }
-      for (const d of de) {
-        const e = ex.find(x => x.dia === d.dia);
-        const corpo = { start: d.start, end: d.end, agendaId: d.agendaId, description: plano.descricao, notes: d.notes ?? e?.notes ?? "", ticketId: plano.ticketId };
-        try {
-          if (!e) { const r = await exact(token, "POST", "/event/schedule", corpo); feitos.push({ op: "criar", id: r?.id ?? null, ...corpo }); }
-          else if (e.start !== d.start || e.end !== d.end || e.agendaId !== d.agendaId) { await exact(token, "PUT", `/event/${e.id}`, corpo); feitos.push({ op: "alterar", id: e.id, ...corpo }); }
-        } catch (x: any) { erros.push(String(x.message || x)); }
+      const saida: any = {};
+      // 1) reserva: horário oferecido pelo WhatsApp, aguardando resposta → evento "RESERVA 360" na agenda do projetista
+      if (b.reserva) {
+        const { data: rp, error: er } = await sb.rpc("exact_reserva_plano", { p_id: b.id });
+        if (er) throw new Error(er.message);
+        const feitos: any[] = []; const erros: string[] = [];
+        const ex: any[] = rp?.existentes || [];
+        for (const d of rp?.desejadas || []) {
+          const e = ex.find((x: any) => x.dia === d.dia);
+          const corpo = { start: d.start, end: d.end, agendaId: d.agendaId, description: rp.descricao, notes: rp.notes };
+          try {
+            if (!e) { const r = await exact(token, "POST", "/event", corpo); feitos.push({ op: "criar", id: r?.id ?? null, ...corpo }); }
+            else if (e.start !== d.start || e.end !== d.end || e.agendaId !== d.agendaId) { await exact(token, "PUT", `/event/${e.id}`, corpo); feitos.push({ op: "alterar", id: e.id, ...corpo }); }
+          } catch (x: any) { erros.push(String(x.message || x)); }
+        }
+        for (const e of ex) if (!(rp?.desejadas || []).some((d: any) => d.dia === e.dia)) {
+          try { await exact(token, "DELETE", `/event/${e.id}`); feitos.push({ op: "excluir", id: e.id, start: e.start }); }
+          catch (x: any) { const m = String(x.message || x); if (/→ 404/.test(m)) feitos.push({ op: "excluir", id: e.id, start: e.start }); else erros.push(m); }
+        }
+        await sb.rpc("exact_reserva_ok", { p_id: b.id, p: { feitos, erros } });
+        saida.reserva = { feitos, erros };
       }
-      for (const e of ex) if (!de.some(d => d.dia === e.dia)) {
-        try { await exact(token, "DELETE", `/event/${e.id}`); feitos.push({ op: "excluir", id: e.id }); } catch (x: any) { erros.push(String(x.message || x)); }
+      // 2) agendamento do cliente (ligado ao ticket)
+      if (b.agenda !== false) {
+        const { data: plano, error } = await sb.rpc("exact_push_plano", { p_id: b.id });
+        if (error) throw new Error(error.message);
+        if (!plano || plano.pular) { saida.agenda = { pulado: plano?.motivo || "nada a fazer" }; return json({ ok: true, ...saida }); }
+        const feitos: any[] = []; const erros: string[] = [];
+        const de: any[] = plano.desejados || [];
+        const diaLocal = (iso: string) => new Date(new Date(iso).getTime() - 3 * 3600e3).toISOString().slice(0, 10);
+        const hojeL = diaLocal(new Date().toISOString());
+        const lerEventos = async () => {
+          const t = await exact(token, "GET", `/ticket/checklist/${plano.ticketId}`);
+          return (t?.events || []).filter((e: any) => diaLocal(e.start) >= hojeL)
+            .map((e: any) => ({ id: e.id, dia: diaLocal(e.start), start: e.start, end: e.end, agendaId: e.agendaId, notes: e.notes, description: e.description }));
+        };
+        let ex: any[] = plano.existentes || [];
+        try { ex = await lerEventos(); } catch { /* usa a cópia do 360 */ }
+        for (const d of de) {
+          const e = ex.find(x => x.dia === d.dia);
+          const corpo = { start: d.start, end: d.end, agendaId: d.agendaId, description: plano.descricao, notes: d.notes ?? e?.notes ?? "", ticketId: plano.ticketId };
+          try {
+            if (!e) { const r = await exact(token, "POST", "/event/schedule", corpo); feitos.push({ op: "criar", id: r?.id ?? null, ...corpo }); }
+            else if (e.start !== d.start || e.end !== d.end || e.agendaId !== d.agendaId) { await exact(token, "PUT", `/event/${e.id}`, corpo); feitos.push({ op: "alterar", id: e.id, ...corpo }); }
+          } catch (x: any) { erros.push(String(x.message || x)); }
+        }
+        for (const e of ex) if (!de.some(d => d.dia === e.dia)) {
+          try { await exact(token, "DELETE", `/event/${e.id}`); feitos.push({ op: "excluir", id: e.id }); } catch (x: any) { erros.push(String(x.message || x)); }
+        }
+        let eventos: any[] | null = null;
+        if (feitos.length) { try { eventos = await lerEventos(); } catch { eventos = null; } }
+        await sb.rpc("exact_push_ok", { p_id: b.id, p: { feitos, erros, eventos, ticketId: plano.ticketId } });
+        saida.agenda = { feitos, erros };
       }
-      let eventos: any[] | null = null;
-      if (feitos.length) { try { eventos = await lerEventos(); } catch { eventos = null; } }
-      await sb.rpc("exact_push_ok", { p_id: b.id, p: { feitos, erros, eventos, ticketId: plano.ticketId } });
-      return json({ ok: !erros.length, feitos, erros });
+      return json({ ok: true, ...saida });
     }
     return json({ erro: "ação desconhecida" }, 400);
   } catch (e: any) {
