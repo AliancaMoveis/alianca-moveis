@@ -76,7 +76,10 @@ export function agendaPlanilha(datas: string, agenda: string): { data: string; p
   while ((m = re.exec(s))) brutas.push(m[0]);
   const lista = brutas.length ? brutas.map(b => datasPlanilha(b)[0]).filter(Boolean) : datasPlanilha(s);
   const nomes = String(agenda || "").split(/[,;/]+/).map(x => x.trim()).filter(Boolean);
-  const pares = lista.map((d, i) => ({ data: d, projetista: nomes[i] ?? nomes[nomes.length - 1] ?? "" })).sort((a, b) => a.data.localeCompare(b.data));
+  // a coluna "Agenda" do Exact traz os nomes sem dizer qual é de qual dia: com mais de um nome, não dá para saber o projetista de cada dia
+  // → fica vazio e o 360 mantém o projetista que já tem (quem ajusta é a equipe na ficha)
+  const unicos = Array.from(new Set(nomes.map(n => n.toLowerCase())));
+  const pares = lista.map(d => ({ data: d, projetista: unicos.length === 1 ? nomes[0] : "" })).sort((a, b) => a.data.localeCompare(b.data));
   return pares.filter((p, i) => !pares.slice(0, i).some(x => x.data.slice(0, 10) === p.data.slice(0, 10)));
 }
 
