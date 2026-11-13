@@ -321,35 +321,36 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
   const nCupom = ps.filter(p => cupom(p.nome)).length, nPronta = ps.length - nCupom;
   const soma = (k: string, f?: (p: any) => boolean) => ps.filter(f || (() => true)).reduce((t, p) => t + (Number(p[k]) || 0), 0);
   const tetoCupons = soma("negociado", p => cupom(p.nome));
-  const linha = (r: string, val: ReactNode) => <div className="dv-l"><span>{r}</span><b>{val}</b></div>;
+  const linha = (r: string, val: ReactNode) => <div className="pjv-l"><span>{r}</span><b>{val}</b></div>;
   return <div className="body" style={{ gridTemplateColumns: "minmax(0,1fr) 320px" }}>
-    <style>{`.pj .dv-card{border:1px solid var(--pj-l);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--pj-bg,#fff)}.pj .dv-card h4{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--pj-s)}
-.pj .dv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 18px}@media (max-width:900px){.pj .dv-grid{grid-template-columns:1fr}}
-.pj .dv-l{display:flex;flex-direction:column;font-size:12.5px}.pj .dv-l span{color:var(--pj-f);font-size:11.5px}.pj .dv-l b{font-weight:600}
-.pj .dv-teto{border-radius:12px;padding:14px 16px;background:linear-gradient(135deg,#1f3a7a,#284b8f);color:#fff;margin-bottom:14px}.pj .dv-teto small{opacity:.85;font-weight:700;letter-spacing:.5px;text-transform:uppercase;font-size:11px}.pj .dv-teto b{display:block;font-size:28px;margin:2px 0}.pj .dv-teto div{font-size:12.5px;opacity:.92}
-.pj .dv-tab{width:100%;border-collapse:collapse;font-size:13px}.pj .dv-tab th{text-align:left;font-size:11.5px;color:var(--pj-s);background:var(--pj-l2);padding:7px 8px}.pj .dv-tab td{padding:7px 8px;border-top:1px solid var(--pj-l2)}.pj .dv-tab .n{text-align:right;white-space:nowrap}.pj .dv-tab tfoot td{font-weight:800;border-top:2px solid var(--pj-l)}
-.pj .dv-tag{font-size:10.5px;font-weight:800;border-radius:999px;padding:1px 7px;margin-left:6px}.pj .dv-tag.cp{background:#e8f1ff;color:#284b8f}.pj .dv-tag.lp{background:#fff1dc;color:#8a5d00}`}</style>
+    <style>{`.pj .pjv-card{display:block;border:1px solid var(--pj-l);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--pj-bg,#fff)}.pj .pjv-card h4{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--pj-s)}
+.pj .pjv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 18px}@media (max-width:900px){.pj .pjv-grid{grid-template-columns:1fr}}
+.pj .pjv-l{display:flex;flex-direction:column;font-size:12.5px}.pj .pjv-l span{color:var(--pj-f);font-size:11.5px}.pj .pjv-l b{font-weight:600}
+.pj .pjv-teto{border-radius:12px;padding:14px 16px;background:linear-gradient(135deg,#1f3a7a,#284b8f);color:#fff;margin-bottom:14px}.pj .pjv-teto small{opacity:.85;font-weight:700;letter-spacing:.5px;text-transform:uppercase;font-size:11px}.pj .pjv-teto b{display:block;font-size:28px;margin:2px 0}.pj .pjv-teto div{font-size:12.5px;opacity:.92}.pj .pjv-teto .pjv-neg{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.25);font-size:13.5px;opacity:1}.pj .pjv-teto .pjv-neg b{display:inline;font-size:15px;margin:0}
+.pj .pjv-tab{width:100%;border-collapse:collapse;font-size:13px}.pj .pjv-tab th{text-align:left;font-size:11.5px;color:var(--pj-s);background:var(--pj-l2);padding:7px 8px}.pj .pjv-tab td{padding:7px 8px;border-top:1px solid var(--pj-l2)}.pj .pjv-tab .n{text-align:right;white-space:nowrap}.pj .pjv-tab tfoot td{font-weight:800;border-top:2px solid var(--pj-l)}
+.pj .pjv-tag{font-size:10.5px;font-weight:800;border-radius:999px;padding:1px 7px;margin-left:6px}.pj .pjv-tag.cp{background:#e8f1ff;color:#284b8f}.pj .pjv-tag.lp{background:#fff1dc;color:#8a5d00}`}</style>
     <div>
-      <div className="dv-card"><h4>👤 Cliente</h4><div className="dv-grid">
+      <div className="pjv-card"><h4>👤 Cliente</h4><div className="pjv-grid">
         {linha("Nome", cl.nome || c.cliente)}{linha("Telefone", [cl.telefone, cl.telefone2].filter(Boolean).map(fmtTel).join(" / ") || "—")}{linha("E-mail", cl.email || "—")}
         <div style={{ gridColumn: "1/-1" }}>{linha("Endereço (Exact)", (cl.endereco || "—") + (cl.cep ? " · CEP " + String(cl.cep).replace(/^(\d{5})(\d{3})$/, "$1-$2") : ""))}</div>
       </div></div>
-      <div className="dv-card"><h4>🧾 Venda</h4><div className="dv-grid">
+      <div className="pjv-card"><h4>🧾 Venda</h4><div className="pjv-grid">
         {linha("Código da venda", v.codigo || c.pedido)}{linha("Código do ticket", v.ticket ?? "—")}{linha("Vendedor", cap(v.vendedor || c.vendedor || "") || "—")}
         {linha("Situação no Exact", v.situacao || "—")}{linha("Situação da venda", v.situacaoVenda || "—")}{linha("100% promissória", v.promissoria100 ? "Sim" : "Não")}
         {linha("Valor total bruto", brl(v.bruto))}{linha("Valor total negociado", brl(v.negociado))}{linha("Percentual de desconto", v.descontoPct == null ? "—" : String(v.descontoPct).replace(".", ",") + " %")}
         {v.obraEmAndamento && <div style={{ gridColumn: "1/-1", color: "#8a5d00", fontWeight: 700 }}>⚠️ Cliente com obra em andamento</div>}
       </div></div>
-      <div className="dv-card"><h4>📦 Produtos da venda <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 600 }}>· {nCupom} cupo{nCupom === 1 ? "m" : "ns"} de planejado{nPronta ? " · " + nPronta + " de linha pronta" : ""}</span></h4>
-        {ps.length ? <div style={{ overflowX: "auto" }}><table className="dv-tab"><thead><tr><th>Nome</th><th className="n">Qtd</th><th className="n">Vlr unit.</th><th className="n">Vlr total</th><th className="n">Vlr negociado</th></tr></thead>
-          <tbody>{ps.map((p, i) => <tr key={i}><td>{p.nome}<span className={"dv-tag " + (cupom(p.nome) ? "cp" : "lp")}>{cupom(p.nome) ? "planejado" : "linha pronta"}</span></td><td className="n">{p.qtd}</td><td className="n">{brl(p.unitario)}</td><td className="n">{brl(p.total)}</td><td className="n"><b>{brl(p.negociado)}</b></td></tr>)}</tbody>
+      <div className="pjv-card"><h4>📦 Produtos da venda <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 600 }}>· {nCupom} cupo{nCupom === 1 ? "m" : "ns"} de planejado{nPronta ? " · " + nPronta + " de linha pronta" : ""}</span></h4>
+        {ps.length ? <div style={{ overflowX: "auto" }}><table className="pjv-tab"><thead><tr><th>Nome</th><th className="n">Qtd</th><th className="n">Vlr unit.</th><th className="n">Vlr total</th><th className="n">Vlr negociado</th></tr></thead>
+          <tbody>{ps.map((p, i) => <tr key={i}><td>{p.nome}<span className={"pjv-tag " + (cupom(p.nome) ? "cp" : "lp")}>{cupom(p.nome) ? "planejado" : "linha pronta"}</span></td><td className="n">{p.qtd}</td><td className="n">{brl(p.unitario)}</td><td className="n">{brl(p.total)}</td><td className="n"><b>{brl(p.negociado)}</b></td></tr>)}</tbody>
           <tfoot><tr><td>Total</td><td className="n">{ps.reduce((t, p) => t + (Number(p.qtd) || 0), 0)}</td><td /><td className="n">{brl(soma("total"))}</td><td className="n">{brl(soma("negociado"))}</td></tr></tfoot></table></div>
           : <div className="note">O Exact não trouxe produtos para esta venda.</div>}
       </div>
     </div>
     <div>
-      <div className="dv-teto"><small>Teto para o projeto final</small><b>{brl(nCupom ? tetoCupons : v.negociado)}</b>
-        <div>{nCupom ? "Valor negociado dos cupons de planejado" + (nPronta ? " (sem a linha pronta)" : "") : "Valor negociado da venda"}. O projeto final do checklist não pode passar disso — se o cliente pedir mudanças que aumentem o valor, a diferença precisa ser cobrada.</div></div>
+      <div className="pjv-teto"><small>Teto para o projeto final (valor bruto)</small><b>{brl(nCupom ? soma("total", p => cupom(p.nome)) : v.bruto)}</b>
+        <div>{nCupom ? "Valor bruto dos cupons de planejado" + (nPronta ? " (sem a linha pronta)" : "") : "Valor bruto da venda"} — é o valor que se compara com o orçamento do Promob. O projeto final do checklist não pode passar disso; se o cliente pedir mudanças que aumentem o valor, a diferença precisa ser cobrada.</div>
+        <div className="pjv-neg">Valor negociado: <b>{brl(nCupom ? tetoCupons : v.negociado)}</b>{v.descontoPct != null ? " · desconto " + String(v.descontoPct).replace(".", ",") + " %" : ""}</div></div>
       <div className="box"><h4>Resumo</h4><div className="hist">
         <div>Bruto <b>{brl(v.bruto)}</b></div><div>Desconto <b>{v.descontoPct == null ? "—" : String(v.descontoPct).replace(".", ",") + " %"}</b></div><div>Negociado <b>{brl(v.negociado)}</b></div>
         {nPronta > 0 && <div>Linha pronta (negociado) <b>{brl(soma("negociado", p => !cupom(p.nome)))}</b></div>}</div></div>
@@ -476,7 +477,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
             <div>Tel <b>{tels.length ? tels.map(fmtTel).join(" / ") : "—"}</b></div>
             <div>Vendedor <b>{cap(c.vendedor || "") || "—"}</b></div>
             <div>Medição <b>{c.medida ? (MEDIDA_CURTA[c.medida.etapa] || c.medida.etapa) + (c.medida.medidor && c.medida.medidor !== "—" ? " · " + primeiroNome(c.medida.medidor) : "") : c.minhaVisita ? "Minha Visita" : "—"}</b></div>
-            <div style={{ gridColumn: "1/-1" }}>📍 <b>{endereco(c) || "endereço não encontrado na base"}</b></div>
+            <div style={{ gridColumn: "1/-1" }}>📍 <b>{endereco(c) || arqs?.dados?.cliente?.endereco || (arqs === null ? "…" : "endereço não encontrado")}</b></div>
           </div></div>
         <div className="acts">
           {tels[0] && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }} onClick={() => abrirWhats("https://wa.me/" + sanitizeWhats(tels[0]))}>💬 WhatsApp</button>}
