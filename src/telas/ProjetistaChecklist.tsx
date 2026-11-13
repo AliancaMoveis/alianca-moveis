@@ -160,7 +160,7 @@ const CSS = `
 .pj .barra{position:sticky;bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin-top:12px;border:1px solid var(--pj-l);border-radius:10px;background:var(--pj-bg);box-shadow:0 4px 18px rgba(0,0,0,.12)}
 `;
 
-type Arqs = { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null };
+type Arqs = { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null; dados?: any };
 
 export default function ProjetistaChecklist() {
   const { toast, st } = useApp() as any;
@@ -293,6 +293,54 @@ function LinhaCliente({ e, hj, segura, onAbrir }: { e: any; hj: string; segura: 
   </div>;
 }
 
+
+// ---------------- cliente e venda (dados do Exact; valores só para o projetista — nunca saem na impressão do cliente) ----------------
+const brl = (n: number | null | undefined) => n == null || isNaN(Number(n)) ? "—" : Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; erro: string; c: any }) {
+  if (carregando) return <div className="body" style={{ gridTemplateColumns: "1fr" }}><div className="empty">Buscando os dados da venda no Exact…</div></div>;
+  if (!d) return <div className="body" style={{ gridTemplateColumns: "1fr" }}><div className="note">Não foi possível trazer os dados da venda do Exact{erro ? " (" + erro + ")" : ""}. Confira se a venda {c.pedido} já tem ticket de checklist no Exact.</div></div>;
+  const v = d.venda || {}, cl = d.cliente || {}, ps: any[] = d.produtos || [];
+  const cupom = (n: string) => /^#?\s*cupom/i.test(n);
+  const nCupom = ps.filter(p => cupom(p.nome)).length, nPronta = ps.length - nCupom;
+  const soma = (k: string, f?: (p: any) => boolean) => ps.filter(f || (() => true)).reduce((t, p) => t + (Number(p[k]) || 0), 0);
+  const tetoCupons = soma("negociado", p => cupom(p.nome));
+  const linha = (r: string, val: ReactNode) => <div className="dv-l"><span>{r}</span><b>{val}</b></div>;
+  return <div className="body" style={{ gridTemplateColumns: "minmax(0,1fr) 320px" }}>
+    <style>{`.pj .dv-card{border:1px solid var(--pj-l);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--pj-bg,#fff)}.pj .dv-card h4{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--pj-s)}
+.pj .dv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 18px}@media (max-width:900px){.pj .dv-grid{grid-template-columns:1fr}}
+.pj .dv-l{display:flex;flex-direction:column;font-size:12.5px}.pj .dv-l span{color:var(--pj-f);font-size:11.5px}.pj .dv-l b{font-weight:600}
+.pj .dv-teto{border-radius:12px;padding:14px 16px;background:linear-gradient(135deg,#1f3a7a,#284b8f);color:#fff;margin-bottom:14px}.pj .dv-teto small{opacity:.85;font-weight:700;letter-spacing:.5px;text-transform:uppercase;font-size:11px}.pj .dv-teto b{display:block;font-size:28px;margin:2px 0}.pj .dv-teto div{font-size:12.5px;opacity:.92}
+.pj .dv-tab{width:100%;border-collapse:collapse;font-size:13px}.pj .dv-tab th{text-align:left;font-size:11.5px;color:var(--pj-s);background:var(--pj-l2);padding:7px 8px}.pj .dv-tab td{padding:7px 8px;border-top:1px solid var(--pj-l2)}.pj .dv-tab .n{text-align:right;white-space:nowrap}.pj .dv-tab tfoot td{font-weight:800;border-top:2px solid var(--pj-l)}
+.pj .dv-tag{font-size:10.5px;font-weight:800;border-radius:999px;padding:1px 7px;margin-left:6px}.pj .dv-tag.cp{background:#e8f1ff;color:#284b8f}.pj .dv-tag.lp{background:#fff1dc;color:#8a5d00}`}</style>
+    <div>
+      <div className="dv-card"><h4>👤 Cliente</h4><div className="dv-grid">
+        {linha("Nome", cl.nome || c.cliente)}{linha("Telefone", [cl.telefone, cl.telefone2].filter(Boolean).map(fmtTel).join(" / ") || "—")}{linha("E-mail", cl.email || "—")}
+        <div style={{ gridColumn: "1/-1" }}>{linha("Endereço (Exact)", (cl.endereco || "—") + (cl.cep ? " · CEP " + String(cl.cep).replace(/^(\d{5})(\d{3})$/, "$1-$2") : ""))}</div>
+      </div></div>
+      <div className="dv-card"><h4>🧾 Venda</h4><div className="dv-grid">
+        {linha("Código da venda", v.codigo || c.pedido)}{linha("Código do ticket", v.ticket ?? "—")}{linha("Vendedor", cap(v.vendedor || c.vendedor || "") || "—")}
+        {linha("Situação no Exact", v.situacao || "—")}{linha("Situação da venda", v.situacaoVenda || "—")}{linha("100% promissória", v.promissoria100 ? "Sim" : "Não")}
+        {linha("Valor total bruto", brl(v.bruto))}{linha("Valor total negociado", brl(v.negociado))}{linha("Percentual de desconto", v.descontoPct == null ? "—" : String(v.descontoPct).replace(".", ",") + " %")}
+        {v.obraEmAndamento && <div style={{ gridColumn: "1/-1", color: "#8a5d00", fontWeight: 700 }}>⚠️ Cliente com obra em andamento</div>}
+      </div></div>
+      <div className="dv-card"><h4>📦 Produtos da venda <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 600 }}>· {nCupom} cupo{nCupom === 1 ? "m" : "ns"} de planejado{nPronta ? " · " + nPronta + " de linha pronta" : ""}</span></h4>
+        {ps.length ? <div style={{ overflowX: "auto" }}><table className="dv-tab"><thead><tr><th>Nome</th><th className="n">Qtd</th><th className="n">Vlr unit.</th><th className="n">Vlr total</th><th className="n">Vlr negociado</th></tr></thead>
+          <tbody>{ps.map((p, i) => <tr key={i}><td>{p.nome}<span className={"dv-tag " + (cupom(p.nome) ? "cp" : "lp")}>{cupom(p.nome) ? "planejado" : "linha pronta"}</span></td><td className="n">{p.qtd}</td><td className="n">{brl(p.unitario)}</td><td className="n">{brl(p.total)}</td><td className="n"><b>{brl(p.negociado)}</b></td></tr>)}</tbody>
+          <tfoot><tr><td>Total</td><td className="n">{ps.reduce((t, p) => t + (Number(p.qtd) || 0), 0)}</td><td /><td className="n">{brl(soma("total"))}</td><td className="n">{brl(soma("negociado"))}</td></tr></tfoot></table></div>
+          : <div className="note">O Exact não trouxe produtos para esta venda.</div>}
+      </div>
+    </div>
+    <div>
+      <div className="dv-teto"><small>Teto para o projeto final</small><b>{brl(nCupom ? tetoCupons : v.negociado)}</b>
+        <div>{nCupom ? "Valor negociado dos cupons de planejado" + (nPronta ? " (sem a linha pronta)" : "") : "Valor negociado da venda"}. O projeto final do checklist não pode passar disso — se o cliente pedir mudanças que aumentem o valor, a diferença precisa ser cobrada.</div></div>
+      <div className="box"><h4>Resumo</h4><div className="hist">
+        <div>Bruto <b>{brl(v.bruto)}</b></div><div>Desconto <b>{v.descontoPct == null ? "—" : String(v.descontoPct).replace(".", ",") + " %"}</b></div><div>Negociado <b>{brl(v.negociado)}</b></div>
+        {nPronta > 0 && <div>Linha pronta (negociado) <b>{brl(soma("negociado", p => !cupom(p.nome)))}</b></div>}</div></div>
+      <div className="hint">🔒 Valores só para conferência interna do checklist. Não aparecem na impressão nem em nada que vai para o cliente.</div>
+    </div>
+  </div>;
+}
+
 // ---------------- ficha do cliente ----------------
 type Img = { fonte: string; id?: string; url?: string; path?: string; nome: string };
 type Amb = AmbTermo & { _k: string; origem?: string; escritoPor?: string; codigos?: string[]; ficha?: Record<string, boolean | null>; fichaObs?: string; obs?: string; imagens?: Img[]; listagens?: string[]; itensDe?: string | null };
@@ -301,7 +349,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
   const { R, setModal } = useApp() as any;
   const me = R?.me?.()?.nome ? primeiroNome(R.me().nome) : proj;
   const t0 = c.termo || {};
-  const [aba, setAba] = useState<"venda" | "medicao" | "checklist" | "historico">(t0.iniciadoEm && !termoFinal(c) ? "checklist" : "venda");
+  const [aba, setAba] = useState<"dados" | "venda" | "medicao" | "checklist" | "historico">(t0.iniciadoEm && !termoFinal(c) ? "checklist" : "dados");
   const [arqs, setArqs] = useState<Arqs | null>(null);
   const [arqErro, setArqErro] = useState("");
   const setVer = (a: any) => setModal(<Visualizar a={a} c={c} onFechar={() => setModal(null)} />);
@@ -377,11 +425,14 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
         </div>
       </div>
       <div className="tabs">
-        <button className={"tab" + (aba === "venda" ? " on" : "")} onClick={() => setAba("venda")}>🧾 Venda{nArqVenda !== null && <span className="c">{nArqVenda}</span>}</button>
+        <button className={"tab" + (aba === "dados" ? " on" : "")} onClick={() => setAba("dados")}>👤 Cliente e venda</button>
+        <button className={"tab" + (aba === "venda" ? " on" : "")} onClick={() => setAba("venda")}>📁 Arquivos da venda{nArqVenda !== null && <span className="c">{nArqVenda}</span>}</button>
         <button className={"tab" + (aba === "medicao" ? " on" : "")} onClick={() => setAba("medicao")}>📐 Medição{nMed !== null && <span className="c">{nMed}</span>}</button>
         {!reserva && <button className={"tab" + (aba === "checklist" ? " on" : "")} onClick={() => setAba("checklist")}>✏️ Checklist<span className="c">{e5 ? "realizado" : "etapa " + etapaAtual + " de 5"}</span></button>}
         <button className={"tab" + (aba === "historico" ? " on" : "")} onClick={() => setAba("historico")}>🕘 Histórico</button>
       </div>
+
+      {aba === "dados" && <DadosVenda d={arqs?.dados} carregando={arqs === null} erro={arqErro} c={c} />}
 
       {aba === "venda" && <div className="body">
         <div>
