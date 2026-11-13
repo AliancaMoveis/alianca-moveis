@@ -1,6 +1,12 @@
 // Todas as gravações passam por funções do banco, que conferem a permissão e registram o histórico.
 import { sb } from "./supabase";
 
+/** chama uma função do Supabase com o login da pessoa (para respostas em arquivo e envio multipart) */
+async function chamarFuncao(nome: string, corpo: BodyInit, ct?: string): Promise<Response> {
+  const tok = (await sb.auth.getSession()).data.session?.access_token || "";
+  const base = (sb as any).supabaseUrl || (sb as any).rest?.url?.replace(/\/rest\/v1\/?$/, "") || "";
+  return fetch(base + "/functions/v1/" + nome, { method: "POST", body: corpo, headers: { Authorization: "Bearer " + tok, apikey: (sb as any).supabaseKey || "", ...(ct ? { "Content-Type": ct } : {}) } });
+}
 async function rpc<T = any>(fn: string, args: Record<string, any> = {}): Promise<T> {
   const { data, error } = await sb.rpc(fn, args);
   if (error) throw new Error(error.message || "Não foi possível concluir a ação");
@@ -260,6 +266,32 @@ export const A = {
   vendedorAssumir: (id: string) => rpc("vendedor_assumir", { p_id: id }),
   salvarMeusDados: (nomeCompleto: string, telefone: string) => rpc("salvar_meus_dados", { p_nome_completo: nomeCompleto, p_telefone: telefone }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),
+  // área do projetista do checklist (agenda dele + termo de ciência a partir da listagem do Promob — sem valores)
+  ckProjetistaEu: () => rpc<{ projetista: string | null; podeTodos: boolean; projetistas: string[] }>("ck_projetista_eu"),
+  ckProjetistaAgenda: (proj: string | null, de: string, ate: string) => rpc<any[]>("ck_projetista_agenda", { p_proj: proj, p_de: de, p_ate: ate }),
+  /** acao: salvar · iniciar · impressao · assinado · realizado (realizado só com impressão + digitalizado assinado) */
+  ckProjetistaSalvar: (id: string, p: any, acao: "salvar" | "iniciar" | "impressao" | "assinado" | "realizado" = "salvar") => rpc("ck_projetista_salvar", { p_id: id, p, p_acao: acao }),
+  /** arquivos da venda (Exact), fotos da medição (Exact + medidas do 360) e o que o checklist subiu — função checklist-arquivos */
+  ckArquivos: async (id: string) => {
+    const { data, error } = await sb.functions.invoke("checklist-arquivos", { body: { acao: "arquivos", id } });
+    if (error) { let m = error.message; try { const j = await (error as any).context?.json?.(); if (j?.erro) m = j.erro; } catch { /* */ } throw new Error(m || "Não foi possível buscar os arquivos"); }
+    if (data?.erro) throw new Error(data.erro);
+    return data as { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null };
+  },
+  /** conteúdo de um arquivo da venda (Exact) — volta como Blob para miniatura / visualização / download */
+  ckBaixar: async (id: string, anexo: string) => {
+    const r = await chamarFuncao("checklist-arquivos", JSON.stringify({ acao: "baixar", id, anexo }), "application/json");
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.erro || "Não foi possível abrir o arquivo"); }
+    return await r.blob();
+  },
+  /** sobe um arquivo do checklist (assinado, imagem, listagem, .promob): guarda no 360 e manda para o ticket do Exact quando cabe */
+  ckSubir: async (id: string, finalidade: "assinado" | "imagem" | "arquivo" | "listagem" | "promob", file: File) => {
+    const fd = new FormData(); fd.append("id", id); fd.append("finalidade", finalidade); fd.append("file", file, file.name);
+    const r = await chamarFuncao("checklist-arquivos", fd);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível enviar " + file.name);
+    return j as { path: string; nome: string; tipo: string; url: string; exact: boolean; exactErro: string };
+  },
   salvarChecklistAgenda: (p: any) => rpc("salvar_checklist_agenda", { p }),
   checklistExcluir: (ids: string[]) => rpc<number>("checklist_excluir", { p_ids: ids }),
   checklistPedirMedida: (id: string, obs: string) => rpc<string>("checklist_pedir_medida", { p_id: id, p_obs: obs }),

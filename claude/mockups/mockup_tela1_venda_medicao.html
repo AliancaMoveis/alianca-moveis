@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>360 · Área do projetista (mockup)</title>
+<style>
+:root{--bg:#eef0f2;--surface:#fff;--surface-2:#f7f8f9;--ink:#1a1d21;--soft:#5a6270;--faint:#8b94a3;--line:#e0e3e8;--line2:#eceef1;--pri:#284b8f;--pri-soft:#eaf0fb;--ok:#3f8f4f;--ok-bg:#e6f4e9;--warn:#c98a12;--warn-bg:#faf1df;--wa:#1fa855;--side:#1f2a3b;--jul:#d6336c}
+*{box-sizing:border-box}body{margin:0;font:13.5px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--bg)}
+.app{display:grid;grid-template-columns:210px 1fr;height:1000px}
+.side{background:var(--side);color:#cfd6e2;padding:16px 12px}
+.logo{font-weight:900;color:#fff;font-size:17px;letter-spacing:.5px;margin-bottom:18px}.logo small{display:block;font-weight:500;color:#8fa0bb;font-size:11px;letter-spacing:0}
+.nav a{display:flex;gap:8px;padding:8px 10px;border-radius:8px;color:#cfd6e2;text-decoration:none;margin-bottom:2px;font-size:13px}
+.nav a.on{background:#2f3e57;color:#fff;font-weight:700}
+.nav .sec{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:#71819b;margin:14px 10px 6px}
+.me{position:absolute;bottom:16px;left:12px;width:186px;background:#2a3547;border-radius:10px;padding:10px;font-size:12px}.me b{color:#fff}
+main{padding:16px 20px;overflow:hidden}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.top h1{font-size:20px;margin:0}.top .sub{color:var(--soft)}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-weight:600;font-size:12.5px}
+.chip.b{background:var(--pri-soft);color:var(--pri);border-color:transparent}.chip.g{background:var(--ok-bg);color:var(--ok);border-color:transparent}.chip.w{background:var(--warn-bg);color:#8a5d00;border-color:transparent}
+.sp{flex:1}
+.grid{display:grid;grid-template-columns:330px 1fr;gap:16px;height:900px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px rgba(20,28,45,.05),0 4px 16px rgba(20,28,45,.06)}
+.lista{padding:12px;overflow:hidden}
+.dia{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--faint);font-weight:800;margin:6px 4px 8px}
+.it{border:1px solid var(--line2);border-left:4px solid var(--jul);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff}
+.it.on{border-color:var(--pri);border-left-color:var(--pri);background:var(--pri-soft)}
+.it .h{display:flex;justify-content:space-between;font-weight:800}.it .h span{color:var(--pri)}
+.it .n{font-weight:700;margin:2px 0}.it .m{color:var(--soft);font-size:12px}
+.pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;margin-top:5px;margin-right:4px}
+.p-ok{background:var(--ok-bg);color:var(--ok)}.p-w{background:var(--warn-bg);color:#8a5d00}.p-b{background:var(--pri-soft);color:var(--pri)}.p-g{background:#eef1f6;color:#3b4558}
+.ficha{padding:0;display:flex;flex-direction:column;overflow:hidden}
+.fh{padding:16px 20px;border-bottom:1px solid var(--line2);display:flex;gap:18px;align-items:flex-start}
+.fh h2{margin:0 0 4px;font-size:19px}.fh .meta{color:var(--soft);font-size:12.5px;display:grid;grid-template-columns:auto auto auto;gap:3px 22px}
+.fh .meta b{color:var(--ink)}
+.acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:330px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;font-weight:700;font-size:12.5px;white-space:nowrap}
+.btn.pri{background:var(--pri);color:#fff;border-color:var(--pri)}.btn.wa{background:var(--wa);color:#fff;border-color:var(--wa)}.btn.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+.tabs{display:flex;gap:4px;padding:10px 20px 0;border-bottom:1px solid var(--line2)}
+.tab{padding:9px 14px;border-radius:8px 8px 0 0;font-weight:700;color:var(--soft)}.tab.on{color:var(--pri);border-bottom:3px solid var(--pri)}
+.tab .c{background:#eef1f6;border-radius:999px;padding:0 7px;font-size:11px;margin-left:5px}
+.body{padding:16px 20px;display:grid;grid-template-columns:1fr 300px;gap:18px;overflow:hidden}
+.sec{font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--soft);margin:2px 0 10px;display:flex;align-items:center;gap:8px}
+.sec .src{font-weight:700;text-transform:none;letter-spacing:0;font-size:11px;padding:1px 8px;border-radius:999px}
+.files{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.f{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.th{height:104px;display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;position:relative}
+.th.img1{background:linear-gradient(135deg,#c9b79c,#8d7a5f)}.th.img2{background:linear-gradient(135deg,#9fb3c8,#5d7690)}.th.img3{background:linear-gradient(135deg,#d7cfc4,#a39582)}.th.img4{background:linear-gradient(135deg,#b7c4a9,#76866a)}
+.th.pdf{background:#fff3f2;color:#c23b3b}.th.promob{background:#eef3ff;color:#284b8f}
+.th .tag{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-weight:800;border-radius:5px;padding:1px 6px}
+.f .fi{padding:7px 9px;font-size:12px}.f .fi b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.f .fi span{color:var(--faint);font-size:11px}
+.f .fi .a{float:right;color:var(--pri);font-weight:800;font-size:11px}
+.mini{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:8px}
+.mini .th{height:68px;border-radius:8px;font-size:18px}
+.note{background:var(--surface-2);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;color:var(--soft);font-size:12.5px}
+.box{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px;background:#fff}
+.box h4{margin:0 0 8px;font-size:13px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12.5px}.kv span{color:var(--soft)}
+.ck label{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12.5px}.ck i{width:16px;height:16px;border-radius:4px;border:2px solid var(--ok);display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:11px;color:#fff;background:var(--ok)}
+.ck i.no{background:#fff;border-color:var(--line)}
+.drop{border:2px dashed #b9c6e2;border-radius:12px;padding:14px;text-align:center;color:var(--pri);font-weight:700;background:var(--pri-soft);font-size:12.5px}
+.hist{font-size:12px;color:var(--soft)}.hist div{padding:4px 0;border-bottom:1px solid var(--line2)}.hist b{color:var(--ink)}
+.legend{position:absolute;right:24px;top:18px;background:#fffbe6;border:1px solid #f0d77a;border-radius:10px;padding:8px 12px;font-size:12px;color:#6b5400;font-weight:600}
+</style></head><body>
+<div class="app">
+ <aside class="side" style="position:relative">
+  <div class="logo">ALIANÇA 360<small>Checklist · Projetista</small></div>
+  <nav class="nav">
+   <a class="on">🗓️ Meu dia</a><a>📋 Meus checklists</a><a>📁 Arquivos dos clientes</a><a>🔔 Avisos <span style="margin-left:auto;background:#c23b3b;color:#fff;border-radius:999px;padding:0 7px;font-size:11px">2</span></a>
+   <div class="sec">Consulta</div><a>🔎 Buscar venda</a><a>📊 Minha produtividade</a>
+  </nav>
+  <div class="me"><b>Juliana</b><br>Projetista do checklist<br><span style="color:#8fa0bb">Agenda sincronizada com o Exact ✓</span></div>
+ </aside>
+ <main style="position:relative">
+  <div class="legend">Mockup — dados fictícios</div>
+  <div class="top"><h1>Meu dia</h1><span class="sub">terça-feira, 24/11/2026</span>
+   <span class="chip b">3 checklists hoje</span><span class="chip g">2 presenças confirmadas</span><span class="chip w">1 aguardando confirmação</span><span class="sp"></span>
+   <span class="chip">◀ Hoje ▶</span></div>
+  <div class="grid">
+   <section class="card lista">
+    <div class="dia">Hoje · 24/11</div>
+    <div class="it on"><div class="h">09:00 – 11:00<span>2 h</span></div><div class="n">Patrícia Almeida Rocha</div>
+     <div class="m">Venda 1321450 · Água Verde, Curitiba</div><div class="m">Cozinha, Lavanderia</div>
+     <span class="pill p-ok">✅ Presença confirmada</span><span class="pill p-b">📁 12 arquivos</span></div>
+    <div class="it"><div class="h">11:00 – 13:00<span>2 h</span></div><div class="n">Rodrigo Mendes Lacerda</div>
+     <div class="m">Venda 1320877 · Portão, Curitiba</div><div class="m">Dormitório casal</div>
+     <span class="pill p-ok">✅ Presença confirmada</span><span class="pill p-b">📁 7 arquivos</span></div>
+    <div class="it"><div class="h">17:00 – 19:00<span>2 h</span></div><div class="n">Família Bortolini</div>
+     <div class="m">Venda 1319964 · São José dos Pinhais</div><div class="m">Banheiro, Lavabo</div>
+     <span class="pill p-w">⏳ Presença a confirmar</span><span class="pill p-g">⚠️ sem fotos da medição</span></div>
+    <div class="dia" style="margin-top:14px">Amanhã · 25/11</div>
+    <div class="it"><div class="h">09:00 – 11:00<span>2 h</span></div><div class="n">Marcos Vinícius Teixeira</div><div class="m">Venda 1321102 · Bacacheri</div>
+     <span class="pill p-ok">✅ Presença confirmada</span></div>
+    <div class="it" style="border-left-color:#c98a12;background:#fffaf0"><div class="h">11:00 – 13:00<span style="color:#8a5d00">reserva</span></div><div class="n">Ana Paula Ferreira</div><div class="m">⏳ Reserva · aguardando resposta<br>sem resposta há 1 dia · libera sozinha em 25/11 16:20</div></div>
+   </section>
+   <section class="card ficha">
+    <div class="fh">
+     <div style="flex:1"><h2>Patrícia Almeida Rocha</h2>
+      <div class="meta"><div>Venda <b>1321450</b></div><div>Horário <b>24/11 · 09:00–11:00</b></div><div>Ambientes <b>Cozinha, Lavanderia</b></div>
+       <div>Tel <b>(41) 9-9876-1234</b></div><div>Vendedor <b>Carlos Henrique</b></div><div>Medição <b>Aprovada · César</b></div>
+       <div style="grid-column:1/-1">📍 <b>Rua das Araucárias, 812 · ap 304 · Água Verde, Curitiba</b></div></div></div>
+     <div class="acts"><span class="btn wa">💬 WhatsApp</span><span class="btn pri">▶ Iniciar checklist</span><span class="btn ok">✅ Marcar realizado</span></div>
+    </div>
+    <div class="tabs"><div class="tab on">🧾 Venda<span class="c">6</span></div><div class="tab">📐 Medição<span class="c">13</span></div><div class="tab">✏️ Checklist<span class="c">2</span></div><div class="tab">🕘 Histórico</div></div>
+    <div class="body">
+     <div>
+      <div class="sec">Arquivos da venda <span class="src p-b">vindos do Exact</span></div>
+      <div class="files">
+       <div class="f"><div class="th img1"><span class="tag">JPG</span>🖼️</div><div class="fi"><a class="a">ampliar</a><b>img1.jpg</b><span>11/11 · 2,8 MB</span></div></div>
+       <div class="f"><div class="th img2"><span class="tag">JPG</span>🖼️</div><div class="fi"><a class="a">ampliar</a><b>img2.jpg</b><span>11/11 · 3,1 MB</span></div></div>
+       <div class="f"><div class="th pdf"><span class="tag" style="background:#c23b3b">PDF</span>📄</div><div class="fi"><a class="a">abrir</a><b>Imagem cozinha.pdf</b><span>11/11 · 4 págs</span></div></div>
+       <div class="f"><div class="th pdf"><span class="tag" style="background:#c23b3b">PDF</span>💲</div><div class="fi"><a class="a">abrir</a><b>Orçamento completo.pdf</b><span>11/11 · 2 págs</span></div></div>
+       <div class="f"><div class="th promob"><span class="tag" style="background:#284b8f">PROMOB</span>📦</div><div class="fi"><a class="a">⬇ baixar</a><b>cozinha patricia.promob</b><span>11/11 · 6,4 MB</span></div></div>
+       <div class="f"><div class="th promob"><span class="tag" style="background:#284b8f">PROMOB</span>📦</div><div class="fi"><a class="a">⬇ baixar</a><b>lavanderia.promob</b><span>11/11 · 2,1 MB</span></div></div>
+      </div>
+      <div class="sec">Medição <span class="src p-ok">Exact · aprovada 11/11</span><span class="src p-g">+ medidas do 360 / Minha Visita</span><span style="margin-left:auto;text-transform:none;letter-spacing:0;color:var(--pri)">ver todas (13) →</span></div>
+      <div class="mini"><div class="th img3">📷</div><div class="th img1">📷</div><div class="th img4">📷</div><div class="th img2">📷</div><div class="th img3">📷</div><div class="th img4">📷</div><div class="th" style="background:#eef1f6;color:#3b4558;font-size:13px;font-weight:800">+7</div></div>
+      <div class="note">📐 <b>Medidas do 360 (Minha Visita):</b> parede A 3,42 m · parede B 2,18 m · pé-direito 2,60 m · tomada a 1,10 m do piso — anexado pela consultora em 08/11.</div>
+     </div>
+     <div>
+      <div class="box"><h4>Ambiente pronto para montagem?</h4><div class="ck">
+       <label><i>✓</i> Sem obra ou reforma em andamento</label><label><i>✓</i> Piso finalizado</label><label><i>✓</i> Pintura finalizada</label><label><i class="no"></i> Gesso / elétrica finalizados</label></div></div>
+      <div class="box"><h4>Anexar do checklist</h4><div class="drop">⬆ Arraste fotos, PDF ou .promob<br><span style="font-weight:500;color:var(--soft)">fica no 360 e vai para o ticket no Exact</span></div></div>
+      <div class="box"><h4>Histórico</h4><div class="hist">
+       <div><b>12/11 16:21</b> · Agendado pelo 360 → enviado ao Exact ✓</div><div><b>12/11 16:40</b> · Presença confirmada pelo WhatsApp</div><div><b>11/11 10:44</b> · Arquivos da venda anexados (Exact)</div></div></div>
+     </div>
+    </div>
+   </section>
+  </div>
+ </main>
+</div></body></html>

@@ -9,6 +9,7 @@ import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, san
 import { Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
 import { SeloMedidaVenda } from "./Medidas";
+import { abrirTermo } from "./ProjetistaChecklist";
 
 export const ETAPA_CK: Record<string, [string, string]> = {
   a_contatar: ["A contatar", "var(--primary)"], aguardando: ["Mensagem enviada · aguardando resposta", "var(--warn)"], outra_data: ["Aguardando · pediu outra data", "var(--st-respondida)"],
@@ -264,7 +265,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
 }
 
 function CartaoCk({ c, aba }: any) {
-  const { abrirDetalhe, setModal, executar, st } = useApp() as any;
+  const { abrirDetalhe, setModal, executar, st, toast } = useApp() as any;
   const k = ck(c), e = etapaCk(c), g = grupoCk(c), [nome, cor0] = ETAPA_CK[e] || [e, "var(--line)"];
   const segura = cfgAgenda(st).seguraDias, venc = reservaVencida(c, cfgAgenda(st)), atrasoV = diasDesde(k.ultimoContato) - segura;
   const liberar = () => { if (confirm("🔓 Liberar a agenda de " + c.cliente + "?\n\nO horário de " + fmtDateTime(k.proposta) + (k.propostaProjetista ? " com " + k.propostaProjetista : "") + " fica livre e o cliente volta para “A agendar”. O histórico das tentativas fica salvo.")) executar(() => A.checklistRegistrar(c.id, { acao: "liberar" }), "Agenda liberada — cliente voltou para A agendar"); };
@@ -322,6 +323,8 @@ function CartaoCk({ c, aba }: any) {
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="desmarcar" />)}>❌ Desmarcar</button>}
           <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : g === "agendado" ? "Realizado / outros" : "Registrar resultado"}</button>
           {c.status !== "concluida" && g !== "agendar" && <button className="btn sm" onClick={() => setModal(<ModalFinalizarCk c={c} />)}>✓ Finalizar atendimento</button>}
+          {k.termo && (k.termo.ambientes || []).length > 0 && <button className="btn sm" title={(k.termo.finalizadoEm ? "Termo finalizado em " + fmtDateTime(k.termo.finalizadoEm) : "Rascunho do projetista") + (k.termo.salvoPor ? " · " + k.termo.salvoPor : "")}
+            onClick={() => abrirTermo({ ...c, ...k, vendedor: k.planilha?.vendedor, local: k.local }, k.termo, k.projetista || "", toast)}>📄 Termo{k.termo.finalizadoEm ? "" : " (rascunho)"}</button>}
           <button className="btn ghost sm" onClick={() => setModal(<ModalNotas c={c} />)} title="Mensagens enviadas e anotações">📝{notas ? " " + notas : ""}</button>
           <button className="btn ghost sm" onClick={() => abrirDetalhe(c.id)}>Ficha</button>
           <button className="btn ghost sm" title="Excluir cliente do checklist" style={{ color: "var(--danger)" }} onClick={() => setModal(<ConfirmaExcluir ids={[c.id]} rotulo={c.cliente + " (venda " + c.pedido + ")"} />)}>🗑</button>
