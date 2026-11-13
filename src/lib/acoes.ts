@@ -101,7 +101,7 @@ export const A = {
     const path = await rpc<string | null>("remover_anexo", { p_anexo: anexoId });
     if (path) await sb.storage.from("anexos").remove([path]);
   },
-  salvarFabrica: (id: string | null, nome: string, emails: string, rep: string) => rpc("salvar_fabrica", { p_id: id, p_nome: nome, p_emails: emails, p_rep: nz(rep) }),
+  salvarFabrica: (id: string | null, nome: string, emails: string, rep: string, ipi?: number | null, frete?: number | null, apelidos?: string) => rpc("salvar_fabrica", { p_id: id, p_nome: nome, p_emails: emails, p_rep: nz(rep), p_ipi: ipi ?? null, p_frete: frete ?? null, p_apelidos: apelidos ?? null }),
   removerFabrica: (id: string) => rpc("remover_fabrica", { p_id: id }),
   salvarRepresentante: (id: string | null, nome: string, whats: string, email: string) => rpc("salvar_representante", { p_id: id, p_nome: nome, p_whats: whats, p_email: email }),
   removerRepresentante: (id: string) => rpc("remover_representante", { p_id: id }),
