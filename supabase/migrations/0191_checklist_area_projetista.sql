@@ -9,8 +9,11 @@
 --   (config.checklist_agenda.projetistas), ignorando acento e maiúscula.
 -- Setor Checklist e Gestão veem a área de qualquer projetista (para conferir e ajudar).
 --
--- tratativa.checklist.termo = { ambientes[{nome, caixa{mat,esp}, porta{mat,esp,vidro,naoSeAplica}, cor, itens[], conferir[]}],
---   naoInclusos[], obs, ferragens[], arquivos[], listagem{cliente, projeto, data}, salvoEm, salvoPor, finalizadoEm, finalizadoPor }
+-- Etapas (aba Checklist): 1 ambientes da venda · 2 conferência por ambiente · 3 gerar impressão (PDF único) · 4 subir assinado · 5 marcar realizado
+-- tratativa.checklist.termo = { iniciadoEm, iniciadoPor, ambientesConfirmados,
+--   ambientes[{nome, origem, escritoPor, caixa{mat,esp}, porta{mat,esp,vidro,naoSeAplica}, cor, codigos[], itens[], conferir[], ficha{}, fichaObs, obs, imagens[], listagens[]}],
+--   naoInclusos[], obs, ferragens[], arquivos[], listagem{cliente, projeto, data},
+--   impressao{em, por, paginas}, assinados[{nome, path, em, por, exact}], salvoEm, salvoPor, finalizadoEm, finalizadoPor }
 
 -- nome do projetista (da lista da agenda) ligado ao usuário logado; null se não for projetista
 create or replace function public._ck_meu_projetista() returns text
@@ -43,7 +46,7 @@ end $$;
 revoke all on function public.ck_projetista_eu() from public, anon;
 grant execute on function public.ck_projetista_eu() to authenticated;
 
--- agenda do projetista: checklists agendados/realizados em que ele atende algum dia no período (sem valores)
+-- agenda do projetista: checklists agendados/realizados e reservas (horário oferecido, aguardando o cliente) — sem valores
 create or replace function public.ck_projetista_agenda(p_proj text default null, p_de date default null, p_ate date default null) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
 declare eu text := public._ck_meu_projetista(); alvo text; de date; ate date;
@@ -55,76 +58,140 @@ begin
   de := coalesce(p_de, (now() at time zone 'America/Sao_Paulo')::date - 30);
   ate := coalesce(p_ate, (now() at time zone 'America/Sao_Paulo')::date + 60);
   return coalesce((
-    select jsonb_agg(x order by x->>'agendadoPara') from (
+    select jsonb_agg(x order by coalesce(x->>'agendadoPara', x->>'proposta')) from (
       select jsonb_build_object(
         'id', c.id, 'cliente', c.cliente, 'pedido', c.pedido, 'telefone', c.telefone, 'status', c.status,
         'etapa', coalesce(k->>'etapa', 'a_contatar'), 'agendadoPara', k->>'agendadoPara', 'duracaoMin', k->'duracaoMin',
         'projetista', k->>'projetista', 'diasExtras', k->'diasExtras', 'confirmacao', coalesce(k->>'confirmacao', ''),
+        'proposta', case when k->>'etapa' = 'aguardando' then k->>'proposta' end, 'propostaDiasExtras', k->'propostaDiasExtras',
+        'propostaProjetista', k->>'propostaProjetista', 'ultimoContato', k->>'ultimoContato',
         'telefone2', k->>'telefone2', 'local', k->'local', 'ambiente', k->>'ambiente', 'encaixe', k->'encaixe',
         'medidaId', k->'medidaId', 'medidaOk', k->'medidaOk', 'realizadoEm', k->>'realizadoEm',
         'vendedor', k->'planilha'->>'vendedor', 'medidor', k->'planilha'->>'medidor', 'minhaVisita', k->'planilha'->>'minhaVisita',
+        'medida', (select jsonb_build_object('etapa', coalesce(m.tratativa->'medida'->>'etapa', case when m.status = 'concluida' then 'liberada' else 'validar' end),
+                     'medidor', public._nome(m.medidor_id), 'obs', nullif(btrim(coalesce(m.tratativa->'medida'->>'obs', '')), ''), 'em', m.criado_em)
+                   from public.chamados m where m.tipo = 'medidas' and m.pedido = c.pedido order by m.criado_em desc limit 1),
+        'historico', (select coalesce(jsonb_agg(jsonb_build_object('quando', h.quando, 'quem', h.quem_nome, 'texto', h.texto) order by h.quando desc), '[]'::jsonb)
+                      from (select * from public.historico h0 where h0.chamado_id = c.id order by h0.quando desc limit 40) h),
         'termo', k->'termo') x
       from public.chamados c, lateral (select coalesce(c.tratativa->'checklist', '{}'::jsonb) k) kk
       where c.tipo = 'checklist'
-        and coalesce(k->>'etapa', '') in ('agendado', 'realizado')
-        and public._ck_do_projetista(k, alvo)
-        and exists (select 1 from (select nullif(k->>'agendadoPara', '')::timestamp t
-                                   union all select nullif(e->>'data', '')::timestamp
-                                     from jsonb_array_elements(case when jsonb_typeof(k->'diasExtras') = 'array' then k->'diasExtras' else '[]'::jsonb end) e) d
-                     where d.t::date between de and ate)
+        and ((coalesce(k->>'etapa', '') in ('agendado', 'realizado') and public._ck_do_projetista(k, alvo)
+              and exists (select 1 from (select nullif(k->>'agendadoPara', '')::timestamp t
+                                         union all select nullif(e->>'data', '')::timestamp
+                                           from jsonb_array_elements(case when jsonb_typeof(k->'diasExtras') = 'array' then k->'diasExtras' else '[]'::jsonb end) e) d
+                           where d.t::date between de and ate))
+          or (c.status <> 'concluida' and k->>'etapa' = 'aguardando' and coalesce(k->>'propostaProjetista', '') = alvo
+              and nullif(k->>'proposta', '')::timestamp::date between de and ate))
     ) s), '[]'::jsonb);
 end $$;
 revoke all on function public.ck_projetista_agenda(text, date, date) from public, anon;
 grant execute on function public.ck_projetista_agenda(text, date, date) to authenticated;
 
--- salva o checklist do projetista (rascunho) e, com p_finalizar, marca o checklist como realizado
-create or replace function public.ck_projetista_salvar(p_id text, p jsonb, p_finalizar boolean default false) returns void
-language plpgsql security definer set search_path = '' as $$
-declare c public.chamados; k jsonb; eu text := public._ck_meu_projetista(); t jsonb; n int; quem text := public._nome(auth.uid());
+-- contexto para a função "exact" (arquivos da venda, fotos da medição, anexos do 360, envio do assinado):
+-- confere a permissão de quem chama e devolve a venda, o ticket do Exact e os chamados do 360 ligados a ela
+create or replace function public.ck_projetista_contexto(p_id text) returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare c public.chamados; k jsonb; eu text := public._ck_meu_projetista();
 begin
-  select * into c from public.chamados where id = p_id for update;
+  select * into c from public.chamados where id = p_id;
   if not found or c.tipo <> 'checklist' then raise exception 'Checklist não encontrado'; end if;
   k := coalesce(c.tratativa->'checklist', '{}'::jsonb);
+  if not public.pode_checklist() and not (eu is not null and (public._ck_do_projetista(k, eu) or coalesce(k->>'propostaProjetista', '') = eu)) then
+    raise exception 'Este checklist não está na sua agenda';
+  end if;
+  return jsonb_build_object('id', c.id, 'pedido', c.pedido, 'usuario', auth.uid(), 'nome', public._nome(auth.uid()),
+    'ticketId', (select t.ticket_id from public.exact_ticket t where t.sale_id = c.pedido),
+    'medidas', (select coalesce(jsonb_agg(m.id), '[]'::jsonb) from public.chamados m where m.tipo = 'medidas' and m.pedido = c.pedido),
+    'venda', c.vinculado_a);
+end $$;
+revoke all on function public.ck_projetista_contexto(text) from public, anon;
+grant execute on function public.ck_projetista_contexto(text) to authenticated;
+
+drop function if exists public.ck_projetista_salvar(text, jsonb, boolean);
+-- salva o checklist do projetista. p_acao: salvar · iniciar · impressao · assinado · realizado
+--   realizado só com a impressão gerada e o digitalizado assinado anexado
+create or replace function public.ck_projetista_salvar(p_id text, p jsonb, p_acao text default 'salvar') returns void
+language plpgsql security definer set search_path = '' as $$
+declare c public.chamados; k jsonb; t0 jsonb; eu text := public._ck_meu_projetista(); t jsonb; n int; quem text := public._nome(auth.uid());
+        acao text := coalesce(nullif(p_acao, ''), 'salvar'); txt text;
+begin
+  if acao not in ('salvar', 'iniciar', 'impressao', 'assinado', 'realizado') then raise exception 'Ação inválida'; end if;
+  select * into c from public.chamados where id = p_id for update;
+  if not found or c.tipo <> 'checklist' then raise exception 'Checklist não encontrado'; end if;
+  k := coalesce(c.tratativa->'checklist', '{}'::jsonb); t0 := coalesce(k->'termo', '{}'::jsonb);
   if not public.pode_checklist() and not (eu is not null and public._ck_do_projetista(k, eu)) then
     raise exception 'Este checklist não está na sua agenda';
   end if;
   if coalesce(k->>'etapa', '') not in ('agendado', 'realizado') then raise exception 'O checklist precisa estar agendado'; end if;
-  if jsonb_typeof(p) <> 'object' or jsonb_typeof(p->'ambientes') <> 'array' then raise exception 'Dados do checklist inválidos'; end if;
-  if length(p::text) > 400000 then raise exception 'Checklist grande demais — divida a listagem por ambiente'; end if;
+  if jsonb_typeof(p) <> 'object' then raise exception 'Dados do checklist inválidos'; end if;
+  if length(p::text) > 600000 then raise exception 'Checklist grande demais — divida a listagem por ambiente'; end if;
+  if jsonb_typeof(p->'ambientes') <> 'array' then p := p || jsonb_build_object('ambientes', coalesce(t0->'ambientes', '[]'::jsonb)); end if;
   n := jsonb_array_length(p->'ambientes');
-  if p_finalizar and n = 0 then raise exception 'Informe pelo menos um ambiente (anexe a listagem do Promob)'; end if;
-  if p_finalizar and exists (select 1 from jsonb_array_elements(p->'ambientes') a where btrim(coalesce(a->>'nome', '')) = '') then
+  if acao in ('impressao', 'realizado') and n = 0 then raise exception 'Escreva pelo menos um ambiente'; end if;
+  if acao in ('impressao', 'realizado') and exists (select 1 from jsonb_array_elements(p->'ambientes') a where btrim(coalesce(a->>'nome', '')) = '') then
     raise exception 'Dê nome a todos os ambientes';
   end if;
-  -- só o que é do termo (sem valores): descarta qualquer outra chave que venha do navegador
+  -- só o que é do checklist (sem valores): descarta qualquer outra chave que venha do navegador
   t := jsonb_build_object(
     'ambientes', (select coalesce(jsonb_agg(jsonb_build_object(
-        'nome', btrim(coalesce(a->>'nome', '')), 'caixa', coalesce(a->'caixa', '{}'::jsonb), 'porta', coalesce(a->'porta', '{}'::jsonb),
-        'cor', coalesce(a->>'cor', ''), 'conferir', coalesce(a->'conferir', '[]'::jsonb),
+        'nome', btrim(coalesce(a->>'nome', '')), 'origem', coalesce(a->>'origem', ''), 'escritoPor', coalesce(a->>'escritoPor', ''),
+        'caixa', coalesce(a->'caixa', '{}'::jsonb), 'porta', coalesce(a->'porta', '{}'::jsonb),
+        'cor', coalesce(a->>'cor', ''), 'codigos', coalesce(a->'codigos', '[]'::jsonb), 'conferir', coalesce(a->'conferir', '[]'::jsonb),
+        'ficha', coalesce(a->'ficha', '{}'::jsonb), 'obs', coalesce(a->>'obs', ''), 'itensDe', a->'itensDe',
+        'imagens', (select coalesce(jsonb_agg(jsonb_build_object('fonte', i->>'fonte', 'id', i->>'id', 'url', i->>'url', 'path', i->>'path', 'nome', i->>'nome')), '[]'::jsonb)
+                    from jsonb_array_elements(case when jsonb_typeof(a->'imagens') = 'array' then a->'imagens' else '[]'::jsonb end) i),
+        'listagens', coalesce(a->'listagens', '[]'::jsonb),
         'itens', (select coalesce(jsonb_agg(jsonb_build_object('item', l->'item', 'qtd', l->>'qtd', 'ref', l->>'ref', 'descricao', l->>'descricao',
                     'medidas', l->>'medidas', 'linha', l->>'linha', 'tipo', l->>'tipo', 'material', l->'material', 'espessura', l->'espessura',
                     'cor', l->'cor', 'acabamento', l->'acabamento')), '[]'::jsonb)
-                  from jsonb_array_elements(case when jsonb_typeof(a->'itens') = 'array' then a->'itens' else '[]'::jsonb end) l))), '[]'::jsonb)
-      from jsonb_array_elements(p->'ambientes') a),
-    'naoInclusos', coalesce(p->'naoInclusos', '[]'::jsonb), 'obs', btrim(coalesce(p->>'obs', '')), 'ferragens', coalesce(p->'ferragens', '[]'::jsonb),
-    'arquivos', coalesce(p->'arquivos', '[]'::jsonb),
+                  from jsonb_array_elements(case when jsonb_typeof(a->'itens') = 'array' then a->'itens' else '[]'::jsonb end) l)) order by o.i), '[]'::jsonb)
+      from jsonb_array_elements(p->'ambientes') with ordinality o(a, i)),
+    'ambientesConfirmados', coalesce((p->>'ambientesConfirmados')::boolean, false),
+    'naoInclusos', coalesce(p->'naoInclusos', t0->'naoInclusos', '[]'::jsonb), 'obs', btrim(coalesce(p->>'obs', t0->>'obs', '')),
+    'ferragens', coalesce(p->'ferragens', t0->'ferragens', '[]'::jsonb), 'arquivos', coalesce(p->'arquivos', t0->'arquivos', '[]'::jsonb),
     'listagem', jsonb_build_object('cliente', p->'listagem'->>'cliente', 'projeto', p->'listagem'->>'projeto', 'data', p->'listagem'->>'data'),
-    'salvoEm', now(), 'salvoPor', quem,
-    'finalizadoEm', case when p_finalizar then to_jsonb(now()) else k->'termo'->'finalizadoEm' end,
-    'finalizadoPor', case when p_finalizar then to_jsonb(quem) else k->'termo'->'finalizadoPor' end);
+    'iniciadoEm', t0->'iniciadoEm', 'iniciadoPor', t0->'iniciadoPor',
+    'impressao', t0->'impressao', 'assinados', coalesce(t0->'assinados', '[]'::jsonb),
+    'salvoEm', now(), 'salvoPor', quem, 'finalizadoEm', t0->'finalizadoEm', 'finalizadoPor', t0->'finalizadoPor');
+  case acao
+    when 'iniciar' then
+      if t0->>'iniciadoEm' is null then t := t || jsonb_build_object('iniciadoEm', now(), 'iniciadoPor', quem); txt := '▶ Checklist iniciado por ' || quem; end if;
+    when 'impressao' then
+      if exists (select 1 from jsonb_array_elements(t->'ambientes') a where jsonb_array_length(coalesce(a->'conferir', '[]'::jsonb)) > 0) then
+        raise exception 'Ainda há itens em amarelo (conferir) — preencha antes de gerar a impressão';
+      end if;
+      t := t || jsonb_build_object('impressao', jsonb_build_object('em', now(), 'por', quem, 'paginas', p->'impressao'->'paginas'));
+      txt := '🖨 Impressão do checklist gerada por ' || quem || ' (' || n || ' ambiente' || case when n = 1 then '' else 's' end || ')';
+    when 'assinado' then
+      if jsonb_typeof(p->'assinado') <> 'object' or coalesce(p->'assinado'->>'path', '') = '' then raise exception 'Anexe o digitalizado assinado'; end if;
+      t := t || jsonb_build_object('assinados', coalesce(t0->'assinados', '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+             'nome', p->'assinado'->>'nome', 'path', p->'assinado'->>'path', 'em', now(), 'por', quem, 'exact', p->'assinado'->'exact')));
+      txt := '📎 Digitalizado assinado anexado: ' || coalesce(p->'assinado'->>'nome', 'arquivo')
+             || case when coalesce((p->'assinado'->>'exact')::boolean, false) then ' · enviado ao Exact (Outros)' else ' · NÃO foi para o Exact' end;
+    when 'realizado' then
+      if t0->'impressao' is null then raise exception 'Gere a impressão antes de marcar realizado'; end if;
+      if jsonb_array_length(coalesce(t0->'assinados', '[]'::jsonb)) = 0 then raise exception 'Anexe o digitalizado assinado antes de marcar realizado'; end if;
+      t := t || jsonb_build_object('finalizadoEm', now(), 'finalizadoPor', quem);
+      txt := '✅ Checklist realizado pelo projetista ' || coalesce(eu, quem) || ' — ' || n || ' ambiente' || case when n = 1 then '' else 's' end;
+    else null;
+  end case;
   k := k || jsonb_build_object('termo', t);
-  if p_finalizar and coalesce(k->>'etapa', '') <> 'realizado' then
+  if acao = 'realizado' and coalesce(k->>'etapa', '') <> 'realizado' then
     k := k || jsonb_build_object('etapa', 'realizado', 'realizadoEm', now(), 'realizadoPor', quem);
   end if;
   update public.chamados set tratativa = jsonb_set(coalesce(tratativa, '{}'::jsonb), '{checklist}', k),
-    status = case when p_finalizar then 'concluida'::public.status_chamado else status end
+    status = case when acao = 'realizado' then 'concluida'::public.status_chamado else status end
    where id = p_id;
-  if p_finalizar then
-    perform public._reg(p_id, '✅ Checklist realizado pelo projetista ' || coalesce(eu, quem) || ' — termo de ciência gerado com ' || n || ' ambiente' || case when n = 1 then '' else 's' end
-      || case when jsonb_array_length(t->'arquivos') > 0 then ' (listagem: ' || (select string_agg(x, ', ') from jsonb_array_elements_text(t->'arquivos') x) || ')' else '' end);
-  end if;
+  if txt is not null then perform public._reg(p_id, txt); end if;
 end $$;
-revoke all on function public.ck_projetista_salvar(text, jsonb, boolean) from public, anon;
-grant execute on function public.ck_projetista_salvar(text, jsonb, boolean) to authenticated;
+revoke all on function public.ck_projetista_salvar(text, jsonb, text) from public, anon;
+grant execute on function public.ck_projetista_salvar(text, jsonb, text) to authenticated;
+
+-- arquivos que o checklist sobe (digitalizado assinado, imagens do projeto, listagem, .promob): bucket privado próprio,
+-- gravado só pela função "checklist-arquivos" (chave de serviço). O setor Checklist e a Gestão leem.
+insert into storage.buckets (id, name, public, file_size_limit) values ('checklist', 'checklist', false, 52428800) on conflict (id) do nothing;
+drop policy if exists checklist_storage_ler on storage.objects;
+create policy checklist_storage_ler on storage.objects for select to authenticated using (bucket_id = 'checklist' and (select public.pode_checklist()));
 
 select 'ok — área do projetista do checklist' as resultado;
