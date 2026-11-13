@@ -65,9 +65,9 @@ async function lerCsvTatico(f: File): Promise<Record<string, string>[]> {
     const o: Record<string, string> = {}; cab.forEach((c, k) => { if (c) o[c] = (r[k] ?? "").trim(); }); return o; });
 }
 // PREÇO DE VENDA a partir do CUSTO da planilha do Tático (o custo nunca é gravado nem mostrado — só serve de base):
-// custo + IPI 5% → + frete 7% (sobre o valor já com IPI) → × 3,3 de markup  (= custo × 3,7076)
+// custo + IPI 5% → + frete 8% (sobre o valor já com IPI) → × 3,3 de markup  (= custo × 3,7422)
 // Custo vazio, zerado ou muito baixo (abaixo de R$ 5,00) → não sugere preço (mantém o preço que o produto já tinha).
-export const IPI = 0.05, FRETE = 0.07, MARKUP = 3.3, CUSTO_MIN = 5;
+export const IPI = 0.05, FRETE = 0.08, MARKUP = 3.3, CUSTO_MIN = 5;
 export const precoDoCusto = (custo: number): number | null => !(custo >= CUSTO_MIN) ? null : Math.round(custo * (1 + IPI) * (1 + FRETE) * MARKUP * 100) / 100;
 const numTxt = (s: string) => String(s || "").replace(/cm/i, "").replace(/R\$/, "").trim().replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
 
@@ -191,10 +191,12 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   function escolher(c: string) { setSugs([]); buscar(c); }
   const [imp, setImp] = useState<{ nome: string; linhas: any[]; semCod: number; projetado: number; comPreco?: number; semPreco?: number } | null>(null); const [importando, setImportando] = useState(false); const [prog, setProg] = useState(0);
   const inpArq = { current: null as HTMLInputElement | null };
-  async function lerPlanilha(f: File | undefined) {
-    if (!f) return;
+  // pode escolher várias planilhas de uma vez (ex.: Matriz + Linha pronta + Estofados): viram uma importação só
+  async function lerPlanilha(fs: FileList | File[] | null | undefined) {
+    const arqs = Array.from(fs || []); if (!arqs.length) return;
+    const f = { name: arqs.length === 1 ? arqs[0].name : arqs.length + " planilhas (" + arqs.map(a => a.name).join(", ") + ")" };
     try {
-      const l = /\.csv$/i.test(f.name) ? await lerCsvTatico(f) : await lerArquivo(f);
+      const l = (await Promise.all(arqs.map(a => /\.csv$/i.test(a.name) ? lerCsvTatico(a) : lerArquivo(a)))).flat();
       const NUM = ["altura", "profundidade", "largura", "estoque", "reservas", "expedicao", "saldo", "preco"];
       let comPreco = 0, semPreco = 0;
       const linhas = l.map(r => { const o: any = {}; COLS.forEach(([k, , nomes]) => { const v = String(col(r, ...nomes) || "").trim(); if (v) o[k] = NUM.includes(k as string) ? numTxt(v) : v; });
@@ -328,7 +330,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       {(prod.altura != null || prod.profundidade != null || prod.largura != null) && <div className="cp-medidas">
         <div><span>Altura</span><b>{cm(prod.altura)}</b></div><div><span>Profundidade</span><b>{cm(prod.profundidade)}</b></div><div><span>Largura</span><b>{cm(prod.largura)}</b></div></div>}
       {prod.preco == null && precoEtiqueta(prod.cod_etiqueta) == null && precoCam != null && <div className="cp-preco"><span>Preço da etiqueta (lido agora)</span><b>{fmtMoeda(precoCam)}</b></div>}
-      {(prod.preco != null || precoEtiqueta(prod.cod_etiqueta) != null) && <div className="cp-preco"><span>Preço (bruto)</span><b>{fmtMoeda(Number(prod.preco ?? precoEtiqueta(prod.cod_etiqueta)))}</b>
+      {(prod.preco != null || precoEtiqueta(prod.cod_etiqueta) != null) && <div className="cp-preco"><span>Preço sugerido</span><b>{fmtMoeda(Number(prod.preco ?? precoEtiqueta(prod.cod_etiqueta)))}</b>
         {prod.cod_etiqueta && <small>código na etiqueta: {prod.cod_etiqueta}</small>}</div>}
       {prod.especificacoes && <div className="cp-esp"><span>Especificações técnicas</span><div>{prod.especificacoes}</div></div>}
       {prod.obs && <div className="cp-esp"><span>Observações</span><div>{prod.obs}</div></div>}
@@ -374,7 +376,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         {campo("deposito", "Local (Matriz = loja · Estoque 1 / Estofados = depósito)")}
         <label className="cp-f">Código de preço da etiqueta (88…)<input value={form.cod_etiqueta ?? ""} placeholder="ex.: 881496,820688" onChange={e => { const v = e.target.value; const pr = precoEtiqueta(v); setForm({ ...(form as Produto), cod_etiqueta: v, ...(pr != null ? { preco: pr as any } : {}) }); }} />
           {precoEtiqueta(form.cod_etiqueta) != null && <small style={{ color: "var(--st-concluida)", fontWeight: 700 }}>= {fmtMoeda(precoEtiqueta(form.cod_etiqueta) as number)}</small>}</label>
-        {campo("preco", "Preço bruto (R$)", { num: true })}
+        {campo("preco", "Preço sugerido (R$)", { num: true })}
         {campo("imagem_url", "Link da imagem (opcional)", { largo: true })}
         {campo("especificacoes", "Especificações técnicas", { area: true, largo: true })}
         {campo("obs", "Observações", { area: true, largo: true })}
@@ -388,7 +390,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       <div className="cp-lista-cab"><b>Produtos cadastrados</b> <span className="cp-total">{total ? Number(total.total).toLocaleString("pt-BR") : "…"}</span>{total && Number(total.congelados) > 0 ? <span className="hint">· {total.congelados} fora de venda</span> : null}{lista && total && lista.length < Number(total.total) ? <span className="hint">· mostrando {lista.length}{lista.length >= 300 ? " (busque pelo nome/código para achar os outros)" : " na busca"}</span> : null}
         <form style={{ marginLeft: "auto", display: "flex", gap: 6 }} onSubmit={e => { e.preventDefault(); carregarLista(q); }}><input type="search" placeholder="🔎 nome, código, REF" value={q} onChange={e => setQ(e.target.value)} /><button className="btn sm">Buscar</button></form>
         {edita && <><button type="button" className="btn sm" onClick={() => { setProd(null); setNaoAchou(""); setForm({ ...VAZIO }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>＋ Novo produto</button>
-        <label className="btn sm" style={{ cursor: "pointer" }}>⬆ Importar planilha<input type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} ref={el => { inpArq.current = el; }} onChange={e => { lerPlanilha(e.target.files?.[0]); e.target.value = ""; }} /></label>
+        <label className="btn sm" style={{ cursor: "pointer" }}>⬆ Importar planilha(s)<input type="file" accept=".xlsx,.xls,.csv" multiple style={{ display: "none" }} ref={el => { inpArq.current = el; }} onChange={e => { const fs = Array.from(e.target.files || []); e.target.value = ""; lerPlanilha(fs); }} /></label>
         <button type="button" className="btn ghost sm" onClick={modelo}>⬇ Modelo de planilha</button></>}</div>
       {imp && <div className="cp-imp">
         <b>📄 {imp.nome}</b> · <b>{imp.linhas.length}</b> produto(s) prontos para importar{imp.semCod ? <span className="hint"> · {imp.semCod} linha(s) sem código ou sem descrição foram ignoradas</span> : null}{imp.projetado ? <span className="hint"> · <b>{imp.projetado}</b> item(ns) da linha projetado (descrição em letras minúsculas) ficaram de fora</span> : null}
