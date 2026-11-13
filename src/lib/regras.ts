@@ -17,9 +17,11 @@ export const SITUACOES_EXTRA = ["em_obras", "standby", "em_analise"];
 export const SITUACOES_CONSULTOR = ["ausente_endereco", "visita_cancelada", "em_obras", "standby", "em_analise"];
 export const TIPO_VENDA_INFORMADO: Record<string, string> = { efetivada: "à vista (paga)", entrada: "entrada + promissória", promissoria: "100% promissória" };
 export const TIPO_REEMBOLSO: Record<string, string> = { pedagio: "Pedágio", estacionamento: "Estacionamento", combustivel: "Combustível", outro: "Outro" };
-export const ETAPA_MEDIDA: Record<string, string> = { pendente: "Pendente para medir", agendada: "Aguardando medição", validar: "Aguardando análise (medidas do consultor)", realizada: "Aguardando análise", em_obra: "Em obra", liberada: "Aprovada — medida oficial" };
+export const ETAPA_MEDIDA: Record<string, string> = { pendente: "Pendente para medir", agendada: "Aguardando medição", validar: "Medida do 360 para validar (consultor / pós-venda no 360)", realizada: "Aguardando análise", em_obra: "Em obra", liberada: "Aprovada — medida oficial", cancelada: "Cancelada (Exact)", fora: "Fora do Exact (antiga)" };
 /** grupo da medida para as listas: pendentes · aguardando medição · análise · aprovados · em obra */
-export const grupoMedida = (etapa: string) => etapa === "liberada" ? "aprovados" : etapa === "agendada" ? "agendadas" : etapa === "em_obra" ? "obra" : ["validar", "realizada"].includes(etapa) ? "analise" : "pendentes";
+// as filas Pendentes · Aguardando medição · Análise · Aprovados · Em obra · Cancelados espelham o quadro de Medição do Exact (1 cartão = 1 medida);
+// "validar" = medida feita no 360 (consultor / pós-venda no 360) e "fora" = medida antiga que não está mais no Exact (fica fora das filas)
+export const grupoMedida = (etapa: string) => etapa === "liberada" ? "aprovados" : etapa === "agendada" ? "agendadas" : etapa === "em_obra" ? "obra" : etapa === "realizada" ? "analise" : etapa === "validar" ? "no360" : etapa === "cancelada" ? "cancelados" : etapa === "fora" ? "fora" : "pendentes";
 export const VENDA_STATUS: Record<string, string> = {
   registrada: "Pendente de análise", efetivada: "Efetivada", entrada: "Entrada + promissória", promissoria: "Promissória", cancelada: "Cancelada",
 };
@@ -1076,7 +1078,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // 📋 projetista do checklist (acesso extra): a agenda dele, a listagem do Promob e o termo de ciência — grupo próprio, no topo
     else if (temAcesso("projetista_checklist")) G.unshift({ g: "Meu checklist", ic: "📋", itens: [["projetista_ck", "📋 Minha agenda de checklist"]] });
     // Medidas: cruzamento Minha Visita × Exact (Gestão e Supervisão de Medidas)
-    if (ehSupMedidas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Medidas", ic: "📐", itens: [["md_callcenter", "📞 Fila do call center"], ["md_pendentes", "Pendentes para medir"], ["md_agendadas", "Aguardando medição"], ["md_analise", "Aguardando análise"], ["md_aprovados", "Aprovados"], ["md_obra", "Em obra"], ["md_visitados", "📷 Visitados pelo consultor (360)"], ["md_cruzar", "Cruzar Minha Visita × Exact"], ["md_resultados", "Resultado dos cruzamentos"]] });
+    if (ehSupMedidas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Medidas", ic: "📐", itens: [["md_callcenter", "📞 Fila do call center"], ["md_pendentes", "Pendentes para medir"], ["md_agendadas", "Aguardando medição"], ["md_analise", "Aguardando análise"], ["md_aprovados", "Aprovados"], ["md_obra", "Em obra"], ["md_cancelados", "Cancelados"], ["md_no360", "📷 Medidas do 360 para validar"], ["md_visitados", "📷 Visitados pelo consultor (360)"], ["md_cruzar", "Cruzar Minha Visita × Exact"], ["md_resultados", "Resultado dos cruzamentos"]] });
     // consultor externo e medidor: as medidas deles separadas das visitas de venda (medida paga R$ 40, sem comissão)
     else if (false) G.splice(G.findIndex(g => g.g === "Meu financeiro") >= 0 ? G.findIndex(g => g.g === "Meu financeiro") : G.length, 0, { g: "Minhas medidas", ic: "📐", itens: [["md_minhas", "Medidas para fazer"]] });
     // Montagem: só acompanhamento dos agendamentos do Exact (agendadoras e montadores) — só a Gestão
