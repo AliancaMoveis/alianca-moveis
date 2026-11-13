@@ -210,6 +210,9 @@ const ABAS_MD: Record<string, [string, string]> = {
   analise: ["Aguardando análise", "Medidas feitas (medidores / consultores) e as que vieram do cruzamento com o Minha Visita. Aprove como medida oficial ou peça para refazer."],
   aprovados: ["Aprovados — medida oficial", "Medidas aprovadas: o checklist da venda mostra “medida oficial” e as fotos ficam disponíveis para o projetista."],
   obra: ["Em obra", "Clientes em obra: não permite a medida oficial. Volte para pendente quando a obra terminar."],
+  cancelados: ["Cancelados", "Medições canceladas no quadro de Medição do Exact."],
+  no360: ["Medidas do 360 para validar", "Medidas feitas no 360 (consultor antes da venda ou medição pós-venda no 360) que ainda não estão na Análise do Exact. Confira as fotos e aprove ou peça para refazer."],
+  fora: ["Fora do Exact", "Medidas antigas do 360 que não têm mais cartão no quadro de Medição do Exact. Ficam só para consulta."],
   minhasfeitas: ["Medidas finalizadas", "Medidas que você já fez: aguardando análise da supervisão ou aprovadas. Cada medida paga R$ 40, sem comissão."],
   minhas: ["Medidas para fazer", "Solicitações de MEDIDA — não é visita de venda: paga R$ 40 por cliente, sem comissão. Depois de medir, anexe as fotos/planta e finalize."],
 };
@@ -277,7 +280,7 @@ function ListaMedidas({ aba }: { aba: string }) {
         <div className="card" style={{ padding: 0 }}>{lista.map((c: any) => {
           const m = (c.tratativa && c.tratativa.medida) || {}, dck = diaCk(c), alerta = aba !== "aprovados" && dck && em3(dck);
           // aguardando análise: linha em roxo claro quando tem foto (da medida ou da visita do consultor no 360)
-          const temFoto = aba === "analise" && ((c.anexos || []).some((x: any) => x.tipo === "img") || achar360(R, st, c).some((v: any) => (v.anexos || []).some((x: any) => x.tipo === "img")));
+          const temFoto = (aba === "analise" || aba === "no360") && ((c.anexos || []).some((x: any) => x.tipo === "img") || achar360(R, st, c).some((v: any) => (v.anexos || []).some((x: any) => x.tipo === "img")));
           return (
             <div key={c.id} className={"acao" + (temFoto ? " md-comfoto" : "")} title={temFoto ? "Tem foto" : undefined} style={{ borderLeftColor: alerta ? "var(--critico)" : temFoto ? "#7a3fb0" : "var(--line)", margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)" }} onClick={() => abrirDetalhe(c.id)}>
               <span><b>{c.cliente}</b> · venda {c.pedido || "—"} <Selo360 c={c} />
@@ -291,7 +294,7 @@ function ListaMedidas({ aba }: { aba: string }) {
                 {aba === "minhas" && <span className="pill" style={{ marginLeft: 6, background: "var(--st-concluida)", color: "#fff" }}>MEDIDA · R$ 40 · sem comissão</span>}
                 {c.endereco ? <span className="hint"> · {c.endereco}</span> : null}</span>
               <span className="g" style={alerta ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{dck ? (alerta ? "⚠️ " : "") + "checklist " + fmtDateTime(dck) : ""}
-                {aba === "analise" && R.ehSupMedidas() && <button className="btn primary sm" style={{ marginLeft: 8 }} onClick={e => { e.stopPropagation(); aprovar(c); }}>✅ Aprovar</button>}</span>
+                {(aba === "analise" || aba === "no360") && R.ehSupMedidas() && <button className="btn primary sm" style={{ marginLeft: 8 }} onClick={e => { e.stopPropagation(); aprovar(c); }}>✅ Aprovar</button>}</span>
             </div>);
         })}</div>}
     </section>
