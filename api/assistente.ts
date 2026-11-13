@@ -61,7 +61,8 @@ export default async function handler(req: any, res: any) {
       body: JSON.stringify({ model: MODELO, max_tokens: 900,
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         tools: tools.map((t: any, i: number) => (i === tools.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t)),
-        messages: msgs }),
+        thinking: { type: "disabled" },
+        messages: msgs.map((m: any) => (m && m.role === "assistant" && Array.isArray(m.content) ? { ...m, content: m.content.filter((b: any) => b && b.type !== "thinking" && b.type !== "redacted_thinking") } : m)) }),
     });
     const j: any = await r.json().catch(() => ({}));
     if (!r.ok) {
