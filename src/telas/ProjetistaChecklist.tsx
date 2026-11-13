@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
+import { sb } from "../lib/supabase";
 import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import { lerListagemArquivo, type LinhaListagem, type Listagem } from "../lib/listagemPromob";
 import { ambienteDaListagem, impressaoHtml, termoHtml, FICHA_AMBIENTE, type AmbTermo, type DadosTermo, type Mat } from "../lib/termoChecklist";
@@ -41,7 +42,7 @@ function diasDoProj(c: any, proj: string): { slot: string; dur: number; n: numbe
   const todos = [{ slot: String(c.agendadoPara || "").slice(0, 16), dur: Number(c.duracaoMin) || 120, proj: c.projetista || "" },
     ...ex.map(e => ({ slot: String(e.data || "").slice(0, 16), dur: Number(e.duracaoMin) || Number(c.duracaoMin) || 120, proj: e.projetista || c.projetista || "" }))]
     .filter(d => d.slot).sort((a, b) => a.slot.localeCompare(b.slot));
-  return todos.map((d, i) => ({ ...d, n: i + 1, total: todos.length })).filter(d => d.proj === proj);
+  return todos.map((d, i) => ({ ...d, n: i + 1, total: todos.length })).filter(d => proj === "*" || d.proj === proj);
 }
 const bairroCidade = (c: any) => { const l = c.local || {}; return [cap(l.bairro), cap(l.cidade)].filter(Boolean).join(", "); };
 const endereco = (c: any) => { const l = c.local || {}; return [l.endereco || l.rua, l.numero, l.complemento, cap(l.bairro), cap(l.cidade)].filter(Boolean).join(" · "); };
@@ -78,6 +79,7 @@ export function abrirTermo(c: any, termo: any, projetista: string, toast?: (m: s
 
 // ---------------- estilos (mesmo desenho dos mockups, com as cores do 360) ----------------
 const CSS = `
+.pj .pjbusca{width:100%;padding:11px 14px;border:1px solid var(--pj-l);border-radius:12px;font:inherit;background:var(--pj-bg,#fff);color:inherit;margin-bottom:14px}
 .pj .pjkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}@media (max-width:800px){.pj .pjkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pj .pjkpi{background:var(--pj-bg,#fff);border:1px solid var(--pj-l);border-radius:14px;padding:16px 18px;cursor:pointer;box-shadow:0 1px 2px rgba(20,28,45,.05)}.pj .pjkpi b{display:block;font-size:28px;line-height:1.1}.pj .pjkpi span{color:var(--pj-s);font-size:13px}.pj .pjkpi.alerta b{color:#b42318}
 .pj .pjtabs{display:flex;align-items:center;flex-wrap:wrap;gap:4px;background:var(--pj-l2);border-radius:12px;padding:4px;margin-bottom:12px;width:fit-content;max-width:100%}.pj .pjtabs>button{border:0;background:none;padding:8px 14px;border-radius:9px;font-weight:600;color:var(--pj-s);cursor:pointer}.pj .pjtabs>button.on{background:var(--pj-bg,#fff);color:inherit;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -178,7 +180,7 @@ export default function ProjetistaChecklist() {
     A.ckProjetistaEu().then(r => {
       setEu(r);
       let salvo = ""; try { salvo = localStorage.getItem("a360-ck-proj") || ""; } catch { /* */ }
-      setProj(r.projetista || (r.projetistas.includes(salvo) ? salvo : r.projetistas[0] || ""));
+      setProj(r.podeTodos ? (salvo === "*" || r.projetistas.includes(salvo) ? salvo : "*") : r.projetista || "");
     }).catch((e: any) => setErro(e.message));
   }, []);
   const carregar = () => {
@@ -196,7 +198,8 @@ export default function ProjetistaChecklist() {
     const doDia = ent.filter(e => e.slot.slice(0, 10) === dia);
     const vistos = new Set<string>();
     const proximos = ent.filter(e => { const d = e.slot.slice(0, 10); if (d <= hj || vistos.has(e.c.id) || feito(e.c)) return false; vistos.add(e.c.id); return true; });
-    const pendentes = (lista || []).filter(c => c.etapa !== "aguardando" && !termoFinal(c) && (feito(c) || diasDoProj(c, proj).every(d => d.slot.slice(0, 10) < hj)))
+    const pendentes = (lista || []).filter(c => c.etapa !== "aguardando" && !termoFinal(c)
+        && (feito(c) ? !!c.termo?.iniciadoEm : diasDoProj(c, proj).every(d => d.slot.slice(0, 10) < hj)))
       .map(c => { const ds = diasDoProj(c, proj); const u = ds[ds.length - 1]; return u ? { c, ...u } : null; }).filter(Boolean) as typeof ent;
     const realizados = (lista || []).filter(c => termoFinal(c))
       .map(c => { const ds = diasDoProj(c, proj); const u = ds[ds.length - 1]; return u ? { c, ...u } : null; }).filter(Boolean)
@@ -204,6 +207,8 @@ export default function ProjetistaChecklist() {
     return { doDia, proximos, pendentes, realizados };
   }, [lista, proj, dia, hj]);
   const [aba, setAba] = useState<"dia" | "prox" | "fin" | "real">("dia");
+  const [q, setQ] = useState("");
+  const [verAgenda, setVerAgenda] = useState(false);
   const abrir = (id: string) => { sujo.current = false; setSel(id); window.scrollTo({ top: 0 }); };
   const voltar = () => { if (sujo.current && !confirm("Há alterações no checklist que não foram salvas. Voltar para a lista mesmo assim?")) return; sujo.current = false; setSel(null); carregar(); };
 
@@ -225,23 +230,34 @@ export default function ProjetistaChecklist() {
     </section>
   );
 
+  if (verAgenda) return <section className="view active pj" id="view-projetista-ck"><style>{CSS}</style>
+    <div className="pjtop"><button className="btn sm" onClick={() => setVerAgenda(false)}>← Voltar para a lista</button><h2 style={{ marginLeft: 6 }}>Agenda geral do checklist</h2><span className="sub">todos os projetistas · só visualização</span></div>
+    <AgendaGeral eu={eu.projetista} /></section>;
+
   // ---------- tela inicial: visão geral ----------
   const naoRes = doDia.filter(e => !e.reserva);
   const dLonga = dia === hj ? "Hoje" : (() => { const d = parseData(dia + "T12:00"); return cap(DIAS[d.getDay()]) + ", " + d.toLocaleDateString("pt-BR"); })();
-  const itens = aba === "dia" ? doDia : aba === "prox" ? proximos : aba === "fin" ? pendentes : realizados;
-  const vazio = aba === "dia" ? "Nenhum checklist neste dia." : aba === "prox" ? "Nenhum checklist nos próximos dias." : aba === "fin" ? "Nada para finalizar. 👏" : "Nenhum checklist realizado com termo ainda.";
+  const qn = semAcento(q.trim()), qd = q.replace(/\D/g, "");
+  const achados = !qn ? [] : (lista || []).filter(c => semAcento(c.cliente).includes(qn) || (qd.length >= 3 && (String(c.pedido || "").includes(qd) || String(c.telefone || "").replace(/\D/g, "").includes(qd) || String(c.telefone2 || "").replace(/\D/g, "").includes(qd))))
+    .map(c => { const ds = diasDoProj(c, proj); const u = ds.find(d => d.slot.slice(0, 10) >= hj) || ds[ds.length - 1]; return u ? { c, ...u } : null; }).filter(Boolean) as typeof doDia;
+  const itens = qn ? achados : aba === "dia" ? doDia : aba === "prox" ? proximos : aba === "fin" ? pendentes : realizados;
+  const vazio = qn ? "Nenhum cliente encontrado para “" + q + "” (busca nos últimos 45 dias e próximos 60)." : aba === "dia" ? "Nenhum checklist neste dia." : aba === "prox" ? "Nenhum checklist nos próximos dias." : aba === "fin" ? "Nada para finalizar. 👏" : "Nenhum checklist realizado com termo ainda.";
   return (
     <section className="view active pj" id="view-projetista-ck">
       <style>{CSS}</style>
       <div className="pjtop" style={{ alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 260 }}>
           <h2>Área do projetista</h2>
-          <div className="sub" style={{ marginTop: 4, maxWidth: 620 }}>Os clientes do checklist {eu.podeTodos ? "de " + proj : "da sua agenda"}. Clique em <b>Fazer checklist</b> para abrir o cliente: arquivos da venda, medição e as etapas do checklist (sem valores).</div>
+          <div className="sub" style={{ marginTop: 4, maxWidth: 620 }}>Os clientes do checklist {eu.podeTodos ? (proj === "*" ? "de todos os projetistas" : "de " + proj) : "da sua agenda"}. Clique em <b>Fazer checklist</b> para abrir o cliente: arquivos da venda, medição e as etapas do checklist (sem valores).</div>
         </div>
-        {eu.podeTodos && <select value={proj} onChange={e => { setSel(null); setProj(e.target.value); try { localStorage.setItem("a360-ck-proj", e.target.value); } catch { /* */ } }} style={{ minWidth: 170 }} title="Projetista (todos podem ver todos)">
+        {eu.podeTodos && <select value={proj} onChange={e => { setSel(null); setProj(e.target.value); try { localStorage.setItem("a360-ck-proj", e.target.value); } catch { /* */ } }} style={{ width: "auto", minWidth: 200 }} title="Projetista (Gestão / setor Checklist)">
+          <option value="*">👥 Todos os projetistas</option>
           {eu.projetistas.map(n => <option key={n} value={n}>{n}{n === eu.projetista ? " (eu)" : ""}</option>)}</select>}
+        <button className="btn sm" onClick={() => setVerAgenda(true)} title="Agenda de todos os projetistas (só visualização)">📅 Agenda geral</button>
         <button className="btn ghost sm" onClick={() => carregar()} title="Atualizar">↻ Atualizar</button>
       </div>
+      <input className="pjbusca" value={q} onChange={e => setQ(e.target.value)} placeholder="🔎 Buscar cliente por nome, nº da venda ou telefone" />
+      {qn ? <div className="sub" style={{ margin: "-4px 0 10px" }}>{achados.length} cliente{achados.length === 1 ? "" : "s"} encontrado{achados.length === 1 ? "" : "s"} · <button className="lk" onClick={() => setQ("")}>limpar busca</button></div> : <>
       <div className="pjkpis">
         <div className="pjkpi" onClick={() => { setDia(hj); setAba("dia"); }}><b>{doDia.filter(e => !e.reserva).length}</b><span>{dia === hj ? "hoje" : "no dia " + ddmm(dia)}</span></div>
         <div className="pjkpi" onClick={() => setAba("prox")}><b>{proximos.filter(e => !e.reserva).length}</b><span>próximos</span></div>
@@ -256,8 +272,9 @@ export default function ProjetistaChecklist() {
         {aba === "dia" && <span className="nav" style={{ marginLeft: 8 }}><button onClick={() => setDia(somaDias(dia, -1))} title="Dia anterior">◀</button><button onClick={() => setDia(hj)}>Hoje</button><button onClick={() => setDia(somaDias(dia, 1))} title="Próximo dia">▶</button></span>}
         {aba === "dia" && naoRes.length > 0 && <span className="sub" style={{ marginLeft: 8 }}>{naoRes.filter(e => e.c.confirmacao === "confirmada").length} de {naoRes.length} com presença confirmada</span>}
       </div>
+      </>}
       {lista === null ? <div className="empty">Carregando…</div>
-        : itens.length ? <div className="pjrows">{itens.map(e => <LinhaCliente key={e.c.id + e.slot} e={e} hj={hj} segura={segura} onAbrir={() => abrir(e.c.id)} />)}</div>
+        : itens.length ? <div className="pjrows">{itens.map(e => <LinhaCliente key={e.c.id + e.slot} e={e} hj={hj} segura={segura} todos={proj === "*"} onAbrir={() => abrir(e.c.id)} />)}</div>
         : <div className="cardx" style={{ padding: 26, textAlign: "center", color: "var(--ink-faint)" }}>{vazio}</div>}
       {erro && <div className="empty">{erro}</div>}
     </section>
@@ -265,7 +282,7 @@ export default function ProjetistaChecklist() {
 }
 
 /** linha da tela inicial (cartão largo: data · cliente · selos · botões) */
-function LinhaCliente({ e, hj, segura, onAbrir }: { e: any; hj: string; segura: number; onAbrir: () => void }) {
+function LinhaCliente({ e, hj, segura, todos, onAbrir }: { e: any; hj: string; segura: number; todos?: boolean; onAbrir: () => void }) {
   const c = e.c, t = c.termo || {}, d = e.slot.slice(0, 10);
   const ambs = (t.ambientes || []).map((a: any) => a.nome).filter(Boolean);
   const tel = sanitizeWhats(c.telefone || c.telefone2 || "");
@@ -275,7 +292,7 @@ function LinhaCliente({ e, hj, segura, onAbrir }: { e: any; hj: string; segura: 
   return <div className={"pjrow" + (e.reserva ? " res" : "")} style={{ ["--cor" as any]: cor }}>
     <div className="pjdata" style={{ background: cor }}><small>{rot}</small><b>{ddmm(d)}</b><span>{hm(e.slot)}</span></div>
     <div className="pjinfo">
-      <div className="pjl1"><b>{c.cliente}</b><span className="pjtag">Venda {c.pedido}</span>{bairroCidade(c) && <span className="pjtag loc">📍 {bairroCidade(c)}</span>}{e.total > 1 && <span className="pjtag">dia {e.n}/{e.total}</span>}</div>
+      <div className="pjl1"><b>{c.cliente}</b><span className="pjtag">Venda {c.pedido}</span>{bairroCidade(c) && <span className="pjtag loc">📍 {bairroCidade(c)}</span>}{e.total > 1 && <span className="pjtag">dia {e.n}/{e.total}</span>}{todos && <span className="pjtag" style={{ background: "#efe9fb", color: "#5b3c99", borderColor: "transparent" }}>👷 {e.reserva ? c.propostaProjetista || c.projetista : c.projetista}</span>}</div>
       <div className="pjl2">{c.vendedor && <span>Vendedor <b>{cap(c.vendedor)}</b></span>}{(c.telefone || c.telefone2) && <span>Tel. <b>{fmtTel(c.telefone || c.telefone2)}</b></span>}<span>Duração <b>{fmtDur(e.dur)}</b></span>{ambs.length > 0 && <span>Ambientes <b>{ambs.join(", ")}</b></span>}</div>
       <div className="pjl3">
         {e.reserva ? <span className="pjpill p-w">⏳ Reserva · aguardando resposta{lib ? " · libera sozinha em " + fmtDateTime(lib.toISOString()) : ""}</span>
@@ -338,6 +355,52 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
         {nPronta > 0 && <div>Linha pronta (negociado) <b>{brl(soma("negociado", p => !cupom(p.nome)))}</b></div>}</div></div>
       <div className="hint">🔒 Valores só para conferência interna do checklist. Não aparecem na impressão nem em nada que vai para o cliente.</div>
     </div>
+  </div>;
+}
+
+
+// ---------------- agenda geral (todos os projetistas) — SÓ LEITURA: o projetista vê, não edita ----------------
+function AgendaGeral({ eu }: { eu: string | null }) {
+  const hj = hojeISO();
+  const [dia, setDia] = useState(hj);
+  const [d, setD] = useState<any>(null);
+  const [erro, setErro] = useState("");
+  useEffect(() => { setD(null); setErro("");
+    sb.rpc("ck_agenda_geral", { p_de: dia, p_ate: dia }).then(({ data, error }: any) => { if (error) setErro(error.message); else setD(data); }); }, [dia]);
+  const H0 = 8, H1 = 20, PX = 54;
+  const min = (iso: string) => { const [h, m] = iso.slice(11, 16).split(":").map(Number); return h * 60 + m; };
+  const top = (m: number) => (Math.max(H0 * 60, Math.min(H1 * 60, m)) - H0 * 60) / 60 * PX;
+  const projs: string[] = d ? [...(d.projetistas || [])].sort((a: string, b: string) => (a === eu ? -1 : b === eu ? 1 : 0)) : [];
+  const evs: any[] = d?.eventos || [], bls: any[] = d?.bloqueios || [];
+  const dl = (() => { const x = parseData(dia + "T12:00"); return cap(DIAS[x.getDay()]) + ", " + x.toLocaleDateString("pt-BR"); })();
+  const cor = (t: string) => t === "res" ? { background: "#ffe8a3", color: "#6b4a00", border: "1.5px dashed #c98a12" } : t === "feito" ? { background: "#e6f4e9", color: "#2f6f3c", border: "1px solid #9fc5a8" } : { background: "var(--primary,#284b8f)", color: "#fff", border: "0" };
+  return <div>
+    <div className="pjtop">
+      <span className="nav"><button onClick={() => setDia(somaDias(dia, -1))}>◀</button><button onClick={() => setDia(hj)}>Hoje</button><button onClick={() => setDia(somaDias(dia, 1))}>▶</button></span>
+      <b>{dl}</b>
+      <span className="pjchip b">{evs.filter(e => e.tipo !== "res").length} atendimento{evs.filter(e => e.tipo !== "res").length === 1 ? "" : "s"}</span>
+      {evs.some(e => e.tipo === "res") && <span className="pjchip w">{evs.filter(e => e.tipo === "res").length} reserva(s)</span>}
+      <span className="sub">🔒 Só visualização — para mudar a agenda, fale com o suporte do checklist.</span>
+    </div>
+    {erro ? <div className="empty">{erro}</div> : !d ? <div className="empty">Carregando…</div> :
+    <div className="cardx" style={{ overflowX: "auto", padding: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `52px repeat(${projs.length}, minmax(130px, 1fr))`, minWidth: 52 + projs.length * 130 }}>
+        <div />
+        {projs.map(p => <div key={p} style={{ textAlign: "center", fontWeight: 800, padding: "6px 4px", borderBottom: "2px solid var(--pj-l)", color: p === eu ? "var(--primary,#284b8f)" : undefined }}>{p}{p === eu ? " (eu)" : ""}</div>)}
+        <div style={{ position: "relative", height: (H1 - H0) * PX }}>
+          {Array.from({ length: H1 - H0 + 1 }, (_, i) => <div key={i} style={{ position: "absolute", top: i * PX - 7, right: 6, fontSize: 11, color: "var(--pj-f)" }}>{String(H0 + i).padStart(2, "0")}:00</div>)}
+        </div>
+        {projs.map(p => <div key={p} style={{ position: "relative", height: (H1 - H0) * PX, borderLeft: "1px solid var(--pj-l2)", background: `repeating-linear-gradient(to bottom, transparent 0, transparent ${PX - 1}px, var(--pj-l2) ${PX - 1}px, var(--pj-l2) ${PX}px)` }}>
+          {bls.filter(b => b.proj === p || !b.proj).map((b, i) => { const ini = b.inicio.slice(0, 10) < dia ? H0 * 60 : min(b.inicio), fim = b.fim.slice(0, 10) > dia ? H1 * 60 : min(b.fim);
+            return <div key={"b" + i} title={b.motivo} style={{ position: "absolute", left: 2, right: 2, top: top(ini), height: Math.max(18, top(fim) - top(ini)), borderRadius: 6, background: "repeating-linear-gradient(45deg,#eceef1,#eceef1 6px,#e0e3e8 6px,#e0e3e8 12px)", color: "#5a6270", fontSize: 11.5, fontWeight: 700, padding: "3px 6px", overflow: "hidden" }}>🔒 {b.motivo || "Bloqueado"}</div>; })}
+          {evs.filter(e => e.proj === p).map((e, i) => { const ini = min(e.inicio), fim = ini + (Number(e.dur) || 120);
+            return <div key={i} title={e.cliente + " · venda " + e.pedido} style={{ position: "absolute", left: 3, right: 3, top: top(ini) + 1, height: Math.max(22, top(fim) - top(ini) - 2), borderRadius: 7, padding: "4px 7px", fontSize: 11.5, lineHeight: 1.25, overflow: "hidden", ...cor(e.tipo) }}>
+              <b>{e.inicio.slice(11, 16)}</b> {e.tipo === "res" ? "⏳ reserva" : e.tipo === "feito" ? "✅" : ""}{e.encaixe ? " ⚠️ encaixe" : ""}<br /><b>{e.cliente}</b><br />Venda {e.pedido}{e.total > 1 ? " · dia " + e.n + "/" + e.total : ""}{[e.bairro, e.cidade].filter(Boolean).length ? <><br />{[cap(e.bairro), cap(e.cidade)].filter(Boolean).join(", ")}</> : null}
+            </div>; })}
+        </div>)}
+      </div>
+    </div>}
+    <div className="hint" style={{ marginTop: 8 }}>Azul: agendado · verde: realizado · amarelo tracejado: reserva (horário oferecido, aguardando o cliente) · cinza listrado: bloqueio.</div>
   </div>;
 }
 
