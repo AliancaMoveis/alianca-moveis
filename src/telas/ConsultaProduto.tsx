@@ -67,8 +67,23 @@ async function lerCsvTatico(f: File): Promise<Record<string, string>[]> {
 // PREÇO DE VENDA a partir do CUSTO da planilha do Tático (o custo nunca é gravado nem mostrado — só serve de base):
 // custo + IPI 5% → + frete 8% (sobre o valor já com IPI) → × 3,3 de markup  (= custo × 3,7422)
 // Custo vazio, zerado ou muito baixo (abaixo de R$ 5,00) → não sugere preço (mantém o preço que o produto já tinha).
+// IPI e frete vêm do cadastro da FÁBRICA do produto (Cadastros › Fábricas); sem fábrica identificada usa o padrão (IPI 5% · frete 8%)
 export const IPI = 0.05, FRETE = 0.08, MARKUP = 3.3, CUSTO_MIN = 5;
-export const precoDoCusto = (custo: number): number | null => !(custo >= CUSTO_MIN) ? null : Math.round(custo * (1 + IPI) * (1 + FRETE) * MARKUP * 100) / 100;
+export const precoDoCusto = (custo: number, ipi = IPI, frete = FRETE): number | null => !(custo >= CUSTO_MIN) ? null : Math.round(custo * (1 + ipi) * (1 + frete) * MARKUP * 100) / 100;
+const semAc = (s: string) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+/** fábrica do produto pelo nome: o nome da fábrica (ou um dos "outros nomes") aparece no nome do produto; vale a que aparece primeiro */
+export function fabricaDoNome(nome: string, fabs: any[]): any | null {
+  const t = " " + semAc(nome) + " "; let melhor: any = null, pos = 1e9, tam = 0;
+  for (const f of fabs || []) {
+    if (/N[AÃ]O INFORMAD/i.test(f.nome || "")) continue;
+    const base = semAc(f.nome);
+    const chaves = new Set<string>([base, ...String(f.apelidos || "").split(",").map(semAc)]);
+    const sem = base.replace(/^(ESTOFADOS|MOVEIS|COZINHA|GABINETES) /, "").replace(/ (MOVEIS|ESTOFADOS|DECOR|DESIGN|MOBILIARIO|BRASIL|MOBILI|POLTRONAS)$/, "");
+    if (sem.length >= 5) chaves.add(sem);
+    for (const k of chaves) { if (!k) continue; const i = t.indexOf(" " + k + " "); if (i >= 0 && (i < pos || (i === pos && k.length > tam))) { melhor = f; pos = i; tam = k.length; } }
+  }
+  return melhor;
+}
 const numTxt = (s: string) => String(s || "").replace(/cm/i, "").replace(/R\$/, "").trim().replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
 
 type Produto = { congelado?: boolean; congelado_motivo?: string; mostruario_liberado?: boolean; codigo: string; nome: string; modulo: string; grupo: string; cor: string; tamanho: string; especificacoes: string; estoque: number | null; reservas?: number | null; expedicao?: number | null; saldo?: number | null; deposito?: string; preco: number | null;
@@ -164,7 +179,7 @@ export function LeitorCodigo({ onCodigo, onFechar, onPreco }: { onCodigo: (c: st
 }
 
 export default function ConsultaProduto({ movel = false }: { movel?: boolean }) {
-  const { toast, R } = useApp() as any;
+  const { toast, R, st } = useApp() as any;
   const edita = R.podeEditarProduto(), libMostr = R.podeLiberarMostruario();
   async function acao(f: () => Promise<any>, msg: string, recarregar = true) {
     try { await f(); toast(msg); if (recarregar && prod) await buscar(prod.codigo); if (lista) carregarLista(); } catch (e: any) { toast(e.message || "Não consegui salvar"); }
@@ -189,7 +204,7 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
   const sugsVis = sugs.map(x => ({ x, d: vendavel(x) })).filter(o => !soDisp || Number(o.d.disp) > 0)
     .sort((a, b) => (Number(b.d.disp) > 0 ? 1 : 0) - (Number(a.d.disp) > 0 ? 1 : 0) || a.x.nome.localeCompare(b.x.nome, "pt-BR")).map(o => o.x);
   function escolher(c: string) { setSugs([]); buscar(c); }
-  const [imp, setImp] = useState<{ nome: string; linhas: any[]; semCod: number; projetado: number; comPreco?: number; semPreco?: number } | null>(null); const [importando, setImportando] = useState(false); const [prog, setProg] = useState(0);
+  const [imp, setImp] = useState<{ nome: string; linhas: any[]; semCod: number; projetado: number; comPreco?: number; semPreco?: number; semFab?: number } | null>(null); const [importando, setImportando] = useState(false); const [prog, setProg] = useState(0);
   const inpArq = { current: null as HTMLInputElement | null };
   // pode escolher várias planilhas de uma vez (ex.: Matriz + Linha pronta + Estofados): viram uma importação só
   async function lerPlanilha(fs: FileList | File[] | null | undefined) {
@@ -202,7 +217,9 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
       const linhas = l.map(r => { const o: any = {}; COLS.forEach(([k, , nomes]) => { const v = String(col(r, ...nomes) || "").trim(); if (v) o[k] = NUM.includes(k as string) ? numTxt(v) : v; });
         // custo → preço de venda (o custo fica só aqui, na leitura; não vai para o banco)
         const custoTxt = String(col(r, "Custo do Item (R$)", "Custo do Item", "Custo do item R$", "Custo") || "").trim();
-        if (custoTxt) { const pv = precoDoCusto(Number(numTxt(custoTxt))); if (pv != null) { o.preco = pv.toFixed(2); o._cp = 1; } else { delete o.preco; o._sp = 1; } }
+        const fab = o.nome ? fabricaDoNome(o.nome, st.fabricas) : null;
+        if (fab) { o.fabricante = fab.nome; o._fab = 1; }
+        if (custoTxt) { const pv = precoDoCusto(Number(numTxt(custoTxt)), fab ? Number(fab.ipi ?? 5) / 100 : IPI, fab ? Number(fab.frete ?? 8) / 100 : FRETE); if (pv != null) { o.preco = pv.toFixed(2); o._cp = 1; } else { delete o.preco; o._sp = 1; } }
         // "Estoque" do Tático é o depósito (LINHA PRONTA); só vale como quantidade quando é número
         if (o.estoque != null && !/^-?\d+(\.\d+)?$/.test(String(o.estoque))) delete o.estoque;
         if (o.deposito && /^-?[\d.,]+$/.test(String(o.deposito))) delete o.deposito;
@@ -228,8 +245,9 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         a.deposito = [...new Set(a.locais.map((l: Local) => l.local).filter(Boolean))].join(" + ");
       });
       const ok = [...porCod.values()];
-      ok.forEach(x => { if (x._cp) comPreco++; else if (x._sp) semPreco++; delete x._cp; delete x._sp; });
-      setImp({ nome: f.name, linhas: ok, semCod: linhas.filter(x => !(x.codigo && x.nome)).length, projetado, comPreco, semPreco });
+      let semFab = 0;
+      ok.forEach(x => { if (x._cp) { comPreco++; if (!x._fab) semFab++; } else if (x._sp) semPreco++; delete x._cp; delete x._sp; delete x._fab; });
+      setImp({ nome: f.name, linhas: ok, semCod: linhas.filter(x => !(x.codigo && x.nome)).length, projetado, comPreco, semPreco, semFab });
     } catch (e: any) { toast("Não consegui ler a planilha: " + (e.message || e)); }
   }
   async function importar() {
@@ -394,11 +412,11 @@ export default function ConsultaProduto({ movel = false }: { movel?: boolean }) 
         <button type="button" className="btn ghost sm" onClick={modelo}>⬇ Modelo de planilha</button></>}</div>
       {imp && <div className="cp-imp">
         <b>📄 {imp.nome}</b> · <b>{imp.linhas.length}</b> produto(s) prontos para importar{imp.semCod ? <span className="hint"> · {imp.semCod} linha(s) sem código ou sem descrição foram ignoradas</span> : null}{imp.projetado ? <span className="hint"> · <b>{imp.projetado}</b> item(ns) da linha projetado (descrição em letras minúsculas) ficaram de fora</span> : null}
-        {(imp.comPreco || imp.semPreco) ? <div className="hint" style={{ marginTop: 6 }}>💲 Preço de venda calculado pelo custo da planilha em <b>{imp.comPreco || 0}</b> produto(s){imp.semPreco ? <> · <b>{imp.semPreco}</b> com custo vazio, zerado ou abaixo de R$ {CUSTO_MIN},00 ficam <b>sem preço novo</b> (mantêm o que já tinham)</> : null}. O custo não é gravado.</div> : null}
+        {(imp.comPreco || imp.semPreco) ? <div className="hint" style={{ marginTop: 6 }}>💲 Preço de venda calculado pelo custo da planilha em <b>{imp.comPreco || 0}</b> produto(s){imp.semPreco ? <> · <b>{imp.semPreco}</b> com custo vazio, zerado ou abaixo de R$ {CUSTO_MIN},00 ficam <b>sem preço novo</b> (mantêm o que já tinham)</> : null}. IPI e frete de cada fábrica (Cadastros › Fábricas){imp.semFab ? <> · <b>{imp.semFab}</b> sem fábrica identificada no nome usaram o padrão (IPI 5% · frete 8%)</> : null}. O custo não é gravado.</div> : null}
         {locaisDe(imp.linhas).length > 0 && <div className="hint" style={{ marginTop: 6 }}>🔄 <b>Atualiza o estoque de: {locaisDe(imp.linhas).map(nomeLocal).filter((v, i, a) => a.indexOf(v) === i).join(" + ")}</b> ({locaisDe(imp.linhas).join(", ")}). As quantidades são <b>substituídas</b> (não somam com as anteriores) e o produto não duplica. Produto desse estoque que <b>não estiver nesta planilha fica com 0</b> (o Tático não lista o que zerou) — os outros estoques não mudam.</div>}
         <div className="hint">Produto com o mesmo código é atualizado; código novo é cadastrado. Colunas reconhecidas: {COLS.filter(([k]) => imp.linhas.some(x => x[k] != null && x[k] !== "")).map(c => c[1]).join(", ") || "—"}.</div>
-        <div style={{ maxHeight: 220, overflow: "auto", margin: "6px 0" }}><table className="cp-tab"><thead><tr><th>Código</th><th>Descrição</th><th>Acabamento</th><th>A × P × L</th><th>Estoque</th><th>Saldo p/ venda</th><th>Preço de venda</th></tr></thead>
-          <tbody>{imp.linhas.slice(0, 50).map((x, i) => <tr key={i}><td>{x.codigo}</td><td>{x.nome}</td><td>{x.cor || ""}</td><td>{[x.altura, x.profundidade, x.largura].map(v => v || "—").join(" × ")}</td><td>{x.estoque ?? ""}</td><td>{x.saldo ?? ""}</td><td>{x.preco != null ? fmtMoeda(Number(x.preco)) : "—"}</td></tr>)}</tbody></table>
+        <div style={{ maxHeight: 220, overflow: "auto", margin: "6px 0" }}><table className="cp-tab"><thead><tr><th>Código</th><th>Descrição</th><th>Acabamento</th><th>A × P × L</th><th>Estoque</th><th>Saldo p/ venda</th><th>Fábrica</th><th>Preço de venda</th></tr></thead>
+          <tbody>{imp.linhas.slice(0, 50).map((x, i) => <tr key={i}><td>{x.codigo}</td><td>{x.nome}</td><td>{x.cor || ""}</td><td>{[x.altura, x.profundidade, x.largura].map(v => v || "—").join(" × ")}</td><td>{x.estoque ?? ""}</td><td>{x.saldo ?? ""}</td><td>{x.fabricante || "—"}</td><td>{x.preco != null ? fmtMoeda(Number(x.preco)) : "—"}</td></tr>)}</tbody></table>
           {imp.linhas.length > 50 && <div className="hint">… e mais {imp.linhas.length - 50}</div>}</div>
         <div className="cp-acoes"><button type="button" className="btn primary sm" disabled={importando || !imp.linhas.length} onClick={importar}>{importando ? `Importando… ${prog}%` : `✅ Importar ${imp.linhas.length} produto(s)`}</button><button type="button" className="btn ghost sm" onClick={() => setImp(null)}>Cancelar</button></div>
       </div>}
