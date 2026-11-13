@@ -78,6 +78,15 @@ export function abrirTermo(c: any, termo: any, projetista: string, toast?: (m: s
 
 // ---------------- estilos (mesmo desenho dos mockups, com as cores do 360) ----------------
 const CSS = `
+.pj .pjkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}@media (max-width:800px){.pj .pjkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.pj .pjkpi{background:var(--pj-bg,#fff);border:1px solid var(--pj-l);border-radius:14px;padding:16px 18px;cursor:pointer;box-shadow:0 1px 2px rgba(20,28,45,.05)}.pj .pjkpi b{display:block;font-size:28px;line-height:1.1}.pj .pjkpi span{color:var(--pj-s);font-size:13px}.pj .pjkpi.alerta b{color:#b42318}
+.pj .pjtabs{display:flex;align-items:center;flex-wrap:wrap;gap:4px;background:var(--pj-l2);border-radius:12px;padding:4px;margin-bottom:12px;width:fit-content;max-width:100%}.pj .pjtabs>button{border:0;background:none;padding:8px 14px;border-radius:9px;font-weight:600;color:var(--pj-s);cursor:pointer}.pj .pjtabs>button.on{background:var(--pj-bg,#fff);color:inherit;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.pj .pjrows{display:flex;flex-direction:column;gap:10px}
+.pj .pjrow{display:flex;gap:14px;align-items:flex-start;background:var(--pj-bg,#fff);border:1px solid var(--pj-l);border-left:5px solid var(--cor);border-radius:14px;padding:12px 14px;box-shadow:0 1px 2px rgba(20,28,45,.05)}.pj .pjrow.res{background:#fffaf0}
+.pj .pjdata{color:#fff;border-radius:10px;min-width:86px;text-align:center;padding:7px 8px;line-height:1.15}.pj .pjdata small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.8px;opacity:.9}.pj .pjdata b{display:block;font-size:21px}.pj .pjdata span{font-weight:800;font-size:15px}
+.pj .pjinfo{flex:1;min-width:0}.pj .pjl1{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.pj .pjl1>b{font-size:15.5px;margin-right:2px}.pj .pjtag{border:1px solid var(--pj-l);border-radius:6px;padding:1px 7px;font-size:12px;font-weight:700}.pj .pjtag.loc{background:#1f5f8b;color:#fff;border-color:transparent}
+.pj .pjl2{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--pj-f);font-size:12.5px;margin:5px 0}.pj .pjl2 b{color:var(--pj-s);font-weight:600}.pj .pjl3{display:flex;flex-wrap:wrap;gap:4px}
+.pj .pjacts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}@media (max-width:700px){.pj .pjrow{flex-wrap:wrap}.pj .pjacts{width:100%;justify-content:flex-start}}
 .pj{--pj-pri:var(--primary,#284b8f);--pj-soft:var(--primary-soft,#eaf0fb);--pj-ok:#3f8f4f;--pj-okbg:#e6f4e9;--pj-w:#8a5d00;--pj-wbg:#faf1df;--pj-l:var(--line,#e0e3e8);--pj-l2:var(--line-soft,#eceef1);--pj-s:var(--ink-soft,#5a6270);--pj-f:var(--ink-faint,#8b94a3);--pj-bg:var(--surface,#fff);--pj-bg2:var(--surface-2,#f7f8f9)}
 .pj .pjtop{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}.pj .pjtop h2{font-size:20px;margin:0}.pj .pjtop .sub{color:var(--pj-s)}
 .pj .pjchip{background:var(--pj-bg);border:1px solid var(--pj-l);border-radius:999px;padding:5px 12px;font-weight:600;font-size:12.5px;white-space:nowrap}
@@ -179,87 +188,108 @@ export default function ProjetistaChecklist() {
   };
   useEffect(() => { setLista(null); carregar(); }, [proj]);
 
-  // cartões por dia: o dia escolhido e os próximos dias com atendimento; no topo, o que ficou para trás sem finalizar
-  const { secoes, doDia, pendentes } = useMemo(() => {
+  // listas da tela inicial: dia escolhido, próximos, a finalizar (data passou sem termo) e realizados com termo
+  const { doDia, proximos, pendentes, realizados } = useMemo(() => {
     const ent: { c: any; slot: string; dur: number; n: number; total: number; reserva?: boolean }[] = [];
     (lista || []).forEach(c => diasDoProj(c, proj).forEach(d => ent.push({ c, ...d })));
     ent.sort((a, b) => a.slot.localeCompare(b.slot));
     const doDia = ent.filter(e => e.slot.slice(0, 10) === dia);
-    const prox: string[] = [];
-    for (const e of ent) { const d = e.slot.slice(0, 10); if (d > dia && d <= somaDias(dia, 10) && !prox.includes(d)) prox.push(d); if (prox.length >= 2) break; }
-    const pend = (lista || []).filter(c => c.etapa !== "aguardando" && !termoFinal(c) && (feito(c) || diasDoProj(c, proj).every(d => d.slot.slice(0, 10) < hj)))
+    const vistos = new Set<string>();
+    const proximos = ent.filter(e => { const d = e.slot.slice(0, 10); if (d <= hj || vistos.has(e.c.id) || feito(e.c)) return false; vistos.add(e.c.id); return true; });
+    const pendentes = (lista || []).filter(c => c.etapa !== "aguardando" && !termoFinal(c) && (feito(c) || diasDoProj(c, proj).every(d => d.slot.slice(0, 10) < hj)))
       .map(c => { const ds = diasDoProj(c, proj); const u = ds[ds.length - 1]; return u ? { c, ...u } : null; }).filter(Boolean) as typeof ent;
-    const nome = (d: string) => (d === hj ? "Hoje" : d === somaDias(hj, 1) ? "Amanhã" : d === somaDias(hj, -1) ? "Ontem" : cap(DIAS[parseData(d + "T12:00").getDay()])) + " · " + ddmm(d);
-    return { doDia, pendentes: pend, secoes: [{ titulo: nome(dia), itens: doDia }, ...prox.map(d => ({ titulo: nome(d), itens: ent.filter(e => e.slot.slice(0, 10) === d) }))] };
+    const realizados = (lista || []).filter(c => termoFinal(c))
+      .map(c => { const ds = diasDoProj(c, proj); const u = ds[ds.length - 1]; return u ? { c, ...u } : null; }).filter(Boolean)
+      .sort((x: any, y: any) => String(y.c.termo?.finalizadoEm || "").localeCompare(String(x.c.termo?.finalizadoEm || ""))) as typeof ent;
+    return { doDia, proximos, pendentes, realizados };
   }, [lista, proj, dia, hj]);
-
-  // seleção padrão: o primeiro do dia (ou o primeiro pendente)
-  useEffect(() => {
-    if (!lista) return;
-    if (sel && lista.some(c => c.id === sel)) return;
-    setSel((doDia.find(e => !e.reserva) || doDia[0] || pendentes[0] || secoes[1]?.itens[0])?.c.id || null);
-  }, [lista, dia]);
-  const escolher = (id: string) => { if (id === sel) return; if (sujo.current && !confirm("Há alterações no checklist que não foram salvas. Trocar de cliente mesmo assim?")) return; sujo.current = false; setSel(id); };
+  const [aba, setAba] = useState<"dia" | "prox" | "fin" | "real">("dia");
+  const abrir = (id: string) => { sujo.current = false; setSel(id); window.scrollTo({ top: 0 }); };
+  const voltar = () => { if (sujo.current && !confirm("Há alterações no checklist que não foram salvas. Voltar para a lista mesmo assim?")) return; sujo.current = false; setSel(null); carregar(); };
 
   if (erro && !eu) return <section className="view active"><div className="empty">{erro}</div></section>;
   if (!eu) return <section className="view active"><div className="empty">Carregando…</div></section>;
-  if (!eu.projetista && !eu.podeTodos) return <section className="view active"><div className="view-head"><div><h2>Meu dia</h2></div></div>
+  if (!eu.projetista && !eu.podeTodos) return <section className="view active"><div className="view-head"><div><h2>Área do projetista</h2></div></div>
     <div className="card" style={{ padding: 18 }}>Seu usuário tem o acesso de projetista do checklist, mas o nome dele não bate com nenhum projetista da agenda do checklist. Peça para a Gestão conferir o nome no cadastro (tem que ser igual ao da lista de projetistas da agenda).</div></section>;
 
   const atual = sel ? (lista || []).find(c => c.id === sel) : null;
-  const naoRes = doDia.filter(e => !e.reserva);
-  const dLonga = (() => { const d = parseData(dia + "T12:00"); return DIAS[d.getDay()] + ", " + d.toLocaleDateString("pt-BR"); })();
-  return (
+  // ---------- cliente aberto: ficha em tela cheia ----------
+  if (atual) return (
     <section className="view active pj" id="view-projetista-ck">
       <style>{CSS}</style>
       <div className="pjtop">
-        <h2>Meu dia</h2><span className="sub">{dLonga}</span>
-        <span className="pjchip b">{naoRes.length} checklist{naoRes.length === 1 ? "" : "s"} {dia === hj ? "hoje" : "no dia"}</span>
-        <span className="pjchip g">{naoRes.filter(e => e.c.confirmacao === "confirmada").length} presença{naoRes.filter(e => e.c.confirmacao === "confirmada").length === 1 ? "" : "s"} confirmada{naoRes.filter(e => e.c.confirmacao === "confirmada").length === 1 ? "" : "s"}</span>
-        {naoRes.some(e => !feito(e.c) && e.c.confirmacao !== "confirmada") && <span className="pjchip w">{naoRes.filter(e => !feito(e.c) && e.c.confirmacao !== "confirmada").length} aguardando confirmação</span>}
-        <span style={{ flex: 1 }} />
-        {eu.podeTodos && <select value={proj} onChange={e => { if (sujo.current && !confirm("Há alterações não salvas. Trocar de projetista?")) return; sujo.current = false; setSel(null); setProj(e.target.value); try { localStorage.setItem("a360-ck-proj", e.target.value); } catch { /* */ } }} style={{ minWidth: 150 }} title="Projetista (Gestão / setor Checklist)">
+        <button className="btn sm" onClick={voltar}>← Voltar para a lista</button>
+        <span className="sub">{eu.podeTodos ? "Projetista: " + proj : "Minha agenda de checklist"}</span>
+      </div>
+      <Ficha key={atual.id} c={atual} proj={proj} recarregar={carregar} setSujo={(v: boolean) => (sujo.current = v)} toast={toast} />
+    </section>
+  );
+
+  // ---------- tela inicial: visão geral ----------
+  const naoRes = doDia.filter(e => !e.reserva);
+  const dLonga = dia === hj ? "Hoje" : (() => { const d = parseData(dia + "T12:00"); return cap(DIAS[d.getDay()]) + ", " + d.toLocaleDateString("pt-BR"); })();
+  const itens = aba === "dia" ? doDia : aba === "prox" ? proximos : aba === "fin" ? pendentes : realizados;
+  const vazio = aba === "dia" ? "Nenhum checklist neste dia." : aba === "prox" ? "Nenhum checklist nos próximos dias." : aba === "fin" ? "Nada para finalizar. 👏" : "Nenhum checklist realizado com termo ainda.";
+  return (
+    <section className="view active pj" id="view-projetista-ck">
+      <style>{CSS}</style>
+      <div className="pjtop" style={{ alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <h2>Área do projetista</h2>
+          <div className="sub" style={{ marginTop: 4, maxWidth: 620 }}>Os clientes do checklist {eu.podeTodos ? "de " + proj : "da sua agenda"}. Clique em <b>Fazer checklist</b> para abrir o cliente: arquivos da venda, medição e as etapas do checklist (sem valores).</div>
+        </div>
+        {eu.podeTodos && <select value={proj} onChange={e => { setSel(null); setProj(e.target.value); try { localStorage.setItem("a360-ck-proj", e.target.value); } catch { /* */ } }} style={{ minWidth: 170 }} title="Projetista (todos podem ver todos)">
           {eu.projetistas.map(n => <option key={n} value={n}>{n}{n === eu.projetista ? " (eu)" : ""}</option>)}</select>}
-        <span className="nav"><button onClick={() => setDia(somaDias(dia, -1))} title="Dia anterior">◀</button><button onClick={() => setDia(hj)}>Hoje</button><button onClick={() => setDia(somaDias(dia, 1))} title="Próximo dia">▶</button></span>
-        <button className="btn ghost sm" onClick={() => carregar()} title="Atualizar">↻</button>
+        <button className="btn ghost sm" onClick={() => carregar()} title="Atualizar">↻ Atualizar</button>
       </div>
-      <div className="pjgrid">
-        <section className="cardx lista">
-          {lista === null ? <div className="empty">Carregando…</div> : <>
-            {pendentes.length > 0 && <><div className="dia" style={{ color: "#b42318" }}>A finalizar · data passou</div>{pendentes.map(e => <ItemDia key={"p" + e.c.id} e={e} on={e.c.id === sel} onClick={() => escolher(e.c.id)} segura={segura} />)}</>}
-            {secoes.map((s, i) => <div key={s.titulo}><div className="dia" style={i || pendentes.length ? { marginTop: 14 } : undefined}>{s.titulo}</div>
-              {s.itens.length ? s.itens.map(e => <ItemDia key={e.c.id + e.slot} e={e} on={e.c.id === sel} onClick={() => escolher(e.c.id)} segura={segura} />)
-                : <div className="hint" style={{ padding: "4px 6px 10px" }}>Nenhum checklist neste dia.</div>}</div>)}
-            {erro && <div className="empty">{erro}</div>}
-          </>}
-        </section>
-        {atual ? <Ficha key={atual.id} c={atual} proj={proj} recarregar={carregar} setSujo={(v: boolean) => (sujo.current = v)} toast={toast} />
-          : <section className="cardx" style={{ padding: 30, textAlign: "center", color: "var(--ink-faint)" }}>{lista === null ? "Carregando…" : "Escolha um cliente na lista “Meu dia”."}</section>}
+      <div className="pjkpis">
+        <div className="pjkpi" onClick={() => { setDia(hj); setAba("dia"); }}><b>{doDia.filter(e => !e.reserva).length}</b><span>{dia === hj ? "hoje" : "no dia " + ddmm(dia)}</span></div>
+        <div className="pjkpi" onClick={() => setAba("prox")}><b>{proximos.filter(e => !e.reserva).length}</b><span>próximos</span></div>
+        <div className={"pjkpi" + (pendentes.length ? " alerta" : "")} onClick={() => setAba("fin")}><b>{pendentes.length}</b><span>a finalizar</span></div>
+        <div className="pjkpi" onClick={() => setAba("real")}><b>{realizados.length}</b><span>realizados com termo</span></div>
       </div>
+      <div className="pjtabs">
+        <button className={aba === "dia" ? "on" : ""} onClick={() => setAba("dia")}>{dLonga} ({doDia.length})</button>
+        <button className={aba === "prox" ? "on" : ""} onClick={() => setAba("prox")}>Próximos ({proximos.length})</button>
+        <button className={aba === "fin" ? "on" : ""} onClick={() => setAba("fin")}>A finalizar ({pendentes.length})</button>
+        <button className={aba === "real" ? "on" : ""} onClick={() => setAba("real")}>Realizados ({realizados.length})</button>
+        {aba === "dia" && <span className="nav" style={{ marginLeft: 8 }}><button onClick={() => setDia(somaDias(dia, -1))} title="Dia anterior">◀</button><button onClick={() => setDia(hj)}>Hoje</button><button onClick={() => setDia(somaDias(dia, 1))} title="Próximo dia">▶</button></span>}
+        {aba === "dia" && naoRes.length > 0 && <span className="sub" style={{ marginLeft: 8 }}>{naoRes.filter(e => e.c.confirmacao === "confirmada").length} de {naoRes.length} com presença confirmada</span>}
+      </div>
+      {lista === null ? <div className="empty">Carregando…</div>
+        : itens.length ? <div className="pjrows">{itens.map(e => <LinhaCliente key={e.c.id + e.slot} e={e} hj={hj} segura={segura} onAbrir={() => abrir(e.c.id)} />)}</div>
+        : <div className="cardx" style={{ padding: 26, textAlign: "center", color: "var(--ink-faint)" }}>{vazio}</div>}
+      {erro && <div className="empty">{erro}</div>}
     </section>
   );
 }
 
-function ItemDia({ e, on, onClick, segura }: { e: any; on: boolean; onClick: () => void; segura: number }) {
-  const c = e.c, t = c.termo || {};
+/** linha da tela inicial (cartão largo: data · cliente · selos · botões) */
+function LinhaCliente({ e, hj, segura, onAbrir }: { e: any; hj: string; segura: number; onAbrir: () => void }) {
+  const c = e.c, t = c.termo || {}, d = e.slot.slice(0, 10);
   const ambs = (t.ambientes || []).map((a: any) => a.nome).filter(Boolean);
-  if (e.reserva) {
-    const lib = c.ultimoContato ? (() => { const d = new Date(c.ultimoContato); d.setDate(d.getDate() + segura); return d; })() : null;
-    const dias = c.ultimoContato ? Math.floor((Date.now() - +new Date(c.ultimoContato)) / 864e5) : 0;
-    return <div className={"pjit res" + (on ? " on" : "")} onClick={onClick}><div className="pjh">{hm(e.slot)} – {fimDe(e.slot, e.dur)}<span>reserva</span></div><div className="pjn">{c.cliente}</div>
-      <div className="m">⏳ Reserva · aguardando resposta<br />{dias ? "sem resposta há " + dias + " dia" + (dias > 1 ? "s" : "") + " · " : ""}{lib ? "libera sozinha em " + fmtDateTime(lib.toISOString()) : ""}</div></div>;
-  }
-  return <div className={"pjit" + (on ? " on" : "") + (feito(c) ? " pjok" : "")} onClick={onClick} style={{ ["--cor" as any]: "#d6336c" }}>
-    <div className="pjh">{hm(e.slot)} – {fimDe(e.slot, e.dur)}<span>{fmtDur(e.dur)}{e.total > 1 ? " · dia " + e.n + "/" + e.total : ""}</span></div>
-    <div className="pjn">{c.cliente}</div>
-    <div className="m">Venda {c.pedido}{bairroCidade(c) ? " · " + bairroCidade(c) : ""}</div>
-    <div className="m">{ambs.length ? ambs.join(", ") : "⚠️ ambientes ainda não escritos"}</div>
-    {feito(c) ? <span className="pjpill p-ok">✅ Realizado{termoFinal(c) ? "" : " · falta o termo"}</span>
-      : c.confirmacao === "confirmada" ? <span className="pjpill p-ok">✅ Presença confirmada</span>
-      : <span className="pjpill p-w">⏳ Presença a confirmar</span>}
-    {t.iniciadoEm && !feito(c) && <span className="pjpill p-b">⏱ em andamento</span>}
-    {!c.medida ? <span className="pjpill p-g">⚠️ sem medição no 360</span> : c.medida.etapa !== "liberada" ? <span className="pjpill p-w">📐 {MEDIDA_CURTA[c.medida.etapa] || c.medida.etapa}</span> : null}
-    {c.encaixe && <span className="pjpill p-r">⚠️ encaixe</span>}
+  const tel = sanitizeWhats(c.telefone || c.telefone2 || "");
+  const rot = d === hj ? "HOJE" : d === somaDias(hj, 1) ? "AMANHÃ" : d === somaDias(hj, -1) ? "ONTEM" : DIAS[parseData(d + "T12:00").getDay()].slice(0, 3).toUpperCase();
+  const cor = e.reserva ? "#c98a12" : feito(c) ? "#3f8f4f" : d < hj ? "#b42318" : d === hj ? "#3f8f4f" : "var(--primary,#284b8f)";
+  const lib = e.reserva && c.ultimoContato ? (() => { const x = new Date(c.ultimoContato); x.setDate(x.getDate() + segura); return x; })() : null;
+  return <div className={"pjrow" + (e.reserva ? " res" : "")} style={{ ["--cor" as any]: cor }}>
+    <div className="pjdata" style={{ background: cor }}><small>{rot}</small><b>{ddmm(d)}</b><span>{hm(e.slot)}</span></div>
+    <div className="pjinfo">
+      <div className="pjl1"><b>{c.cliente}</b><span className="pjtag">Venda {c.pedido}</span>{bairroCidade(c) && <span className="pjtag loc">📍 {bairroCidade(c)}</span>}{e.total > 1 && <span className="pjtag">dia {e.n}/{e.total}</span>}</div>
+      <div className="pjl2">{c.vendedor && <span>Vendedor <b>{cap(c.vendedor)}</b></span>}{(c.telefone || c.telefone2) && <span>Tel. <b>{fmtTel(c.telefone || c.telefone2)}</b></span>}<span>Duração <b>{fmtDur(e.dur)}</b></span>{ambs.length > 0 && <span>Ambientes <b>{ambs.join(", ")}</b></span>}</div>
+      <div className="pjl3">
+        {e.reserva ? <span className="pjpill p-w">⏳ Reserva · aguardando resposta{lib ? " · libera sozinha em " + fmtDateTime(lib.toISOString()) : ""}</span>
+          : feito(c) ? <span className="pjpill p-ok">✅ Realizado{termoFinal(c) ? " · termo assinado" : " · falta o termo"}</span>
+          : c.confirmacao === "confirmada" ? <span className="pjpill p-ok">✅ Presença confirmada</span> : <span className="pjpill p-w">⏳ Presença a confirmar</span>}
+        {t.iniciadoEm && !feito(c) && <span className="pjpill p-b">⏱ em andamento</span>}
+        {!e.reserva && (!c.medida ? <span className="pjpill p-g">⚠️ sem medição no 360</span> : c.medida.etapa !== "liberada" ? <span className="pjpill p-w">📐 {MEDIDA_CURTA[c.medida.etapa] || c.medida.etapa}</span> : null)}
+        {c.encaixe && <span className="pjpill p-r">⚠️ encaixe</span>}
+      </div>
+    </div>
+    <div className="pjacts">
+      <button className="btn sm" style={{ background: "var(--primary,#284b8f)", color: "#fff", borderColor: "var(--primary,#284b8f)" }} onClick={onAbrir}>{e.reserva ? "👁 Ver" : feito(c) ? "📂 Abrir" : "📋 Fazer checklist"}</button>
+      {tel && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }} onClick={() => abrirWhats("https://wa.me/" + tel)}>💬 WhatsApp</button>}
+    </div>
   </div>;
 }
 
@@ -501,14 +531,24 @@ function Arquivo({ a, c, onVer }: { a: any; c: any; onVer: () => void }) {
 function Visualizar({ a, c, onFechar }: { a: any; c: any; onFechar: () => void }) {
   const [u, setU] = useState(""); const [erro, setErro] = useState("");
   useEffect(() => { urlDe(a, c).then(setU).catch((e: any) => setErro(e.message)); }, [a]);
-  return <Modal titulo={a.nome} onFechar={onFechar}>
-    <div style={{ minWidth: "min(900px, 86vw)" }}>
-      {erro ? <div className="empty">{erro}</div> : !u ? <div className="empty">Abrindo…</div>
-        : a.tipo === "img" ? <img src={u} alt="" style={{ maxWidth: "100%", maxHeight: "75vh", display: "block", margin: "0 auto" }} />
-        : <iframe src={u} title={a.nome} style={{ width: "100%", height: "75vh", border: 0 }} />}
-      {u && <div style={{ marginTop: 8, textAlign: "right" }}><a className="btn sm" href={u} target="_blank" rel="noopener" download={a.nome}>⬇ Baixar / abrir em outra aba</a></div>}
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onFechar(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, []);
+  // tela quase cheia: o PDF abre ajustado à largura e a imagem inteira na tela
+  const src = u && a.tipo === "pdf" ? u + (u.includes("#") ? "" : "#view=FitH&zoom=page-width") : u;
+  return <div onMouseDown={e => { if (e.target === e.currentTarget) onFechar(); }}
+    style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,20,30,.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: "2vh 2vw" }}>
+    <div style={{ background: "var(--card,#fff)", borderRadius: 14, width: "96vw", height: "94vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,.35)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: "1px solid var(--line,#e0e3e8)" }}>
+        <b style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nome}</b>
+        {u && <a className="btn sm" href={u} target="_blank" rel="noopener" download={a.nome}>⬇ Baixar / abrir em outra aba</a>}
+        <button className="btn sm" onClick={onFechar}>✕ Fechar</button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, background: a.tipo === "img" ? "#1b1f27" : "#525659", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {erro ? <div className="empty" style={{ color: "#fff" }}>{erro}</div> : !u ? <div className="empty" style={{ color: "#fff" }}>Abrindo…</div>
+          : a.tipo === "img" ? <img src={u} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+          : <iframe src={src} title={a.nome} style={{ width: "100%", height: "100%", border: 0, background: "#fff" }} />}
+      </div>
     </div>
-  </Modal>;
+  </div>;
 }
 function Soltar({ texto, onArquivos, aceita, multiplo, ocupado, estilo }: { texto: ReactNode; onArquivos: (f: File[]) => void; aceita?: string; multiplo?: boolean; ocupado?: boolean; estilo?: CSSProperties }) {
   const ref = useRef<HTMLInputElement>(null); const [over, setOver] = useState(false);
