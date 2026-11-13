@@ -20,7 +20,7 @@ export function Cadastros() {
       <div className="subnav" id="subnav"><button className={sub === "fabricas" ? "on" : ""} onClick={() => setSub("fabricas")}>Fábricas</button><button className={sub === "reps" ? "on" : ""} onClick={() => setSub("reps")}>Representantes</button></div>
       {sub === "fabricas" && <div id="subFabricas"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditFab id={null} />)}>Adicionar fábrica</button></div>
         <div id="listaFab">{fabricas.length ? fabricas.map(f => { const r = st.representantes.find(x => x.id === f.repId); return (
-          <div className="fab" key={f.id}><div className="fi">{inicial(f.nome)}</div><div><div className="fn">{f.nome}</div><div className="fc">{f.emails || "sem e-mail"} · Rep.: {r ? r.nome : "—"}</div></div>
+          <div className="fab" key={f.id}><div className="fi">{inicial(f.nome)}</div><div><div className="fn">{f.nome}</div><div className="fc">{f.emails || "sem e-mail"} · Rep.: {r ? r.nome : "—"} · <b>IPI {String(f.ipi ?? 5).replace(".", ",")}% · Frete {String(f.frete ?? 8).replace(".", ",")}%</b></div></div>
             <div className="sp"><button className="btn ghost sm" onClick={() => setModal(<EditFab id={f.id} />)}>Editar</button><button className="btn danger sm" onClick={() => executar(() => A.removerFabrica(f.id), "Fábrica removida")}>Remover</button></div></div>); })
           : <div className="empty">Nenhuma fábrica.</div>}</div></div>}
       {sub === "reps" && <div id="subReps"><div style={{ marginBottom: 14 }}><button className="btn primary" onClick={() => setModal(<EditRep id={null} />)}>Adicionar representante</button></div>
@@ -34,15 +34,26 @@ export function Cadastros() {
 
 export function EditFab({ id }: { id: string | null }) {
   const { st, executar, setModal, toast } = useApp();
-  const f = id ? st.fabricas.find(x => x.id === id) : { nome: "", emails: "", repId: "" };
+  const f = id ? st.fabricas.find(x => x.id === id) : { nome: "", emails: "", repId: "", ipi: 5, frete: 8, apelidos: "" };
   const [nome, setNome] = useState(f.nome); const [emails, setEmails] = useState(f.emails || ""); const [rep, setRep] = useState(f.repId || "");
+  const pct = (v: any) => v == null ? "" : String(v).replace(".", ",");
+  const [ipi, setIpi] = useState(pct(f.ipi ?? 5)); const [frete, setFrete] = useState(pct(f.frete ?? 8)); const [apelidos, setApelidos] = useState(f.apelidos || "");
+  const num = (s: string) => { const n = Number(String(s).replace("%", "").replace(",", ".").trim()); return isNaN(n) ? null : n; };
+  const vIpi = num(ipi), vFrete = num(frete);
+  const fator = vIpi != null && vFrete != null ? (1 + vIpi / 100) * (1 + vFrete / 100) * 3.3 : null;
   const fechar = () => setModal(null);
   return (
     <Modal titulo={id ? "Editar fábrica" : "Nova fábrica"} onFechar={fechar}>
       <div className="field" style={{ marginBottom: 14 }}><label>Nome <span className="req-star">*</span></label><input value={nome} onChange={e => setNome(e.target.value)} /></div>
       <div className="field" style={{ marginBottom: 14 }}><label>E-mails <span className="hint">(vírgula)</span></label><input value={emails} onChange={e => setEmails(e.target.value)} /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 6 }}>
+        <div className="field"><label>IPI (%)</label><input inputMode="decimal" value={ipi} onChange={e => setIpi(e.target.value)} placeholder="5" /></div>
+        <div className="field"><label>Frete (%)</label><input inputMode="decimal" value={frete} onChange={e => setFrete(e.target.value)} placeholder="8" /></div>
+      </div>
+      <div className="hint" style={{ marginBottom: 14 }}>Base do <b>preço sugerido</b> dos produtos desta fábrica: custo + IPI → + frete (sobre o valor com IPI) → × 3,3.{fator ? <> Hoje: custo × <b>{fator.toFixed(4).replace(".", ",")}</b> (ex.: custo R$ 100,00 → R$ {(100 * fator).toFixed(2).replace(".", ",")}).</> : null} Vale na próxima importação da planilha de produtos.</div>
+      <div className="field" style={{ marginBottom: 14 }}><label>Outros nomes no produto <span className="hint">(vírgula — como a fábrica aparece no nome do produto, se for diferente)</span></label><input value={apelidos} onChange={e => setApelidos(e.target.value)} placeholder="ex.: EDN, MOVEIS EDN" /></div>
       <div className="field" style={{ marginBottom: 20 }}><label>Representante</label><select value={rep} onChange={e => setRep(e.target.value)}><option value="">Sem representante</option>{[...st.representantes].sort((a, b) => String(a.nome || "").trim().localeCompare(String(b.nome || "").trim(), "pt-BR", { sensitivity: "base" })).map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}</select></div>
-      <button className="btn primary" onClick={async () => { if (!nome.trim()) { toast("Informe o nome"); return; } if (await executar(() => A.salvarFabrica(id, nome, emails, rep), "Fábrica salva")) fechar(); }}>Salvar</button>
+      <button className="btn primary" onClick={async () => { if (!nome.trim()) { toast("Informe o nome"); return; } if (vIpi == null || vFrete == null || vIpi < 0 || vFrete < 0 || vIpi > 100 || vFrete > 100) { toast("Informe IPI e frete em % (ex.: 5 e 8)"); return; } if (await executar(() => A.salvarFabrica(id, nome, emails, rep, vIpi, vFrete, apelidos), "Fábrica salva")) fechar(); }}>Salvar</button>
     </Modal>
   );
 }
