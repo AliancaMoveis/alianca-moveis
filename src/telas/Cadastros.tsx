@@ -160,6 +160,7 @@ function EditUser({ id }: { id: string | null }) {
 }
 const ACESSOS_EXTRAS: [string, string, string][] = [
   ["fretes", "🚚 Fretes — fechamento", "Fechamento de fretes do Tático: romaneios, km e valores, descontos e relatório para o financeiro"],
+  ["projetista_checklist", "📋 Projetista do checklist", "Abre a área do projetista: a agenda de checklist dele (o nome do usuário precisa ser o mesmo da lista de projetistas da agenda), a leitura da listagem do Promob e o termo de ciência para o cliente assinar"],
   ["montagem", "🔧 Montagem — efetivadas e pagamento", "Montagens efetivadas, aprovação, notas fiscais, fechamento e pagamento dos montadores (os agendamentos do Exact ficam com a Gestão)"],
 ];
 

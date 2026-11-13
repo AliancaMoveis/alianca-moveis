@@ -260,6 +260,10 @@ export const A = {
   vendedorAssumir: (id: string) => rpc("vendedor_assumir", { p_id: id }),
   salvarMeusDados: (nomeCompleto: string, telefone: string) => rpc("salvar_meus_dados", { p_nome_completo: nomeCompleto, p_telefone: telefone }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),
+  // área do projetista do checklist (agenda dele + termo de ciência a partir da listagem do Promob — sem valores)
+  ckProjetistaEu: () => rpc<{ projetista: string | null; podeTodos: boolean; projetistas: string[] }>("ck_projetista_eu"),
+  ckProjetistaAgenda: (proj: string | null, de: string, ate: string) => rpc<any[]>("ck_projetista_agenda", { p_proj: proj, p_de: de, p_ate: ate }),
+  ckProjetistaSalvar: (id: string, p: any, finalizar: boolean) => rpc("ck_projetista_salvar", { p_id: id, p, p_finalizar: finalizar }),
   salvarChecklistAgenda: (p: any) => rpc("salvar_checklist_agenda", { p }),
   checklistExcluir: (ids: string[]) => rpc<number>("checklist_excluir", { p_ids: ids }),
   checklistPedirMedida: (id: string, obs: string) => rpc<string>("checklist_pedir_medida", { p_id: id, p_obs: obs }),

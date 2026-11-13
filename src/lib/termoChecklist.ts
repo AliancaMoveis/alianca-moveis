@@ -23,7 +23,7 @@ export function ambienteDaListagem(nome: string, itens: LinhaListagem[], geral?:
   const um = <T,>(xs: (T | null)[]) => { const u = [...new Set(xs.filter((x): x is T => x != null))]; return u.length === 1 ? u[0] : null; };
   const matGeral = geral?.resumo.materiais.length === 1 ? geral.resumo.materiais[0] : null;
   const caixaMat = um(chapa.map(l => l.material)) ?? matGeral;
-  const caixaEsp = um(chapa.filter(l => l.tipo === "painel").map(l => l.espessura)) ?? (geral?.resumo.espessuras.length === 1 ? geral.resumo.espessuras[0] : null);
+  const caixaEsp = um(chapa.filter(l => l.tipo === "painel").map(l => l.espessura)) ?? um(chapa.filter(l => l.tipo === "modulo").map(l => l.espessura)) ?? (geral?.resumo.espessuras.length === 1 ? geral.resumo.espessuras[0] : null);
   const portaMat = um(portas.map(l => l.material));
   const portaEsp = um(portas.map(l => l.espessura));
   const vidro = itens.some(l => /vidro|reflecta|espelho/i.test(l.descricao));
