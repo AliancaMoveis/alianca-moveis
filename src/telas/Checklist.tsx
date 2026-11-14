@@ -265,7 +265,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
 }
 
 function CartaoCk({ c, aba }: any) {
-  const { abrirDetalhe, setModal, executar, st, toast } = useApp() as any;
+  const { abrirDetalhe, setModal, executar, st, toast, irPara } = useApp() as any;
   const k = ck(c), e = etapaCk(c), g = grupoCk(c), [nome, cor0] = ETAPA_CK[e] || [e, "var(--line)"];
   const segura = cfgAgenda(st).seguraDias, venc = reservaVencida(c, cfgAgenda(st)), atrasoV = diasDesde(k.ultimoContato) - segura;
   const liberar = () => { if (confirm("🔓 Liberar a agenda de " + c.cliente + "?\n\nO horário de " + fmtDateTime(k.proposta) + (k.propostaProjetista ? " com " + k.propostaProjetista : "") + " fica livre e o cliente volta para “A agendar”. O histórico das tentativas fica salvo.")) executar(() => A.checklistRegistrar(c.id, { acao: "liberar" }), "Agenda liberada — cliente voltou para A agendar"); };
@@ -326,6 +326,7 @@ function CartaoCk({ c, aba }: any) {
           {k.termo && (k.termo.ambientes || []).length > 0 && <button className="btn sm" title={(k.termo.finalizadoEm ? "Termo finalizado em " + fmtDateTime(k.termo.finalizadoEm) : "Rascunho do projetista") + (k.termo.salvoPor ? " · " + k.termo.salvoPor : "")}
             onClick={() => abrirTermo({ ...c, ...k, vendedor: k.planilha?.vendedor, local: k.local }, k.termo, k.projetista || "", toast)}>📄 Termo{k.termo.finalizadoEm ? "" : " (rascunho)"}</button>}
           <button className="btn ghost sm" onClick={() => setModal(<ModalNotas c={c} />)} title="Mensagens enviadas e anotações">📝{notas ? " " + notas : ""}</button>
+          {(g === "agendado" || c.status === "concluida") && <button className="btn sm primary" onClick={() => irPara("projetista_ck", { abrirCk: c.id })} title="Abrir a tela de trabalho do checklist (ambientes, conferência, contrato)">🧑‍💻 Tela do checklist</button>}
           <button className="btn ghost sm" onClick={() => abrirDetalhe(c.id)}>Ficha</button>
           <button className="btn ghost sm" title="Excluir cliente do checklist" style={{ color: "var(--danger)" }} onClick={() => setModal(<ConfirmaExcluir ids={[c.id]} rotulo={c.cliente + " (venda " + c.pedido + ")"} />)}>🗑</button>
         </div>

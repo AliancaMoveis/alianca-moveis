@@ -11,6 +11,7 @@ import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, san
 import { lerListagemArquivo, type LinhaListagem, type Listagem } from "../lib/listagemPromob";
 import { ambienteDaListagem, impressaoHtml, termoHtml, FICHA_AMBIENTE, type AmbTermo, type DadosTermo, type Mat } from "../lib/termoChecklist";
 import { Modal } from "../comp/Modal";
+import { aceitesDoContrato, blobParaJpeg, pdfParaImagens, qrDataUrl } from "../lib/contratoUtil";
 
 const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 const NAO_INCLUSOS_PADRAO = ["Granito / pedra", "Eletrodomésticos", "Cuba", "Iluminação"];
@@ -165,7 +166,9 @@ const CSS = `
 type Arqs = { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null; dados?: any };
 
 export default function ProjetistaChecklist() {
-  const { toast, st } = useApp() as any;
+  const { toast, st, preset } = useApp() as any;
+  // vindo da agenda / ficha do cliente: abre direto a tela de trabalho daquele checklist
+  const abrirId = useRef<string | null>(preset?.abrirCk || null);
   const [eu, setEu] = useState<{ projetista: string | null; podeTodos: boolean; projetistas: string[] } | null>(null);
   const [proj, setProj] = useState("");
   const [lista, setLista] = useState<any[] | null>(null);
@@ -180,7 +183,7 @@ export default function ProjetistaChecklist() {
     A.ckProjetistaEu().then(r => {
       setEu(r);
       let salvo = ""; try { salvo = localStorage.getItem("a360-ck-proj") || ""; } catch { /* */ }
-      setProj(r.podeTodos ? (salvo === "*" || r.projetistas.includes(salvo) ? salvo : "*") : r.projetista || "");
+      setProj(r.podeTodos ? (abrirId.current ? "*" : salvo === "*" || r.projetistas.includes(salvo) ? salvo : "*") : r.projetista || "");
     }).catch((e: any) => setErro(e.message));
   }, []);
   const carregar = () => {
@@ -189,6 +192,11 @@ export default function ProjetistaChecklist() {
     return A.ckProjetistaAgenda(proj, somaDias(hj, -45), somaDias(hj, 60)).then(l => setLista(l || [])).catch((e: any) => { setErro(e.message); setLista([]); });
   };
   useEffect(() => { setLista(null); carregar(); }, [proj]);
+  useEffect(() => {
+    if (!abrirId.current || !lista) return;
+    const id = abrirId.current; abrirId.current = null;
+    if (lista.some(c => c.id === id)) setSel(id); else toast("Este cliente não está na agenda de checklist" + (eu?.podeTodos ? "" : " deste projetista"));
+  }, [lista]);
 
   // listas da tela inicial: dia escolhido, próximos, a finalizar (data passou sem termo) e realizados com termo
   const { doDia, proximos, pendentes, realizados } = useMemo(() => {
@@ -425,6 +433,11 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
   const [ferragens, setFerragens] = useState<string[]>(t0.ferragens || []);
   const [arquivos, setArquivos] = useState<string[]>(t0.arquivos || []);
   const [meta, setMeta] = useState<any>(t0.listagem || {});
+  const [imgsProj, setImgsProj] = useState<Img[]>(t0.imagensProjeto || []);
+  // contrato com assinatura online (link + QR Code)
+  const [ct, setCt] = useState<any>(null);
+  const verContrato = () => A.ckContrato("status", c.id).then(r => { setCt(r.contrato); return r.contrato; }).catch(() => null);
+  useEffect(() => { verContrato(); }, [c.id]);
   const [mudou, _setMudou] = useState(false);
   const setMudou = (v: boolean) => { _setMudou(v); setSujo(v); };
   const [ocupado, setOcupado] = useState("");
@@ -435,7 +448,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
 
   const dados = (extra: any = {}) => ({
     ambientes: ambs.map(({ _k, ...a }) => ({ ...a, nome: a.nome.trim(), conferir: conferirAmb(a) })),
-    ambientesConfirmados: confirmados, naoInclusos: naoInc, obs, ferragens, arquivos, listagem: meta, ...extra,
+    ambientesConfirmados: confirmados, naoInclusos: naoInc, obs, ferragens, arquivos, listagem: meta, imagensProjeto: imgsProj.map(({ url, ...x }: any) => x), ...extra,
   });
   async function salvar(acao: "salvar" | "iniciar" | "impressao" | "assinado" | "realizado" = "salvar", extra: any = {}, ok = "Checklist salvo") {
     setOcupado(acao);
@@ -447,11 +460,20 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
   // etapas
   const e1 = ambs.length > 0 && ambs.every(a => a.nome.trim()) && confirmados;
   const e2 = e1 && ambs.every(a => !conferirAmb(a).length && fichaOk(a));
-  const e3 = !!t0.impressao;
+  const e3 = !!t0.impressao || (!!ct && ct.status !== "expirado");
   const e4 = (t0.assinados || []).length > 0;
   const e5 = termoFinal(c);
   const etapaAtual = !e1 ? 1 : !e2 ? 2 : !e3 ? 3 : !e4 ? 4 : 5;
   const [etapa, setEtapa] = useState<number>(etapaAtual);
+  // enquanto o link está com o cliente, confere a cada 4 s se ele já assinou
+  useEffect(() => {
+    if (ct?.status !== "pendente") return;
+    const t = setInterval(async () => {
+      const n = await verContrato();
+      if (n?.status === "assinado") { toast("✍️ Contrato assinado pelo cliente!"); await recarregar(); setAba("checklist"); setEtapa(5); }
+    }, 4000);
+    return () => clearInterval(t);
+  }, [ct?.status, ct?.token]);
 
   const ds = diasDoProj(c, proj);
   const ref = ds.find(d => d.slot.slice(0, 10) >= hojeISO()) || ds[ds.length - 1];
@@ -461,8 +483,8 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
   const podeRealizar = e3 && e4 && !e5;
 
   async function marcarRealizado() {
-    if (!podeRealizar) { setAba("checklist"); setEtapa(!e3 ? 3 : 4); toast(!e3 ? "Gere a impressão primeiro" : "Anexe o digitalizado assinado antes de marcar realizado"); return; }
-    if (!confirm(`Marcar o checklist de ${c.cliente} como REALIZADO?\n\nO checklist fica realizado no 360 e o PDF assinado fica guardado na ficha.`)) return;
+    if (!podeRealizar) { setAba("checklist"); setEtapa(3); toast(!e3 ? "Gere o contrato para o cliente assinar" : "Falta o cliente assinar o contrato"); return; }
+    if (!confirm(`Finalizar o atendimento de ${c.cliente} (checklist REALIZADO)?\n\nO checklist fica realizado no 360 e o contrato assinado fica guardado na ficha.`)) return;
     await salvar("realizado", {}, "Checklist realizado ✅");
   }
 
@@ -485,7 +507,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
             : e5 ? <span className="selo" style={{ background: "#e6f4e9", color: "#3f8f4f" }}>✅ Realizado · {fmtDateTime(t0.finalizadoEm)}</span>
             : t0.iniciadoEm ? <span className="selo">⏱ Checklist em andamento · desde {hm(new Date(new Date(t0.iniciadoEm).getTime() - new Date().getTimezoneOffset() * 6e4).toISOString())}</span>
             : <button className="btn primary sm" disabled={!!ocupado} onClick={async () => { if (await salvar("iniciar", {}, "Checklist iniciado")) { setAba("checklist"); setEtapa(1); } }}>▶ Iniciar checklist</button>}
-          {!reserva && !e5 && <button className="btn sm" style={podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .55 }} title={podeRealizar ? "" : "Libera quando a impressão for gerada e o digitalizado assinado for anexado"} disabled={!!ocupado} onClick={marcarRealizado}>✅ Marcar realizado</button>}
+          {!reserva && !e5 && <button className="btn sm" style={podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .55 }} title={podeRealizar ? "" : "Libera quando o cliente assinar o contrato"} disabled={!!ocupado} onClick={marcarRealizado}>✅ Marcar realizado</button>}
         </div>
       </div>
       <div className="tabs">
@@ -544,23 +566,26 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
 
       {aba === "checklist" && !reserva && <div className="body">
         <div>
-          <div className="steps5">{[["Ambientes", "da venda", e1], ["Conferência", "por ambiente", e2], ["Gerar", "impressão", e3], ["Subir", "assinado", e4], ["Marcar", "realizado", e5]].map(([a, b, ok], i) =>
+          <div className="steps5">{[["Ambientes", "da venda", e1], ["Conferência", "e imagens", e2], ["Contrato", "link + QR Code", e3], ["Assinado", "pelo cliente", e4], ["Finalizar", "atendimento", e5]].map(([a, b, ok], i) =>
             <button key={i} className={"stp" + (etapa === i + 1 ? " on" : ok ? " done" : "")} onClick={() => setEtapa(i + 1)}><span>{ok && etapa !== i + 1 ? "✓" : i + 1}</span>{a}<br />{b}</button>)}</div>
           {etapa === 1 && <Etapa1 ambs={ambs} setAmbs={(f: any) => { setAmbs(f); setMudou(true); }} me={me} arqs={arqs} c={c} confirmados={confirmados} setConfirmados={(v: boolean) => { setConfirmados(v); setMudou(true); }} />}
           {etapa === 2 && <Etapa2 c={c} ambs={ambs} setAmbs={(f: any) => { setAmbs(f); setMudou(true); }} arqs={arqs} toast={toast}
             naoInc={naoInc} setNaoInc={(f: any) => { setNaoInc(f); setMudou(true); }} obs={obs} setObs={(v: string) => { setObs(v); setMudou(true); }}
             ferragens={ferragens} setFerragens={(f: any) => { setFerragens(f); setMudou(true); }}
+            imgsProj={imgsProj} setImgsProj={(f: any) => { setImgsProj(f); setMudou(true); }}
             aoLer={(nome: string, l: Listagem) => { setArquivos(xs => [...new Set([...xs, nome])]); setMeta((m: any) => ({ cliente: m.cliente || l.cliente, projeto: [m.projeto, l.projeto].filter(Boolean).join(" · "), data: m.data || l.data })); setMudou(true); }} />}
           {etapa === 3 && <Etapa3 c={c} t0={t0} ambs={ambs} proj={proj} naoInc={naoInc} obs={obs} ferragens={ferragens} arqs={arqs} liberado={e2} ocupado={ocupado} toast={toast}
+            ct={ct} setCt={setCt} assinado={e4} seguir={() => setEtapa(5)} antes={async () => (mudou ? await salvar("salvar", {}, "") : true)}
             gerar={async (paginas: number) => salvar("impressao", { impressao: { paginas } }, "Impressão registrada")} />}
-          {etapa === 4 && <Etapa4 c={c} t0={t0} ocupado={ocupado} setOcupado={setOcupado} toast={toast} liberado={e3}
+          {etapa === 4 && <Etapa4 c={c} t0={t0} ct={ct} ocupado={ocupado} setOcupado={setOcupado} toast={toast} liberado={e3}
             registrar={(assinado: any) => salvar("assinado", { assinado }, assinado.exact ? "Digitalizado anexado e enviado ao Exact" : "Digitalizado anexado no 360")} />}
           {etapa === 5 && <div>
             <div className="sec">5 · Marcar realizado</div>
-            {e5 ? <div className="note">✅ Checklist realizado em <b>{fmtDateTime(t0.finalizadoEm)}</b>{t0.finalizadoPor ? " por " + t0.finalizadoPor : ""}. O PDF assinado está guardado na ficha.</div>
+            {ct?.status === "assinado" && <ContratoAssinado ct={ct} toast={toast} />}
+            {e5 ? <div className="note">✅ Checklist realizado em <b>{fmtDateTime(t0.finalizadoEm)}</b>{t0.finalizadoPor ? " por " + t0.finalizadoPor : ""}. O contrato assinado está guardado na ficha.</div>
               : <div className="imp"><div><b>{podeRealizar ? "Tudo pronto para finalizar" : "Ainda não dá para marcar realizado"}</b>
-                <div className="ck" style={{ marginTop: 6 }}>{[["Ambientes escritos e confirmados", e1], ["Conferência por ambiente preenchida", e2], ["Impressão gerada", e3], ["Digitalizado assinado anexado", e4]].map(([t, ok]: any) => <label key={t}><i className={ok ? "" : "no"}>{ok ? "✓" : ""}</i> {t}</label>)}</div></div>
-                <button className="btn sm" style={podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .5 }} disabled={!podeRealizar || !!ocupado} onClick={marcarRealizado}>✅ Marcar realizado</button></div>}
+                <div className="ck" style={{ marginTop: 6 }}>{[["Ambientes escritos e confirmados", e1], ["Conferência por ambiente preenchida", e2], ["Contrato gerado", e3], ["Contrato assinado pelo cliente", e4]].map(([t, ok]: any) => <label key={t}><i className={ok ? "" : "no"}>{ok ? "✓" : ""}</i> {t}</label>)}</div></div>
+                <button className="btn sm" style={podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .5 }} disabled={!podeRealizar || !!ocupado} onClick={marcarRealizado}>✅ Finalizar atendimento</button></div>}
           </div>}
           {(etapa === 1 || etapa === 2) && <div className="barra">
             <button className="btn sm" disabled={!!ocupado || !mudou} onClick={() => salvar()}>{ocupado === "salvar" ? "Salvando…" : "💾 Salvar"}</button>
@@ -582,17 +607,17 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
               <div>• Fica registrado que os ambientes foram separados <b>pelo checklist</b> e por quem</div></div></div>
             <div className="box"><h4>Se alguém já informou</h4><div className="pjhist"><div>• Se o vendedor ou o projetista final já tiver escrito os ambientes, a lista vem preenchida</div><div>• O checklist sempre confere e pode mudar</div></div></div>
           </>}
-          {etapa === 2 && <div className="box"><h4>Para gerar a impressão</h4><div className="ck">
+          {etapa === 2 && <div className="box"><h4>Para gerar o contrato</h4><div className="ck">
             {ambs.map(a => { const ok = !conferirAmb(a).length && fichaOk(a); return <label key={a._k}><i className={ok ? "" : "no"}>{ok ? "✓" : ""}</i> {a.nome || "—"}{ok ? "" : <span style={{ color: "#8a5d00", fontWeight: 600 }}>&nbsp;· {conferirAmb(a).length ? "material / cor" : "ficha"}</span>}</label>; })}</div>
-            <button className="btn primary sm" style={{ marginTop: 10, width: "100%", ...(e2 ? {} : { opacity: .45 }) }} disabled={!e2 || !!ocupado} onClick={async () => { if (mudou && !(await salvar("salvar", {}, ""))) return; setEtapa(3); }}>Seguir → Gerar impressão</button>
+            <button className="btn primary sm" style={{ marginTop: 10, width: "100%", ...(e2 ? {} : { opacity: .45 }) }} disabled={!e2 || !!ocupado} onClick={async () => { if (mudou && !(await salvar("salvar", {}, ""))) return; setEtapa(3); }}>Seguir → Contrato para assinatura</button>
             <div className="hint" style={{ marginTop: 6 }}>Libera sem nada em amarelo: material, espessura e o <b>nome</b> da cor de cada ambiente, e a ficha respondida (o “Não” precisa de observação).</div></div>}
           {(etapa === 3 || etapa === 4 || etapa === 5) && <>
             <div className="box"><h4>Antes de finalizar</h4><div className="ck">
-              <label><i className={e2 ? "" : "no"}>{e2 ? "✓" : ""}</i> Conferência preenchida</label><label><i className={e3 ? "" : "no"}>{e3 ? "✓" : ""}</i> Impressão gerada</label><label><i className={e4 ? "" : "no"}>{e4 ? "✓" : ""}</i> Digitalizado assinado anexado</label></div>
-              {!e5 && <button className="btn sm" style={{ marginTop: 10, width: "100%", ...(podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .45 }) }} disabled={!podeRealizar || !!ocupado} onClick={marcarRealizado}>✅ Marcar realizado</button>}
-              {!e5 && <div style={{ fontSize: 11.5, color: "var(--pj-s)", marginTop: 6 }}>Libera quando o digitalizado for anexado.</div>}</div>
+              <label><i className={e2 ? "" : "no"}>{e2 ? "✓" : ""}</i> Conferência preenchida</label><label><i className={e3 ? "" : "no"}>{e3 ? "✓" : ""}</i> Contrato gerado</label><label><i className={e4 ? "" : "no"}>{e4 ? "✓" : ""}</i> Contrato assinado pelo cliente</label></div>
+              {!e5 && <button className="btn sm" style={{ marginTop: 10, width: "100%", ...(podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .45 }) }} disabled={!podeRealizar || !!ocupado} onClick={marcarRealizado}>✅ Finalizar atendimento</button>}
+              {!e5 && <div style={{ fontSize: 11.5, color: "var(--pj-s)", marginTop: 6 }}>Libera quando o cliente assinar o contrato.</div>}</div>
             <div className="box"><h4>Ao marcar realizado</h4><div className="pjhist">
-              <div>• Checklist fica <b>realizado</b> no 360</div><div>• PDF assinado guardado na ficha</div><div>• Ticket vai para <b>“Checklist concluído”</b> no Exact <span style={{ color: "#5b3c99", fontWeight: 700 }}>(rota a testar)</span></div><div>• Agendamento do Exact continua como histórico</div></div></div>
+              <div>• Checklist fica <b>realizado</b> no 360</div><div>• Contrato assinado (com selfie) guardado na ficha</div><div>• Ticket vai para <b>“Checklist concluído”</b> no Exact <span style={{ color: "#5b3c99", fontWeight: 700 }}>(rota a testar)</span></div><div>• Agendamento do Exact continua como histórico</div></div></div>
           </>}
           <CaixaHistorico c={c} n={4} />
         </div>
@@ -731,7 +756,7 @@ function EscolherImagens({ a, arqs, c, onFechar, onSalvar }: { a: Amb; arqs: Arq
 function coresUsadas(): string[] { try { return JSON.parse(localStorage.getItem("a360-ck-cores") || "[]"); } catch { return []; } }
 function lembrarCor(n: string) { const v = n.trim(); if (!v || /^\d+$/.test(v)) return; try { const l = [v, ...coresUsadas().filter(x => x !== v)].slice(0, 60); localStorage.setItem("a360-ck-cores", JSON.stringify(l)); } catch { /* */ } }
 
-function Etapa2({ c, ambs, setAmbs, arqs, toast, naoInc, setNaoInc, obs, setObs, ferragens, setFerragens, aoLer }: any) {
+function Etapa2({ c, ambs, setAmbs, arqs, toast, naoInc, setNaoInc, obs, setObs, ferragens, setFerragens, aoLer, imgsProj, setImgsProj }: any) {
   const [lendo, setLendo] = useState(false);
   const { setModal } = useApp() as any;
   const setPendente = (pd: { nome: string; l: Listagem; file: File } | null) => { if (!pd) { setModal(null); return; }
@@ -782,6 +807,7 @@ function Etapa2({ c, ambs, setAmbs, arqs, toast, naoInc, setNaoInc, obs, setObs,
     <div className="sec">Listagens do Promob <span className="src p-b">o 360 lê material, espessura, cores e módulos · sem valores</span></div>
     <Soltar aceita=".pdf,application/pdf" multiplo ocupado={lendo} texto={<>📎 Anexar a listagem do Promob (PDF)<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>1 listagem = 1 ambiente é o ideal · ela <b>não vai para o cliente</b> · ambiente sem listagem é preenchido à mão</span></>} onArquivos={ler} />
     {avisos.length > 0 && <div className="alert" style={{ marginTop: 8 }}>{avisos.map((a, i) => <div key={i}>⚠️ {a}</div>)}</div>}
+    <ImagensProjeto c={c} ambs={ambs} setAmbs={setAmbs} imgs={imgsProj || []} setImgs={setImgsProj} arqs={arqs} toast={toast} />
     <div className="sec" style={{ marginTop: 16 }}>2 · Conferência com o cliente, por ambiente</div>
     {ambs.map((a: Amb, i: number) => <ConfAmb key={a._k} a={a} i={i} todos={ambs} set={(fn: any) => set(a._k, fn)} sugCores={sugCores} c={c} arqs={arqs}
       mover={(item: LinhaListagem, para: string) => setAmbs((xs: Amb[]) => xs.map(x => x._k === a._k ? { ...x, itens: x.itens.filter(y => y !== item) } : x._k === para ? { ...x, itens: [...x.itens, item].sort((p, q) => p.item - q.item), itensDe: null } : x))} />)}
@@ -794,6 +820,35 @@ function Etapa2({ c, ambs, setAmbs, arqs, toast, naoInc, setNaoInc, obs, setObs,
       <div className="lbl2" style={{ marginTop: 8 }}>Observações do checklist</div>
       <textarea rows={2} value={obs} onChange={e => setObs(e.target.value)} placeholder="Ex.: cliente vai mover o ponto de água até 30/11 — ciente que a montagem depende disso." style={{ width: "100%" }} />
     </div>
+  </div>;
+}
+
+/** imagens do projeto final (PDF de imagens ou fotos): vão para o cliente, no contrato, na folha de cada ambiente marcado */
+function ImagensProjeto({ c, ambs, setAmbs, imgs, setImgs, arqs, toast }: any) {
+  const [env, setEnv] = useState(false);
+  const { setModal } = useApp() as any;
+  const chave = (x: Img) => x.path || x.id || x.nome;
+  const noAmb = (a: Amb, x: Img) => (a.imagens || []).some(m => chave(m) === chave(x));
+  const alternar = (a: Amb, x: Img) => setAmbs((xs: Amb[]) => xs.map(y => y._k !== a._k ? y : { ...y, imagens: noAmb(y, x) ? (y.imagens || []).filter(m => chave(m) !== chave(x)) : [...(y.imagens || []), { fonte: x.fonte, id: x.id, path: x.path, nome: x.nome }] }));
+  const comUrl = (x: any) => ({ ...x, tipo: ehPdf(x.nome) ? "pdf" : "img", url: (arqs?.ck || []).find((k: any) => k.path === x.path)?.url || x.url || "" });
+  return <div className="pjab" style={{ marginTop: 14 }}>
+    <h5>🖼 Imagens do projeto final <span style={{ fontWeight: 600, color: "var(--pj-s)" }}>· vão para o cliente no contrato</span></h5>
+    <Soltar aceita="image/*,.pdf,application/pdf" multiplo ocupado={env} texto={<>⬆ Anexar o PDF das imagens do projeto (ou fotos / renders)<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>cada página do PDF vira uma imagem na folha do ambiente · marque abaixo de qual ambiente é</span></>}
+      onArquivos={async fs => {
+        setEnv(true); const novos: Img[] = [];
+        for (const f of fs) { try { const r = await A.ckSubir(c.id, "imagem", f); novos.push({ fonte: "checklist", id: r.path, path: r.path, nome: r.nome, url: r.url }); } catch (e: any) { toast(e.message); } }
+        setEnv(false); if (!novos.length) return;
+        setImgs((xs: Img[]) => [...xs, ...novos]);
+        if (ambs.length === 1) setAmbs((xs: Amb[]) => xs.map(y => ({ ...y, imagens: [...(y.imagens || []), ...novos.map(({ url, ...n }) => n)] })));
+        toast(novos.length + " arquivo(s) de imagem anexado(s)" + (ambs.length > 1 ? " — marque os ambientes" : ""));
+      }} />
+    {imgs.length > 0 && <div style={{ marginTop: 8 }}>{imgs.map((x: Img, i: number) => <div key={chave(x) + i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderTop: i ? "1px solid #eef0f2" : 0, flexWrap: "wrap" }}>
+      <Miniatura a={comUrl(x)} c={c} style={{ width: 54, height: 54, flex: "none" }} onClick={() => setModal(<Visualizar a={comUrl(x)} c={c} onFechar={() => setModal(null)} />)} />
+      <div style={{ flex: 1, minWidth: 180 }}><b style={{ fontSize: 13 }}>{x.nome}</b>
+        <div className="pjchips" style={{ marginTop: 3 }}>{ambs.map((a: Amb) => { const on = noAmb(a, x); return <button key={a._k} type="button" className={"cp" + (on ? " used" : "")} onClick={() => alternar(a, x)}>{on ? "✓ " : "＋ "}{a.nome || "—"}</button>; })}</div>
+        {!ambs.some((a: Amb) => noAmb(a, x)) && <div className="hint" style={{ color: "#8a5d00" }}>Marque de qual ambiente é — sem ambiente ela não sai no contrato.</div>}</div>
+      <button className="pjx" title="Tirar do contrato" onClick={() => { setImgs((xs: Img[]) => xs.filter(y => chave(y) !== chave(x))); setAmbs((xs: Amb[]) => xs.map(y => ({ ...y, imagens: (y.imagens || []).filter(m => chave(m) !== chave(x)) }))); }}>✕</button>
+    </div>)}</div>}
   </div>;
 }
 
@@ -857,63 +912,135 @@ function ConfAmb({ a, i, todos, set, sugCores, mover, c, arqs }: { a: Amb; i: nu
   </div>;
 }
 
-// ---------------- etapa 3: gerar a impressão (um PDF só) ----------------
+// ---------------- etapa 3: contrato para assinatura online (link + QR Code) ----------------
 const blobParaDataUrl = (b: Blob) => new Promise<string>((ok, er) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = er; r.readAsDataURL(b); });
-function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocupado, toast, gerar }: any) {
-  const [montando, setMontando] = useState(false);
-  const nome = `Checklist_${primeiroNome(cap(c.cliente))}_${c.pedido}.pdf`;
+const ehPdf = (n: string) => /\.pdf$/i.test(n || "");
+/** abre o HTML numa janela e manda imprimir */
+function imprimirHtml(html: string, w?: Window | null) {
+  const j = w || window.open("", "_blank"); if (!j) return false;
+  j.document.open(); j.document.write(html); j.document.close();
+  setTimeout(() => { try { j.focus(); j.print(); } catch { /* */ } }, 900);
+  return true;
+}
+function ContratoAssinado({ ct, toast }: { ct: any; toast: (m: string) => void }) {
+  const [abrindo, setAbrindo] = useState(false);
   async function imprimir() {
-    if (!liberado) { toast("Termine a conferência por ambiente (nada em amarelo) antes de gerar a impressão"); return; }
-    const w = window.open("", "_blank");
-    if (!w) { toast("Libere as janelas (pop-up) do navegador para gerar a impressão"); return; }
-    w.document.write("<p style='font:16px system-ui;padding:30px'>Montando o checklist para impressão…</p>");
-    setMontando(true);
-    try {
-      // imagens: as do Exact antigo e as do checklist entram embutidas (o link delas é temporário)
-      const ambsImp = await Promise.all(ambs.map(async (a: Amb) => ({ ...a, conferir: [], imagens: (await Promise.all((a.imagens || []).map(async (m: Img) => {
-        try {
-          if (m.fonte === "legacy" && m.id) return { nome: m.nome, src: await blobParaDataUrl(await A.ckBaixar(c.id, m.id)) };
-          const u = m.fonte === "checklist" ? (arqs?.ck || []).find((x: any) => x.path === m.path)?.url || "" : m.url || "";
-          return u ? { nome: m.nome, src: u } : null;
-        } catch { return null; }
-      }))).filter(Boolean) })));
-      const data = fmtDate(hojeISO());
-      const html = impressaoHtml({ venda: String(c.pedido), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj, data,
-        ambientes: ambsImp, naoInclusos: naoInc, obs, ferragens });
-      w.document.open(); w.document.write(html); w.document.close();
-      const paginas = 1 + ambs.length + 1 + 1;
-      setTimeout(() => { try { w.focus(); w.print(); } catch { /* */ } }, 700);
-      await gerar(paginas);
-    } catch (e: any) { toast(e.message || "Não foi possível montar a impressão"); try { w.close(); } catch { /* */ } }
-    finally { setMontando(false); }
+    const w = window.open("", "_blank"); if (!w) { toast("Libere as janelas (pop-up) do navegador"); return; }
+    w.document.write("<p style='font:16px system-ui;padding:30px'>Abrindo o contrato assinado…</p>"); setAbrindo(true);
+    try { const html = await (await fetch(ct.url)).text(); imprimirHtml(html, w); } catch (e: any) { toast(e.message || "Não foi possível abrir"); w.close(); } finally { setAbrindo(false); }
   }
+  return <div className="imp" style={{ background: "#e6f4e9", borderColor: "#9fc5a8", marginBottom: 12 }}>
+    {ct.selfie && <img src={ct.selfie} alt="" style={{ width: 64, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid #9fc5a8" }} />}
+    <div><b>✅ Contrato assinado</b><span>por <b>{ct.nome}</b> em {fmtDateTime(ct.assinado_em)} · com selfie{ct.exact ? " · enviado ao Exact" : ""}</span></div>
+    <button className="btn sm" disabled={abrindo || !ct.url} onClick={imprimir}>{abrindo ? "Abrindo…" : "🖨 Imprimir contrato assinado"}</button>
+  </div>;
+}
+function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocupado, toast, gerar, ct, setCt, assinado, seguir, antes }: any) {
+  const [montando, setMontando] = useState("");
+  const nome = `Checklist_${primeiroNome(cap(c.cliente))}_${c.pedido}.pdf`;
+  const link = ct?.token ? location.origin + "/contrato?t=" + ct.token : "";
+  /** o documento completo, com todas as imagens embutidas (as do Exact, as do checklist e as páginas dos PDFs de imagens) */
+  async function montar(online: boolean): Promise<string> {
+    const blobDe = async (m: Img): Promise<Blob | null> => {
+      if (m.fonte === "legacy" && m.id) return A.ckBaixar(c.id, m.id);
+      const u = m.fonte === "checklist" ? (arqs?.ck || []).find((x: any) => x.path === m.path)?.url || m.url || "" : m.url || "";
+      return u ? (await fetch(u)).blob() : null;
+    };
+    const ambsImp = [];
+    for (const a of ambs as Amb[]) {
+      const imgs: { nome: string; src: string }[] = [];
+      for (const m of a.imagens || []) {
+        try {
+          const b = await blobDe(m); if (!b) continue;
+          if (ehPdf(m.nome) || b.type === "application/pdf") (await pdfParaImagens(b)).forEach((src, i, l) => imgs.push({ nome: m.nome + (l.length > 1 ? " · pág. " + (i + 1) : ""), src }));
+          else imgs.push({ nome: m.nome, src: await blobParaJpeg(b).catch(() => blobParaDataUrl(b)) });
+        } catch { /* imagem que não abriu fica de fora */ }
+      }
+      ambsImp.push({ ...a, conferir: [], imagens: imgs });
+    }
+    return impressaoHtml({ venda: String(c.pedido), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj,
+      data: fmtDate(hojeISO()), ambientes: ambsImp, naoInclusos: naoInc, obs, ferragens, online });
+  }
+  async function gerarLink() {
+    if (!liberado) { toast("Termine a conferência por ambiente (nada em amarelo) antes de gerar o contrato"); return; }
+    if (ct?.status === "pendente" && !confirm("Já existe um link aguardando o cliente. Gerar um novo cancela o anterior. Continuar?")) return;
+    if (!(await antes())) return;
+    setMontando("link");
+    try {
+      const html = await montar(true);
+      const r = await A.ckContrato("criar", c.id, { html, aceites: aceitesDoContrato((ambs as Amb[]).map(a => a.nome.trim())) });
+      setCt({ token: r.token, status: "pendente", expira: r.expira });
+      toast("Contrato gerado — mostre o QR Code ao cliente");
+    } catch (e: any) { toast(e.message || "Não foi possível gerar o contrato"); }
+    finally { setMontando(""); }
+  }
+  /** imprime o contrato para o cliente ler no papel (online = a mesma versão que ele vai assinar no celular) */
+  async function imprimir(online: boolean) {
+    if (!liberado) { toast("Termine a conferência por ambiente (nada em amarelo) antes"); return; }
+    const w = window.open("", "_blank");
+    if (!w) { toast("Libere as janelas (pop-up) do navegador para imprimir"); return; }
+    w.document.write("<p style='font:16px system-ui;padding:30px'>Montando o contrato para impressão…</p>");
+    setMontando(online ? "ler" : "papel");
+    try {
+      imprimirHtml(await montar(online), w);
+      if (!online) await gerar(1 + ambs.length + 2);
+    } catch (e: any) { toast(e.message || "Não foi possível montar a impressão"); try { w.close(); } catch { /* */ } }
+    finally { setMontando(""); }
+  }
+  const copiar = async () => { try { await navigator.clipboard.writeText(link); toast("Link copiado"); } catch { prompt("Copie o link:", link); } };
+  const tel = sanitizeWhats(c.telefone || c.telefone2 || "");
   const imp = t0.impressao;
   return <div>
-    <div className="sec">3 · Impressão para assinatura <span className="src p-b">um PDF só · sem valores, sem listagem, sem .promob</span></div>
-    {!liberado && <div className="alert">A impressão libera quando a conferência de todos os ambientes estiver completa (nada em amarelo). Volte à etapa 2.</div>}
-    <div className="imp">
-      <div><b>🖨 {nome}</b><span>{imp ? "gerado " + fmtDateTime(imp.em) + (imp.por ? " por " + imp.por : "") + (imp.paginas ? " · ~" + imp.paginas + " páginas" : "") : "ainda não gerado"}</span>
-        <div className="inc"><span>✓ Capa (cliente / venda)</span><span>✓ Por ambiente: imagens + ficha de checklist</span><span>✓ Resumo do que foi comprado</span><span>✓ Termo de ciência do material</span><span>✓ Condições gerais (29 itens) + responsabilidades</span><span>✓ Assinaturas</span></div>
-        <div className="hint" style={{ marginTop: 6 }}>Na janela de impressão escolha <b>“Salvar como PDF”</b> para guardar o arquivo, ou imprima direto. O cliente assina tudo de uma vez.</div></div>
-      <button className="btn primary sm" disabled={!liberado || montando || !!ocupado} onClick={imprimir}>{montando ? "Montando…" : imp ? "🖨 Imprimir de novo" : "🖨 Gerar impressão"}</button>
-    </div>
+    <div className="sec">3 · Contrato para o cliente assinar <span className="src p-b">checklist + imagens + termo + condições · sem valores</span></div>
+    {!liberado && <div className="alert">O contrato libera quando a conferência de todos os ambientes estiver completa (nada em amarelo). Volte à etapa 2.</div>}
+    {ct?.status === "assinado" ? <>
+      <ContratoAssinado ct={ct} toast={toast} />
+      <button className="btn sm" style={{ background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" }} onClick={seguir}>Seguir → Finalizar atendimento</button>
+    </> : ct?.status === "pendente" && link ? <div className="imp" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+      <img src={qrDataUrl(link, 240)} alt="QR Code do contrato" style={{ width: 220, height: 220, border: "1px solid var(--line,#e0e3e8)", borderRadius: 10, background: "#fff" }} />
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <b style={{ fontSize: 15 }}>📲 Peça ao cliente para ler o QR Code com a câmera do celular</b>
+        <span>No celular ele lê o contrato, marca a ciência de cada item, assina com o dedo e tira uma selfie. Esta tela muda sozinha quando ele terminar.</span>
+        <div className="hint" style={{ margin: "8px 0", wordBreak: "break-all" }}>{link}</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button className="btn sm" onClick={copiar}>📋 Copiar link</button>
+          {tel && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
+            onClick={() => abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(`Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o contrato do checklist do seu projeto da Aliança Móveis para conferir e assinar: ${link}`))}>💬 Enviar por WhatsApp</button>}
+          <button className="btn sm" disabled={!!montando} onClick={() => imprimir(true)}>{montando === "ler" ? "Montando…" : "🖨 Imprimir para o cliente ler antes"}</button>
+          <button className="btn sm ghost" disabled={!!montando} onClick={gerarLink}>{montando === "link" ? "Gerando…" : "↻ Gerar de novo"}</button>
+          <button className="btn sm ghost" onClick={async () => { if (!confirm("Cancelar este link? O cliente não vai mais conseguir assinar por ele.")) return; try { await A.ckContrato("cancelar", c.id); setCt(null); } catch (e: any) { toast(e.message); } }}>✕ Cancelar link</button>
+        </div>
+        <div className="hint" style={{ marginTop: 8 }}>⏳ Aguardando a assinatura… · link vale até {fmtDateTime(ct.expira)}</div>
+      </div>
+    </div> : <div className="imp">
+      <div><b>📲 Contrato com assinatura online</b><span>{ct?.status === "expirado" ? "o link anterior expirou — gere outro" : "gera um link e um QR Code para o cliente assinar no celular"}</span>
+        <div className="inc"><span>✓ Capa (cliente / venda)</span><span>✓ Por ambiente: imagens + ficha de checklist</span><span>✓ Resumo do que foi comprado</span><span>✓ Termo de ciência do material</span><span>✓ Condições gerais + responsabilidades</span><span>✓ Assinatura na tela + selfie</span></div>
+        <div className="hint" style={{ marginTop: 6 }}>O cliente quer ler no papel antes? Use <b>“Imprimir para ler antes”</b> — é o mesmo documento que ele assina no celular.</div></div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <button className="btn primary sm" disabled={!liberado || !!montando || !!ocupado} onClick={gerarLink}>{montando === "link" ? "Montando o contrato…" : "📲 Gerar link e QR Code"}</button>
+        <button className="btn sm" disabled={!liberado || !!montando} onClick={() => imprimir(true)}>{montando === "ler" ? "Montando…" : "🖨 Imprimir para ler antes"}</button>
+      </div>
+    </div>}
+    {!assinado && <div className="hint" style={{ marginTop: 14 }}>Sem celular / sem internet? <button className="lk" disabled={!liberado || !!montando} onClick={() => imprimir(false)}>{montando === "papel" ? "montando…" : "🖨 imprimir " + nome.replace(/\.pdf$/, "") + " para assinar no papel"}</button>{imp ? " · impresso em " + fmtDateTime(imp.em) : ""} — depois suba o digitalizado na etapa 4.</div>}
   </div>;
 }
 
-// ---------------- etapa 4: subir o digitalizado assinado ----------------
-function Etapa4({ c, t0, ocupado, setOcupado, toast, registrar, liberado }: any) {
+// ---------------- etapa 4: contrato assinado (online) ou digitalizado do papel ----------------
+function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: any) {
   const ass: any[] = t0.assinados || [];
   return <div>
-    <div className="sec">4 · Documento assinado (digitalizado) <span className="src p-b">vai para o Exact como “Outros”</span></div>
-    {!liberado && <div className="alert">Gere a impressão (etapa 3) e colha as assinaturas antes de subir o digitalizado.</div>}
-    <Soltar aceita="application/pdf,image/*" multiplo ocupado={ocupado === "assinado"} estilo={{ padding: 18 }}
-      texto={<>⬆ Arraste aqui o PDF escaneado com as assinaturas do cliente<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>ou tire foto pelo celular · pode subir mais de um arquivo</span></>}
+    <div className="sec">4 · Contrato assinado <span className="src p-b">vai para o Exact como “Outros”</span></div>
+    {ct?.status === "assinado" && <ContratoAssinado ct={ct} toast={toast} />}
+    {!ass.length && <div className="alert">{liberado ? "Aguardando o cliente assinar pelo QR Code (etapa 3)." : "Gere o contrato na etapa 3."}</div>}
+    {ass.length > 0 && <div style={{ marginBottom: 12 }}>{ass.map((a, i) => <div key={i} className="pjrow on"><b>{a.online ? "✍️" : "📎"} {a.nome}</b><span className="hint">{fmtDateTime(a.em)}{a.por ? " · " + a.por : ""}</span>
+      <span className={"pjpill " + (a.exact ? "p-ok" : "p-w")} style={{ margin: 0 }}>{a.exact ? "Exact ✓" : "só no 360"}</span></div>)}</div>}
+    <div className="sec" style={{ marginTop: 6 }}>Assinou no papel? <span className="src p-g">alternativa</span></div>
+    <Soltar aceita="application/pdf,image/*" multiplo ocupado={ocupado === "assinado"} estilo={{ padding: 14 }}
+      texto={<>⬆ Suba o PDF escaneado com as assinaturas do cliente<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>ou foto pelo celular · pode subir mais de um arquivo</span></>}
       onArquivos={async fs => {
         setOcupado("assinado");
         try { for (const f of fs) { const r = await A.ckSubir(c.id, "assinado", f); await registrar({ nome: r.nome, path: r.path, exact: r.exact }); if (!r.exact) toast(f.name + ": guardado no 360, mas não foi para o Exact" + (r.exactErro ? " (" + r.exactErro.slice(0, 80) + ")" : "")); } }
         catch (e: any) { toast(e.message); } finally { setOcupado(""); }
       }} />
-    {ass.length > 0 && <div style={{ marginTop: 12 }}>{ass.map((a, i) => <div key={i} className="pjrow on"><b>📎 {a.nome}</b><span className="hint">{fmtDateTime(a.em)}{a.por ? " · " + a.por : ""}</span>
-      <span className={"pjpill " + (a.exact ? "p-ok" : "p-w")} style={{ margin: 0 }}>{a.exact ? "Exact ✓" : "só no 360"}</span></div>)}</div>}
   </div>;
 }
