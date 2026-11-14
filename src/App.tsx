@@ -9,6 +9,7 @@ import { Overlays } from "./comp/Overlays";
 import AgendaPublica from "./telas/AgendaPublica";
 import Avaliar from "./telas/Avaliar";
 import Admissao from "./telas/Admissao";
+import Contrato from "./telas/Contrato";
 
 // /loja = agenda da loja em tela aberta (sem login, só com o link secreto); nada do sistema é carregado
 export default function App() {
@@ -17,6 +18,8 @@ export default function App() {
   if (location.pathname.replace(/\/+$/, "") === "/avaliar") return <Avaliar />;
   // /admissao?t=… = ficha de admissão que o RH manda para quem vai ser contratado (sem login, só com o link)
   if (location.pathname.replace(/\/+$/, "") === "/admissao") return <Admissao />;
+  // /contrato?t=… = contrato do checklist para o cliente ler, dar ciência, assinar e tirar a selfie (sem login, só com o link / QR Code)
+  if (location.pathname.replace(/\/+$/, "") === "/contrato") return <Contrato />;
   return <AppLogado />;
 }
 
