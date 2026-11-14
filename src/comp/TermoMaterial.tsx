@@ -9,7 +9,7 @@ export default function TermoMaterial({ v, orig, onChange, compacto, sugCores }:
 }) {
   const btn = (on: boolean, alterado: boolean): any => ({
     padding: compacto ? "4px 9px" : "8px 11px", fontSize: compacto ? 12.5 : 14, fontWeight: 700, borderRadius: 8, cursor: "pointer",
-    border: "1.5px solid " + (on ? COR.pri : COR.l), background: on ? COR.pri : "#fff", color: on ? "#fff" : "#1a1d21",
+    border: "1.5px solid " + (on ? COR.pri : compacto ? "rgba(128,140,160,.45)" : COR.l), background: on ? COR.pri : compacto ? "transparent" : "#fff", color: on ? "#fff" : compacto ? "inherit" : "#1a1d21",
     boxShadow: on && alterado ? "0 0 0 2px " + COR.alt : "none",
   });
   const setLinha = (k: keyof TermoAmb, l: LinhaTermo) => onChange({ ...v, [k]: l });
@@ -27,7 +27,7 @@ export default function TermoMaterial({ v, orig, onChange, compacto, sugCores }:
         </div>
         {l.mat === "NAO" ? <span style={{ color: COR.s, fontSize: 13 }}>—</span>
           : <input value={l.cor} list={sugCores ? lista : undefined} onChange={e => setLinha(k, { ...l, cor: e.target.value })} placeholder={"Cor de " + rot.toLowerCase()}
-            style={{ width: "100%", boxSizing: "border-box", fontSize: compacto ? 13 : 16, padding: compacto ? "4px 8px" : "10px 12px", borderRadius: 8, border: "1.5px solid " + (mudouCor ? COR.alt : COR.l), background: mudouCor ? COR.altbg : "#fff" }} />}
+            style={{ width: "100%", boxSizing: "border-box", fontSize: compacto ? 13 : 16, padding: compacto ? "4px 8px" : "10px 12px", borderRadius: 8, border: "1.5px solid " + (mudouCor ? COR.alt : compacto ? "rgba(128,140,160,.45)" : COR.l), background: compacto ? "transparent" : mudouCor ? COR.altbg : "#fff", color: compacto ? "inherit" : "#1a1d21" }} />}
         {!compacto && o && (mudouMat || mudouCor) && <span style={{ fontSize: 12, color: COR.alt }}>No sistema estava: {MAT_ROT[o.mat || ""] || "em branco"}{o.cor ? " · " + o.cor : ""}</span>}
       </div>;
     })}
