@@ -939,7 +939,7 @@ function Vinculados({ c }: any) {
 
 const paraLocal = (iso: string) => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 function BlocoChecklist({ c }: any) {
-  const { R, st, setModal, toast, recarregar } = useApp() as any;
+  const { R, st, setModal, toast, recarregar, irPara, fecharDetalhe } = useApp() as any;
   const [conf, setConf] = useState(false);
   async function confirmarPresenca() {
     setConf(true);
@@ -949,6 +949,8 @@ function BlocoChecklist({ c }: any) {
   const k = ck(c), e = etapaCk(c), [nome, cor] = ETAPA_CK[e] || [e, "var(--line)"], p = k.planilha || {};
   return (
     <div className="resp-box" style={{ borderColor: cor }}><h4>Checklist (revisão do projeto) <span className="badge" style={{ background: cor, color: "#fff", marginLeft: 6 }}>{nome}</span></h4>
+      {["agendado", "realizado"].includes(e) && <button className="btn primary" style={{ width: "100%", margin: "4px 0 10px", fontWeight: 800 }}
+        onClick={() => { fecharDetalhe(); irPara("projetista_ck", { abrirCk: c.id }); }}>🧑‍💻 Abrir a tela de trabalho do checklist</button>}
       <RowSb k="Venda"><b>{c.pedido || "—"}</b></RowSb>
       <RowSb k="Cidade"><b>{cidadeCk(c) || "não encontrada na base de clientes"}</b></RowSb>
       <RowSb k="Medidas"><SeloMedidaVenda pedido={c.pedido} comLink />{!st.chamados.some((x: any) => x.tipo === "medidas" && x.pedido === c.pedido) && !(st.medidasCruz || {})[c.pedido] ? <span className="hint">sem medida registrada no 360</span> : null}</RowSb>
