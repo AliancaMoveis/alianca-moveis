@@ -11,7 +11,9 @@ import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, san
 import { lerListagemArquivo, type LinhaListagem, type Listagem } from "../lib/listagemPromob";
 import { ambienteDaListagem, impressaoHtml, termoHtml, FICHA_AMBIENTE, type AmbTermo, type DadosTermo, type Mat } from "../lib/termoChecklist";
 import { Modal } from "../comp/Modal";
-import { aceitesDoContrato, blobParaJpeg, pdfParaImagens, qrDataUrl } from "../lib/contratoUtil";
+import { blobParaJpeg, pdfParaImagens, qrDataUrl } from "../lib/contratoUtil";
+import { contratoHtml, faltaNoTermo, termoVazio, type ContratoDados, type TermoAmb } from "../lib/contratoDoc";
+import TermoMaterial from "../comp/TermoMaterial";
 
 const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 const NAO_INCLUSOS_PADRAO = ["Granito / pedra", "Eletrodomésticos", "Cuba", "Iluminação"];
@@ -62,6 +64,24 @@ export function conferirAmb(a: AmbTermo): string[] {
   return out;
 }
 const fichaDe = (a: any) => FICHA_AMBIENTE.map(k => [k, (a.ficha || {})[k]] as [string, boolean | null | undefined]);
+/** termo de ciência do material do ambiente: o que o projetista ajustou, ou o que dá para tirar da conferência e da listagem */
+export function termoDoAmb(a: any, ferragens: string[] = []): TermoAmb {
+  if (a?.termo && typeof a.termo === "object") return { ...termoVazio(), ...a.termo };
+  const t = termoVazio();
+  const cor = String(a?.cor || "").trim();
+  t.estrutura = { mat: a?.caixa?.mat || null, cor };
+  t.portas = a?.porta?.naoSeAplica ? { mat: "NAO", cor: "" } : { mat: a?.porta?.mat || null, cor };
+  const itens: any[] = Array.isArray(a?.itens) ? a.itens : [];
+  const matDe = (f: (l: any) => boolean) => { const l = itens.find(x => f(x) && x.material); return l ? l.material : null; };
+  const pn = matDe(l => l.tipo === "painel" || /painel/i.test(l.descricao || ""));
+  if (pn) t.paineis = { mat: pn, cor };
+  const ev = matDe(l => /envolt/i.test(l.descricao || ""));
+  if (ev) t.envoltorio = { mat: ev, cor };
+  const txt = [...ferragens, ...itens.map(x => x.descricao || "")].join(" | ");
+  const amort = (re: RegExp) => { const m = txt.split(" | ").filter(x => re.test(x)); return !m.length ? null : m.some(x => /amortec|soft|slow|silent/i.test(x)) ? "com" : "sem"; };
+  t.corredicas = amort(/corredi/i) as any; t.dobradicas = amort(/dobradi/i) as any;
+  return t;
+}
 const fichaOk = (a: any) => fichaDe(a).every(([, v]) => v === true || (v === false && String(a.fichaObs || "").trim().length > 2));
 
 /** termo de ciência sozinho (botão "📄 Termo" no cartão do setor Checklist) */
@@ -415,7 +435,7 @@ function AgendaGeral({ eu }: { eu: string | null }) {
 
 // ---------------- ficha do cliente ----------------
 type Img = { fonte: string; id?: string; url?: string; path?: string; nome: string };
-type Amb = AmbTermo & { _k: string; origem?: string; escritoPor?: string; codigos?: string[]; ficha?: Record<string, boolean | null>; fichaObs?: string; obs?: string; imagens?: Img[]; listagens?: string[]; itensDe?: string | null };
+type Amb = AmbTermo & { _k: string; origem?: string; escritoPor?: string; codigos?: string[]; ficha?: Record<string, boolean | null>; fichaObs?: string; obs?: string; imagens?: Img[]; listagens?: string[]; itensDe?: string | null; termo?: TermoAmb | null };
 
 function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; recarregar: () => any; setSujo: (v: boolean) => void; toast: (m: string) => void }) {
   const { R, setModal } = useApp() as any;
@@ -809,7 +829,7 @@ function Etapa2({ c, ambs, setAmbs, arqs, toast, naoInc, setNaoInc, obs, setObs,
     {avisos.length > 0 && <div className="alert" style={{ marginTop: 8 }}>{avisos.map((a, i) => <div key={i}>⚠️ {a}</div>)}</div>}
     <ImagensProjeto c={c} ambs={ambs} setAmbs={setAmbs} imgs={imgsProj || []} setImgs={setImgsProj} arqs={arqs} toast={toast} />
     <div className="sec" style={{ marginTop: 16 }}>2 · Conferência com o cliente, por ambiente</div>
-    {ambs.map((a: Amb, i: number) => <ConfAmb key={a._k} a={a} i={i} todos={ambs} set={(fn: any) => set(a._k, fn)} sugCores={sugCores} c={c} arqs={arqs}
+    {ambs.map((a: Amb, i: number) => <ConfAmb key={a._k} a={a} i={i} todos={ambs} set={(fn: any) => set(a._k, fn)} sugCores={sugCores} c={c} arqs={arqs} ferragens={ferragens}
       mover={(item: LinhaListagem, para: string) => setAmbs((xs: Amb[]) => xs.map(x => x._k === a._k ? { ...x, itens: x.itens.filter(y => y !== item) } : x._k === para ? { ...x, itens: [...x.itens, item].sort((p, q) => p.item - q.item), itensDe: null } : x))} />)}
     <div className="pjab"><h5>Não inclusos e observações gerais</h5>
       <div className="lbl2">Não estão inclusos (o cliente risca o que estiver incluso)</div>
@@ -867,7 +887,7 @@ function QualAmbiente({ ambs, l, onOk, onCancelar }: { ambs: Amb[]; l: Listagem;
 function Seg<T extends string | number | null>({ v, ops, on }: { v: T; ops: [T, string][]; on: (x: T) => void }) {
   return <span className="seg">{ops.map(([x, t]) => <button key={String(x)} type="button" className={v === x ? "on" : ""} onClick={() => on(v === x ? (null as T) : x)}>{t}</button>)}</span>;
 }
-function ConfAmb({ a, i, todos, set, sugCores, mover, c, arqs }: { a: Amb; i: number; todos: Amb[]; set: (fn: (a: Amb) => Amb) => void; sugCores: string[]; mover: (item: LinhaListagem, para: string) => void; c: any; arqs: Arqs | null }) {
+function ConfAmb({ a, i, todos, set, sugCores, mover, c, arqs, ferragens }: { a: Amb; i: number; todos: Amb[]; set: (fn: (a: Amb) => Amb) => void; sugCores: string[]; mover: (item: LinhaListagem, para: string) => void; c: any; arqs: Arqs | null; ferragens?: string[] }) {
   const { setModal } = useApp() as any;
   const [verItens, setVerItens] = useState(false);
   const setImgs = (_: boolean) => setModal(<EscolherImagens a={a} arqs={arqs} c={c} onFechar={() => setModal(null)} onSalvar={im => { set(x => ({ ...x, imagens: im })); setModal(null); }} />);
@@ -891,6 +911,12 @@ function ConfAmb({ a, i, todos, set, sugCores, mover, c, arqs }: { a: Amb; i: nu
         {(a.codigos || []).length > 0 && <div className="hint" style={{ marginTop: 3 }}>Na listagem: cód. {(a.codigos || []).join(" · ")} — o código não vai para o cliente; escreva o nome da cor.</div>}</div>
     </div>
     {falta.length > 0 && <div className="obsw" style={{ marginBottom: 8 }}>⚠️ Conferir: {falta.join(", ")}</div>}
+    {(() => { const tm = termoDoAmb(a, ferragens); const ft = faltaNoTermo(tm); return <div style={{ margin: "4px 0 10px", padding: "8px 10px", border: "1px solid var(--pj-l2,#e6e9ee)", borderRadius: 10 }}>
+      <div className="lbl2" style={{ display: "flex", gap: 8, alignItems: "center" }}>Termo de ciência do material <span className="hint" style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>· vai preenchido para o cliente conferir (ele pode corrigir na assinatura){a.termo ? "" : " · montado da conferência acima"}</span>
+        {a.termo && <button type="button" className="lk" style={{ marginLeft: "auto" }} onClick={() => set(x => ({ ...x, termo: null }))}>refazer da conferência</button>}</div>
+      <TermoMaterial compacto v={tm} sugCores={sugCores} onChange={t => set(x => ({ ...x, termo: t }))} />
+      {ft.length > 0 && <div className="hint" style={{ color: "#8a5d00", marginTop: 4 }}>Em branco: {ft.join(", ")} — o cliente vai ter que preencher na assinatura.</div>}
+    </div>; })()}
     <div className="lbl2">Ficha do ambiente</div>
     {fic.map(([k, v]) => <div key={k} className={"pjrow" + (v === true ? " on" : v === false ? " no" : "")}><b>{k}</b>
       <span className="yn"><button type="button" className={v === true ? "y" : ""} onClick={() => set(x => ({ ...x, ficha: { ...(x.ficha || {}), [k]: v === true ? null : true } }))}>Sim</button><button type="button" className={v === false ? "pjn" : ""} onClick={() => set(x => ({ ...x, ficha: { ...(x.ficha || {}), [k]: v === false ? null : false } }))}>Não</button></span></div>)}
@@ -931,7 +957,8 @@ function ContratoAssinado({ ct, toast }: { ct: any; toast: (m: string) => void }
   }
   return <div className="imp" style={{ background: "#e6f4e9", borderColor: "#9fc5a8", marginBottom: 12 }}>
     {ct.selfie && <img src={ct.selfie} alt="" style={{ width: 64, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid #9fc5a8" }} />}
-    <div><b>✅ Contrato assinado</b><span>por <b>{ct.nome}</b> em {fmtDateTime(ct.assinado_em)} · com selfie{ct.exact ? " · enviado ao Exact" : ""}</span></div>
+    <div><b>✅ Contrato assinado</b><span>por <b>{ct.nome}</b> em {fmtDateTime(ct.assinado_em)} · com selfie{ct.exact ? " · enviado ao Exact" : ""}</span>
+      {(ct.alteracoes || []).length > 0 && <div style={{ marginTop: 6, color: "#9b1c1c", fontSize: 12.5 }}><b>O cliente alterou o termo do material:</b>{ct.alteracoes.map((x: string, i: number) => <div key={i}>• {x}</div>)}</div>}</div>
     <button className="btn sm" disabled={abrindo || !ct.url} onClick={imprimir}>{abrindo ? "Abrindo…" : "🖨 Imprimir contrato assinado"}</button>
   </div>;
 }
@@ -939,14 +966,14 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
   const [montando, setMontando] = useState("");
   const nome = `Checklist_${primeiroNome(cap(c.cliente))}_${c.pedido}.pdf`;
   const link = ct?.token ? location.origin + "/contrato?t=" + ct.token : "";
-  /** o documento completo, com todas as imagens embutidas (as do Exact, as do checklist e as páginas dos PDFs de imagens) */
-  async function montar(online: boolean): Promise<string> {
+  /** os dados do contrato, com todas as imagens embutidas (as do Exact, as do checklist e as páginas dos PDFs de imagens) */
+  async function montar(): Promise<ContratoDados> {
     const blobDe = async (m: Img): Promise<Blob | null> => {
       if (m.fonte === "legacy" && m.id) return A.ckBaixar(c.id, m.id);
       const u = m.fonte === "checklist" ? (arqs?.ck || []).find((x: any) => x.path === m.path)?.url || m.url || "" : m.url || "";
       return u ? (await fetch(u)).blob() : null;
     };
-    const ambsImp = [];
+    const ambientes: ContratoDados["ambientes"] = [];
     for (const a of ambs as Amb[]) {
       const imgs: { nome: string; src: string }[] = [];
       for (const m of a.imagens || []) {
@@ -956,10 +983,14 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
           else imgs.push({ nome: m.nome, src: await blobParaJpeg(b).catch(() => blobParaDataUrl(b)) });
         } catch { /* imagem que não abriu fica de fora */ }
       }
-      ambsImp.push({ ...a, conferir: [], imagens: imgs });
+      // resumo do que foi comprado (sem valores): peças iguais juntas
+      const grupos = new Map<string, { l: LinhaListagem; n: number }>();
+      for (const l of a.itens.filter(l => l.tipo !== "consumivel")) { const k = `${l.descricao}|${l.medidas}|${/M2/i.test(l.qtd) ? "" : l.qtd}`; const g = grupos.get(k); if (g) g.n++; else grupos.set(k, { l, n: 1 }); }
+      ambientes.push({ nome: a.nome.trim(), termo: termoDoAmb(a, ferragens), ficha: fichaDe(a).map(([k, v]) => [k, v ?? null]), fichaObs: [a.fichaObs, a.obs].filter(Boolean).join(" — "),
+        itens: [...grupos.values()].map(({ l, n }) => ({ qtd: n > 1 ? n + " peças" : /M2/i.test(l.qtd) ? "1 peça" : l.qtd, descricao: l.descricao, medidas: l.medidas })), imagens: imgs });
     }
-    return impressaoHtml({ venda: String(c.pedido), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj,
-      data: fmtDate(hojeISO()), ambientes: ambsImp, naoInclusos: naoInc, obs, ferragens, online });
+    return { venda: String(c.pedido), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj,
+      data: fmtDate(hojeISO()), ambientes, naoInclusos: naoInc, obs, ferragens };
   }
   async function gerarLink() {
     if (!liberado) { toast("Termine a conferência por ambiente (nada em amarelo) antes de gerar o contrato"); return; }
@@ -967,8 +998,8 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
     if (!(await antes())) return;
     setMontando("link");
     try {
-      const html = await montar(true);
-      const r = await A.ckContrato("criar", c.id, { html, aceites: aceitesDoContrato((ambs as Amb[]).map(a => a.nome.trim())) });
+      const dados = await montar();
+      const r = await A.ckContrato("criar", c.id, { dados });
       setCt({ token: r.token, status: "pendente", expira: r.expira });
       toast("Contrato gerado — mostre o QR Code ao cliente");
     } catch (e: any) { toast(e.message || "Não foi possível gerar o contrato"); }
@@ -982,7 +1013,7 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
     w.document.write("<p style='font:16px system-ui;padding:30px'>Montando o contrato para impressão…</p>");
     setMontando(online ? "ler" : "papel");
     try {
-      imprimirHtml(await montar(online), w);
+      imprimirHtml(contratoHtml(await montar(), null, null, location.origin + "/logo.png"), w);
       if (!online) await gerar(1 + ambs.length + 2);
     } catch (e: any) { toast(e.message || "Não foi possível montar a impressão"); try { w.close(); } catch { /* */ } }
     finally { setMontando(""); }
@@ -991,7 +1022,7 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
   const tel = sanitizeWhats(c.telefone || c.telefone2 || "");
   const imp = t0.impressao;
   return <div>
-    <div className="sec">3 · Contrato para o cliente assinar <span className="src p-b">checklist + imagens + termo + condições · sem valores</span></div>
+    <div className="sec">3 · Contrato para o cliente assinar <span className="src p-b">termo do material + geral + imagens · sem valores</span></div>
     {!liberado && <div className="alert">O contrato libera quando a conferência de todos os ambientes estiver completa (nada em amarelo). Volte à etapa 2.</div>}
     {ct?.status === "assinado" ? <>
       <ContratoAssinado ct={ct} toast={toast} />
@@ -1014,7 +1045,7 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
       </div>
     </div> : <div className="imp">
       <div><b>📲 Contrato com assinatura online</b><span>{ct?.status === "expirado" ? "o link anterior expirou — gere outro" : "gera um link e um QR Code para o cliente assinar no celular"}</span>
-        <div className="inc"><span>✓ Capa (cliente / venda)</span><span>✓ Por ambiente: imagens + ficha de checklist</span><span>✓ Resumo do que foi comprado</span><span>✓ Termo de ciência do material</span><span>✓ Condições gerais + responsabilidades</span><span>✓ Assinatura na tela + selfie</span></div>
+        <div className="inc"><span>✓ 1 · Termo de ciência do material (vem preenchido, o cliente confere e pode corrigir)</span><span>✓ 2 · Geral — 29 itens com “Sim”</span><span>✓ 3 · Imagens do projeto de cada ambiente + checklist + o que foi comprado</span><span>✓ 4 · Nome, CPF, assinatura na tela e selfie</span></div>
         <div className="hint" style={{ marginTop: 6 }}>O cliente quer ler no papel antes? Use <b>“Imprimir para ler antes”</b> — é o mesmo documento que ele assina no celular.</div></div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <button className="btn primary sm" disabled={!liberado || !!montando || !!ocupado} onClick={gerarLink}>{montando === "link" ? "Montando o contrato…" : "📲 Gerar link e QR Code"}</button>
