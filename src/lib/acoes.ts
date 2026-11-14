@@ -292,6 +292,13 @@ export const A = {
     if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível enviar " + file.name);
     return j as { path: string; nome: string; tipo: string; url: string; exact: boolean; exactErro: string };
   },
+  /** contrato do checklist com assinatura online (função "contrato"): criar · status · cancelar */
+  ckContrato: async (acao: "criar" | "status" | "cancelar", id: string, extra: any = {}) => {
+    const r = await chamarFuncao("contrato", JSON.stringify({ acao, id, ...extra }), "application/json");
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível falar com o servidor do contrato");
+    return j;
+  },
   salvarChecklistAgenda: (p: any) => rpc("salvar_checklist_agenda", { p }),
   checklistExcluir: (ids: string[]) => rpc<number>("checklist_excluir", { p_ids: ids }),
   checklistPedirMedida: (id: string, obs: string) => rpc<string>("checklist_pedir_medida", { p_id: id, p_obs: obs }),

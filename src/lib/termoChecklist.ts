@@ -160,7 +160,7 @@ export const CONDICOES_GERAIS = [
 ];
 
 export type AmbImpressao = AmbTermo & { ficha?: Record<string, boolean | null>; fichaObs?: string; obs?: string; imagens?: { nome: string; src: string }[] };
-export type DadosImpressao = Omit<DadosTermo, "ambientes"> & { ambientes: AmbImpressao[] };
+export type DadosImpressao = Omit<DadosTermo, "ambientes"> & { ambientes: AmbImpressao[]; online?: boolean };
 
 const CSS_IMP = `.capa{padding-top:30mm;text-align:center}.capa h1{font-size:26pt;margin:0 0 4mm;letter-spacing:1px}.capa h2{font-size:14pt;font-weight:400;margin:0 0 14mm;color:#333}
 .capa table{width:140mm;margin:0 auto;font-size:11pt}.capa td{border:0;border-bottom:1px solid #ccc;padding:6px 4px;text-align:left}.capa td:first-child{color:#555;width:42mm}
@@ -175,7 +175,7 @@ const CSS_IMP = `.capa{padding-top:30mm;text-align:center}.capa h1{font-size:26p
 export function impressaoHtml(d: DadosImpressao): string {
   const cab = (titulo: string, sub = "") => `<div class="hd"><div class="l"><b>ALIANÇA MÓVEIS</b><div>Checklist do projeto final · ${esc(d.cliente.toUpperCase())}</div></div>
 <div class="r"><b>${titulo}</b><br>Venda <b>${esc(d.venda)}</b>${sub ? " · " + sub : ""}</div></div>`;
-  const capa = `<div class="pg capa"><h1>ALIANÇA MÓVEIS</h1><h2>Checklist do projeto final — documento para assinatura do cliente</h2>
+  const capa = `<div class="pg capa"><h1>ALIANÇA MÓVEIS</h1><h2>Checklist do projeto final — ${d.online ? "contrato para assinatura eletrônica do cliente" : "documento para assinatura do cliente"}</h2>
 <table><tr><td>Cliente</td><td><b>${esc(d.cliente.toUpperCase())}</b></td></tr><tr><td>Venda</td><td><b>${esc(d.venda)}</b></td></tr>
 <tr><td>Endereço</td><td>${esc(d.endereco)}</td></tr><tr><td>Vendedor(a)</td><td>${esc(d.vendedor)}</td></tr><tr><td>Projetista do checklist</td><td>${esc(d.projetista)}</td></tr><tr><td>Data</td><td>${esc(d.data)}</td></tr></table>
 <div class="lst">Ambientes: ${d.ambientes.map((a, i) => `<b>${i + 1} · ${esc(a.nome)}</b>`).join(" ")}</div>
@@ -198,13 +198,15 @@ ${imgs.length ? `<h3>Imagens do projeto</h3><div class="imgs${imgs.length === 1 
 ${a.fichaObs || a.obs ? `<div class="obs fill" style="margin-top:3mm">${esc([a.fichaObs, a.obs].filter(Boolean).join(" — "))}</div>` : ""}
 ${vis.length ? `<h3>Resumo do que foi comprado <i>(${vis.length} itens · sem valores)</i></h3><table class="it"><tr><th class="q">Qtd</th><th>Descrição</th><th class="m">Medidas (L × A × P)</th></tr>`
   + vis.map(({ l, n }) => `<tr><td>${n > 1 ? n + " peças" : /M2/i.test(l.qtd) ? "1 peça" : esc(l.qtd)}</td><td>${esc(l.descricao)}</td><td>${esc(l.medidas)}</td></tr>`).join("") + `</table>` : ""}
-<div class="ass"><div>Rubrica do cliente · ${esc(a.nome)}</div><div>Projetista do checklist</div></div></div>`;
+${d.online ? `<div class="rub" style="margin-top:6mm">✔ Ciência e aceite deste ambiente registrados na assinatura eletrônica (última página).</div>` : `<div class="ass"><div>Rubrica do cliente · ${esc(a.nome)}</div><div>Projetista do checklist</div></div>`}</div>`;
   }).join("");
-  const termo = termoHtml({ ...d, ambientes: d.ambientes.map(a => ({ ...a, conferir: [] })), cupom: undefined }, true).replace('<div class="pg">', '<div class="pg quebra">');
+  let termo = termoHtml({ ...d, ambientes: d.ambientes.map(a => ({ ...a, conferir: [] })), cupom: undefined }, true).replace('<div class="pg">', '<div class="pg quebra">');
+  if (d.online) termo = termo.replace(/<span class="bx"><\/span>(<span>)/g, '<span style="flex:none">•</span>$1').replace(/\(assinalar cada item\)/g, "(aceite na assinatura eletrônica)").replace("o cliente confere e rubrica cada linha", "o cliente confere cada linha")
+    .replace(/<div class="ass">[\s\S]*?<\/div><\/div>/, '<div class="rub" style="margin-top:6mm">Ciência registrada na assinatura eletrônica do cliente (última página).</div>');
   const cg = `<div class="pg quebra">${cab("CONDIÇÕES GERAIS DO CHECKLIST")}
-<div class="rub" style="margin-bottom:3mm">Li e estou de acordo com cada item abaixo (assinalar “Sim”).</div><div class="cg">
-${CONDICOES_GERAIS.map((t, i) => `<div><span class="n">${i + 1}.</span><span>${esc(t)}</span><span class="sim"><span class="bx"></span>Sim</span></div>`).join("")}</div>
-<div class="ass" style="margin-top:14mm"><div>Assinatura do cliente<br><span class="rub">${esc(d.cliente.toUpperCase())} · ${esc(d.data)}</span></div><div>Projetista do checklist<br><span class="rub">${esc(d.projetista)}</span></div></div>
+<div class="rub" style="margin-bottom:3mm">${d.online ? "Li e estou de acordo com cada item abaixo (aceite registrado na assinatura eletrônica)." : "Li e estou de acordo com cada item abaixo (assinalar “Sim”)."}</div><div class="cg">
+${CONDICOES_GERAIS.map((t, i) => `<div><span class="n">${i + 1}.</span><span>${esc(t)}</span>${d.online ? "" : `<span class="sim"><span class="bx"></span>Sim</span>`}</div>`).join("")}</div>
+${d.online ? `<div class="rub" style="margin-top:8mm">Assinatura eletrônica do cliente, com selfie, data, hora e código do documento: <b>página seguinte</b>.</div>` : `<div class="ass" style="margin-top:14mm"><div>Assinatura do cliente<br><span class="rub">${esc(d.cliente.toUpperCase())} · ${esc(d.data)}</span></div><div>Projetista do checklist<br><span class="rub">${esc(d.projetista)}</span></div></div>`}
 <div class="foot"><span>Gerado pelo ALIANÇA 360 · venda ${esc(d.venda)}</span><span>Projeto final validado no checklist</span></div></div>`;
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Checklist_${esc(d.cliente.split(" ")[0])}_${esc(d.venda)}</title><style>${CSS}${CSS_IMP}</style></head><body>
 ${capa}${amb}${termo}${cg}</body></html>`;
