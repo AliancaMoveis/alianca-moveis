@@ -105,7 +105,7 @@ const CSS = `
 .pj .pjkpi{background:var(--pj-bg,#fff);border:1px solid var(--pj-l);border-radius:14px;padding:16px 18px;cursor:pointer;box-shadow:0 1px 2px rgba(20,28,45,.05)}.pj .pjkpi b{display:block;font-size:28px;line-height:1.1}.pj .pjkpi span{color:var(--pj-s);font-size:13px}.pj .pjkpi.alerta b{color:#b42318}
 .pj .pjtabs{display:flex;align-items:center;flex-wrap:wrap;gap:4px;background:var(--pj-l2);border-radius:12px;padding:4px;margin-bottom:12px;width:fit-content;max-width:100%}.pj .pjtabs>button{border:0;background:none;padding:8px 14px;border-radius:9px;font-weight:600;color:var(--pj-s);cursor:pointer}.pj .pjtabs>button.on{background:var(--pj-bg,#fff);color:inherit;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .pj .pjrows{display:flex;flex-direction:column;gap:10px}
-.pj .pjrow{display:flex;gap:14px;align-items:flex-start;background:var(--pj-bg,#fff);border:1px solid var(--pj-l);border-left:5px solid var(--cor);border-radius:14px;padding:12px 14px;box-shadow:0 1px 2px rgba(20,28,45,.05)}.pj .pjrow.res{background:#fffaf0}
+.pj .pjrow{display:flex;gap:14px;align-items:flex-start;background:var(--pj-bg,#fff);border:1px solid var(--pj-l);border-left:5px solid var(--cor);border-radius:14px;padding:12px 14px;box-shadow:0 1px 2px rgba(20,28,45,.05)}.pj .pjrow.res{background:rgba(201,138,18,.10)}
 .pj .pjdata{color:#fff;border-radius:10px;min-width:86px;text-align:center;padding:7px 8px;line-height:1.15}.pj .pjdata small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.8px;opacity:.9}.pj .pjdata b{display:block;font-size:21px}.pj .pjdata span{font-weight:800;font-size:15px}
 .pj .pjinfo{flex:1;min-width:0}.pj .pjl1{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.pj .pjl1>b{font-size:15.5px;margin-right:2px}.pj .pjtag{border:1px solid var(--pj-l);border-radius:6px;padding:1px 7px;font-size:12px;font-weight:700}.pj .pjtag.loc{background:#1f5f8b;color:#fff;border-color:transparent}
 .pj .pjl2{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--pj-f);font-size:12.5px;margin:5px 0}.pj .pjl2 b{color:var(--pj-s);font-weight:600}.pj .pjl3{display:flex;flex-wrap:wrap;gap:4px}
@@ -122,7 +122,7 @@ const CSS = `
 .pj .dia{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--pj-f);font-weight:800;margin:6px 4px 8px}
 .pj .pjit{border:1px solid var(--pj-l2);border-left:4px solid var(--cor,#d6336c);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--pj-bg);cursor:pointer}
 .pj .pjit:hover{border-color:var(--pj-pri)}.pj .pjit.on{border-color:var(--pj-pri);border-left-color:var(--pj-pri);background:var(--pj-soft)}
-.pj .pjit.res{border-left-color:#c98a12;background:#fffaf0}.pj .pjit.pjok{border-left-color:var(--pj-ok)}
+.pj .pjit.res{border-left-color:#c98a12;background:rgba(201,138,18,.10)}.pj .pjit.pjok{border-left-color:var(--pj-ok)}
 .pj .pjit .pjh{display:flex;justify-content:space-between;font-weight:800}.pj .pjit .pjh span{color:var(--pj-pri)}.pj .pjit.res .pjh span{color:var(--pj-w)}
 .pj .pjit .pjn{font-weight:700;margin:2px 0}.pj .pjit .m{color:var(--pj-s);font-size:12px}
 .pj .pjpill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;margin-top:5px;margin-right:4px}
@@ -166,7 +166,7 @@ const CSS = `
 .pj .amblist{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media (max-width:800px){.pj .amblist{grid-template-columns:1fr}}
 .pj .am{border:1px solid var(--pj-l);border-radius:10px;padding:9px 11px;background:var(--pj-bg)}.pj .am.drag{opacity:.4}.pj .am.alvo{border-color:var(--pj-pri);box-shadow:0 0 0 2px var(--pj-soft)}
 .pj .am .pjh{display:flex;align-items:center;gap:8px;font-weight:800}.pj .am .pjh .pjx{margin-left:auto;color:var(--pj-f);font-weight:600;font-size:13px;cursor:pointer;border:0;background:none}
-.pj .am .in{border:1px solid #c9d3e6;border-radius:6px;padding:3px 8px;font-weight:700;flex:1;background:#fbfcff;min-width:0}
+.pj .am .in{border:1px solid #c9d3e6;border-radius:6px;padding:3px 8px;font-weight:700;flex:1;background:transparent;color:inherit;min-width:0}
 .pj .am .m2{color:var(--pj-s);font-size:11.5px;margin-top:5px}.pj .lk{color:var(--pj-pri);font-weight:700;cursor:pointer;border:0;background:none;padding:0;font-size:inherit}
 .pj .orig{font-size:10.5px;font-weight:800;border-radius:999px;padding:1px 7px;font-style:normal;cursor:grab}
 .pj .pjab{border:1px solid var(--pj-l);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--pj-bg)}.pj .pjab.am-w{border-left:4px solid #c98a12}.pj .pjab.am-ok{border-left:4px solid var(--pj-ok)}
@@ -174,7 +174,7 @@ const CSS = `
 .pj .seg{display:inline-flex;border:1px solid var(--pj-l);border-radius:7px;overflow:hidden;vertical-align:middle}.pj .seg button{border:0;background:var(--pj-bg);font-size:12px;font-weight:800;padding:4px 10px;color:var(--pj-s);cursor:pointer}.pj .seg button+button{border-left:1px solid var(--pj-l)}.pj .seg button.on{background:var(--pj-pri);color:#fff}
 .pj .lbl2{font-size:11px;color:var(--pj-f);text-transform:uppercase;letter-spacing:.4px;font-weight:800;margin-bottom:4px}
 .pj .mat{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:10px}
-.pj .pjrow{display:flex;align-items:center;gap:8px;border:1px solid var(--pj-l);border-radius:9px;padding:5px 10px;background:var(--pj-bg);font-size:12.5px;margin-bottom:5px}.pj .pjrow b{flex:1;font-weight:600}.pj .pjrow.on{border-color:#9fc5a8;background:#f5fbf6}.pj .pjrow.no{border-color:#f0d9a6;background:#fffaf0}
+.pj .pjrow{display:flex;align-items:center;gap:8px;border:1px solid var(--pj-l);border-radius:9px;padding:5px 10px;background:var(--pj-bg);font-size:12.5px;margin-bottom:5px}.pj .pjrow b{flex:1;font-weight:600}.pj .pjrow.on{border-color:#5fa070;background:rgba(47,122,63,.14)}.pj .pjrow.no{border-color:#c98a12;background:rgba(201,138,18,.14)}
 .pj .yn{display:flex;border:1px solid var(--pj-l);border-radius:7px;overflow:hidden}.pj .yn button{border:0;font-size:11px;font-weight:800;padding:3px 9px;color:var(--pj-f);background:var(--pj-bg);cursor:pointer}.pj .yn button.y{background:var(--pj-ok);color:#fff}.pj .yn button.pjn{background:#e9ecf1;color:#3b4558}
 .pj .obsw{background:var(--pj-wbg);color:#6b4a00;border-radius:8px;padding:6px 8px;font-size:12px;margin-top:6px}
 .pj .imp{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border:1px solid var(--pj-l);border-radius:10px;padding:10px 12px;flex-wrap:wrap}.pj .imp b{display:block}.pj .imp>div>span{color:var(--pj-f);font-size:11.5px}
@@ -967,21 +967,30 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
   const nome = `Checklist_${primeiroNome(cap(c.cliente))}_${c.pedido}.pdf`;
   const link = ct?.token ? location.origin + "/contrato?t=" + ct.token : "";
   /** os dados do contrato, com todas as imagens embutidas (as do Exact, as do checklist e as páginas dos PDFs de imagens) */
-  async function montar(): Promise<ContratoDados> {
+  async function montar(): Promise<{ dados: ContratoDados; falhas: string[] }> {
+    // links novos dos arquivos do checklist (os que acabaram de subir ainda não estão na lista, e os links vencem em 1 hora)
+    let ck: any[] = arqs?.ck || [];
+    try { ck = (await A.ckArquivos(c.id)).ck || ck; } catch { /* usa a lista que já tinha */ }
+    const falhas: string[] = [];
     const blobDe = async (m: Img): Promise<Blob | null> => {
       if (m.fonte === "legacy" && m.id) return A.ckBaixar(c.id, m.id);
-      const u = m.fonte === "checklist" ? (arqs?.ck || []).find((x: any) => x.path === m.path)?.url || m.url || "" : m.url || "";
-      return u ? (await fetch(u)).blob() : null;
+      const u = m.fonte === "checklist" ? ck.find((x: any) => x.path === m.path)?.url || "" : m.url || "";
+      if (!u) return null;
+      const r = await fetch(u); if (!r.ok) throw new Error("arquivo " + r.status);
+      return r.blob();
     };
     const ambientes: ContratoDados["ambientes"] = [];
     for (const a of ambs as Amb[]) {
       const imgs: { nome: string; src: string }[] = [];
       for (const m of a.imagens || []) {
         try {
-          const b = await blobDe(m); if (!b) continue;
-          if (ehPdf(m.nome) || b.type === "application/pdf") (await pdfParaImagens(b)).forEach((src, i, l) => imgs.push({ nome: m.nome + (l.length > 1 ? " · pág. " + (i + 1) : ""), src }));
-          else imgs.push({ nome: m.nome, src: await blobParaJpeg(b).catch(() => blobParaDataUrl(b)) });
-        } catch { /* imagem que não abriu fica de fora */ }
+          const b = await blobDe(m); if (!b) { falhas.push(m.nome + " (arquivo não encontrado)"); continue; }
+          if (ehPdf(m.nome) || b.type === "application/pdf") {
+            const pags = await pdfParaImagens(b);
+            if (!pags.length) falhas.push(m.nome + " (PDF sem páginas)");
+            pags.forEach((src, i, l) => imgs.push({ nome: m.nome + (l.length > 1 ? " · pág. " + (i + 1) : ""), src }));
+          } else imgs.push({ nome: m.nome, src: await blobParaJpeg(b).catch(() => blobParaDataUrl(b)) });
+        } catch (e: any) { falhas.push(m.nome + " (" + (e?.message || "não abriu") + ")"); }
       }
       // resumo do que foi comprado (sem valores): peças iguais juntas
       const grupos = new Map<string, { l: LinhaListagem; n: number }>();
@@ -989,8 +998,8 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
       ambientes.push({ nome: a.nome.trim(), termo: termoDoAmb(a, ferragens), ficha: fichaDe(a).map(([k, v]) => [k, v ?? null]), fichaObs: [a.fichaObs, a.obs].filter(Boolean).join(" — "),
         itens: [...grupos.values()].map(({ l, n }) => ({ qtd: n > 1 ? n + " peças" : /M2/i.test(l.qtd) ? "1 peça" : l.qtd, descricao: l.descricao, medidas: l.medidas })), imagens: imgs });
     }
-    return { venda: String(c.pedido), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj,
-      data: fmtDate(hojeISO()), ambientes, naoInclusos: naoInc, obs, ferragens };
+    return { dados: { venda: String(c.pedido || ""), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj,
+      data: fmtDate(hojeISO()), ambientes, naoInclusos: naoInc, obs, ferragens }, falhas };
   }
   async function gerarLink() {
     if (!liberado) { toast("Termine a conferência por ambiente (nada em amarelo) antes de gerar o contrato"); return; }
@@ -998,8 +1007,11 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
     if (!(await antes())) return;
     setMontando("link");
     try {
-      const dados = await montar();
+      const { dados, falhas } = await montar();
+      if (falhas.length && !confirm("Estas imagens NÃO entraram no contrato:\n\n• " + falhas.join("\n• ") + "\n\nGerar o link mesmo assim?")) return;
+      const nImg = dados.ambientes.reduce((n, a) => n + a.imagens.length, 0);
       const r = await A.ckContrato("criar", c.id, { dados });
+      if (!nImg) toast("Atenção: contrato sem imagens do projeto");
       setCt({ token: r.token, status: "pendente", expira: r.expira });
       toast("Contrato gerado — mostre o QR Code ao cliente");
     } catch (e: any) { toast(e.message || "Não foi possível gerar o contrato"); }
@@ -1013,7 +1025,9 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
     w.document.write("<p style='font:16px system-ui;padding:30px'>Montando o contrato para impressão…</p>");
     setMontando(online ? "ler" : "papel");
     try {
-      imprimirHtml(contratoHtml(await montar(), null, null, location.origin + "/logo.png"), w);
+      const { dados, falhas } = await montar();
+      if (falhas.length) toast("Imagens que não entraram: " + falhas.join(", "));
+      imprimirHtml(contratoHtml(dados, null, null, location.origin + "/logo.png"), w);
       if (!online) await gerar(1 + ambs.length + 2);
     } catch (e: any) { toast(e.message || "Não foi possível montar a impressão"); try { w.close(); } catch { /* */ } }
     finally { setMontando(""); }
