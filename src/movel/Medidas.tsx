@@ -26,7 +26,7 @@ export type TipoCliente = "pre" | "pos" | "confirmacao";
 export const TIPO_CLIENTE: Record<TipoCliente, { ic: string; t: string; s: string; cor: string; bg: string }> = {
   pre: { ic: "🟢", t: "VISITA DE VENDA", s: "pré-venda · você vai vender · gera comissão", cor: "#1f7a3a", bg: "rgba(47,122,63,.12)" },
   pos: { ic: "🟣", t: "MEDIDA PÓS-VENDA", s: "o cliente já comprou · só medir · não é venda · sem comissão", cor: "#7c3aed", bg: "rgba(124,58,237,.12)" },
-  confirmacao: { ic: "🔵", t: "CONFIRMAÇÃO DE MEDIDA", s: "medida devolvida · complete o que está faltando", cor: "#1d6fd1", bg: "rgba(29,111,209,.12)" },
+  confirmacao: { ic: "🔵", t: "CONFIRMAÇÃO DE MEDIDA", s: "cliente que você já visitou ou medida devolvida · confirme e complete", cor: "#1d6fd1", bg: "rgba(29,111,209,.12)" },
 };
 const tel8 = (x: any) => String(x || "").replace(/\D/g, "").slice(-8);
 /** medida: confirmação (foi feita, não foi aprovada e voltou — no 360 ou pelo Exact) ou pós-venda; a Gestão / Medidas pode trocar */
@@ -34,9 +34,14 @@ export function tipoMedida(c: any, _st?: any): "pos" | "confirmacao" {
   const m = (c.tratativa && c.tratativa.medida) || {};
   if (m.tipoVisita === "pos") return "pos";
   if (m.tipoVisita === "confirmacao") return "confirmacao";
-  return (m.faltando && m.faltando.length) || m.refazer || m.motivoNovaExact ? "confirmacao" : "pos";
+  // medida devolvida (faltou algo / refazer / nova medição no Exact)
+  if ((m.faltando && m.faltando.length) || m.refazer || m.motivoNovaExact) return "confirmacao";
+  // quem vai medir é o mesmo consultor que visitou o cliente antes da venda → confirmação do que ele já mediu
+  if (m.consultorVisita && m.consultorVisita === c.medidorId) return "confirmacao";
+  const t = tel8(c.telefone);
+  if (t.length < 8 || !c.medidorId || !_st) return "pos";
+  return (_st.chamados || []).some((v: any) => v.tipo === "visita_consultor" && v.consultorId === c.medidorId && tel8(v.telefone) === t && String(v.criadoEm || "") < String(c.criadoEm || "9")) ? "confirmacao" : "pos";
 }
-void tel8;
 export function SeloTipo({ tipo, grande }: { tipo: TipoCliente; grande?: boolean }) {
   const x = TIPO_CLIENTE[tipo];
   return grande ? <div style={{ background: x.bg, border: "2px solid " + x.cor, borderRadius: 12, padding: "10px 12px", margin: "6px 0 10px" }}>
@@ -114,8 +119,9 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
   const etapa = R.etapaMedida(c);
   const [med, setMed] = useState(m.medidas || ""); const [obs, setObs] = useState(m.obs || "");
   const souEu = c.medidorId === R.currentUserId;
-  const conf = tipoMedida(c) === "confirmacao";
-  const [aba, setAba] = useState<"falta" | "anteriores" | "venda">("falta");
+  const conf = tipoMedida(c, R.state) === "confirmacao";
+  const devolvida = !!((m.faltando || []).length || m.refazer || m.motivoNovaExact);
+  const [aba, setAba] = useState<"falta" | "anteriores" | "venda">(devolvida ? "falta" : "anteriores");
   return <>
     <div className="mv-cli">📐 {c.cliente}</div>
     <SeloTipo tipo={tipoMedida(c, R.state)} grande />
@@ -133,10 +139,12 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
       <div><span>Checklist</span><b>{fmtDateTime(pz.ck)}</b></div><div><span>Medir até</span><b>{fmtDate(pz.limite)}</b></div>
       <small>As medidas precisam estar prontas 5 dias antes do checklist.</small></div> : null; })()}
     {conf ? <>
-      <div className="mv-seg" style={{ margin: "4px 0 6px" }}>{([["falta", "⚠️ O que falta"], ["anteriores", "📷 Fotos e medidas anteriores"], ["venda", "🖼 Imagem da venda"]] as const).map(([k, l]) =>
-        <button key={k} className={aba === k ? "on" : ""} onClick={() => setAba(k)}>{l}</button>)}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, margin: "6px 0 8px" }}>{([["falta", "⚠️", "O que falta"], ["anteriores", "📷", "Fotos e medidas anteriores"], ["venda", "🖼", "Imagem da venda"]] as const).map(([k, ic, l]) =>
+        <button key={k} type="button" onClick={() => setAba(k)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "9px 4px", minHeight: 64, borderRadius: 12, font: "inherit", fontSize: 12.5, fontWeight: 800, lineHeight: 1.15, textAlign: "center", cursor: "pointer",
+          border: "1.5px solid " + (aba === k ? "#1d6fd1" : "var(--line)"), background: aba === k ? "#1d6fd1" : "var(--surface)", color: aba === k ? "#fff" : "var(--ink)" }}>
+          <span style={{ fontSize: 20 }}>{ic}</span>{l}</button>)}</div>
       {aba === "falta" && ((m.faltando || []).length > 0 ? <Faltando c={c} pode={souEu || R.ehSupMedidas()} />
-        : <div className="mv-dica" style={{ margin: "6px 0 10px" }}>{m.refazer || m.motivoNovaExact || "Medida devolvida — veja as fotos e medidas anteriores."}</div>)}
+        : <div className="mv-dica" style={{ margin: "6px 0 10px" }}>{m.refazer || m.motivoNovaExact || "Você já visitou este cliente antes da venda. Confira as fotos e medidas anteriores e confirme as medidas."}</div>)}
       {aba === "anteriores" && <Anteriores c={c} />}
       {aba === "venda" && <ImagensVenda c={c} />}
     </> : <ImagensVenda c={c} />}
