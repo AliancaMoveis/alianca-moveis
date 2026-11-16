@@ -402,39 +402,69 @@ function Freteiros({ d, toast, rec }: any) {
 function FormManual({ fr, fixo, mes, uid, toast, fechar, feito }: { fr: Freteiro[]; fixo?: Freteiro; mes: string; uid: string; toast: any; fechar: () => void; feito: () => void }) {
   const hojeIso = new Date().toISOString().slice(0, 10);
   const [fid, setFid] = useState<string>(fixo ? String(fixo.id) : "");
-  const [numero, setNumero] = useState(""); const [data, setData] = useState(hojeIso.slice(0, 7) === mes ? hojeIso : mes + "-01");
-  const vazia = () => ({ tipo: "Entrega", cliente: "", km: "", valor: "" });
+  const [data, setData] = useState(hojeIso.slice(0, 7) === mes ? hojeIso : mes + "-01");
+  const vazia = (numero = "") => ({ numero, tipo: "Entrega", cliente: "", km: "", valor: "" });
   const [ls, setLs] = useState([vazia()]);
+  const [salvando, setSalvando] = useState(false);
   const total = ls.reduce((s, l) => s + (num(l.valor) || 0), 0), km = ls.reduce((s, l) => s + (num(l.km) || 0), 0);
   const f = fr.find(x => String(x.id) === fid); const vkm = f?.valor_km ?? 3;
+  const preenchida = (l: any) => !!(l.cliente.trim() || num(l.valor) != null || num(l.km) != null);
+  // cada nº vira UM romaneio; linhas com o mesmo nº entram juntas no mesmo romaneio
+  const grupos = () => { const g: Record<string, any[]> = {}; ls.forEach(l => { const n = String(l.numero || "").trim(); if (n) (g[n] = g[n] || []).push(l); }); return g; };
+  const nRom = Object.keys(grupos()).length;
   const gravar = async () => {
-    if (!f) return toast?.("Escolha o entregador"); if (!numero.trim()) return toast?.("Informe o nº do romaneio manual");
-    const linhas = ls.filter(l => l.cliente.trim() || num(l.valor) != null || num(l.km) != null).map(l => ({ tipo: l.tipo, cliente: l.cliente.trim(), km: num(l.km), valor: num(l.valor) }));
-    if (!linhas.length) return toast?.("Inclua ao menos uma linha com valor");
-    try { await criarManual(f, numero, data, linhas, uid); toast?.("Romaneio manual " + numero + " incluído"); fechar(); feito(); } catch (e: any) { toast?.(e.message); }
+    if (!f) return toast?.("Escolha o entregador");
+    if (ls.some(l => !String(l.numero || "").trim() && preenchida(l))) return toast?.("Tem linha preenchida sem o nº do romaneio");
+    const g = grupos(); const nums = Object.keys(g);
+    if (!nums.length) return toast?.("Informe o nº do romaneio");
+    setSalvando(true);
+    const ok: string[] = []; const falhou: { n: string; erro: string }[] = [];
+    for (const n of nums) {
+      const linhas = g[n].filter(preenchida).map((l: any) => ({ tipo: l.tipo, cliente: l.cliente.trim(), km: num(l.km), valor: num(l.valor) }));
+      try { await criarManual(f, n, data, linhas.length ? linhas : [{ tipo: "Entrega", cliente: "", km: null, valor: null }], uid); ok.push(n); }
+      catch (e: any) { falhou.push({ n, erro: e?.message || "não gravou" }); }
+    }
+    setSalvando(false);
+    if (ok.length) toast?.(ok.length === 1 ? "Romaneio manual " + ok[0] + " incluído" : ok.length + " romaneios manuais incluídos: " + ok.join(", "));
+    feito();
+    if (falhou.length) { // os que falharam continuam na tela para corrigir
+      toast?.("Não entrou: " + falhou.map(x => x.n + " (" + x.erro + ")").join(" · "));
+      setLs(ls.filter(l => falhou.some(x => x.n === String(l.numero || "").trim())));
+      return;
+    }
+    fechar();
   };
   const set = (k: number, c: string, v: string) => setLs(x => x.map((l, j) => j === k ? { ...l, [c]: v } : l));
+  const maisLinha = () => setLs(x => [...x, vazia(String(x[x.length - 1]?.numero || ""))]);   // outra entrega no MESMO romaneio
+  const maisRomaneio = () => setLs(x => [...x, vazia()]);                                      // romaneio novo (nº em branco)
   return <div className="card" style={{ padding: 12, border: "2px dashed var(--primary)" }}>
-    <b>➕ Romaneio manual</b> <span className="hint">(o que não vem no relatório do Tático)</span>
+    <b>➕ Romaneio manual</b> <span className="hint">(o que não vem no relatório do Tático) · dá para lançar vários de uma vez: um nº por linha</span>
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
       <div className="field" style={{ margin: 0 }}><label>Entregador</label><select value={fid} disabled={!!fixo} onChange={e => setFid(e.target.value)}><option value="">—</option>{fr.filter(x => x.ativo).map(x => <option key={x.id} value={x.id}>{x.apelido}</option>)}</select></div>
-      <div className="field" style={{ margin: 0, width: 140 }}><label>Nº do romaneio manual</label><input value={numero} onChange={e => setNumero(e.target.value)} placeholder="ex.: 2345" /></div>
-      <div className="field" style={{ margin: 0 }}><label>Data</label><input type="date" value={data} onChange={e => setData(e.target.value)} /></div>
+      <div className="field" style={{ margin: 0 }}><label>Data (vale para todos)</label><input type="date" value={data} onChange={e => setData(e.target.value)} /></div>
+      <span className="hint">Só o nº já basta: inclua agora e depois digite km e valor direto na lista.</span>
     </div>
     <table className="ma-tab" style={{ width: "100%", fontSize: 13.5, marginTop: 8 }}>
-      <thead><tr><th>Tipo</th><th>Cliente / observação</th><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Valor (R$)</th><th></th></tr></thead>
-      <tbody>{ls.map((l, k) => <tr key={k}>
+      <thead><tr><th style={{ width: 110 }}>Nº do romaneio</th><th>Tipo</th><th>Cliente / observação</th><th style={{ textAlign: "right" }}>Km</th><th style={{ textAlign: "right" }}>Valor (R$)</th><th></th></tr></thead>
+      <tbody>{ls.map((l, k) => { const rep = k > 0 && String(l.numero || "").trim() && String(l.numero || "").trim() === String(ls[k - 1].numero || "").trim();
+        return <tr key={k}>
+        <td><input value={l.numero} onChange={e => set(k, "numero", e.target.value)} placeholder={k ? "novo nº" : "ex.: 2345"}
+          title={rep ? "Mesmo nº da linha de cima: entra como outra entrega do mesmo romaneio" : "Cada nº diferente vira um romaneio"}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); maisRomaneio(); } }}
+          style={{ width: 96, fontWeight: 700, ...(rep ? { opacity: .55 } : {}) }} /></td>
         <td><select value={l.tipo} onChange={e => set(k, "tipo", e.target.value)}>{TIPOS_MANUAL.map(t => <option key={t}>{t}</option>)}</select></td>
         <td><input value={l.cliente} onChange={e => set(k, "cliente", e.target.value)} placeholder="nome do cliente" style={{ width: "100%" }} /></td>
         <td style={{ textAlign: "right" }}><input value={l.km} inputMode="decimal" onChange={e => set(k, "km", e.target.value)} style={{ width: 70, textAlign: "right" }} /></td>
-        <td style={{ textAlign: "right" }}><input value={l.valor} inputMode="decimal" onChange={e => set(k, "valor", e.target.value)} onKeyDown={e => { if (e.key === "Enter" && k === ls.length - 1) setLs(x => [...x, vazia()]); }} style={{ width: 90, textAlign: "right" }} /></td>
+        <td style={{ textAlign: "right" }}><input value={l.valor} inputMode="decimal" onChange={e => set(k, "valor", e.target.value)} onKeyDown={e => { if (e.key === "Enter" && k === ls.length - 1) maisRomaneio(); }} style={{ width: 90, textAlign: "right" }} /></td>
         <td>{ls.length > 1 && <button className="btn sm" onClick={() => setLs(x => x.filter((_, j) => j !== k))}>✕</button>}</td>
-      </tr>)}</tbody>
+      </tr>; })}</tbody>
     </table>
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-      <button className="btn sm" onClick={() => setLs(x => [...x, vazia()])}>+ linha</button>
-      <span style={{ marginLeft: "auto" }}>Km {fmtN(km) || 0} × {moeda(vkm)} = {moeda(km * vkm)} + {moeda(total)} = <b>{moeda(total + km * vkm)}</b></span>
-      <button className="btn primary" onClick={gravar}>Incluir</button><button className="btn" onClick={fechar}>Cancelar</button>
+      <button className="btn sm primary" onClick={maisRomaneio}>+ romaneio</button>
+      <button className="btn sm" onClick={maisLinha} title="Outra entrega dentro do mesmo romaneio (repete o nº da última linha)">+ linha no mesmo romaneio</button>
+      <span style={{ marginLeft: "auto" }}>{nRom > 1 ? <b>{nRom} romaneios</b> : null} Km {fmtN(km) || 0} × {moeda(vkm)} = {moeda(km * vkm)} + {moeda(total)} = <b>{moeda(total + km * vkm)}</b></span>
+      <button className="btn primary" disabled={salvando} onClick={gravar}>{salvando ? "Incluindo…" : nRom > 1 ? "Incluir " + nRom + " romaneios" : "Incluir"}</button>
+      <button className="btn" onClick={fechar}>Cancelar</button>
     </div>
   </div>;
 }
