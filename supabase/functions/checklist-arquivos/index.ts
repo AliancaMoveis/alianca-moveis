@@ -30,11 +30,36 @@ function tipoDe(nome: string, mime?: string) {
 }
 /** arquivo do Exact em formato único (os nomes dos campos variam entre rotas) */
 function norm(a: any, fonte: string) {
-  const nome = String(a.originalName || a.fileName || a.filename || a.name || a.nome || a.key || ("arquivo " + (a.id ?? ""))).split("/").pop() || "arquivo";
+  const nome = String(a.originalFileName || a.originalName || a.fileName || a.filename || a.name || a.nome || a.key || ("arquivo " + (a.id ?? ""))).split("/").pop() || "arquivo";
   const url = a.url || a.location || a.publicUrl || a.link || a.path || "";
-  return { fonte, id: String(a.id ?? a.attachmentId ?? ""), nome, tipo: tipoDe(nome || url, a.mimeType || a.contentType || a.mimetype || a.type),
-    categoria: String(a.type || a.attachmentType || a.category || "").toUpperCase(), tamanho: Number(a.size || a.fileSize || 0) || null,
+  return { fonte, id: String(a.id ?? a.attachmentId ?? ""), nome, tipo: tipoDe(nome || url, a.mimeType || a.contentType || a.mimetype),
+    categoria: String(a.referenceType || a.attachmentType || a.category || "").toUpperCase(), tamanho: Number(a.size || a.fileSize || 0) || null,
     em: a.createdAt || a.created_at || a.uploadedAt || null, url: /^https?:\/\//.test(url) ? url : "" };
+}
+
+// situação do ticket (coluna do quadro do checklist no Exact) e da venda
+const SIT_TICKET: Record<number, string> = { 1: "(SEC) Agendamento", 2: "(LM) Aguardando medição", 3: "(Proj) Aguardando checklist", 4: "(FIN) Checklist concluído", 5: "(SEC) Clientes obras/planta", 6: "Cancelado" };
+const SIT_VENDA: Record<number, string> = { 1: "Pendente", 2: "Efetivada", 3: "Cancelada" };
+const r2 = (n: number) => Math.round(n * 100) / 100;
+/** dados da venda e do cliente para o projetista (valores = teto para o projeto final; nunca vão para a impressão do cliente) */
+function dadosVenda(t: any) {
+  const cli = t?.client || {}, ad = cli.address || {};
+  const bruto = Number(t?.totalValue) || 0, desc = t?.discountPercentage == null ? null : Number(t.discountPercentage);
+  const fator = desc == null ? 1 : 1 - desc / 100;
+  const produtos = (Array.isArray(t?.saleProducts) ? t.saleProducts : []).map((p: any) => ({
+    nome: String(p.name || "").trim(), qtd: Number(p.qtd) || 0, unitario: Number(p.unitValue) || 0, total: Number(p.totalValue) || 0,
+    negociado: r2((Number(p.totalValue) || 0) * fator), frete: Number(p.deliveryValue) || 0 }))
+    .sort((a: any, b: any) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true }));
+  const rua = String(ad.street || ad.address || "").trim(), num = String(ad.addressNumber || ad.number || "").trim();
+  const end = [rua && num && !rua.includes(num) ? rua + ", " + num : rua, ad.add || ad.complement, ad.neighbor || ad.district || ad.neighborhood, ad.city, String(ad.state || "").trim()]
+    .map((x: any) => String(x ?? "").trim()).filter(Boolean).join(", ");
+  return {
+    cliente: { nome: String(cli.name || "").trim(), cpf: String(cli.taxId || "").replace(/\D/g, ""), telefone: cli.phoneNumber || "", telefone2: cli.alternativePhoneNumber || "", email: cli.email || "", endereco: end, cep: ad.zipCode || ad.cep || "" },
+    venda: { codigo: String(t?.saleId ?? ""), ticket: t?.externalId ?? null, vendedor: t?.seller || "", situacao: SIT_TICKET[Number(t?.status)] || (t?.status != null ? "código " + t.status : ""),
+      situacaoVenda: SIT_VENDA[Number(t?.saleStatus)] || (t?.saleStatus != null ? "código " + t.saleStatus : ""), descricao: t?.description || "",
+      bruto: r2(bruto), descontoPct: desc == null ? null : Math.round(desc * 1e4) / 1e4, negociado: r2(bruto * fator), promissoria100: !!t?.isFullPromissory, obraEmAndamento: !!t?.buildingInProgress },
+    produtos,
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -56,7 +81,7 @@ Deno.serve(async (req: Request) => {
 
     // ---------- arquivos da venda + medição ----------
     if (b.acao === "arquivos") {
-      const avisos: string[] = []; const venda: any[] = []; const medicao: any[] = []; const outrosTicket: any[] = [];
+      const avisos: string[] = []; const venda: any[] = []; const medicao: any[] = []; const outrosTicket: any[] = []; let dados: any = null;
       if (!token) avisos.push("EXACT_TOKEN não configurado — sem os arquivos do Exact");
       if (token && pedido) {
         try { lista(await exact(token, "GET", `/attachments-legacy/${pedido}`)).forEach(a => venda.push(norm(a, "legacy"))); }
@@ -65,11 +90,17 @@ Deno.serve(async (req: Request) => {
       if (token && ticket) {
         try {
           const t = await exact(token, "GET", `/ticket/checklist/${ticket}`);
-          const fr = [t?.fieldReport, ...(Array.isArray(t?.fieldReports) ? t.fieldReports : [])].filter(Boolean);
-          fr.forEach((r: any) => lista(r?.attachments ?? r?.photos ?? r).forEach(a => medicao.push({ ...norm(a, "ticket"), categoria: "MEASURING" })));
+          try { dados = dadosVenda(t); } catch { /* segue sem os dados da venda */ }
+          // fieldReport vem como lista (medição, montagem…); as fotos ficam em attachments de cada um
+          const fr = [t?.fieldReport, t?.fieldReports].flat(2).filter((r: any) => r && typeof r === "object");
+          const vistos = new Set<string>();
+          fr.filter((r: any) => !r.type || r.type === "MEASURING").forEach((r: any) => (Array.isArray(r.attachments) ? r.attachments : []).forEach((a: any) => {
+            const n = { ...norm(a, "ticket"), categoria: "MEASURING" }; if (n.url && !vistos.has(n.id)) { vistos.add(n.id); medicao.push(n); } }));
           lista(t?.attachments).forEach(a => {
+            if (vistos.has(String(a.id))) return;
             const n = norm(a, "ticket");
-            if (n.categoria === "MEASURING") medicao.push(n); else if (n.categoria === "FINAL_PROJECT") venda.push(n); else outrosTicket.push(n);
+            if (!n.url) return;
+            if (n.categoria === "MEASURING") medicao.push(n); else if (n.categoria === "FINAL_PROJECT" || n.categoria === "INITIAL_PROJECT") venda.push(n); else outrosTicket.push(n);
           });
         } catch (x: any) { avisos.push("Ticket do checklist (Exact): " + String(x.message || x).slice(0, 160)); }
       } else if (token) avisos.push("Venda sem ticket de checklist no Exact (ainda não sincronizada)");
@@ -92,7 +123,7 @@ Deno.serve(async (req: Request) => {
         const { data: s } = await adm.storage.from("checklist").createSignedUrls(ps, 3600);
         (s || []).forEach((x: any, i: number) => { const nome = String(ps[i].split("/").pop()).replace(/^[0-9a-f-]{36}-/, ""); ck.push({ fonte: "checklist", id: ps[i], path: ps[i], nome, tipo: tipoDe(nome), url: x.signedUrl || "", em: (objs[i] as any).created_at || null }); });
       }
-      return json({ ok: true, venda, medicao, m360, ck, outrosTicket, avisos, ticketId: ticket || null });
+      return json({ ok: true, venda, medicao, m360, ck, outrosTicket, avisos, ticketId: ticket || null, dados });
     }
 
     // ---------- baixar um arquivo da venda (Exact legacy) ----------
@@ -104,8 +135,16 @@ Deno.serve(async (req: Request) => {
       const r = await fetch(API + `/attachment/download-legacy/${id}`, { headers: { Authorization: "Bearer " + token } });
       if (!r.ok) return json({ erro: "Exact: " + r.status }, 502);
       const ct = r.headers.get("content-type") || "application/octet-stream";
-      if (ct.includes("json")) { // a rota pode devolver só o link
-        const d: any = await r.json().catch(() => ({})); const u = d?.url || d?.data?.url || d?.data;
+      if (ct.includes("json")) { // o Exact devolve {type:"Buffer", data:[bytes]} (às vezes dentro de {data:…}) ou só o link
+        const d: any = await r.json().catch(() => ({}));
+        const buf = d?.type === "Buffer" ? d : d?.data?.type === "Buffer" ? d.data : null;
+        if (buf && Array.isArray(buf.data)) {
+          const nome = da.find(a => a.id === id)?.nome || "";
+          const e = ext(nome);
+          const mime = e === "pdf" ? "application/pdf" : ["jpg", "jpeg"].includes(e) ? "image/jpeg" : e === "png" ? "image/png" : e === "webp" ? "image/webp" : "application/octet-stream";
+          return new Response(new Uint8Array(buf.data), { headers: { ...CORS, "Content-Type": mime, "Content-Disposition": `inline; filename="${encodeURIComponent(nome)}"` } });
+        }
+        const u = d?.url || d?.data?.url || d?.data;
         if (typeof u === "string" && /^https?:\/\//.test(u)) { const f = await fetch(u); return new Response(f.body, { headers: { ...CORS, "Content-Type": f.headers.get("content-type") || "application/octet-stream" } }); }
         return json({ erro: "Exact não devolveu o arquivo" }, 502);
       }

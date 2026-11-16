@@ -349,7 +349,15 @@ function LinhaCliente({ e, hj, segura, todos, onAbrir }: { e: any; hj: string; s
 
 // ---------------- cliente e venda (dados do Exact; valores só para o projetista — nunca saem na impressão do cliente) ----------------
 const brl = (n: number | null | undefined) => n == null || isNaN(Number(n)) ? "—" : Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+/** CPF/CNPJ formatado (o Exact manda só os dígitos, às vezes com espaços) */
+function fmtDoc(x: any) {
+  const d = String(x || "").replace(/\D/g, "");
+  if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  return d || "—";
+}
 function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; erro: string; c: any }) {
+  const [verNeg, setVerNeg] = useState(false);
   if (carregando) return <div className="body" style={{ gridTemplateColumns: "1fr" }}><div className="empty">Buscando os dados da venda no Exact…</div></div>;
   if (!d) return <div className="body" style={{ gridTemplateColumns: "1fr" }}><div className="note">Não foi possível trazer os dados da venda do Exact{erro ? " (" + erro + ")" : ""}. Confira se a venda {c.pedido} já tem ticket de checklist no Exact.</div></div>;
   const v = d.venda || {}, cl = d.cliente || {}, ps: any[] = d.produtos || [];
@@ -358,6 +366,11 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
   const soma = (k: string, f?: (p: any) => boolean) => ps.filter(f || (() => true)).reduce((t, p) => t + (Number(p[k]) || 0), 0);
   const tetoCupons = soma("negociado", p => cupom(p.nome));
   const linha = (r: string, val: ReactNode) => <div className="pjv-l"><span>{r}</span><b>{val}</b></div>;
+  // o valor negociado fica oculto: aparece só quando o projetista clica no olho (o bruto e os percentuais continuam à vista)
+  const oculto = "•••••••";
+  const neg = (n: number | null | undefined) => verNeg ? brl(n) : oculto;
+  const Olho = () => <button type="button" onClick={() => setVerNeg(v => !v)} title={verNeg ? "Ocultar os valores negociados" : "Mostrar os valores negociados"}
+    style={{ background: "none", border: 0, cursor: "pointer", fontSize: 13, padding: "0 4px", opacity: .85 }}>{verNeg ? "🙈" : "👁"}</button>;
   return <div className="body" style={{ gridTemplateColumns: "minmax(0,1fr) 320px" }}>
     <style>{`.pj .pjv-card{display:block;border:1px solid var(--pj-l);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--pj-bg,#fff)}.pj .pjv-card h4{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--pj-s)}
 .pj .pjv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 18px}@media (max-width:900px){.pj .pjv-grid{grid-template-columns:1fr}}
@@ -367,29 +380,30 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
 .pj .pjv-tag{font-size:10.5px;font-weight:800;border-radius:999px;padding:1px 7px;margin-left:6px}.pj .pjv-tag.cp{background:#e8f1ff;color:#284b8f}.pj .pjv-tag.lp{background:#fff1dc;color:#8a5d00}`}</style>
     <div>
       <div className="pjv-card"><h4>👤 Cliente</h4><div className="pjv-grid">
-        {linha("Nome", cl.nome || c.cliente)}{linha("Telefone", [cl.telefone, cl.telefone2].filter(Boolean).map(fmtTel).join(" / ") || "—")}{linha("E-mail", cl.email || "—")}
+        {linha("Nome", cl.nome || c.cliente)}{linha("CPF / CNPJ", fmtDoc(cl.cpf || c.clienteDoc))}{linha("Telefone", [cl.telefone, cl.telefone2].filter(Boolean).map(fmtTel).join(" / ") || "—")}
+        {linha("E-mail", cl.email || "—")}
         <div style={{ gridColumn: "1/-1" }}>{linha("Endereço (Exact)", (cl.endereco || "—") + (cl.cep ? " · CEP " + String(cl.cep).replace(/^(\d{5})(\d{3})$/, "$1-$2") : ""))}</div>
       </div></div>
       <div className="pjv-card"><h4>🧾 Venda</h4><div className="pjv-grid">
         {linha("Código da venda", v.codigo || c.pedido)}{linha("Código do ticket", v.ticket ?? "—")}{linha("Vendedor", cap(v.vendedor || c.vendedor || "") || "—")}
         {linha("Situação no Exact", v.situacao || "—")}{linha("Situação da venda", v.situacaoVenda || "—")}{linha("100% promissória", v.promissoria100 ? "Sim" : "Não")}
-        {linha("Valor total bruto", brl(v.bruto))}{linha("Valor total negociado", brl(v.negociado))}{linha("Percentual de desconto", v.descontoPct == null ? "—" : String(v.descontoPct).replace(".", ",") + " %")}
+        {linha("Valor total bruto", brl(v.bruto))}{linha(<>Valor total negociado <Olho /></> as any, neg(v.negociado))}{linha("Percentual de desconto", v.descontoPct == null ? "—" : String(v.descontoPct).replace(".", ",") + " %")}
         {v.obraEmAndamento && <div style={{ gridColumn: "1/-1", color: "#8a5d00", fontWeight: 700 }}>⚠️ Cliente com obra em andamento</div>}
       </div></div>
       <div className="pjv-card"><h4>📦 Produtos da venda <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 600 }}>· {nCupom} cupo{nCupom === 1 ? "m" : "ns"} de planejado{nPronta ? " · " + nPronta + " de linha pronta" : ""}</span></h4>
-        {ps.length ? <div style={{ overflowX: "auto" }}><table className="pjv-tab"><thead><tr><th>Nome</th><th className="n">Qtd</th><th className="n">Vlr unit.</th><th className="n">Vlr total</th><th className="n">Vlr negociado</th></tr></thead>
-          <tbody>{ps.map((p, i) => <tr key={i}><td>{p.nome}<span className={"pjv-tag " + (cupom(p.nome) ? "cp" : "lp")}>{cupom(p.nome) ? "planejado" : "linha pronta"}</span></td><td className="n">{p.qtd}</td><td className="n">{brl(p.unitario)}</td><td className="n">{brl(p.total)}</td><td className="n"><b>{brl(p.negociado)}</b></td></tr>)}</tbody>
-          <tfoot><tr><td>Total</td><td className="n">{ps.reduce((t, p) => t + (Number(p.qtd) || 0), 0)}</td><td /><td className="n">{brl(soma("total"))}</td><td className="n">{brl(soma("negociado"))}</td></tr></tfoot></table></div>
+        {ps.length ? <div style={{ overflowX: "auto" }}><table className="pjv-tab"><thead><tr><th>Nome</th><th className="n">Qtd</th><th className="n">Vlr unit.</th><th className="n">Vlr total</th><th className="n">Vlr negociado <Olho /></th></tr></thead>
+          <tbody>{ps.map((p, i) => <tr key={i}><td>{p.nome}<span className={"pjv-tag " + (cupom(p.nome) ? "cp" : "lp")}>{cupom(p.nome) ? "planejado" : "linha pronta"}</span></td><td className="n">{p.qtd}</td><td className="n">{brl(p.unitario)}</td><td className="n">{brl(p.total)}</td><td className="n"><b>{neg(p.negociado)}</b></td></tr>)}</tbody>
+          <tfoot><tr><td>Total</td><td className="n">{ps.reduce((t, p) => t + (Number(p.qtd) || 0), 0)}</td><td /><td className="n">{brl(soma("total"))}</td><td className="n">{neg(soma("negociado"))}</td></tr></tfoot></table></div>
           : <div className="note">O Exact não trouxe produtos para esta venda.</div>}
       </div>
     </div>
     <div>
       <div className="pjv-teto"><small>Teto para o projeto final (valor bruto)</small><b>{brl(nCupom ? soma("total", p => cupom(p.nome)) : v.bruto)}</b>
         <div>{nCupom ? "Valor bruto dos cupons de planejado" + (nPronta ? " (sem a linha pronta)" : "") : "Valor bruto da venda"} — é o valor que se compara com o orçamento do Promob. O projeto final do checklist não pode passar disso; se o cliente pedir mudanças que aumentem o valor, a diferença precisa ser cobrada.</div>
-        <div className="pjv-neg">Valor negociado: <b>{brl(nCupom ? tetoCupons : v.negociado)}</b>{v.descontoPct != null ? " · desconto " + String(v.descontoPct).replace(".", ",") + " %" : ""}</div></div>
+        <div className="pjv-neg">Valor negociado: <b>{neg(nCupom ? tetoCupons : v.negociado)}</b> <Olho />{v.descontoPct != null ? " · desconto " + String(v.descontoPct).replace(".", ",") + " %" : ""}</div></div>
       <div className="box"><h4>Resumo</h4><div className="hist">
-        <div>Bruto <b>{brl(v.bruto)}</b></div><div>Desconto <b>{v.descontoPct == null ? "—" : String(v.descontoPct).replace(".", ",") + " %"}</b></div><div>Negociado <b>{brl(v.negociado)}</b></div>
-        {nPronta > 0 && <div>Linha pronta (negociado) <b>{brl(soma("negociado", p => !cupom(p.nome)))}</b></div>}</div></div>
+        <div>Bruto <b>{brl(v.bruto)}</b></div><div>Desconto <b>{v.descontoPct == null ? "—" : String(v.descontoPct).replace(".", ",") + " %"}</b></div><div>Negociado <b>{neg(v.negociado)}</b> <Olho /></div>
+        {nPronta > 0 && <div>Linha pronta (negociado) <b>{neg(soma("negociado", p => !cupom(p.nome)))}</b></div>}</div></div>
       <div className="hint">🔒 Valores só para conferência interna do checklist. Não aparecem na impressão nem em nada que vai para o cliente.</div>
     </div>
   </div>;
@@ -989,6 +1003,11 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
   const [montando, setMontando] = useState("");
   // quem está aqui é o titular da compra? Se não, ele assina como representante e o titular assina depois, pelo 2º link.
   const [quem, setQuem] = useState<"" | "titular" | "representante">("");
+  // ambientes que entram NESTE contrato (às vezes um ambiente fica para depois e o resto já é fechado)
+  const [ambSel, setAmbSel] = useState<string[] | null>(null);   // null = todos
+  const nomesAmb = (ambs as Amb[]).map(a => a.nome.trim()).filter(Boolean);
+  const entra = (n: string) => !ambSel || ambSel.includes(n);
+  const ambsDoContrato = (ambs as Amb[]).filter(a => entra(a.nome.trim()));
   const [reprNome, setReprNome] = useState("");
   const [reprTel, setReprTel] = useState("");
   // contrato já gerado: a resposta vem dele, senão "Gerar de novo" pediria algo que não está na tela
@@ -1010,7 +1029,7 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
       return r.blob();
     };
     const ambientes: ContratoDados["ambientes"] = [];
-    for (const a of ambs as Amb[]) {
+    for (const a of ambsDoContrato) {
       const imgs: { nome: string; src: string }[] = [];
       for (const m of a.imagens || []) {
         try {
@@ -1034,6 +1053,7 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
   }
   async function gerarLink() {
     if (!liberado) { toast("Termine a conferência por ambiente (nada em amarelo) antes de gerar o contrato"); return; }
+    if (!ambsDoContrato.length) { toast("Escolha pelo menos um ambiente para este contrato"); return; }
     if (!quem) { toast("Diga se quem vai assinar é o titular da compra"); return; }
     if (quem === "representante" && reprNome.trim().length < 5) { toast("Escreva o nome completo de quem vai assinar"); return; }
     if (quem === "representante" && sanitizeWhats(reprTel).length < 10) { toast("Informe o telefone de quem vai assinar"); return; }
@@ -1067,6 +1087,24 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
     finally { setMontando(""); }
   }
   const tel = sanitizeWhats(c.telefone || c.telefone2 || "");
+  /** quais ambientes entram neste contrato — dá para fechar um e deixar o resto para depois */
+  const escolhaAmbientes = <div style={{ marginTop: 10, padding: "9px 12px", borderRadius: 10, background: "#f6f7f9", border: "1.5px solid var(--line,#e0e3e8)" }}>
+    <b style={{ fontSize: 13.5 }}>Quais ambientes entram neste contrato?</b>
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+      <button className={"btn sm" + (!ambSel ? " primary" : "")} onClick={() => setAmbSel(null)}>Todos ({nomesAmb.length})</button>
+      <button className={"btn sm" + (ambSel ? " primary" : "")} onClick={() => setAmbSel(ambSel || nomesAmb.slice())}>Escolher ambientes</button>
+    </div>
+    {ambSel && <>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{nomesAmb.map(n =>
+        <label key={n} style={{ display: "inline-flex", gap: 6, alignItems: "center", padding: "6px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13.5, fontWeight: 700,
+          background: entra(n) ? "#e6f4e9" : "#fff", border: "1.5px solid " + (entra(n) ? "#9fc5a8" : "var(--line,#e0e3e8)") }}>
+          <input type="checkbox" checked={entra(n)} onChange={e => setAmbSel(v => e.target.checked ? [...(v || []), n] : (v || []).filter(x => x !== n))} />{n}</label>)}</div>
+      <div className="hint" style={{ marginTop: 6 }}>
+        {ambsDoContrato.length ? <>Este contrato vai com <b>{ambsDoContrato.length} de {nomesAmb.length}</b> ambiente(s): {ambsDoContrato.map(a => a.nome.trim()).join(", ")}.
+          {ambsDoContrato.length < nomesAmb.length && <> Os outros ({nomesAmb.filter(n => !entra(n)).join(", ")}) ficam para um contrato depois — é só gerar outro link quando estiverem prontos.</>}</>
+          : <b style={{ color: "#8a5d00" }}>Escolha pelo menos um ambiente.</b>}</div>
+    </>}
+  </div>;
   /** quem está no checklist nem sempre é quem comprou: aí ele assina como representante e o titular assina depois */
   const perguntaTitular = <div style={{ marginTop: 10, padding: "9px 12px", borderRadius: 10, background: "#f6f7f9", border: "1.5px solid var(--line,#e0e3e8)" }}>
     <b style={{ fontSize: 13.5 }}>Quem está aqui para assinar é o titular da compra ({cap(c.cliente)})?</b>
@@ -1121,12 +1159,14 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
         </div>
         <div className="hint" style={{ marginTop: 8 }}>⏳ Aguardando a assinatura… · link vale até {fmtDateTime(ct.expira)}</div>
         {/* dá para corrigir quem assina e gerar o link de novo, sem cancelar antes */}
+        {escolhaAmbientes}
         {perguntaTitular}
       </div>
     </div> : <div className="imp">
       <div><b>📲 Contrato com assinatura online</b><span>{ct?.status === "expirado" ? "o link anterior expirou — gere outro" : "gera um link e um QR Code para o cliente assinar no celular"}</span>
         <div className="inc"><span>✓ 1 · Termo de ciência do material (vem preenchido, o cliente confere e pode corrigir)</span><span>✓ 2 · Geral — 29 itens com “Sim”</span><span>✓ 3 · Imagens do projeto de cada ambiente + checklist + o que foi comprado</span><span>✓ 4 · Nome, CPF, assinatura na tela e selfie</span></div>
         <div className="hint" style={{ marginTop: 6 }}>O cliente quer ler no papel antes? Use <b>“Imprimir para ler antes”</b> — é o mesmo documento que ele assina no celular.</div>
+        {escolhaAmbientes}
         {perguntaTitular}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <button className="btn primary sm" disabled={!liberado || !!montando || !!ocupado} onClick={gerarLink}>{montando === "link" ? "Montando o contrato…" : "📲 Gerar link e QR Code"}</button>
