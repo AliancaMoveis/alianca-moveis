@@ -16,12 +16,13 @@ function Ampliar({ src, fechar }: { src: string; fechar: () => void }) {
     <img src={src} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", background: "#fff" }} />
     <div style={{ position: "absolute", top: 10, right: 14, color: "#fff", fontWeight: 800 }}>✕ fechar</div></div>;
 }
-function Foto({ c, x, abrir }: { c: any; x: any; abrir: (s: string) => void }) {
+function Foto({ c, x, abrir, inteira }: { c: any; x: any; abrir: (s: string) => void; inteira?: boolean }) {
   const [src, setSrc] = useState(""); const [erro, setErro] = useState(false);
   useEffect(() => { let vivo = true; urlDe(c, x).then(u => vivo && setSrc(u)).catch(() => vivo && setErro(true)); return () => { vivo = false; }; }, [x.id, x.url]);
   return <button type="button" onClick={() => src && abrir(src)} title={x.nome}
-    style={{ border: "1px solid rgba(128,140,160,.4)", borderRadius: 10, padding: 0, overflow: "hidden", background: "#fff", aspectRatio: "4/3", cursor: src ? "zoom-in" : "default" }}>
-    {src ? <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : <span style={{ fontSize: 12, color: "#667" }}>{erro ? "não abriu" : "carregando…"}</span>}
+    style={{ border: "1px solid rgba(128,140,160,.4)", borderRadius: 10, padding: 0, overflow: "hidden", background: "#fff", aspectRatio: "4/3", position: "relative", cursor: src ? "zoom-in" : "default" }}>
+    {src ? <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: inteira ? "contain" : "cover", display: "block" }} /> : <span style={{ fontSize: 12, color: "#667" }}>{erro ? "não abriu" : "carregando…"}</span>}
+    {src && inteira && <span style={{ position: "absolute", right: 6, bottom: 6, background: "rgba(20,24,32,.72)", color: "#fff", fontSize: 11.5, fontWeight: 700, borderRadius: 6, padding: "3px 7px" }}>🔍 toque para ampliar</span>}
   </button>;
 }
 const grade: any = { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 8, margin: "6px 0" };
@@ -34,7 +35,7 @@ export function ImagensVenda({ c }: { c: any }) {
   return <div style={{ border: "1.5px solid rgba(128,140,160,.35)", borderRadius: 12, padding: "10px 12px", margin: "8px 0 12px" }}>
     <div style={titulo}>🖼 Imagem da venda <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· projeto que o cliente comprou</span></div>
     {l === null ? <div style={{ fontSize: 13, opacity: .7 }}>Buscando no Exact…</div>
-      : l.length ? <div style={grade}>{l.map((x, i) => <Foto key={x.fonte + x.id + i} c={c} x={x} abrir={setZoom} />)}</div>
+      : l.length ? <div style={l.length === 1 ? { margin: "6px 0" } : grade}>{l.map((x, i) => <Foto key={x.fonte + x.id + i} c={c} x={x} abrir={setZoom} inteira />)}</div>
       : <div style={{ fontSize: 13, opacity: .75 }}>{erro || "Nenhuma imagem anexada na venda."}</div>}
     {zoom && <Ampliar src={zoom} fechar={() => setZoom("")} />}
   </div>;
