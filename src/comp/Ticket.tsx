@@ -56,7 +56,7 @@ export function Ticket({ c, resposta }: { c: any; resposta?: boolean }) {
     linha2 = <>Visita <b>{dv}</b>{c.tratativa && c.tratativa.contatoIniciado ? <> <span className="pill">contato iniciado</span></> : null} · Consultor {c.consultorId ? R.nomeUser(c.consultorId) : "—"}{c.endereco ? " · " + c.endereco : ""}</>;
   } else {
     linha2 = <>Pedido <b>{c.pedido}</b> · {c.produto}{c.tipo === "medidas" && (() => { const pz = prazoMedida(est, c); if (!pz) return null; const aFazer = !["liberada", "em_obra"].includes(R.etapaMedida(c)); const atras = aFazer && hojeISO() > pz.limite;
-      return <> <span className="pill" style={{ fontWeight: 700, background: atras ? "var(--danger)" : "#7c3aed", color: "#fff" }}>{atras ? "⚠️ ATRASADA · " : "📐 "}checklist {fmtDate(pz.ck).slice(0, 5)} · medir até {fmtDate(pz.limite).slice(0, 5)}</span></>; })()}</>;
+      return <> <span className="pill" style={{ fontWeight: 700, background: atras ? "var(--danger)" : "#7c3aed", color: "#fff" }}>{atras ? "⚠️ ATRASADA · " : "📐 "}{pz.ck ? "checklist " + fmtDate(pz.ck).slice(0, 5) + " · " : ""}medir até {fmtDate(pz.limite).slice(0, 5)}</span></>; })()}</>;
   }
   return (
     <div className={"ticket" + (!presale && t.porGerencia && c.status !== "concluida" ? " ger" : "")} data-id={c.id} data-prazo={pr === "urgente" ? "atrasado" : pr} onClick={() => abrirDetalhe(c.id)}>
