@@ -54,6 +54,7 @@ export default function Contrato() {
   const [tit, setTit] = useState<{ nome: string; representante: string; em: string; resposta: any } | null>(null);
   const [autorizo, setAutorizo] = useState(false);
   const [telTit, setTelTit] = useState("");   // telefone do titular, para mandar o 2º link (vem do sistema, dá para corrigir)
+  const [enviei, setEnviei] = useState(false);
   const soLeitura = !!tit;
 
   useEffect(() => {
@@ -118,6 +119,14 @@ export default function Contrato() {
   const botao = (txt: string, on: boolean, f: () => void, cor = COR.pri) => <button type="button" onClick={f} disabled={!on}
     style={{ width: "100%", padding: 15, fontSize: 16.5, fontWeight: 800, color: "#fff", background: on ? cor : "#9aa3b0", border: 0, borderRadius: 12, cursor: on ? "pointer" : "default", marginTop: 4 }}>{txt}</button>;
 
+  // o representante assinou e já mandou o link: fecha com o que falta
+  if (feito?.aguardandoTitular && enviei) return casca(<div style={{ ...card, textAlign: "center", padding: "34px 18px" }}>
+    <div style={{ fontSize: 54 }}>✅</div><h2 style={{ margin: "6px 0" }}>Pronto, é só isso</h2>
+    <p style={{ color: COR.s }}>Sua parte está assinada e registrada.<br />Agora é <b>{feito.titular}</b> abrir o link, autorizar a representação e assinar — aí o contrato fica completo.</p>
+    <button type="button" onClick={() => setEnviei(false)}
+      style={{ marginTop: 14, padding: "11px 18px", fontSize: 15, fontWeight: 700, color: COR.pri, background: "#fff", border: "1.5px solid " + COR.l, borderRadius: 12 }}>↩ Voltar e mandar o link de novo</button>
+    <p style={{ fontSize: 12.5, color: COR.s, marginTop: 14 }}>O projetista também consegue reenviar o link pelo 360.</p>
+  </div>);
   // o representante assinou: falta o titular da compra — mostra o link para mandar para ele
   if (feito?.aguardandoTitular) {
     const link = location.origin + "/contrato?t=" + feito.tokenTitular;
@@ -146,7 +155,10 @@ export default function Contrato() {
           style={{ padding: "11px 18px", fontSize: 15, fontWeight: 700, color: COR.pri, background: "#fff", border: "1.5px solid " + COR.l, borderRadius: 12 }}>📋 Copiar o link</button>
       </div>
       {msg && <div style={{ textAlign: "center", color: COR.ok, fontWeight: 700, marginTop: 10 }}>{msg}</div>}
-      <p style={{ fontSize: 12.5, color: COR.s, textAlign: "center", marginTop: 14 }}>O link vale por 3 dias. O projetista também consegue reenviá-lo pelo 360.</p>
+      <button type="button" onClick={() => setEnviei(true)}
+        style={{ width: "100%", padding: "13px 20px", fontSize: 16, fontWeight: 800, color: "#fff", background: COR.pri, border: 0, borderRadius: 12, marginTop: 16 }}>
+        ✓ Já enviei — finalizar</button>
+      <p style={{ fontSize: 12.5, color: COR.s, textAlign: "center", marginTop: 12 }}>O link vale por 3 dias. Se fechar esta tela sem enviar, o projetista reenvia pelo 360.</p>
     </div>);
   }
   if (feito) return casca(<div style={{ ...card, textAlign: "center", padding: "34px 18px" }}>

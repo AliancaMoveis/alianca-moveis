@@ -1,6 +1,7 @@
 // Checklist · cópia do contrato ASSINADO
 // Duas portas para o mesmo arquivo que a função "contrato" já guarda no bucket checklist:
-//  · {token}      → o CLIENTE, sem login, baixa o contrato que ele acabou de assinar (ou reabre o link depois)
+//  · {token}      → o CLIENTE, sem login, baixa o contrato que ele acabou de assinar (ou reabre o link depois).
+//                   Serve tanto para o link da conferência quanto para o 2º link, o do titular da compra.
 //  · {id, path}   → o PROJETISTA logado abre qualquer contrato assinado da ficha (os antigos também)
 // O path só é liberado se estiver registrado em termo.assinados daquele checklist — ninguém abre arquivo de outro.
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -19,7 +20,9 @@ Deno.serve(async (req: Request) => {
     if (b.token) {
       const token = String(b.token).replace(/[^a-f0-9]/gi, "");
       if (token.length < 20) return json({ erro: "Link inválido" }, 404);
-      const { data: k } = await adm.from("ck_contratos").select("assinado_html_path,status,nome_assinante,assinado_em,cliente,venda").eq("token", token).maybeSingle();
+      // vale o link de quem conferiu e também o 2º link, do titular da compra — os dois baixam o mesmo contrato
+      const { data: k } = await adm.from("ck_contratos").select("assinado_html_path,status,nome_assinante,assinado_em,cliente,venda")
+        .or(`token.eq.${token},titular_token.eq.${token}`).maybeSingle();
       if (!k || !k.assinado_html_path) return json({ erro: "Contrato ainda não assinado" }, 404);
       const su = await adm.storage.from("checklist").createSignedUrl(k.assinado_html_path, DIAS);
       if (!su.data?.signedUrl) return json({ erro: "Contrato não encontrado" }, 404);

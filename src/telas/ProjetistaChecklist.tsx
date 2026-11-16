@@ -493,12 +493,13 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
   const e5 = termoFinal(c);
   const etapaAtual = !e1 ? 1 : !e2 ? 2 : !e3 ? 3 : !e4 ? 4 : 5;
   const [etapa, setEtapa] = useState<number>(etapaAtual);
-  // enquanto o link está com o cliente, confere a cada 4 s se ele já assinou
+  // enquanto o link está com o cliente — e depois enquanto falta a assinatura do titular — confere a cada 4 s
   useEffect(() => {
-    if (ct?.status !== "pendente") return;
+    if (ct?.status !== "pendente" && ct?.status !== "aguardando_titular") return;
     const t = setInterval(async () => {
       const n = await verContrato();
       if (n?.status === "assinado") { toast("✍️ Contrato assinado pelo cliente!"); await recarregar(); setAba("checklist"); setEtapa(5); }
+      else if (n?.status === "aguardando_titular" && ct?.status === "pendente") toast(`✍️ ${n.nome} assinou como representante — falta ${n.titular}`);
     }, 4000);
     return () => clearInterval(t);
   }, [ct?.status, ct?.token]);
