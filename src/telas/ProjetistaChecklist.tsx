@@ -988,7 +988,10 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
   const [montando, setMontando] = useState("");
   // quem está aqui é o titular da compra? Se não, ele assina como representante e o titular assina depois, pelo 2º link.
   const [quem, setQuem] = useState<"" | "titular" | "representante">("");
-  const [nomeTitular, setNomeTitular] = useState("");
+  const [reprNome, setReprNome] = useState("");
+  const [reprTel, setReprTel] = useState("");
+  // contrato já gerado: a resposta vem dele, senão "Gerar de novo" pediria algo que não está na tela
+  useEffect(() => { if (!ct || quem) return; if (ct.representante) { setQuem("representante"); setReprNome(ct.representante); setReprTel(ct.reprTelefone || ""); } else if (ct.token) setQuem("titular"); }, [ct?.token, ct?.representante]);
   const nome = `Checklist_${primeiroNome(cap(c.cliente))}_${c.pedido}.pdf`;
   const link = ct?.token ? location.origin + "/contrato?t=" + ct.token : "";
   const linkTitular = ct?.tokenTitular ? location.origin + "/contrato?t=" + ct.tokenTitular : "";
@@ -1026,12 +1029,13 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
     }
     return { dados: { venda: String(c.pedido || ""), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj,
       data: fmtDate(hojeISO()), ambientes, naoInclusos: naoInc, obs, ferragens,
-      titular: quem === "representante" ? nomeTitular.trim() : null }, falhas };
+      representante: quem === "representante" ? { nome: reprNome.trim(), telefone: reprTel.trim() } : null }, falhas };
   }
   async function gerarLink() {
     if (!liberado) { toast("Termine a conferência por ambiente (nada em amarelo) antes de gerar o contrato"); return; }
     if (!quem) { toast("Diga se quem vai assinar é o titular da compra"); return; }
-    if (quem === "representante" && nomeTitular.trim().length < 5) { toast("Escreva o nome completo do titular da compra"); return; }
+    if (quem === "representante" && reprNome.trim().length < 5) { toast("Escreva o nome completo de quem vai assinar"); return; }
+    if (quem === "representante" && sanitizeWhats(reprTel).length < 10) { toast("Informe o telefone de quem vai assinar"); return; }
     if (ct?.status === "pendente" && !confirm("Já existe um link aguardando o cliente. Gerar um novo cancela o anterior. Continuar?")) return;
     if (!(await antes())) return;
     setMontando("link");
@@ -1041,7 +1045,7 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
       const nImg = dados.ambientes.reduce((n, a) => n + a.imagens.length, 0);
       const r = await A.ckContrato("criar", c.id, { dados });
       if (!nImg) toast("Atenção: contrato sem imagens do projeto");
-      setCt({ token: r.token, status: "pendente", expira: r.expira, titular: quem === "representante" ? nomeTitular.trim() : "" });
+      setCt({ token: r.token, status: "pendente", expira: r.expira, representante: quem === "representante" ? reprNome.trim() : "", reprTelefone: reprTel.trim() });
       toast(quem === "representante" ? "Contrato gerado — quem está aqui assina como representante" : "Contrato gerado — mostre o QR Code ao cliente");
     } catch (e: any) { toast(e.message || "Não foi possível gerar o contrato"); }
     finally { setMontando(""); }
@@ -1061,8 +1065,23 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
     } catch (e: any) { toast(e.message || "Não foi possível montar a impressão"); try { w.close(); } catch { /* */ } }
     finally { setMontando(""); }
   }
-  const copiar = async () => { try { await navigator.clipboard.writeText(link); toast("Link copiado"); } catch { prompt("Copie o link:", link); } };
   const tel = sanitizeWhats(c.telefone || c.telefone2 || "");
+  /** quem está no checklist nem sempre é quem comprou: aí ele assina como representante e o titular assina depois */
+  const perguntaTitular = <div style={{ marginTop: 10, padding: "9px 12px", borderRadius: 10, background: "#f6f7f9", border: "1.5px solid var(--line,#e0e3e8)" }}>
+    <b style={{ fontSize: 13.5 }}>Quem está aqui para assinar é o titular da compra ({cap(c.cliente)})?</b>
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+      <button className={"btn sm" + (quem === "titular" ? " primary" : "")} onClick={() => { setQuem("titular"); setReprNome(""); setReprTel(""); }}>Sim, é o titular</button>
+      <button className={"btn sm" + (quem === "representante" ? " primary" : "")} onClick={() => setQuem("representante")}>Não — é outra pessoa</button>
+    </div>
+    {quem === "representante" && <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+      <input value={reprNome} onChange={e => setReprNome(e.target.value)} placeholder="Nome completo de quem está aqui para assinar"
+        style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", fontSize: 14, borderRadius: 8, border: "1.5px solid var(--line,#e0e3e8)" }} />
+      <input value={reprTel} onChange={e => setReprTel(e.target.value)} placeholder="Telefone de quem está aqui (WhatsApp)" inputMode="tel"
+        style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", fontSize: 14, borderRadius: 8, border: "1.5px solid var(--line,#e0e3e8)" }} />
+      <div className="hint">Essa pessoa assina como <b>representante</b> de {cap(c.cliente)}. No fim da assinatura dela abre um botão de WhatsApp com o link já endereçado ao titular{tel ? " (" + (c.telefone || c.telefone2) + ")" : ""}. O contrato fica pronto com as duas assinaturas.</div>
+    </div>}
+  </div>;
+  const copiar = async () => { try { await navigator.clipboard.writeText(link); toast("Link copiado"); } catch { prompt("Copie o link:", link); } };
   const imp = t0.impressao;
   return <div>
     <div className="sec">3 · Contrato para o cliente assinar <span className="src p-b">termo do material + geral + imagens · sem valores</span></div>
@@ -1074,18 +1093,18 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
       {linkTitular && <img src={qrDataUrl(linkTitular, 240)} alt="QR Code para o titular" style={{ width: 200, height: 200, border: "1px solid var(--line,#e0e3e8)", borderRadius: 10, background: "#fff" }} />}
       <div style={{ flex: 1, minWidth: 240 }}>
         <b style={{ fontSize: 15 }}>✍️ Conferência assinada por {ct.nome} (representante)</b>
-        <span>Falta a assinatura de <b>{ct.titular}</b>, titular da compra. O contrato só fica pronto com as duas.</span>
+        <span>Falta a assinatura de <b>{cap(c.cliente)}</b>, titular da compra. O contrato só fica pronto com as duas.</span>
         <div className="hint" style={{ margin: "8px 0", wordBreak: "break-all" }}>{linkTitular}</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(linkTitular); toast("Link do titular copiado"); } catch { prompt("Copie o link:", linkTitular); } }}>📋 Copiar link do titular</button>
           {tel && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
-            onClick={() => abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(`Olá! Aqui está o link para ${ct.titular} assinar o contrato do checklist do projeto da Aliança Móveis: ${linkTitular}`))}>💬 Enviar por WhatsApp</button>}
+            onClick={() => abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(`Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o link para você assinar o contrato do checklist do seu projeto da Aliança Móveis: ${linkTitular}`))}>💬 Enviar ao titular pelo WhatsApp</button>}
         </div>
         <div className="hint" style={{ marginTop: 8 }}>⏳ Aguardando a assinatura do titular… · link vale até {fmtDateTime(ct.expira)}</div>
       </div>
     </div> : ct?.status === "pendente" && link ? <div className="imp" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
-      {ct.titular && <div style={{ flexBasis: "100%", background: "#eef3ff", border: "1.5px solid #c9d8f5", borderRadius: 10, padding: "8px 12px", marginBottom: 8, fontSize: 13.5 }}>
-        👤 Quem está no checklist assina como <b>representante</b> de <b>{ct.titular}</b> (titular da compra). Ao assinar, sai um 2º link para o titular assinar também.</div>}
+      {ct.representante && <div style={{ flexBasis: "100%", background: "#eef3ff", border: "1.5px solid #c9d8f5", borderRadius: 10, padding: "8px 12px", marginBottom: 8, fontSize: 13.5 }}>
+        👤 <b>{ct.representante}</b> assina como <b>representante</b> de <b>{cap(c.cliente)}</b> (titular da compra). Ao assinar, abre o WhatsApp com o link para o titular.</div>}
       <img src={qrDataUrl(link, 240)} alt="QR Code do contrato" style={{ width: 220, height: 220, border: "1px solid var(--line,#e0e3e8)", borderRadius: 10, background: "#fff" }} />
       <div style={{ flex: 1, minWidth: 240 }}>
         <b style={{ fontSize: 15 }}>📲 Peça ao cliente para ler o QR Code com a câmera do celular</b>
@@ -1100,24 +1119,14 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
           <button className="btn sm ghost" onClick={async () => { if (!confirm("Cancelar este link? O cliente não vai mais conseguir assinar por ele.")) return; try { await A.ckContrato("cancelar", c.id); setCt(null); } catch (e: any) { toast(e.message); } }}>✕ Cancelar link</button>
         </div>
         <div className="hint" style={{ marginTop: 8 }}>⏳ Aguardando a assinatura… · link vale até {fmtDateTime(ct.expira)}</div>
+        {/* dá para corrigir quem assina e gerar o link de novo, sem cancelar antes */}
+        {perguntaTitular}
       </div>
     </div> : <div className="imp">
       <div><b>📲 Contrato com assinatura online</b><span>{ct?.status === "expirado" ? "o link anterior expirou — gere outro" : "gera um link e um QR Code para o cliente assinar no celular"}</span>
         <div className="inc"><span>✓ 1 · Termo de ciência do material (vem preenchido, o cliente confere e pode corrigir)</span><span>✓ 2 · Geral — 29 itens com “Sim”</span><span>✓ 3 · Imagens do projeto de cada ambiente + checklist + o que foi comprado</span><span>✓ 4 · Nome, CPF, assinatura na tela e selfie</span></div>
         <div className="hint" style={{ marginTop: 6 }}>O cliente quer ler no papel antes? Use <b>“Imprimir para ler antes”</b> — é o mesmo documento que ele assina no celular.</div>
-        {/* quem está no checklist nem sempre é quem comprou: aí ele assina como representante e o titular assina depois */}
-        <div style={{ marginTop: 10, padding: "9px 12px", borderRadius: 10, background: "#f6f7f9", border: "1.5px solid var(--line,#e0e3e8)" }}>
-          <b style={{ fontSize: 13.5 }}>Quem está aqui para assinar é o titular da compra?</b>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-            <button className={"btn sm" + (quem === "titular" ? " primary" : "")} onClick={() => { setQuem("titular"); setNomeTitular(""); }}>Sim, é o titular</button>
-            <button className={"btn sm" + (quem === "representante" ? " primary" : "")} onClick={() => setQuem("representante")}>Não — é outra pessoa</button>
-          </div>
-          {quem === "representante" && <div style={{ marginTop: 8 }}>
-            <input value={nomeTitular} onChange={e => setNomeTitular(e.target.value)} placeholder="Nome completo do titular da compra"
-              style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", fontSize: 14, borderRadius: 8, border: "1.5px solid var(--line,#e0e3e8)" }} />
-            <div className="hint" style={{ marginTop: 4 }}>Quem está aqui assina como <b>representante</b> e, ao assinar, recebe um link para o titular assinar também. O contrato fica pronto com as duas assinaturas.</div>
-          </div>}
-        </div></div>
+        {perguntaTitular}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <button className="btn primary sm" disabled={!liberado || !!montando || !!ocupado} onClick={gerarLink}>{montando === "link" ? "Montando o contrato…" : "📲 Gerar link e QR Code"}</button>
         <button className="btn sm" disabled={!liberado || !!montando} onClick={() => imprimir(true)}>{montando === "ler" ? "Montando…" : "🖨 Imprimir para ler antes"}</button>

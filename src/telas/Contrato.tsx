@@ -53,13 +53,14 @@ export default function Contrato() {
   // 2º link: quem abre é o TITULAR da compra. O representante já conferiu tudo; o titular lê, autoriza e assina.
   const [tit, setTit] = useState<{ nome: string; representante: string; em: string; resposta: any } | null>(null);
   const [autorizo, setAutorizo] = useState(false);
+  const [telTit, setTelTit] = useState("");   // telefone do titular, para mandar o 2º link (vem do sistema, dá para corrigir)
   const soLeitura = !!tit;
 
   useEffect(() => {
     document.title = "Contrato · Aliança Móveis";
     if (!token) { setErro("Link inválido"); return; }
     contratoApi({ acao: "ver", token }).then(r => {
-      if (r.assinado) { setFeito(r); return; }
+      if (r.assinado) { setFeito(r); if (r.telefoneTitular) setTelTit(String(r.telefoneTitular)); return; }
       const dd: ContratoDados = r.dados; setD(dd);
       if (r.titular) {
         // o titular vê a conferência que o representante fez, já marcada, sem poder mudar
@@ -71,6 +72,7 @@ export default function Contrato() {
         return;
       }
       setTermos(dd.ambientes.map(a => copia(a.termo))); setMatOk(dd.ambientes.map(() => false)); setImgOk(dd.ambientes.map(() => false));
+      if (r.representante) setNome(r.representante);   // o projetista já cadastrou quem está assinando
     }).catch(e => setErro(e.message));
   }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [passo]);
@@ -81,6 +83,7 @@ export default function Contrato() {
   const ok4 = (!tit || autorizo) && nome.trim().length >= 5 && cpfValido(cpf) && !!assin && !!selfie;
   const falta4 = tit && !autorizo ? "Marque a autorização acima" : nome.trim().length < 5 ? "Escreva seu nome completo" : !cpfValido(cpf) ? "Informe um CPF válido" : !assin ? "Faça sua assinatura no quadro" : !selfie ? "Tire a selfie" : "";
   const libera = [true, ok1, ok1 && ok2, ok1 && ok2 && ok3];
+  useEffect(() => { if (tit) setPasso(3); }, [tit]);   // o titular só autoriza e assina — a conferência já foi feita
 
   function imprimir() {
     if (!d) return;
@@ -97,6 +100,7 @@ export default function Contrato() {
       const r = tit
         ? await contratoApi({ acao: "assinar", token, titular: true, nome: nome.trim(), cpf: cpf.replace(/\D/g, ""), autorizo, assinatura: assin, selfie })
         : await contratoApi({ acao: "assinar", token, resposta: { nome: nome.trim(), cpf: cpf.replace(/\D/g, ""), termos, materiaisOk: matOk, geral, imagensOk: imgOk }, assinatura: assin, selfie });
+      if (r.telefoneTitular) setTelTit(String(r.telefoneTitular));
       setFeito({ nome: nome.trim(), em: new Date().toISOString(), teste: !!r.teste, url: r.url || "",
         aguardandoTitular: !!r.aguardandoTitular, titular: r.titular || "", tokenTitular: r.tokenTitular || "" });
       window.scrollTo(0, 0);
@@ -117,17 +121,29 @@ export default function Contrato() {
   // o representante assinou: falta o titular da compra — mostra o link para mandar para ele
   if (feito?.aguardandoTitular) {
     const link = location.origin + "/contrato?t=" + feito.tokenTitular;
-    const texto = `Olá! Segue o link para você assinar o contrato do seu projeto na Aliança Móveis: ${link}`;
+    const prim = String(feito.titular || "").trim().split(" ")[0];
+    const num = telTit.replace(/\D/g, "");
+    const zap = num.length >= 10 ? (num.length <= 11 ? "55" + num : num) : "";
+    const texto = `Olá${prim ? ", " + prim : ""}! Aqui está o link para você assinar o contrato do seu projeto na Aliança Móveis: ${link}`;
     return casca(<div style={{ ...card, padding: "28px 18px" }}>
       <div style={{ fontSize: 50, textAlign: "center" }}>✍️</div>
       <h2 style={{ margin: "6px 0", textAlign: "center" }}>Conferência assinada</h2>
-      <p style={{ color: COR.s, textAlign: "center" }}>Obrigado{feito.nome ? ", " + String(feito.nome).split(" ")[0] : ""}! Falta a assinatura de <b>{feito.titular}</b>, titular da compra.<br />Mande o link abaixo para {String(feito.titular || "").split(" ")[0]} assinar. O contrato só fica pronto com as duas assinaturas.</p>
-      <div style={{ background: "#f6f7f9", border: "1px solid " + COR.l, borderRadius: 10, padding: "10px 12px", margin: "14px 0", fontSize: 13, wordBreak: "break-all" }}>{link}</div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-        <a href={"https://wa.me/?text=" + encodeURIComponent(texto)} target="_blank" rel="noopener"
-          style={{ padding: "13px 20px", fontSize: 16, fontWeight: 800, color: "#fff", background: "#1f9d55", borderRadius: 12, textDecoration: "none" }}>📲 Enviar pelo WhatsApp</a>
+      <p style={{ color: COR.s, textAlign: "center" }}>Obrigado{feito.nome ? ", " + String(feito.nome).split(" ")[0] : ""}! Agora falta a assinatura de <b>{feito.titular}</b>, titular da compra.<br />É só mandar o link pelo WhatsApp. {prim || "O titular"} abre, autoriza a representação e assina — não precisa refazer nada.</p>
+
+      <div style={{ marginTop: 16 }}>
+        <label style={{ fontSize: 13.5, fontWeight: 700, color: COR.s }}>Celular de {prim || "quem vai assinar"}</label>
+        <input value={telTit} onChange={e => setTelTit(e.target.value)} inputMode="tel" placeholder="(41) 99999-9999"
+          style={{ width: "100%", boxSizing: "border-box", fontSize: 17, padding: "12px", border: "1.5px solid " + COR.l, borderRadius: 10, marginTop: 5 }} />
+        <div style={{ fontSize: 12.5, color: COR.s, marginTop: 4 }}>Veio do cadastro da venda. Se não for esse, corrija aqui antes de enviar.</div>
+      </div>
+
+      <a href={zap ? "https://wa.me/" + zap + "?text=" + encodeURIComponent(texto) : "https://wa.me/?text=" + encodeURIComponent(texto)} target="_blank" rel="noopener"
+        style={{ display: "block", textAlign: "center", padding: "15px 20px", fontSize: 17, fontWeight: 800, color: "#fff", background: "#1f9d55", borderRadius: 12, textDecoration: "none", marginTop: 14 }}>
+        📲 Enviar pelo WhatsApp{zap ? "" : " (escolher o contato)"}</a>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 10 }}>
         <button type="button" onClick={() => { navigator.clipboard?.writeText(link); setMsg("Link copiado"); }}
-          style={{ padding: "13px 20px", fontSize: 16, fontWeight: 800, color: COR.pri, background: "#fff", border: "1.5px solid " + COR.l, borderRadius: 12 }}>📋 Copiar o link</button>
+          style={{ padding: "11px 18px", fontSize: 15, fontWeight: 700, color: COR.pri, background: "#fff", border: "1.5px solid " + COR.l, borderRadius: 12 }}>📋 Copiar o link</button>
       </div>
       {msg && <div style={{ textAlign: "center", color: COR.ok, fontWeight: 700, marginTop: 10 }}>{msg}</div>}
       <p style={{ fontSize: 12.5, color: COR.s, textAlign: "center", marginTop: 14 }}>O link vale por 3 dias. O projetista também consegue reenviá-lo pelo 360.</p>

@@ -140,7 +140,7 @@ Deno.serve(async (req: Request) => {
       if (k.status === "assinado") return json({ assinado: true, nome: k.nome_assinante, em: k.assinado_em, cliente: k.cliente });
       // o representante já assinou: o link dele passa a mostrar o link do titular, para ele mandar
       if (!ehTitular && k.status === "aguardando_titular")
-        return json({ assinado: true, aguardandoTitular: true, titular: k.titular_nome, nome: k.nome_assinante, em: k.assinado_em, cliente: k.cliente, tokenTitular: k.titular_token });
+        return json({ assinado: true, aguardandoTitular: true, titular: k.titular_nome || k.cliente, telefoneTitular: k.titular_telefone || "", nome: k.nome_assinante, em: k.assinado_em, cliente: k.cliente, tokenTitular: k.titular_token });
       if (k.status !== (ehTitular ? "aguardando_titular" : "pendente") || new Date(k.expira_em) < new Date())
         return json({ erro: "Este link expirou. Peça um novo ao projetista da Aliança Móveis." }, 410);
       if (!String(k.html_path || "").endsWith(".json")) return json({ erro: "Este link é de uma versão antiga do contrato. Peça um novo ao projetista." }, 410);
@@ -149,7 +149,8 @@ Deno.serve(async (req: Request) => {
       const dados: ContratoDados = JSON.parse(await f.text());
       if (b.acao === "ver") return json({ ok: true, dados, hash: k.doc_hash,
         // o titular só lê o que o representante conferiu, autoriza e assina
-        titular: ehTitular ? { nome: k.titular_nome || "", representante: k.nome_assinante || "", em: k.assinado_em, resposta: k.resposta || null } : null });
+        titular: ehTitular ? { nome: k.titular_nome || k.cliente || "", representante: k.nome_assinante || k.repr_nome || "", em: k.assinado_em, resposta: k.resposta || null } : null,
+        representante: !ehTitular ? (k.repr_nome || "") : "" });
 
       // ---- o titular da compra autoriza e assina (o representante já conferiu tudo) ----
       if (ehTitular) return await assinarTitular(adm, req, k, dados, b);
@@ -188,7 +189,7 @@ Deno.serve(async (req: Request) => {
           titular_token: tok, expira_em: new Date(Date.now() + 3 * 86400e3).toISOString() }).eq("id", k.id);
         if (k.chamado_id !== TESTE) await adm.from("historico").insert({ chamado_id: k.chamado_id, quem_nome: nome,
           texto: `✍️ Conferência assinada por ${nome} como representante — falta a assinatura de ${k.titular_nome} (titular da compra)` });
-        return json({ ok: true, aguardandoTitular: true, titular: k.titular_nome, tokenTitular: tok });
+        return json({ ok: true, aguardandoTitular: true, titular: k.titular_nome || k.cliente, telefoneTitular: k.titular_telefone || "", tokenTitular: tok });
       }
 
       const assinado = contratoHtml(dados, resp, { nome, cpf, quando: agoraBR(), ip, ua, hash: k.doc_hash || "", assinatura: b.assinatura, selfie: b.selfie, projetista: k.criado_por_nome || dados.projetista }, await logoEmbutido());
@@ -217,11 +218,14 @@ Deno.serve(async (req: Request) => {
         const { data: k } = await adm.from("ck_contratos").select("*").eq("chamado_id", TESTE).order("criado_em", { ascending: false }).limit(1).maybeSingle();
         if (!k) return json({ ok: true, contrato: null });
         const a = k.assinado_html_path ? (await adm.storage.from("checklist").createSignedUrl(k.assinado_html_path, 7 * 86400)).data?.signedUrl || "" : "";
-        return json({ ok: true, status: k.status, nome: k.nome_assinante, em: k.assinado_em, ip: k.ip, url: a, token: k.token });
+        return json({ ok: true, status: k.status, nome: k.nome_assinante, em: k.assinado_em, ip: k.ip, url: a, token: k.token, tokenTitular: k.titular_token, titular: k.titular_nome, representante: k.repr_nome });
       }
       const erro = dadosOk(b.dados); if (erro) return json({ erro }, 400);
       const { data: k, error } = await adm.from("ck_contratos").insert({ chamado_id: TESTE, criado_por_nome: b.dados.projetista || "Teste", aceites: [], cliente: b.dados.cliente, venda: b.dados.venda,
-        titular_nome: String(b.dados.titular || "").trim().slice(0, 120) || null,
+        titular_nome: b.dados.representante ? String(b.dados.cliente || "").slice(0, 120) : null,
+        titular_telefone: b.dados.representante ? "41999999999" : null,
+        repr_nome: b.dados.representante ? String(b.dados.representante.nome || "").slice(0, 120) : null,
+        repr_telefone: b.dados.representante ? String(b.dados.representante.telefone || "") : null,
         reutilizavel: b.reutilizavel !== false, expira_em: new Date(Date.now() + 90 * 86400e3).toISOString() }).select("*").single();
       if (error) throw new Error(error.message);
       await guardar(k, b.dados);
@@ -238,16 +242,22 @@ Deno.serve(async (req: Request) => {
       const erro = dadosOk(b.dados); if (erro) return json({ erro }, 400);
       if (JSON.stringify(b.dados).length > 40e6) return json({ erro: "Contrato grande demais (imagens). Escolha menos imagens." }, 400);
       await adm.from("ck_contratos").update({ status: "cancelado" }).eq("chamado_id", ctx.id).eq("status", "pendente");
-      const { data: ch } = await adm.from("chamados").select("cliente,pedido").eq("id", ctx.id).maybeSingle();
-      // quem está no checklist não é o titular da compra: assina como representante e o titular assina depois, no 2º link
-      const titular = String(b.dados.titular || "").trim().slice(0, 120) || null;
-      if (titular && titular.length < 5) return json({ erro: "Escreva o nome completo do titular da compra" }, 400);
+      const { data: ch } = await adm.from("chamados").select("cliente,pedido,telefone").eq("id", ctx.id).maybeSingle();
+      // quem está no checklist não é o titular da compra: assina como representante e o titular (o cliente da venda) assina depois
+      const rep = b.dados.representante || null;
+      const repNome = rep ? String(rep.nome || "").trim().slice(0, 120) : "";
+      const repTel = rep ? String(rep.telefone || "").replace(/\D/g, "").slice(0, 15) : "";
+      if (rep && repNome.length < 5) return json({ erro: "Escreva o nome completo de quem vai assinar" }, 400);
+      if (rep && repTel.length < 10) return json({ erro: "Informe o telefone de quem vai assinar" }, 400);
       const { data: k, error } = await adm.from("ck_contratos").insert({ chamado_id: ctx.id, criado_por: ctx.usuario, criado_por_nome: ctx.nome, aceites: [],
-        cliente: ch?.cliente || b.dados.cliente || "", venda: ch?.pedido || b.dados.venda || "", titular_nome: titular }).select("*").single();
+        cliente: ch?.cliente || b.dados.cliente || "", venda: ch?.pedido || b.dados.venda || "",
+        titular_nome: rep ? (ch?.cliente || b.dados.cliente || "") : null,
+        titular_telefone: rep ? String(ch?.telefone || "").replace(/\D/g, "") : null,
+        repr_nome: repNome || null, repr_telefone: repTel || null }).select("*").single();
       if (error) throw new Error(error.message);
       await guardar(k, b.dados);
       await adm.from("historico").insert({ chamado_id: ctx.id, quem_id: ctx.usuario, quem_nome: ctx.nome,
-        texto: "🔗 Contrato gerado para assinatura online (link válido por 3 dias)" + (titular ? ` · quem confere assina como representante de ${titular} (titular da compra), que assina depois pelo 2º link` : "") });
+        texto: "🔗 Contrato gerado para assinatura online (link válido por 3 dias)" + (rep ? ` · ${repNome} assina como representante de ${ch?.cliente || "o titular"}, que assina depois pelo 2º link` : "") });
       const { data: k2 } = await adm.from("ck_contratos").select("doc_hash").eq("id", k.id).maybeSingle();
       return json({ ok: true, token: k.token, expira: k.expira_em, hash: k2?.doc_hash || "" });
     }
@@ -262,7 +272,8 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, contrato: { token: k.token, status: new Date(k.expira_em) < new Date() && k.status === "pendente" ? "expirado" : k.status, criado: k.criado_em, expira: k.expira_em,
         nome: k.nome_assinante, assinado_em: k.assinado_em, exact: k.exact, url, selfie, alteracoes: k.resposta?.alteracoes || [],
         // titular da compra: quem é, se já assinou e o link para ele assinar
-        titular: k.titular_nome || "", tokenTitular: k.titular_token || "", titularAssinadoEm: k.titular_assinado_em || null } });
+        titular: k.titular_nome || "", tokenTitular: k.titular_token || "", titularAssinadoEm: k.titular_assinado_em || null,
+        representante: k.repr_nome || "", reprTelefone: k.repr_telefone || "", telefoneTitular: k.titular_telefone || "" } });
     }
     if (b.acao === "cancelar") {
       await adm.from("ck_contratos").update({ status: "cancelado" }).eq("chamado_id", ctx.id).eq("status", "pendente");
