@@ -48,6 +48,7 @@ export const A = {
   /** devolve a medida com a lista do que está faltando (vira "Confirmação de medida" para quem mede) */
   medidaDevolver: (id: string, itens: string[], motivo: string) => rpc("medida_devolver", { p_id: id, p_itens: itens, p_motivo: motivo }),
   medidaFaltandoMarcar: (id: string, idx: number, ok: boolean) => rpc("medida_faltando_marcar", { p_id: id, p_idx: idx, p_ok: ok }),
+  medidaDataLimite: (id: string, data: string | null) => rpc("medida_data_limite", { p_id: id, p_data: data }),
   /** imagens do projeto da venda para quem vai medir (só imagens) — função medida-arquivos */
   medidaImagens: async (id: string) => {
     const r = await chamarFuncao("medida-arquivos", JSON.stringify({ acao: "imagens", id }), "application/json");
