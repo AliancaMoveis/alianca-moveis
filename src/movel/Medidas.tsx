@@ -10,9 +10,15 @@ const hora = (v: any) => { const s = String(v || ""); return s.length > 10 ? s.s
 const dia = (v: any) => String(v || "").slice(0, 10);
 const diaCurto = (v: any) => { const d = dia(v); if (!d) return "sem data"; if (d === hojeISO()) return "hoje"; const a = new Date(); a.setDate(a.getDate() + 1); if (d === isoLocal(a)) return "amanhã"; return fmtDate(d).slice(0, 5); };
 
+/** ordem de quem está a medir: primeiro quem tem checklist marcado (o limite mais próximo — 5 dias antes do checklist — vem primeiro);
+ *  sem data de checklist, pela data da venda (a venda mais antiga primeiro) */
+export function ordemMedir(st: any, c: any) {
+  const pz = prazoMedida(st, c);
+  return pz ? "0" + pz.limite + String(c.dataMedida || "9") : "1" + String(c.dataVenda || "9") + String(c.criadoEm || "");
+}
 export function medDados(R: any) {
   const todas = R.medidasDe(R.currentUserId).slice().sort((a: any, b: any) => String(a.dataMedida || "9").localeCompare(String(b.dataMedida || "9")));
-  const aFazer = todas.filter((c: any) => R.etapaMedida(c) === "agendada");
+  const aFazer = todas.filter((c: any) => R.etapaMedida(c) === "agendada").sort((a: any, b: any) => ordemMedir(R.state, a).localeCompare(ordemMedir(R.state, b)));
   const hoje = aFazer.filter((c: any) => dia(c.dataMedida) === hojeISO());
   const atrasadas = aFazer.filter((c: any) => c.dataMedida && dia(c.dataMedida) < hojeISO());
   const feitas = todas.filter((c: any) => c.tratativa && c.tratativa.medida && c.tratativa.medida.realizadaEm).sort((a: any, b: any) => String(b.tratativa.medida.realizadaEm).localeCompare(String(a.tratativa.medida.realizadaEm)));
@@ -54,6 +60,8 @@ export function prazoMedida(st: any, c: any): { ck: string; limite: string } | n
   const p = String(c.pedido || "").trim(); if (!p) return null;
   const ds = st.chamados.filter((k: any) => k.tipo === "checklist" && String(k.pedido || "").trim() === p && ["agendado", "realizado"].includes(((k.tratativa || {}).checklist || {}).etapa))
     .map((k: any) => String(k.tratativa.checklist.agendadoPara || "")).filter(Boolean).sort();
+  const ex = String((c.tratativa && c.tratativa.medida && c.tratativa.medida.dataChecklistExact) || "").slice(0, 16);
+  if (!ds.length && ex) ds.push(ex);
   if (!ds.length) return null;
   const d = new Date(ds[0].slice(0, 10) + "T12:00:00"); d.setDate(d.getDate() - 5);
   return { ck: ds[0], limite: isoLocal(d).slice(0, 10) };
