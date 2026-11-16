@@ -45,6 +45,8 @@ export const A = {
   medidaRealizada: (id: string, medidas: string, obs: string) => rpc("medida_realizada", { p_id: id, p_medidas: medidas || "", p_obs: obs || "" }),
   medidaContato: (id: string, data: string | null, obs = "") => rpc("medida_contato", { p_id: id, p_data: data ? (data.length === 10 ? data + "T09:00" : data) : null, p_obs: obs }),
   medidaRefazer: (id: string, motivo: string) => rpc("medida_refazer", { p_id: id, p_motivo: motivo }),
+  /** tipo da medida para o consultor: "pos" (só medir, sem comissão), "confirmacao" (cliente que ele visitou antes da venda) ou "" (automático) */
+  medidaTipoVisita: (id: string, tipo: "" | "pos" | "confirmacao") => rpc("medida_tipo_visita", { p_id: id, p_tipo: tipo }),
   medidaEmObra: (id: string, previsao: string, obs: string) => rpc("medida_em_obra", { p_id: id, p_previsao: previsao || null, p_obs: obs || "" }),
   medidaPendente: (id: string, obs: string) => rpc("medida_pendente", { p_id: id, p_obs: obs || "" }),
   medidasImportar: (linhas: any[], aplicar: boolean) => rpc<any>("medidas_importar", { p: linhas, p_aplicar: aplicar }),
