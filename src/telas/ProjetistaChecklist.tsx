@@ -10,6 +10,7 @@ import { sb } from "../lib/supabase";
 import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import { lerListagemArquivo, type LinhaListagem, type Listagem } from "../lib/listagemPromob";
 import { ambienteDaListagem, impressaoHtml, termoHtml, FICHA_AMBIENTE, type AmbTermo, type DadosTermo, type Mat } from "../lib/termoChecklist";
+import { FotoViewer } from "../comp/Fotos";
 import { Modal } from "../comp/Modal";
 import { blobParaJpeg, pdfParaImagens, qrDataUrl } from "../lib/contratoUtil";
 import { contratoHtml, faltaNoTermo, termoVazio, type ContratoDados, type TermoAmb } from "../lib/contratoDoc";
@@ -444,7 +445,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
   const [aba, setAba] = useState<"dados" | "venda" | "medicao" | "checklist" | "historico">(t0.iniciadoEm && !termoFinal(c) ? "checklist" : "dados");
   const [arqs, setArqs] = useState<Arqs | null>(null);
   const [arqErro, setArqErro] = useState("");
-  const setVer = (a: any) => setModal(<Visualizar a={a} c={c} onFechar={() => setModal(null)} />);
+  const setVer = (a: any, lista?: any[]) => setModal(<Visualizar a={a} c={c} lista={lista} onFechar={() => setModal(null)} />);
   // estado do checklist (só os ambientes e a conferência ficam aqui; impressão/assinado/realizado vêm do banco)
   const [ambs, setAmbs] = useState<Amb[]>(() => (t0.ambientes || []).map((a: any) => ({ ...a, cor: /^(cód\.)/i.test(a.cor || "") ? "" : a.cor, _k: novaChave() })));
   const [confirmados, setConfirmados] = useState<boolean>(!!t0.ambientesConfirmados);
@@ -546,13 +547,13 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
         <div>
           <div className="sec">Arquivos da venda <span className="src p-b">vindos do Exact</span></div>
           {arqs === null ? <div className="empty">Buscando os arquivos no Exact…</div> : <>
-            {arqs.venda.length ? <div className="files">{arqs.venda.map((a, i) => <Arquivo key={a.fonte + a.id + i} a={a} c={c} onVer={() => setVer(a)} />)}</div>
+            {arqs.venda.length ? <div className="files">{arqs.venda.map((a, i) => <Arquivo key={a.fonte + a.id + i} a={a} c={c} onVer={() => setVer(a, arqs.venda)} />)}</div>
               : <div className="note" style={{ marginBottom: 18 }}>Nenhum arquivo da venda no Exact{arqs.avisos.length ? "" : " ainda"}.</div>}
             {arqs.ck.length > 0 && <><div className="sec">Anexados pelo checklist <span className="src p-g">no 360</span></div>
-              <div className="files">{arqs.ck.map((a, i) => <Arquivo key={"ck" + i} a={a} c={c} onVer={() => setVer(a)} />)}</div></>}
+              <div className="files">{arqs.ck.map((a, i) => <Arquivo key={"ck" + i} a={a} c={c} onVer={() => setVer(a, arqs.ck)} />)}</div></>}
             <div className="sec">Medição {c.medida && <span className={"src " + (c.medida.etapa === "liberada" ? "p-ok" : "p-w")}>{MEDIDA_CURTA[c.medida.etapa] || c.medida.etapa}</span>}<span className="src p-g">Exact + medidas do 360</span>
               {(arqs.medicao.length + arqs.m360.length) > 0 && <button className="lk" style={{ marginLeft: "auto", textTransform: "none", letterSpacing: 0 }} onClick={() => setAba("medicao")}>ver todas ({arqs.medicao.length + arqs.m360.length}) →</button>}</div>
-            {(() => { const fotos = [...arqs.medicao, ...arqs.m360].filter(a => a.tipo === "img"); return fotos.length ? <div className="pjmini">{fotos.slice(0, 6).map((a, i) => <Miniatura key={i} a={a} c={c} onClick={() => setVer(a)} />)}{fotos.length > 6 && <div className="th outro" style={{ fontSize: 13, fontWeight: 800 }} onClick={() => setAba("medicao")}>+{fotos.length - 6}</div>}</div> : <div className="note" style={{ marginBottom: 8 }}>⚠️ Sem fotos da medição.</div>; })()}
+            {(() => { const fotos = [...arqs.medicao, ...arqs.m360].filter(a => a.tipo === "img"); return fotos.length ? <div className="pjmini">{fotos.slice(0, 6).map((a, i) => <Miniatura key={i} a={a} c={c} onClick={() => setVer(a, fotos)} />)}{fotos.length > 6 && <div className="th outro" style={{ fontSize: 13, fontWeight: 800 }} onClick={() => setAba("medicao")}>+{fotos.length - 6}</div>}</div> : <div className="note" style={{ marginBottom: 8 }}>⚠️ Sem fotos da medição.</div>; })()}
             <NotaMedida c={c} />
             {(arqs.avisos.length > 0 || arqErro) && <div className="hint" style={{ marginTop: 10 }}>{[arqErro, ...arqs.avisos].filter(Boolean).map((x, i) => <div key={i}>⚠️ {x}</div>)}</div>}
           </>}
@@ -570,9 +571,9 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
       {aba === "medicao" && <div className="body">
         <div>
           <div className="sec">Fotos da medição <span className="src p-ok">Exact</span></div>
-          {arqs === null ? <div className="empty">Buscando no Exact…</div> : arqs.medicao.length ? <div className="files">{arqs.medicao.map((a, i) => <Arquivo key={i} a={a} c={c} onVer={() => setVer(a)} />)}</div> : <div className="note" style={{ marginBottom: 18 }}>Nenhuma foto de medição no ticket do Exact.</div>}
+          {arqs === null ? <div className="empty">Buscando no Exact…</div> : arqs.medicao.length ? <div className="files">{arqs.medicao.map((a, i) => <Arquivo key={i} a={a} c={c} onVer={() => setVer(a, [...arqs.medicao, ...arqs.m360])} />)}</div> : <div className="note" style={{ marginBottom: 18 }}>Nenhuma foto de medição no ticket do Exact.</div>}
           <div className="sec">Medidas do 360 <span className="src p-g">setor de medidas / Minha Visita</span></div>
-          {arqs && arqs.m360.length > 0 && <div className="files">{arqs.m360.map((a, i) => <Arquivo key={i} a={a} c={c} onVer={() => setVer(a)} />)}</div>}
+          {arqs && arqs.m360.length > 0 && <div className="files">{arqs.m360.map((a, i) => <Arquivo key={i} a={a} c={c} onVer={() => setVer(a, [...arqs.medicao, ...arqs.m360])} />)}</div>}
           <NotaMedida c={c} />
         </div>
         <div>
@@ -690,12 +691,24 @@ function Arquivo({ a, c, onVer }: { a: any; c: any; onVer: () => void }) {
     <div className="pjfi"><span className="a">{acao}</span><b>{a.nome}</b><span>{[a.em ? ddmm(String(a.em)) : "", tam(a.tamanho), a.categoria && a.categoria !== "MEASURING" ? a.categoria.toLowerCase().replace("_", " ") : ""].filter(Boolean).join(" · ") || " "}</span></div>
   </div>;
 }
-function Visualizar({ a, c, onFechar }: { a: any; c: any; onFechar: () => void }) {
+function Visualizar({ a, c, lista, onFechar }: { a: any; c: any; lista?: any[]; onFechar: () => void }) {
   const [u, setU] = useState(""); const [erro, setErro] = useState("");
+  // imagem: abre no visualizador de tela cheia, passando para o lado entre as fotos do mesmo grupo
+  const fotos = (lista && lista.length ? lista : [a]).filter((x: any) => x.tipo === "img");
+  const galeria = a.tipo === "img" && fotos.length > 0;
+  const [urls, setUrls] = useState<string[] | null>(null);
+  useEffect(() => { if (!galeria) return; let vivo = true;
+    Promise.all(fotos.map((x: any) => urlDe(x, c).catch(() => ""))).then(us => { if (vivo) setUrls(us); });
+    return () => { vivo = false; }; }, [galeria, a]);
   useEffect(() => { urlDe(a, c).then(setU).catch((e: any) => setErro(e.message)); }, [a]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onFechar(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, []);
   // tela quase cheia: o PDF abre ajustado à largura e a imagem inteira na tela
   const src = u && a.tipo === "pdf" ? u + (u.includes("#") ? "" : "#view=FitH&zoom=page-width") : u;
+  if (galeria) {
+    if (!urls) return <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,20,30,.8)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>Abrindo…</div>;
+    const ini = Math.max(0, fotos.findIndex((x: any) => x === a || (x.id && x.id === a.id)));
+    return <FotoViewer fotos={fotos.map((x: any, i: number) => ({ url: urls[i] || "", nome: x.nome }))} inicio={ini} onFechar={onFechar} />;
+  }
   return <div onMouseDown={e => { if (e.target === e.currentTarget) onFechar(); }}
     style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,20,30,.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: "2vh 2vw" }}>
     <div style={{ background: "var(--card,#fff)", borderRadius: 14, width: "96vw", height: "94vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,.35)" }}>
