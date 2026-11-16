@@ -1,6 +1,7 @@
 // Integração ALIANÇA 360 ⇄ Exact (checklist)
 // · sync: lê o quadro do checklist e o calendário do Exact e aplica no 360 (rpc exact_aplicar)
 // · enderecos: completa o endereço das medidas (e do checklist da mesma venda) que estão sem endereço, pelo cartão de medição do Exact
+// · montagem: relatório de pagamento de montagem (o mesmo "Exportar em Massa" do Exact) → montagem_efet (tela Pagamento de Montagem)
 // · push: envia para o Exact o agendamento de um checklist do 360 (cria / altera / exclui eventos)
 // Chamada pelo banco (pg_net / pg_cron) com o cabeçalho x-exact-segredo. A chave do Exact fica no segredo EXACT_TOKEN.
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -48,6 +49,43 @@ async function completarEnderecos(sb: any, token: string, limite = 25) {
   return { ok, vistos: (ls || []).length, erros };
 }
 
+/** CSV do Exact ("a","b",…) → linhas */
+function lerCsv(txt: string): string[][] {
+  const out: string[][] = []; let lin: string[] = []; let cel = ""; let q = false;
+  const t = txt.replace(/^\ufeff/, "");
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (q) { if (ch === '"') { if (t[i + 1] === '"') { cel += '"'; i++; } else q = false; } else cel += ch; continue; }
+    if (ch === '"') q = true; else if (ch === ",") { lin.push(cel); cel = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && t[i + 1] === "\n") i++; lin.push(cel); cel = ""; if (lin.some(x => x !== "")) out.push(lin); lin = []; }
+    else cel += ch;
+  }
+  if (cel !== "" || lin.length) { lin.push(cel); if (lin.some(x => x !== "")) out.push(lin); }
+  return out;
+}
+const dataIso = (s: string) => { const m = String(s || "").match(/(\d{2})[-\/](\d{2})[-\/](\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ""; };
+const numero = (s: string) => { const t = String(s || "0").trim(); const n = Number(/,\d{1,2}$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "")); return isFinite(n) ? n : 0; };
+const r2 = (n: number) => Math.round(n * 100) / 100;
+/** mesmo critério da importação do Excel na tela Pagamento de Montagem (chave = O.S. ¦ montador ¦ data de montagem) */
+function montagensDoCsv(txt: string) {
+  const ls = lerCsv(txt); if (!ls.length) return [];
+  const cab = ls[0].map(x => x.trim().toLowerCase());
+  const ix = (...n: string[]) => cab.findIndex(c => n.some(k => c === k.toLowerCase()));
+  const iM = ix("Montador"), iO = ix("os", "O.S."), iS = ix("status"), iD = ix("Data Montagem"), iF = ix("Data Finalizacao", "Data Finalização"),
+        iP = ix("Total Produtos"), iA = ix("Total Adicionais"), iT = ix("Total OS");
+  if (iM < 0 || iO < 0 || iD < 0 || iT < 0) throw new Error("Relatório do Exact mudou de formato: " + ls[0].join(", "));
+  const m = new Map<string, any>();
+  for (const l of ls.slice(1)) {
+    const osFull = String(l[iO] || "").trim(), mont = String(l[iM] || "").trim(); if (!osFull || !mont) continue;
+    const os = osFull.split("|")[0].trim(), dm = dataIso(l[iD]), chave = [os, mont, dm].join("¦");
+    const e = { chave, os, montador: mont, status: String(l[iS] || "").trim(), mont: dm, fin: iF >= 0 ? dataIso(l[iF]) : "",
+      prod: numero(l[iP]), adic: iA >= 0 ? numero(l[iA]) : 0, total: numero(l[iT]) };
+    const ex = m.get(chave);
+    if (ex) { ex.prod = r2(ex.prod + e.prod); ex.adic = r2(ex.adic + e.adic); ex.total = r2(ex.total + e.total); } else m.set(chave, e);
+  }
+  return Array.from(m.values());
+}
+
 Deno.serve(async (req: Request) => {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   const { data: cfg } = await sb.from("exact_config").select("*").eq("id", 1).maybeSingle();
@@ -60,6 +98,24 @@ Deno.serve(async (req: Request) => {
     if (b.acao === "evento") {
       const d = await exact(token, b.metodo, b.rota, b.corpo);
       return json({ ok: true, d });
+    }
+
+    // ---------- pagamento de montagem (relatório "Exportar em Massa" do Exact) → 360 ----------
+    if (b.acao === "montagem") {
+      const de = String(b.de || "").slice(0, 10), ate = String(b.ate || "").slice(0, 10), por = b.por === "schedule" ? "schedule" : "assemble";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(de) || !/^\d{4}-\d{2}-\d{2}$/.test(ate)) return json({ erro: "período inválido" }, 400);
+      const csv = await exact(token, "GET", `/tickets/payment-report?start=${de}&end=${ate}&date=${por}`);
+      const lin = montagensDoCsv(typeof csv === "string" ? csv : String(csv ?? ""));
+      let r: any = { novos: 0, atualizados: 0, total: 0 };
+      for (let i = 0; i < lin.length; i += 500) {
+        const { data, error } = await sb.rpc("_montagem_efet_aplicar", { p: lin.slice(i, i + 500) });
+        if (error) throw new Error(error.message);
+        r = { novos: r.novos + data.novos, atualizados: r.atualizados + data.atualizados, total: data.total };
+      }
+      const soma = r2(lin.reduce((s: number, x: any) => s + x.total, 0));
+      const res = { ok: true, de, ate, por, linhas: lin.length, soma, ...r };
+      await sb.from("exact_log").insert({ tipo: "montagem", ok: true, detalhe: JSON.stringify({ ...res, quem: b.quem || "" }) });
+      return json(res);
     }
 
     if (b.acao === "enderecos") return json({ ok: true, r: await completarEnderecos(sb, token, Math.min(Number(b.limite) || 40, 120)) });
