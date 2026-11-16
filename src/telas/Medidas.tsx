@@ -216,6 +216,7 @@ const ABAS_MD: Record<string, [string, string]> = {
   fora: ["Fora do Exact", "Medidas antigas do 360 que não têm mais cartão no quadro de Medição do Exact. Ficam só para consulta."],
   minhasfeitas: ["Medidas finalizadas", "Medidas que você já fez: aguardando análise da supervisão ou aprovadas. Cada medida paga R$ 40, sem comissão."],
   minhas: ["Medidas para fazer", "Solicitações de MEDIDA — não é visita de venda: paga R$ 40 por cliente, sem comissão. Depois de medir, anexe as fotos/planta e finalize."],
+  busca: ["Buscar cliente", "Procura em TODAS as medidas, em qualquer etapa — por nome, CPF, nº da venda, telefone ou nº do chamado. A coluna Situação mostra em que etapa cada uma está."],
 };
 function ListaMedidas({ aba }: { aba: string }) {
   const { R, st, abrirDetalhe, executar: ex, recarregar, toast } = useApp() as any;
@@ -235,6 +236,7 @@ function ListaMedidas({ aba }: { aba: string }) {
   let lista = st.chamados.filter((c: any) => c.tipo === "medidas" && R.podeVer(c));
   lista = aba === "minhas" ? lista.filter((c: any) => c.medidorId === eu && ["agendada"].includes(R.etapaMedida(c)))
     : aba === "minhasfeitas" ? lista.filter((c: any) => c.medidorId === eu && ["realizada", "validar", "liberada"].includes(R.etapaMedida(c)))
+    : aba === "busca" ? lista   // a busca varre todas as etapas
     : lista.filter((c: any) => grupoMedida(R.etapaMedida(c)) === aba);
   const [onde, setOnde] = useState<"" | "no360" | "visita" | "exact" | "fora">("");
   const contaOnde = aba === "aprovados" ? lista.reduce((acc: any, c: any) => { const k = ondeMedida(R, st, c).k; acc[k] = (acc[k] || 0) + 1; return acc; }, {}) : {};
@@ -256,7 +258,9 @@ function ListaMedidas({ aba }: { aba: string }) {
   (st.chamados || []).forEach((x: any) => { if (x.tipo === "medidas" && x.cliente) (porCliente[tira(x.cliente)] = porCliente[tira(x.cliente)] || []).push({ id: x.id, pedido: String(x.pedido || "") }); });
   const irmas = (c: any) => (porCliente[tira(c.cliente)] || []).filter(x => x.id !== c.id && x.pedido && x.pedido !== String(c.pedido || ""));
   const busca = tira(q), dig = so(q);
-  if (q) lista = lista.filter((c: any) => tira(c.cliente + " " + R.nomeUser(c.medidorId || "")).includes(busca) || (dig.length >= 3 && (String(c.pedido).includes(dig) || so(c.telefone).includes(dig))));
+  if (q) lista = lista.filter((c: any) => tira(c.cliente + " " + R.nomeUser(c.medidorId || "") + " " + (c.id || "")).includes(busca)
+    || (dig.length >= 3 && (String(c.pedido).includes(dig) || so(c.telefone).includes(dig) || so(c.telefone2).includes(dig) || so(c.clienteDoc).includes(dig))));
+  if (aba === "busca" && busca.length < 2 && dig.length < 3) lista = [];
   const [ckMeu, setCkMeu] = useState<Record<string, string>>({});
   useEffect(() => { if (aba === "minhas" || aba === "minhasfeitas") A.minhasMedidasChecklist().then(setCkMeu).catch(() => setCkMeu({})); }, [aba]);
   const diaCk = (c: any) => { const k = ckPorVenda[c.pedido]; return k && k.tratativa?.checklist?.etapa === "agendado" ? String(k.tratativa.checklist.agendadoPara || "").slice(0, 16) : String(ckMeu[c.pedido] || "").slice(0, 16); };

@@ -83,7 +83,10 @@ const ABAS: Record<string, [string, string]> = {
   agendados: ["Agendados", "Checklists com data marcada, por dia. Altere, desmarque ou marque como realizado."],
   confirmar: ["Confirmação de presença", "Agendados com data próxima: envie a confirmação pronta e marque quando o cliente confirmar."],
   agenda: ["Agenda do checklist", "A agenda do dia separada por projetista, no formato do sistema interno."],
+  busca: ["Buscar cliente", "Procura em TODOS os checklists, em qualquer etapa — por nome, CPF, nº da venda, telefone ou projetista. Cada linha mostra em que etapa o cliente está."],
 };
+/** em que etapa o cliente está, para a busca mostrar na linha */
+const ETAPA_BUSCA: Record<string, string> = { agendar: "A agendar", aguardando: "Aguardando", agendado: "Agendado" };
 
 export default function Checklist({ aba = "agendar" }: { aba?: string }) {
   const { R, st, toast, recarregar, setModal } = useApp() as any;
@@ -146,8 +149,11 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
   // "solicitam encaixe": todos desta aba com o pedido, do mais antigo para o mais novo (prioridade por demanda)
   const grupoAba = aba === "agendar" ? "agendar" : aba === "aguardando" ? "aguardando" : "agendado";
   const encAba = todos.filter((c: any) => querEnc(c) && grupoCk(c) === grupoAba && (grupoAba !== "agendado" || diaAg(c) >= hoje()));
-  let lista = soEnc ? encAba : FILTROS[f] ? todos.filter(FILTROS[f][1]) : [];
-  if (busca) lista = lista.filter((c: any) => String(c.cliente).toLowerCase().includes(busca) || String(ck(c).projetista || "").toLowerCase().includes(busca) || (dig.length >= 3 && (String(c.pedido).includes(dig) || String(c.telefone).includes(dig))));
+  // aba de busca: varre TODOS os checklists, em qualquer etapa, e só lista depois de digitar algo
+  let lista = aba === "busca" ? todos : soEnc ? encAba : FILTROS[f] ? todos.filter(FILTROS[f][1]) : [];
+  if (busca || dig.length >= 3) lista = lista.filter((c: any) => (busca && (String(c.cliente).toLowerCase().includes(busca) || String(ck(c).projetista || "").toLowerCase().includes(busca) || String(c.id || "").toLowerCase().includes(busca)))
+    || (dig.length >= 3 && (String(c.pedido).includes(dig) || String(c.telefone).replace(/\D/g, "").includes(dig) || String(c.clienteDoc || "").replace(/\D/g, "").includes(dig))));
+  if (aba === "busca" && busca.length < 2 && dig.length < 3) lista = [];
   const ordem = (c: any) => { const k = ck(c); return String(grupoCk(c) === "agendado" ? k.agendadoPara : k.retornarEm || c.dataVenda || c.criadoEm || ""); };
   lista = lista.slice().sort((a: any, b: any) => soEnc ? String(querEnc(a).em).localeCompare(String(querEnc(b).em)) || ordem(a).localeCompare(ordem(b)) : ordem(a).localeCompare(ordem(b)));
   const porDia = (aba === "agendados" || aba === "confirmar") && !soEnc;
@@ -281,6 +287,8 @@ function CartaoCk({ c, aba }: any) {
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontWeight: 700, fontSize: 15, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{c.cliente}
             <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: "var(--surface-2)", border: "1px solid var(--line)" }}>Venda {c.pedido}</span>
+            {/* na busca o cliente vem de qualquer etapa: diz logo em qual ele está */}
+            {aba === "busca" && <span style={{ fontWeight: 800, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: cor, color: "#fff" }}>{ETAPA_BUSCA[g] || g}{nome && nome !== (ETAPA_BUSCA[g] || g) ? " · " + nome : ""}</span>}
             <Selo360 c={c} />
             <span title="Cidade do cliente (base de clientes)" style={{ fontWeight: 800, fontSize: 13, padding: "1px 9px", borderRadius: 6, background: cidadeCk(c) ? "#0f5f8a" : "var(--surface-2)", color: cidadeCk(c) ? "#fff" : "var(--ink-faint)", border: cidadeCk(c) ? 0 : "1px dashed var(--line)" }}>📍 {cidadeCk(c) || "cidade não encontrada"}</span>
             {g !== "agendado" && (e === "aguardando" && k.proposta ? (k.propostaProjetista || k.projetista) && <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: corProj(k.propostaProjetista || k.projetista), color: "#fff" }}>👤 {k.propostaProjetista || k.projetista}</span>

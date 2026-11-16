@@ -29,6 +29,28 @@ const RowSb = ({ k, children, pb = "4px 0", bold }: any) => <div className="deta
 const corVenda = (vs: string) => vs === "efetivada" ? "var(--st-concluida)" : vs === "promissoria" ? "var(--st-tratativa)" : vs === "cancelada" ? "var(--danger)" : "var(--warn)";
 const VENDA_SC = ["vendido", "vendido_revisao", "vendido_promissoria", "vendido_entrada", "venda_cancelada"];
 
+/** Botão único de concluir a medida: mostra o que ainda falta antes de deixar enviar.
+ *  Aparece no bloco "Registrar a medida" E logo abaixo das fotos — quem acabou de anexar finaliza ali mesmo. */
+function FinalizarMedida({ c, med, obs }: { c: any; med: string; obs: string }) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const m = (c.tratativa && c.tratativa.medida) || {};
+  const fotos = (c.anexos || []).length;
+  const faltam = (m.faltando || []).filter((x: any) => !x.ok);
+  const refazendo = (m.faltando || []).length > 0;
+  return <div style={{ marginTop: 10 }}>
+    <div style={{ fontSize: 12.5, color: fotos ? "var(--st-concluida)" : "#8a5d00", fontWeight: 700, marginBottom: 6 }}>
+      {fotos ? "📷 " + fotos + " arquivo(s) anexado(s)" : "📷 Nenhuma foto anexada ainda — anexe as fotos/planta da medição"}</div>
+    <button className="btn primary" disabled={!fotos} style={{ opacity: fotos ? 1 : .5 }}
+      title={fotos ? "" : "Anexe as fotos da medição primeiro"}
+      onClick={() => {
+        if (!fotos) { toast("Anexe as fotos/planta da medição primeiro"); return; }
+        if (faltam.length && !confirm("Ainda falta marcar " + faltam.length + " item(ns) do que estava faltando:\n\n• " + faltam.map((x: any) => x.t).join("\n• ") + "\n\nEnviar mesmo assim?")) return;
+        ex(() => A.medidaRealizada(c.id, med.trim(), obs.trim()), "Medida enviada para a Supervisão de Medidas ✓");
+      }}>✓ {refazendo ? "Finalizar e enviar a medida completa" : "Finalizar e enviar para Medidas"}</button>
+    <div className="hint" style={{ marginTop: 6 }}>A medida fica como <b>realizada</b> e vai para a Supervisão de Medidas conferir e liberar para o checklist.</div>
+  </div>;
+}
+
 export default function Detalhe({ id }: { id: string }) {
   const app = useApp();
   const { R, st, fecharDetalhe, focoDetalhe, abrirDetalhe } = app;
@@ -782,6 +804,7 @@ function MedidaBloco({ c }: any) {
   const etapa = R.etapaMedida(c);
   const venda = c.vinculadoA ? st.chamados.find((x: any) => x.id === c.vinculadoA) : null;
   const checklist = st.chamados.find((x: any) => x.vinculadoA === c.id && x.tipo === "checklist");
+
   const sup = R.ehSupMedidas(), souMedidor = !!c.medidorId && c.medidorId === R.currentUserId;
   const { medidores, consultores } = R.quemMede();
   const [quem, setQuem] = useState(c.medidorId || m.consultorVisita || "");
@@ -843,10 +866,10 @@ function MedidaBloco({ c }: any) {
       {etapa === "liberada" && <div className="ro-note" style={{ marginTop: 8 }}>{m.validouConsultor ? "Medidas do consultor validadas" : "Medidas conferidas"}{m.liberadaPor ? " por " + m.liberadaPor : ""}{m.liberadaEm ? " em " + fmtDateTime(m.liberadaEm) : ""}.{checklist ? <> Checklist: <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(checklist.id); }}>{checklist.id}</a></> : null}</div>}
 
       {(souMedidor || sup) && etapa === "agendada" && <div className="resp-box" style={{ marginTop: 12 }}><h4>Registrar a medida</h4>
-        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Anexe as fotos/planta da medição (abaixo) e marque como realizada. A medida paga {fmtMoeda(R.cfg().pagamentoVisita)} a quem mediu.</div>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Anexe as fotos/planta da medição e finalize. A medida paga {fmtMoeda(R.cfg().pagamentoVisita)} a quem mediu.</div>
         <div className="grid"><div className="field full"><label>Medidas</label><textarea value={med} onChange={e => setMed(e.target.value)} placeholder="Ex.: parede 3,20m x pé-direito 2,60m…" /></div>
           <div className="field full"><label>Observação</label><input value={mobs} onChange={e => setMobs(e.target.value)} /></div></div>
-        <button className="btn primary sm" style={{ marginTop: 10 }} onClick={() => { if (!(c.anexos || []).length) { toast("Anexe as fotos/planta da medição primeiro"); return; } ex(() => A.medidaRealizada(c.id, med.trim(), mobs.trim()), "Medida registrada — a supervisora vai conferir"); }}>✓ Medida realizada</button>
+        <FinalizarMedida c={c} med={med} obs={mobs} />
       </div>}
 
       {/* quem vai medir precisa ver o projeto que o cliente comprou — abre sozinho enquanto a medida não foi feita */}
@@ -1218,6 +1241,10 @@ function FichaPorta({ c }: { c: any }) {
             <button className="btn sm" onClick={async () => { if (!novo) { toast("Selecione o vendedor"); return; } if (novo === c.atendenteId) { toast("Esse já é o vendedor"); return; }
               if (!confirm("Trocar o vendedor para " + R.nomeUser(novo) + "?")) return; if (await ex(() => A.trocarVendedor(c.id, novo), "Vendedor alterado")) setNovo(""); }}>Trocar</button></div></div>}
           <Anexos c={c} editavel={R.podeAnexar(c)} />
+          {/* quem acabou de anexar as fotos da medição finaliza aqui mesmo, sem ter que subir a tela de novo */}
+          {c.tipo === "medidas" && R.etapaMedida(c) === "agendada" && (R.ehSupMedidas() || (!!c.medidorId && c.medidorId === R.currentUserId)) &&
+            <div className="resp-box" style={{ borderColor: "var(--st-concluida)" }}><h4>Terminou a medição?</h4>
+              <FinalizarMedida c={c} med="" obs="" /></div>}
           {R.podeTratar(c) && <div className="resp-box"><h4>Anotação</h4><div className="inline-2">
             <div className="field"><input value={nota} onChange={e => setNota(e.target.value)} placeholder="Ex.: cliente volta sábado com a planta" /></div>
             <button className="btn sm" onClick={async () => { if (!nota.trim()) { toast("Escreva a anotação"); return; } if (await ex(() => A.adicionarNota(c.id, nota.trim()), "Anotação registrada")) setNota(""); }}>Salvar</button></div></div>}

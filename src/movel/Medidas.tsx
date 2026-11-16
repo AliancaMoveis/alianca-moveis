@@ -118,15 +118,26 @@ export function MedHoje({ abrir, ir }: any) {
 }
 
 // lista de medidas (medidor e consultor)
+const semAcento = (x: any) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const soDig = (x: any) => String(x || "").replace(/\D/g, "");
 export function MedLista({ abrir }: any) {
   const { R } = useApp() as any;
   const d = medDados(R);
   const [f, setF] = useState<"fazer" | "feitas" | "todas">("fazer");
-  const lista = f === "fazer" ? d.aFazer : f === "feitas" ? d.feitas : d.todas;
+  const [q, setQ] = useState("");
+  // busca em TODAS as medidas, em qualquer etapa: nome, CPF, nº da venda, telefone ou nº do chamado
+  const txt = semAcento(q.trim()), dig = soDig(q);
+  const achados = !q.trim() ? null : d.todas.filter((c: any) =>
+    (txt.length >= 2 && semAcento(c.cliente + " " + (c.id || "")).includes(txt))
+    || (dig.length >= 3 && (String(c.pedido || "").includes(dig) || soDig(c.telefone).includes(dig) || soDig(c.clienteDoc).includes(dig))));
+  const lista = achados || (f === "fazer" ? d.aFazer : f === "feitas" ? d.feitas : d.todas);
   return <>
-    <div className="mv-seg">{([["fazer", "A fazer", d.aFazer.length], ["feitas", "Feitas", d.feitas.length], ["todas", "Todas", d.todas.length]] as any[]).map(([k, l, n]) =>
-      <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>
-    {lista.length ? lista.map((c: any) => <CartaoMedida key={c.id} c={c} abrir={abrir} />) : <div className="mv-vazio">Nada aqui.</div>}
+    <input className="mv-busca" type="search" value={q} onChange={e => setQ(e.target.value)}
+      placeholder="🔎 Buscar cliente: nome, CPF, venda ou telefone" />
+    {achados ? <div className="mv-dica" style={{ margin: "2px 0 8px" }}>{achados.length} cliente(s) · busca em todas as etapas</div>
+      : <div className="mv-seg">{([["fazer", "A fazer", d.aFazer.length], ["feitas", "Feitas", d.feitas.length], ["todas", "Todas", d.todas.length]] as any[]).map(([k, l, n]) =>
+        <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
+    {lista.length ? lista.map((c: any) => <CartaoMedida key={c.id} c={c} abrir={abrir} />) : <div className="mv-vazio">{q.trim() ? "Nenhum cliente encontrado." : "Nada aqui."}</div>}
   </>;
 }
 
@@ -176,8 +187,10 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
       <input value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação (opcional)" />
       <button className="mv-principal" onClick={() => { if (!(c.anexos || []).length) { toast("Anexe as fotos/planta da medição primeiro"); return; }
         const fl = (m.faltando || []).filter((x: any) => !x.ok); if (fl.length && !confirm("Ainda falta marcar " + fl.length + " item(ns) do que estava faltando:\n\n• " + fl.map((x: any) => x.t).join("\n• ") + "\n\nEnviar mesmo assim?")) return;
-        ex(() => A.medidaRealizada(c.id, med.trim(), obs.trim()), "Medida registrada ✓"); }}>✓ {(m.faltando || []).length ? "Enviar a medida completa" : "Medida realizada"}</button>
-      <div className="mv-dica">A medida paga {fmtMoeda(R.cfg().pagamentoVisita)} (sem comissão). A supervisora confere e libera para o checklist.</div>
+        ex(() => A.medidaRealizada(c.id, med.trim(), obs.trim()), "Medida enviada para Medidas ✓"); }}>✓ {(m.faltando || []).length ? "Finalizar e enviar a medida completa" : "Finalizar e enviar para Medidas"}</button>
+      <div className="mv-dica" style={{ color: (c.anexos || []).length ? undefined : "#8a5d00", fontWeight: (c.anexos || []).length ? undefined : 700 }}>
+        {(c.anexos || []).length ? "📷 " + (c.anexos || []).length + " arquivo(s) anexado(s)." : "📷 Anexe as fotos/planta da medição antes de finalizar."}</div>
+      <div className="mv-dica">A medida fica como <b>realizada</b> e vai para a Supervisão de Medidas conferir e liberar para o checklist. Paga {fmtMoeda(R.cfg().pagamentoVisita)} (sem comissão).</div>
     </div>}
     {etapa === "realizada" && <div className="mv-ok">✓ Medida enviada — aguardando a supervisora conferir</div>}
     {etapa === "liberada" && <div className="mv-ok">✓ Medidas liberadas para o checklist</div>}
