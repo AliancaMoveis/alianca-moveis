@@ -986,8 +986,12 @@ function ContratoAssinado({ ct, toast }: { ct: any; toast: (m: string) => void }
 }
 function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocupado, toast, gerar, ct, setCt, assinado, seguir, antes }: any) {
   const [montando, setMontando] = useState("");
+  // quem está aqui é o titular da compra? Se não, ele assina como representante e o titular assina depois, pelo 2º link.
+  const [quem, setQuem] = useState<"" | "titular" | "representante">("");
+  const [nomeTitular, setNomeTitular] = useState("");
   const nome = `Checklist_${primeiroNome(cap(c.cliente))}_${c.pedido}.pdf`;
   const link = ct?.token ? location.origin + "/contrato?t=" + ct.token : "";
+  const linkTitular = ct?.tokenTitular ? location.origin + "/contrato?t=" + ct.tokenTitular : "";
   /** os dados do contrato, com todas as imagens embutidas (as do Exact, as do checklist e as páginas dos PDFs de imagens) */
   async function montar(): Promise<{ dados: ContratoDados; falhas: string[] }> {
     // links novos dos arquivos do checklist (os que acabaram de subir ainda não estão na lista, e os links vencem em 1 hora)
@@ -1021,10 +1025,13 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
         itens: [...grupos.values()].map(({ l, n }) => ({ qtd: n > 1 ? n + " peças" : /M2/i.test(l.qtd) ? "1 peça" : l.qtd, descricao: l.descricao, medidas: l.medidas })), imagens: imgs });
     }
     return { dados: { venda: String(c.pedido || ""), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj,
-      data: fmtDate(hojeISO()), ambientes, naoInclusos: naoInc, obs, ferragens }, falhas };
+      data: fmtDate(hojeISO()), ambientes, naoInclusos: naoInc, obs, ferragens,
+      titular: quem === "representante" ? nomeTitular.trim() : null }, falhas };
   }
   async function gerarLink() {
     if (!liberado) { toast("Termine a conferência por ambiente (nada em amarelo) antes de gerar o contrato"); return; }
+    if (!quem) { toast("Diga se quem vai assinar é o titular da compra"); return; }
+    if (quem === "representante" && nomeTitular.trim().length < 5) { toast("Escreva o nome completo do titular da compra"); return; }
     if (ct?.status === "pendente" && !confirm("Já existe um link aguardando o cliente. Gerar um novo cancela o anterior. Continuar?")) return;
     if (!(await antes())) return;
     setMontando("link");
@@ -1034,8 +1041,8 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
       const nImg = dados.ambientes.reduce((n, a) => n + a.imagens.length, 0);
       const r = await A.ckContrato("criar", c.id, { dados });
       if (!nImg) toast("Atenção: contrato sem imagens do projeto");
-      setCt({ token: r.token, status: "pendente", expira: r.expira });
-      toast("Contrato gerado — mostre o QR Code ao cliente");
+      setCt({ token: r.token, status: "pendente", expira: r.expira, titular: quem === "representante" ? nomeTitular.trim() : "" });
+      toast(quem === "representante" ? "Contrato gerado — quem está aqui assina como representante" : "Contrato gerado — mostre o QR Code ao cliente");
     } catch (e: any) { toast(e.message || "Não foi possível gerar o contrato"); }
     finally { setMontando(""); }
   }
@@ -1063,7 +1070,22 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
     {ct?.status === "assinado" ? <>
       <ContratoAssinado ct={ct} toast={toast} />
       <button className="btn sm" style={{ background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" }} onClick={seguir}>Seguir → Finalizar atendimento</button>
-    </> : ct?.status === "pendente" && link ? <div className="imp" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+    </> : ct?.status === "aguardando_titular" ? <div className="imp" style={{ alignItems: "flex-start", flexWrap: "wrap", background: "#eef3ff", borderColor: "#c9d8f5" }}>
+      {linkTitular && <img src={qrDataUrl(linkTitular, 240)} alt="QR Code para o titular" style={{ width: 200, height: 200, border: "1px solid var(--line,#e0e3e8)", borderRadius: 10, background: "#fff" }} />}
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <b style={{ fontSize: 15 }}>✍️ Conferência assinada por {ct.nome} (representante)</b>
+        <span>Falta a assinatura de <b>{ct.titular}</b>, titular da compra. O contrato só fica pronto com as duas.</span>
+        <div className="hint" style={{ margin: "8px 0", wordBreak: "break-all" }}>{linkTitular}</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(linkTitular); toast("Link do titular copiado"); } catch { prompt("Copie o link:", linkTitular); } }}>📋 Copiar link do titular</button>
+          {tel && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
+            onClick={() => abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(`Olá! Aqui está o link para ${ct.titular} assinar o contrato do checklist do projeto da Aliança Móveis: ${linkTitular}`))}>💬 Enviar por WhatsApp</button>}
+        </div>
+        <div className="hint" style={{ marginTop: 8 }}>⏳ Aguardando a assinatura do titular… · link vale até {fmtDateTime(ct.expira)}</div>
+      </div>
+    </div> : ct?.status === "pendente" && link ? <div className="imp" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+      {ct.titular && <div style={{ flexBasis: "100%", background: "#eef3ff", border: "1.5px solid #c9d8f5", borderRadius: 10, padding: "8px 12px", marginBottom: 8, fontSize: 13.5 }}>
+        👤 Quem está no checklist assina como <b>representante</b> de <b>{ct.titular}</b> (titular da compra). Ao assinar, sai um 2º link para o titular assinar também.</div>}
       <img src={qrDataUrl(link, 240)} alt="QR Code do contrato" style={{ width: 220, height: 220, border: "1px solid var(--line,#e0e3e8)", borderRadius: 10, background: "#fff" }} />
       <div style={{ flex: 1, minWidth: 240 }}>
         <b style={{ fontSize: 15 }}>📲 Peça ao cliente para ler o QR Code com a câmera do celular</b>
@@ -1082,7 +1104,20 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
     </div> : <div className="imp">
       <div><b>📲 Contrato com assinatura online</b><span>{ct?.status === "expirado" ? "o link anterior expirou — gere outro" : "gera um link e um QR Code para o cliente assinar no celular"}</span>
         <div className="inc"><span>✓ 1 · Termo de ciência do material (vem preenchido, o cliente confere e pode corrigir)</span><span>✓ 2 · Geral — 29 itens com “Sim”</span><span>✓ 3 · Imagens do projeto de cada ambiente + checklist + o que foi comprado</span><span>✓ 4 · Nome, CPF, assinatura na tela e selfie</span></div>
-        <div className="hint" style={{ marginTop: 6 }}>O cliente quer ler no papel antes? Use <b>“Imprimir para ler antes”</b> — é o mesmo documento que ele assina no celular.</div></div>
+        <div className="hint" style={{ marginTop: 6 }}>O cliente quer ler no papel antes? Use <b>“Imprimir para ler antes”</b> — é o mesmo documento que ele assina no celular.</div>
+        {/* quem está no checklist nem sempre é quem comprou: aí ele assina como representante e o titular assina depois */}
+        <div style={{ marginTop: 10, padding: "9px 12px", borderRadius: 10, background: "#f6f7f9", border: "1.5px solid var(--line,#e0e3e8)" }}>
+          <b style={{ fontSize: 13.5 }}>Quem está aqui para assinar é o titular da compra?</b>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+            <button className={"btn sm" + (quem === "titular" ? " primary" : "")} onClick={() => { setQuem("titular"); setNomeTitular(""); }}>Sim, é o titular</button>
+            <button className={"btn sm" + (quem === "representante" ? " primary" : "")} onClick={() => setQuem("representante")}>Não — é outra pessoa</button>
+          </div>
+          {quem === "representante" && <div style={{ marginTop: 8 }}>
+            <input value={nomeTitular} onChange={e => setNomeTitular(e.target.value)} placeholder="Nome completo do titular da compra"
+              style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", fontSize: 14, borderRadius: 8, border: "1.5px solid var(--line,#e0e3e8)" }} />
+            <div className="hint" style={{ marginTop: 4 }}>Quem está aqui assina como <b>representante</b> e, ao assinar, recebe um link para o titular assinar também. O contrato fica pronto com as duas assinaturas.</div>
+          </div>}
+        </div></div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <button className="btn primary sm" disabled={!liberado || !!montando || !!ocupado} onClick={gerarLink}>{montando === "link" ? "Montando o contrato…" : "📲 Gerar link e QR Code"}</button>
         <button className="btn sm" disabled={!liberado || !!montando} onClick={() => imprimir(true)}>{montando === "ler" ? "Montando…" : "🖨 Imprimir para ler antes"}</button>

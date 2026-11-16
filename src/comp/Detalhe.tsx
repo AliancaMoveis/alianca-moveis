@@ -824,6 +824,17 @@ function MedidaBloco({ c }: any) {
       {ckVenda && <RowSb k="Checklist" pb="4px 0"><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(ckVenda.id); }}>{ckVenda.id}</a>{ckVenda.tratativa?.checklist?.agendadoPara ? " · agendado " + fmtDateTime(ckVenda.tratativa.checklist.agendadoPara) + (ckVenda.tratativa.checklist.projetista ? " com " + ckVenda.tratativa.checklist.projetista : "") : " · ainda não agendado"}</RowSb>}
       {etapa === "em_obra" && <div className="alerta" style={{ margin: "8px 0" }}><b>🚧 Em obra</b> — sem medida oficial{m.previsaoObra ? " · previsão de término " + String(m.previsaoObra).split("-").reverse().join("/") : ""}{m.obsObra ? " · " + m.obsObra : ""}</div>}
       {venda && <RowSb k="Venda" pb="4px 0"><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(venda.id); }}>{venda.id}</a>{venda.venda ? " · nº " + venda.venda.numero : ""}{venda.atendenteId ? " · vendedor " + R.nomeUser(venda.atendenteId) : ""}</RowSb>}
+      {(() => { const out = (st.chamados || []).filter((x: any) => x.tipo === "medidas" && x.id !== c.id && x.cliente && c.cliente
+        && String(x.cliente).trim().toLowerCase() === String(c.cliente).trim().toLowerCase() && x.pedido && String(x.pedido) !== String(c.pedido || ""));
+        return out.length > 0 ? <div className="alerta" style={{ margin: "8px 0" }}>
+          <b>👥 Este cliente tem {out.length === 1 ? "outra venda" : out.length + " outras vendas"} com medida</b> — são medidas diferentes, não é repetição.
+          <div style={{ marginTop: 3 }}>{out.map((x: any, i: number) => <span key={x.id}>{i ? " · " : ""}
+            <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(x.id); }}>venda {x.pedido}</a> ({ETAPA_MEDIDA[R.etapaMedida(x)] || "—"}){x.endereco ? " · " + x.endereco : ""}</span>)}</div>
+        </div> : null; })()}
+      {(m.ambientes || m.qtdAmbientes || m.obsVenda) && <div className="alerta" style={{ margin: "8px 0", background: "var(--tn-blue)" }}>
+        <b>🧩 O que vai ser medido</b> <span style={{ fontSize: 12, opacity: .75 }}>· escrito pelo vendedor na venda</span>
+        <div style={{ marginTop: 3 }}>{[m.qtdAmbientes ? m.qtdAmbientes + (m.qtdAmbientes === 1 ? " ambiente" : " ambientes") : "", m.ambientes].filter(Boolean).join(" · ") || "—"}</div>
+        {m.obsVenda && <div style={{ marginTop: 3 }}>{m.obsVenda}</div>}</div>}
       {m.consultorVisita && <RowSb k="Consultor que visitou" pb="4px 0">{R.nomeUser(m.consultorVisita)}{venda ? " · " + anexosConsultor + " anexo(s) na visita" : ""}</RowSb>}
       {(m.medidasConsultor || m.obsConsultor) && <RowSb k="Medidas do consultor" pb="4px 0">{[m.medidasConsultor, m.obsConsultor].filter(Boolean).join(" · ")}</RowSb>}
       {c.medidorId && <RowSb k="Quem mede" pb="4px 0"><b>{R.nomeUser(c.medidorId)}</b>{c.dataMedida ? " · " + fmtDateTime(c.dataMedida) : ""}</RowSb>}
@@ -838,7 +849,9 @@ function MedidaBloco({ c }: any) {
         <button className="btn primary sm" style={{ marginTop: 10 }} onClick={() => { if (!(c.anexos || []).length) { toast("Anexe as fotos/planta da medição primeiro"); return; } ex(() => A.medidaRealizada(c.id, med.trim(), mobs.trim()), "Medida registrada — a supervisora vai conferir"); }}>✓ Medida realizada</button>
       </div>}
 
-      <details style={{ margin: "8px 0" }}><summary style={{ cursor: "pointer", fontWeight: 800 }}>🖼 Imagem da venda</summary><ImagensVenda c={c} /></details>
+      {/* quem vai medir precisa ver o projeto que o cliente comprou — abre sozinho enquanto a medida não foi feita */}
+      <details style={{ margin: "8px 0" }} open={(souMedidor || sup) && ["pendente", "agendada", "validar"].includes(etapa)}>
+        <summary style={{ cursor: "pointer", fontWeight: 800 }}>🖼 Imagem da venda — o projeto que o cliente comprou</summary><ImagensVenda c={c} /></details>
       {/* fotos para conferir antes de aprovar: as do 360, as da medição no Exact e as da visita do consultor — abre sozinho quando a medida espera aprovação */}
       <details style={{ margin: "8px 0" }} open={sup && ["validar", "realizada"].includes(etapa)}>
         <summary style={{ cursor: "pointer", fontWeight: 800 }}>📷 Fotos da medida — do 360, da medição no Exact e da visita do consultor</summary>

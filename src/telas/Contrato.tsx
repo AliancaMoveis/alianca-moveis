@@ -50,6 +50,10 @@ export default function Contrato() {
   const [msg, setMsg] = useState("");
   const [feito, setFeito] = useState<any>(null);
   const [zoom, setZoom] = useState<string>("");
+  // 2º link: quem abre é o TITULAR da compra. O representante já conferiu tudo; o titular lê, autoriza e assina.
+  const [tit, setTit] = useState<{ nome: string; representante: string; em: string; resposta: any } | null>(null);
+  const [autorizo, setAutorizo] = useState(false);
+  const soLeitura = !!tit;
 
   useEffect(() => {
     document.title = "Contrato · Aliança Móveis";
@@ -57,6 +61,15 @@ export default function Contrato() {
     contratoApi({ acao: "ver", token }).then(r => {
       if (r.assinado) { setFeito(r); return; }
       const dd: ContratoDados = r.dados; setD(dd);
+      if (r.titular) {
+        // o titular vê a conferência que o representante fez, já marcada, sem poder mudar
+        setTit(r.titular);
+        const rp = r.titular.resposta || {};
+        setTermos(dd.ambientes.map((a, i) => copia(rp.termos?.[i] || a.termo)));
+        setMatOk(dd.ambientes.map(() => true)); setImgOk(dd.ambientes.map(() => true));
+        setGeral(CONDICOES_CONTRATO.map(() => true));
+        return;
+      }
       setTermos(dd.ambientes.map(a => copia(a.termo))); setMatOk(dd.ambientes.map(() => false)); setImgOk(dd.ambientes.map(() => false));
     }).catch(e => setErro(e.message));
   }, []);
@@ -65,8 +78,8 @@ export default function Contrato() {
   const ok1 = !!d && matOk.length === d.ambientes.length && matOk.every(Boolean);
   const ok2 = geral.every(Boolean);
   const ok3 = !!d && imgOk.length === d.ambientes.length && imgOk.every(Boolean);
-  const ok4 = nome.trim().length >= 5 && cpfValido(cpf) && !!assin && !!selfie;
-  const falta4 = nome.trim().length < 5 ? "Escreva seu nome completo" : !cpfValido(cpf) ? "Informe um CPF válido" : !assin ? "Faça sua assinatura no quadro" : !selfie ? "Tire a selfie" : "";
+  const ok4 = (!tit || autorizo) && nome.trim().length >= 5 && cpfValido(cpf) && !!assin && !!selfie;
+  const falta4 = tit && !autorizo ? "Marque a autorização acima" : nome.trim().length < 5 ? "Escreva seu nome completo" : !cpfValido(cpf) ? "Informe um CPF válido" : !assin ? "Faça sua assinatura no quadro" : !selfie ? "Tire a selfie" : "";
   const libera = [true, ok1, ok1 && ok2, ok1 && ok2 && ok3];
 
   function imprimir() {
@@ -81,8 +94,12 @@ export default function Contrato() {
     if (!ok4) { setMsg(falta4); return; }
     setEnviando(true); setMsg("");
     try {
-      const r = await contratoApi({ acao: "assinar", token, resposta: { nome: nome.trim(), cpf: cpf.replace(/\D/g, ""), termos, materiaisOk: matOk, geral, imagensOk: imgOk }, assinatura: assin, selfie });
-      setFeito({ nome: nome.trim(), em: new Date().toISOString(), teste: !!r.teste, url: r.url || "" }); window.scrollTo(0, 0);
+      const r = tit
+        ? await contratoApi({ acao: "assinar", token, titular: true, nome: nome.trim(), cpf: cpf.replace(/\D/g, ""), autorizo, assinatura: assin, selfie })
+        : await contratoApi({ acao: "assinar", token, resposta: { nome: nome.trim(), cpf: cpf.replace(/\D/g, ""), termos, materiaisOk: matOk, geral, imagensOk: imgOk }, assinatura: assin, selfie });
+      setFeito({ nome: nome.trim(), em: new Date().toISOString(), teste: !!r.teste, url: r.url || "",
+        aguardandoTitular: !!r.aguardandoTitular, titular: r.titular || "", tokenTitular: r.tokenTitular || "" });
+      window.scrollTo(0, 0);
     } catch (e: any) { setMsg(e.message); } finally { setEnviando(false); }
   }
 
@@ -97,6 +114,25 @@ export default function Contrato() {
   const botao = (txt: string, on: boolean, f: () => void, cor = COR.pri) => <button type="button" onClick={f} disabled={!on}
     style={{ width: "100%", padding: 15, fontSize: 16.5, fontWeight: 800, color: "#fff", background: on ? cor : "#9aa3b0", border: 0, borderRadius: 12, cursor: on ? "pointer" : "default", marginTop: 4 }}>{txt}</button>;
 
+  // o representante assinou: falta o titular da compra — mostra o link para mandar para ele
+  if (feito?.aguardandoTitular) {
+    const link = location.origin + "/contrato?t=" + feito.tokenTitular;
+    const texto = `Olá! Segue o link para você assinar o contrato do seu projeto na Aliança Móveis: ${link}`;
+    return casca(<div style={{ ...card, padding: "28px 18px" }}>
+      <div style={{ fontSize: 50, textAlign: "center" }}>✍️</div>
+      <h2 style={{ margin: "6px 0", textAlign: "center" }}>Conferência assinada</h2>
+      <p style={{ color: COR.s, textAlign: "center" }}>Obrigado{feito.nome ? ", " + String(feito.nome).split(" ")[0] : ""}! Falta a assinatura de <b>{feito.titular}</b>, titular da compra.<br />Mande o link abaixo para {String(feito.titular || "").split(" ")[0]} assinar. O contrato só fica pronto com as duas assinaturas.</p>
+      <div style={{ background: "#f6f7f9", border: "1px solid " + COR.l, borderRadius: 10, padding: "10px 12px", margin: "14px 0", fontSize: 13, wordBreak: "break-all" }}>{link}</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+        <a href={"https://wa.me/?text=" + encodeURIComponent(texto)} target="_blank" rel="noopener"
+          style={{ padding: "13px 20px", fontSize: 16, fontWeight: 800, color: "#fff", background: "#1f9d55", borderRadius: 12, textDecoration: "none" }}>📲 Enviar pelo WhatsApp</a>
+        <button type="button" onClick={() => { navigator.clipboard?.writeText(link); setMsg("Link copiado"); }}
+          style={{ padding: "13px 20px", fontSize: 16, fontWeight: 800, color: COR.pri, background: "#fff", border: "1.5px solid " + COR.l, borderRadius: 12 }}>📋 Copiar o link</button>
+      </div>
+      {msg && <div style={{ textAlign: "center", color: COR.ok, fontWeight: 700, marginTop: 10 }}>{msg}</div>}
+      <p style={{ fontSize: 12.5, color: COR.s, textAlign: "center", marginTop: 14 }}>O link vale por 3 dias. O projetista também consegue reenviá-lo pelo 360.</p>
+    </div>);
+  }
   if (feito) return casca(<div style={{ ...card, textAlign: "center", padding: "34px 18px" }}>
     <div style={{ fontSize: 54 }}>✅</div><h2 style={{ margin: "6px 0" }}>Contrato assinado</h2>
     <p style={{ color: COR.s }}>Obrigado{feito.nome ? ", " + String(feito.nome).split(" ")[0] : ""}! Sua assinatura foi registrada{feito.em ? " em " + new Date(feito.em).toLocaleString("pt-BR") : ""}.<br />O projetista já recebeu a confirmação. Guarde a sua via abaixo — ela fica disponível por 30 dias neste link.</p>
@@ -113,6 +149,10 @@ export default function Contrato() {
 
   const alteracoes = d.ambientes.flatMap((a, i) => termos[i] ? diferencasTermo(a.termo, termos[i]).map(x => a.nome + " — " + x) : []);
   return casca(<>
+    {tit && <div style={{ ...card, background: "#eef3ff", borderColor: "#c9d8f5" }}>
+      <b style={{ fontSize: 16, color: COR.pri }}>Você é o titular da compra</b>
+      <div style={{ fontSize: 14, marginTop: 4 }}><b>{tit.representante}</b> fez o checklist com o projetista e conferiu os materiais, o termo geral e as imagens do projeto, representando você.</div>
+      <div style={{ fontSize: 14, marginTop: 6 }}>Leia o que foi conferido, <b>autorize a representação</b> e assine. O contrato só vale com as duas assinaturas.</div></div>}
     <div style={card}>
       <b style={{ fontSize: 17 }}>{d.cliente}</b><div style={{ color: COR.s, fontSize: 13.5 }}>Venda {d.venda} · {d.ambientes.length} ambiente{d.ambientes.length === 1 ? "" : "s"} · projetista {d.projetista}</div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{d.ambientes.map((a, i) => <span key={i} style={{ background: "#e8ecf3", color: COR.pri, borderRadius: 999, padding: "3px 10px", fontSize: 13, fontWeight: 700 }}>{i + 1} · {a.nome}</span>)}</div>
@@ -139,7 +179,7 @@ export default function Contrato() {
           {a.fichaObs && <div style={{ fontSize: 13.5, background: "#fff8e6", border: "1px solid #f0d9a6", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}><b>Observações:</b> {a.fichaObs}</div>}
           {termos[i] && <TermoMaterial v={termos[i]} orig={a.termo} somenteLeitura onChange={() => { /* o cliente não altera o material */ }} />}
           {falta.length > 0 && <div style={{ marginTop: 10, color: "#8a5d00", fontSize: 13.5, fontWeight: 600 }}>Este ambiente está incompleto ({falta.join(", ")}). Peça ao projetista para completar e gerar o contrato de novo.</div>}
-          {ciente(!!matOk[i], v => setMatOk(m => m.map((x, j) => j === i ? v : x)), `Conferi os materiais do ambiente ${a.nome} e estou ciente`, falta.length > 0)}
+          {ciente(!!matOk[i], v => setMatOk(m => m.map((x, j) => j === i ? v : x)), soLeitura ? `Materiais do ambiente ${a.nome} conferidos por ${tit!.representante}` : `Conferi os materiais do ambiente ${a.nome} e estou ciente`, soLeitura || falta.length > 0)}
         </div>;
       })}
       {botao(ok1 ? "Continuar → Termo geral" : "Confirme os materiais de cada ambiente", ok1, () => setPasso(1))}
@@ -156,7 +196,7 @@ export default function Contrato() {
           <div style={{ fontSize: 13, color: COR.s }}>Como funciona a montagem do seu móvel.</div></div>}
         <div style={{ fontSize: 14.5 }}><b>{i + 1} - </b>{t}</div>
         <label style={{ display: "inline-flex", gap: 8, alignItems: "center", marginTop: 7, padding: "6px 14px", borderRadius: 9, cursor: "pointer", fontWeight: 800, background: geral[i] ? COR.okbg : "#f6f7f9", border: "1.5px solid " + (geral[i] ? "#9fc5a8" : COR.l) }}>
-          <input type="checkbox" checked={geral[i]} onChange={e => setGeral(g => g.map((x, j) => j === i ? e.target.checked : x))} style={{ width: 22, height: 22, accentColor: COR.ok }} /> Sim</label>
+          <input type="checkbox" checked={geral[i]} disabled={soLeitura} onChange={e => setGeral(g => g.map((x, j) => j === i ? e.target.checked : x))} style={{ width: 22, height: 22, accentColor: COR.ok }} /> Sim</label>
       </div>)}</div>
       {botao(ok2 ? "Continuar → Imagens do projeto" : `Marque “Sim” em todos (${geral.filter(Boolean).length}/${CONDICOES_CONTRATO.length})`, ok2, () => setPasso(2))}
     </>}
@@ -175,7 +215,7 @@ export default function Contrato() {
           : <div style={{ color: COR.s }}>Sem imagens anexadas para este ambiente.</div>}
         {(a.itens || []).length > 0 && <details style={{ marginTop: 10 }}><summary style={{ cursor: "pointer", fontWeight: 700, color: COR.pri }}>O que foi comprado ({a.itens!.length} itens)</summary>
           <div style={{ fontSize: 13.5, marginTop: 6 }}>{a.itens!.map((x, j) => <div key={j} style={{ padding: "4px 0", borderBottom: "1px solid #eef0f2" }}>{x.qtd} · {x.descricao} <span style={{ color: COR.s }}>({x.medidas})</span></div>)}</div></details>}
-        {ciente(!!imgOk[i], v => setImgOk(m => m.map((x, j) => j === i ? v : x)), a.imagens.length ? `Vi todas as imagens acima e declaro que elas representam o projeto do ambiente ${a.nome} conforme eu solicitei` : `Estou ciente do projeto do ambiente ${a.nome}`)}
+        {ciente(!!imgOk[i], v => setImgOk(m => m.map((x, j) => j === i ? v : x)), soLeitura ? `Imagens do ambiente ${a.nome} conferidas por ${tit!.representante}` : a.imagens.length ? `Vi todas as imagens acima e declaro que elas representam o projeto do ambiente ${a.nome} conforme eu solicitei` : `Estou ciente do projeto do ambiente ${a.nome}`, soLeitura)}
       </div>)}
       {botao(ok3 ? "Continuar → Assinatura" : "Confirme as imagens de cada ambiente", ok3, () => setPasso(3))}
     </>}
@@ -185,6 +225,11 @@ export default function Contrato() {
         <b style={{ color: COR.r }}>Você alterou o termo do material:</b>
         <div style={{ fontSize: 13.5, marginTop: 4 }}>{alteracoes.map((x, i) => <div key={i}>• {x}</div>)}</div>
         <div style={{ fontSize: 12.5, color: COR.s, marginTop: 4 }}>As alterações ficam registradas no contrato assinado.</div></div>}
+      {tit && <div style={{ ...card, borderColor: autorizo ? "#9fc5a8" : COR.l }}>
+        <h3 style={{ margin: "0 0 6px" }}>Autorização</h3>
+        <p style={{ margin: 0, color: COR.s, fontSize: 14 }}>Confirme que você autorizou {tit.representante} a fazer o checklist no seu lugar.</p>
+        {ciente(autorizo, setAutorizo, `Autorizo ${tit.representante} a me representar na assinatura do checklist`)}
+      </div>}
       <div style={card}>
         <h3 style={{ margin: "0 0 8px" }}>4 · Seus dados</h3>
         <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome completo de quem está assinando" autoComplete="name"

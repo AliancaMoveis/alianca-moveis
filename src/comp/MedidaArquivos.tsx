@@ -55,7 +55,11 @@ export function Anteriores({ c }: { c: any }) {
 
   // uma lista só com TODAS as fotos, na ordem em que aparecem: assim as setas do visualizador passam de um grupo para o outro
   const fotosMinhas: Item[] = minhas.filter((a: any) => a.tipo === "img").map((a: any, i: number) => ({ key: "m" + i, x: { id: "m" + i, url: a.url, nome: a.nome }, nome: a.nome }));
-  const fotosExact: Item[] = ((d?.exact?.fotos || []) as any[]).filter(x => x.img).map((x, i) => ({ key: "e" + i, x: { id: "e" + i, url: x.url, nome: x.nome }, nome: x.nome }));
+  // as fotos da medição no Exact já vêm para a ficha (viram anexo da medida): aqui só aparece o que ainda não veio,
+  // senão a mesma foto apareceria duas vezes na tela
+  const jaNaFicha = new Set(minhas.map((a: any) => a.url));
+  const soNoExact = ((d?.exact?.fotos || []) as any[]).filter(x => x.img && !jaNaFicha.has(x.url));
+  const fotosExact: Item[] = soNoExact.map((x, i) => ({ key: "e" + i, x: { id: "e" + i, url: x.url, nome: x.nome }, nome: x.nome }));
   const fotosVisita: Record<string, Item[]> = {};
   ((d?.visita || []) as any[]).forEach(v => { fotosVisita[v.id] = (v.fotos || []).filter((x: any) => x.img).map((x: any, i: number) => ({ key: v.id + i, x: { id: v.id + i, url: x.url, nome: x.nome }, nome: x.nome })); });
   const todas: Item[] = [...fotosMinhas, ...fotosExact, ...Object.values(fotosVisita).flat()];
@@ -71,19 +75,18 @@ export function Anteriores({ c }: { c: any }) {
         {x.faltando && <div style={{ color: "#1d6fd1" }}><b>Faltou:</b> {x.faltando}</div>}</div>)}</div>}
     {(m.medidas || m.obs) && !ant.length && <div style={caixa}><div style={titulo}>📝 Medidas enviadas</div>{m.medidas && <div><b>Medidas:</b> {m.medidas}</div>}{m.obs && <div><b>Obs.:</b> {m.obs}</div>}</div>}
 
-    <div style={caixa}><div style={titulo}>📷 Fotos desta medida <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· {minhas.length}</span></div>
+    <div style={caixa}><div style={titulo}>📷 Fotos desta medida <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· {minhas.length}{m.fotosExact ? " · " + m.fotosExact + " da medição no Exact" : ""}</span></div>
       {minhas.length ? <div style={grade}>{minhas.map((a: any, i: number) => { const f = fotosMinhas.find(z => z.x.url === a.url && z.nome === a.nome);
         return a.tipo === "img" && f ? <Foto key={i} c={c} x={f.x} abrir={() => abrirFoto(f)} onSrc={aoResolver(f)} />
           : <a key={i} href={a.url} target="_blank" rel="noopener" style={{ fontSize: 12.5 }}>📄 {a.nome || "arquivo"}</a>; })}</div>
         : <div style={{ fontSize: 13, opacity: .75 }}>Nenhuma foto anexada ainda.</div>}</div>
 
-    <div style={caixa}><div style={titulo}>🗂 Medição no Exact</div>
+    {(!d || soNoExact.length > 0 || !!d.exact.notas) && <div style={caixa}><div style={titulo}>🗂 Medição no Exact</div>
       {!d ? <div style={{ fontSize: 13, opacity: .7 }}>Buscando…</div> : <>
-        {(d.exact.fotos || []).length ? <div style={grade}>{(d.exact.fotos as any[]).map((x, i) => { const f = fotosExact.find(z => z.x.url === x.url);
-          return x.img && f ? <Foto key={i} c={c} x={f.x} abrir={() => abrirFoto(f)} onSrc={aoResolver(f)} />
-            : <a key={i} href={x.url} target="_blank" rel="noopener" style={{ fontSize: 12.5 }}>📄 {x.nome}</a>; })}</div>
-          : <div style={{ fontSize: 13, opacity: .75 }}>Sem fotos da medição no Exact.</div>}
-        {d.exact.notas && <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap", marginTop: 6, opacity: .9 }}>{d.exact.notas}</div>}</>}</div>
+        {soNoExact.length ? <div style={grade}>{soNoExact.map((x, i) => { const f = fotosExact.find(z => z.x.url === x.url);
+          return f ? <Foto key={i} c={c} x={f.x} abrir={() => abrirFoto(f)} onSrc={aoResolver(f)} /> : null; })}</div>
+          : <div style={{ fontSize: 13, opacity: .75 }}>{m.fotosExact ? "As fotos da medição no Exact já estão acima, nesta ficha." : "Sem fotos da medição no Exact."}</div>}
+        {d.exact.notas && <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap", marginTop: 6, opacity: .9 }}>{d.exact.notas}</div>}</>}</div>}
 
     {d && (d.visita as any[]).map((v: any) => <div key={v.id} style={caixa}><div style={titulo}>🏠 Visita do consultor antes da venda <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· {v.data ? fmtDateTime(v.data) : ""}</span></div>
       {v.medidas && <div style={{ fontSize: 13.5 }}><b>Medidas:</b> {v.medidas}</div>}{v.obs && <div style={{ fontSize: 13.5 }}><b>Obs.:</b> {v.obs}</div>}

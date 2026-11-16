@@ -1791,6 +1791,7 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .md-cel.dir{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;align-items:center}
 .md-cli{font-weight:800;font-size:13px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .md-end{color:var(--ink-faint);font-size:11.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.md-obs{color:var(--tn-blue-i);font-size:11.5px;font-weight:700;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .md-vazio{color:var(--ink-faint)}
 .md-lb{display:none}
 .md-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
@@ -1801,7 +1802,7 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
   .md-r{grid-template-columns:1fr !important;gap:3px;padding:12px}
   .md-lb{display:inline;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-faint);margin-right:6px}
   .md-cel.dir{justify-content:flex-start}
-  .md-end{white-space:normal}
+  .md-end,.md-obs{white-space:normal}
 }
 :root[data-theme="dark"] .md-r.comfoto{background:#271f36}
 :root[data-theme="dark"] .md-r.comfoto:hover{background:#2d2340}

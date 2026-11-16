@@ -251,6 +251,10 @@ function ListaMedidas({ aba }: { aba: string }) {
   const classeSit = (c: any) => { const pz = prazoMedida(st, c); return !pz ? "semlimite" : hojeISO() > pz.limite ? "atrasadas" : ""; };
   const contaSit = aba === "agendadas" ? lista.reduce((acc: any, c: any) => { const t2 = c.medidorId ? tipoMedida(c, st) : ""; if (t2) acc[t2] = (acc[t2] || 0) + 1; const s = classeSit(c); if (s) acc[s] = (acc[s] || 0) + 1; return acc; }, {}) : {};
   if (aba === "agendadas" && fSit) lista = lista.filter((c: any) => fSit === "confirmacao" || fSit === "pos" ? (c.medidorId ? tipoMedida(c, st) === fSit : false) : classeSit(c) === fSit);
+  // mesmo cliente com mais de uma venda (acontece bastante): avisa na linha para não parecer trabalho repetido
+  const porCliente: Record<string, { id: string; pedido: string }[]> = {};
+  (st.chamados || []).forEach((x: any) => { if (x.tipo === "medidas" && x.cliente) (porCliente[tira(x.cliente)] = porCliente[tira(x.cliente)] || []).push({ id: x.id, pedido: String(x.pedido || "") }); });
+  const irmas = (c: any) => (porCliente[tira(c.cliente)] || []).filter(x => x.id !== c.id && x.pedido && x.pedido !== String(c.pedido || ""));
   const busca = tira(q), dig = so(q);
   if (q) lista = lista.filter((c: any) => tira(c.cliente + " " + R.nomeUser(c.medidorId || "")).includes(busca) || (dig.length >= 3 && (String(c.pedido).includes(dig) || so(c.telefone).includes(dig))));
   const [ckMeu, setCkMeu] = useState<Record<string, string>>({});
@@ -292,10 +296,16 @@ function ListaMedidas({ aba }: { aba: string }) {
   const podeSup = R.ehSupMedidas();
   const rotData = aba === "agendadas" ? "Data da medição" : aba === "aprovados" ? "Aprovada em" : aba === "analise" || aba === "minhasfeitas" ? "Mediu em" : "Entrada";
   const cols: { k: string; t: string; w: string; dir?: boolean; cel: (c: any) => any }[] = [
-    { k: "cli", t: "Cliente", w: "minmax(0,1.6fr)", cel: (c: any) => <>
-      <div className="md-cli">{c.cliente} <Selo360 c={c} /></div>
-      <span className="md-end" title={c.endereco || ""}>{c.endereco ? "📍 " + c.endereco : "sem endereço"}</span></> },
-    { k: "venda", t: "Venda", w: "84px", cel: (c: any) => c.pedido || <span className="md-vazio">—</span> },
+    { k: "cli", t: "Cliente", w: "minmax(0,1.6fr)", cel: (c: any) => { const m = (c.tratativa && c.tratativa.medida) || {};
+      const amb = [m.qtdAmbientes ? m.qtdAmbientes + (m.qtdAmbientes === 1 ? " ambiente" : " ambientes") : "", m.ambientes].filter(Boolean).join(" · ");
+      return <>
+        <div className="md-cli">{c.cliente} <Selo360 c={c} /></div>
+        <span className="md-end" title={c.endereco || ""}>{c.endereco ? "📍 " + c.endereco : "sem endereço"}</span>
+        {/* o que o vendedor escreveu na venda: quantos e quais ambientes serão medidos (vem do cartão do Exact) */}
+        {(amb || m.obsVenda) && <span className="md-obs" title={[amb, m.obsVenda].filter(Boolean).join(" — ")}>🧩 {[amb, m.obsVenda].filter(Boolean).join(" — ")}</span>}</>; } },
+    { k: "venda", t: "Venda", w: "84px", cel: (c: any) => { const out = irmas(c);
+      return <>{c.pedido || <span className="md-vazio">—</span>}
+        {out.length > 0 && <span className="md-obs" style={{ color: "#6a2f9e" }} title={"Este cliente tem outra(s) venda(s) com medida: " + out.map(x => x.pedido).join(", ") + " — são medidas diferentes, não é repetição"}>+{out.length} venda{out.length > 1 ? "s" : ""}</span>}</>; } },
     { k: "tipo", t: "Tipo da medida", w: "minmax(0,1.15fr)", cel: (c: any) => { const o = origemMedida(R, c); const m = (c.tratativa && c.tratativa.medida) || {};
       return <>
         {o.txt ? <span className={"md-tipo " + o.cls}>{o.txt}</span> : <span className="md-vazio">—</span>}

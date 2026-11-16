@@ -16,9 +16,13 @@ export type AmbContrato = {
 export type ContratoDados = {
   venda: string; cliente: string; endereco: string; vendedor: string; projetista: string; data: string;
   ambientes: AmbContrato[]; naoInclusos: string[]; obs: string; ferragens: string[];
+  /** nome do titular da compra quando quem está no checklist é um representante (nulo quando o próprio titular assina) */
+  titular?: string | null;
 };
 export type RespostaContrato = { nome: string; cpf: string; termos: TermoAmb[]; materiaisOk: boolean[]; geral: boolean[]; imagensOk: boolean[] };
-export type AssinaturaContrato = { nome: string; cpf: string; quando: string; ip: string; ua: string; hash: string; assinatura: string; selfie: string; projetista?: string };
+export type AssinaturaContrato = { nome: string; cpf: string; quando: string; ip: string; ua: string; hash: string; assinatura: string; selfie: string; projetista?: string;
+  /** quando quem conferiu e assinou NÃO é o titular da compra: a assinatura do titular, que autoriza a representação */
+  titular?: { nome: string; cpf: string; quando: string; ip: string; ua: string; assinatura: string; selfie: string } | null };
 
 export const LINHAS_TERMO: [keyof TermoAmb, string][] = [["estrutura", "Estrutura"], ["portas", "Portas"], ["envoltorio", "Envoltório"], ["paineis", "Painéis"]];
 export const AMORT: [keyof TermoAmb, string][] = [["corredicas", "Corrediças"], ["dobradicas", "Dobradiças"]];
@@ -124,6 +128,10 @@ table{width:100%;border-collapse:collapse;font-size:9.4pt}th,td{border:1px solid
 .it2 td{font-size:8.6pt;padding:2px 5px}`;
 
 const bx = (on: boolean) => `<span class="bx${on ? " x" : ""}"></span>`;
+/** uma assinatura no documento: o traço e a selfie de quem assinou */
+const bloco = (assinatura: string, selfie: string, rotulo: string) => `<div style="display:flex;gap:18px;align-items:flex-end;margin-top:10px;break-inside:avoid">
+<div style="flex:1;text-align:center"><img src="${esc(assinatura)}" style="max-width:100%;max-height:110px;border-bottom:1px solid #111" alt=""><div style="font-size:9pt;margin-top:3px">${esc(rotulo)}</div></div>
+<div style="width:135px;text-align:center"><img src="${esc(selfie)}" style="width:135px;height:170px;object-fit:cover;border-radius:6px;border:1px solid #999" alt=""><div style="font-size:8pt;margin-top:3px">Selfie no momento da assinatura</div></div></div>`;
 function celMat(l: LinhaTermo, orig?: LinhaTermo) {
   const ops = (["MDP", "MDF", "NAO"] as const).map(m => `<span class="op">${bx(l?.mat === m)}${MAT_ROT[m]}</span>`).join("");
   const mudou = orig && ((orig.mat || null) !== (l?.mat || null) || (String(orig.cor || "").trim() !== String(l?.cor || "").trim() && l?.mat !== "NAO"));
@@ -162,7 +170,7 @@ ${amb.fichaObs ? `<tr><td><b>Observações</b></td><td colspan="2" class="cor">$
 <div><span>CPF:</span> <b>${esc(fmtCpf(cpf)) || "____________________"}</b></div><div><span>Data:</span> <b>${esc(d.data)}</b></div>
 <div style="grid-column:1/-1"><span>Endereço:</span> ${esc(d.endereco)}</div>
 <div style="grid-column:1/-1"><span>Ambiente(s):</span> <b>${d.ambientes.length} ambiente${d.ambientes.length === 1 ? "" : "s"}</b> — ${d.ambientes.map((a, i) => `<b>${i + 1} · ${esc(a.nome)}</b>`).join(", ")}</div></div>
-<p>Eu, <b>${esc(nome) || "_______________________________________"}</b>, declaro que fui devidamente informado(a) e estou ciente de que os móveis projetados adquiridos junto à <b>Aliança Móveis</b> foram especificados e aprovados com base no(s) material(is) sinalizados abaixo:</p>
+<p>Eu, <b>${esc(nome) || "_______________________________________"}</b>${d.titular ? `, na qualidade de <b>representante</b> de <b>${esc(d.titular)}</b>, titular da compra,` : ""}, declaro que fui devidamente informado(a) e estou ciente de que os móveis projetados adquiridos junto à <b>Aliança Móveis</b> foram especificados e aprovados com base no(s) material(is) sinalizados abaixo:</p>
 ${termos}
 <h3>Informações técnicas</h3><div class="info">${INFO_TECNICAS.map(x => `<p>• ${esc(x)}</p>`).join("")}</div>
 ${d.naoInclusos.length || d.obs || d.ferragens.length ? `<h3>Observações do checklist</h3><div class="info">${d.naoInclusos.length ? `<p><b>Não estão inclusos:</b> ${esc(d.naoInclusos.join(", "))}.</p>` : ""}${d.ferragens.length ? `<p><b>Ferragens:</b> ${esc(d.ferragens.join(" · "))}</p>` : ""}${d.obs ? `<p>${esc(d.obs)}</p>` : ""}</div>` : ""}
@@ -187,12 +195,21 @@ ${assinado ? `<div class="ok">☑ O cliente visualizou as imagens do projeto des
   let pAss = "";
   if (assinado) {
     const alts = d.ambientes.flatMap((amb, i) => diferencasTermo(amb.termo, r!.termos[i]).map(x => `Ambiente ${i + 1} · ${amb.nome} — ${x}`));
+    const tit = a!.titular || null;
+    const repr = !!d.titular;
     pAss = `<div class="pg quebra">${cab("ASSINATURA ELETRÔNICA")}<h2>CONTRATO ASSINADO ELETRONICAMENTE</h2>
-<p>O(a) cliente abaixo leu este documento, conferiu e confirmou os materiais de cada ambiente, marcou "Sim" em cada item do termo geral, visualizou as imagens do projeto e assinou eletronicamente, confirmando com uma foto (selfie) tirada no momento da assinatura.</p>
+<p>${repr
+      ? `O projeto foi conferido no checklist por <b>${esc(a!.nome)}</b>, que assinou na qualidade de <b>representante</b> de <b>${esc(d.titular)}</b>, titular da compra. O representante conferiu e confirmou os materiais de cada ambiente, marcou "Sim" em cada item do termo geral e visualizou as imagens do projeto. O titular da compra autorizou a representação e assinou este mesmo documento. As duas assinaturas foram feitas eletronicamente, cada uma confirmada com uma foto (selfie) tirada no momento da assinatura.`
+      : `O(a) cliente abaixo leu este documento, conferiu e confirmou os materiais de cada ambiente, marcou "Sim" em cada item do termo geral, visualizou as imagens do projeto e assinou eletronicamente, confirmando com uma foto (selfie) tirada no momento da assinatura.`}</p>
 <table><tr><td style="width:34%">Cliente / venda</td><td><b>${esc(d.cliente)}</b> · venda ${esc(d.venda)}</td></tr>
-<tr><td>Nome de quem assinou</td><td><b>${esc(a!.nome)}</b></td></tr><tr><td>CPF</td><td><b>${esc(fmtCpf(a!.cpf))}</b></td></tr>
+${repr ? `<tr><td>Titular da compra</td><td><b>${esc(d.titular)}</b>${tit ? " · CPF <b>" + esc(fmtCpf(tit.cpf)) + "</b>" : ""}</td></tr>
+<tr><td>Representante que conferiu</td><td><b>${esc(a!.nome)}</b> · CPF <b>${esc(fmtCpf(a!.cpf))}</b></td></tr>
+<tr><td>Autorização do titular</td><td>${tit ? `<b>${esc(tit.nome)}</b> autorizou <b>${esc(a!.nome)}</b> a representá-lo(a) na assinatura do checklist</td>` : "—</td>"}</tr>
+<tr><td>Data e hora das assinaturas</td><td>Representante: ${esc(a!.quando)}${tit ? " · Titular: " + esc(tit.quando) : ""} (horário de Brasília)</td></tr>
+<tr><td>IP · aparelho</td><td style="font-size:8pt">Representante: ${esc(a!.ip || "—")} · ${esc(a!.ua)}${tit ? `<br>Titular: ${esc(tit.ip || "—")} · ${esc(tit.ua)}` : ""}</td></tr>`
+      : `<tr><td>Nome de quem assinou</td><td><b>${esc(a!.nome)}</b></td></tr><tr><td>CPF</td><td><b>${esc(fmtCpf(a!.cpf))}</b></td></tr>
 <tr><td>Data e hora</td><td>${esc(a!.quando)} (horário de Brasília)</td></tr>
-<tr><td>IP · aparelho</td><td style="font-size:8pt">${esc(a!.ip || "—")} · ${esc(a!.ua)}</td></tr>
+<tr><td>IP · aparelho</td><td style="font-size:8pt">${esc(a!.ip || "—")} · ${esc(a!.ua)}</td></tr>`}
 <tr><td>Código do documento (SHA-256)</td><td style="font-size:7.5pt;word-break:break-all">${esc(a!.hash)}</td></tr>
 <tr><td>Projetista</td><td>${esc(a!.projetista || d.projetista)}</td></tr></table>
 <h3>O que o cliente confirmou</h3><div class="info">
@@ -200,10 +217,9 @@ ${assinado ? `<div class="ok">☑ O cliente visualizou as imagens do projeto des
 <p>☑ Geral — ${CONDICOES_CONTRATO.length} itens marcados "Sim" (inclusive os da montagem)</p>
 <p>☑ Imagens do projeto — visualizadas e de acordo em todos os ambientes</p></div>
 ${alts.length ? `<h3>Alterações feitas pelo cliente no termo do material</h3><div class="info">${alts.map(x => `<p>• ${esc(x)}</p>`).join("")}</div>` : `<p class="rub">O material foi definido pelo projetista e confirmado pelo cliente, sem alterações.</p>`}
-<div style="display:flex;gap:18px;align-items:flex-end;margin-top:10px">
-<div style="flex:1;text-align:center"><img src="${esc(a!.assinatura)}" style="max-width:100%;max-height:120px;border-bottom:1px solid #111" alt=""><div style="font-size:9pt;margin-top:3px">Assinatura do cliente — ${esc(a!.nome)}</div></div>
-<div style="width:150px;text-align:center"><img src="${esc(a!.selfie)}" style="width:150px;height:190px;object-fit:cover;border-radius:6px;border:1px solid #999" alt=""><div style="font-size:8pt;margin-top:3px">Selfie no momento da assinatura</div></div></div>
-<div class="foot"><span>ALIANÇA 360 · venda ${esc(d.venda)}</span><span>Assinatura eletrônica com selfie</span></div></div>`;
+${bloco(a!.assinatura, a!.selfie, repr ? "Assinatura do representante — " + a!.nome : "Assinatura do cliente — " + a!.nome)}
+${tit ? bloco(tit.assinatura, tit.selfie, "Assinatura do titular da compra — " + tit.nome) : ""}
+<div class="foot"><span>ALIANÇA 360 · venda ${esc(d.venda)}</span><span>${repr ? "Duas assinaturas eletrônicas com selfie" : "Assinatura eletrônica com selfie"}</span></div></div>`;
   }
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contrato_${esc(d.cliente.split(" ")[0])}_${esc(d.venda)}</title><style>${CSS}</style></head><body><img class="marca" src="${LOGO}" alt="">
 ${pTermo}${pGeral}${pAmb}${pAss}</body></html>`;
