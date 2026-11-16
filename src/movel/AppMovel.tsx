@@ -42,7 +42,7 @@ import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
 import ConsultaProduto from "../telas/ConsultaProduto";
 import AgendaVendedores from "../telas/AgendaVendedores";
-import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados } from "./Medidas";
+import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados, tipoMedida, SeloTipo, TIPO_CLIENTE } from "./Medidas";
 
 export type Perfil = "consultor" | "vendedor" | "gestor" | "gerente" | "marketing" | "medidor" | "dono" | "juridico" | "posvenda" | "produtos";
 export function perfilMovel(R: any): Perfil | null {
@@ -199,7 +199,7 @@ function Cartao({ c, abrir, linha, destaque }: any) {
   return (
     <button className={"mv-card" + (destaque ? " dest" : "") + (cor ? " cor-" + cor : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{linha?.hora || ""}</b><small>{linha?.dia || ""}</small></div>
-      <div className="mv-card-c"><div className="nm">{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""} <SeloLitoral c={c} /></div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
+      <div className="mv-card-c"><div className="nm">{c.tipo === "visita_consultor" && c.consultorId === R.currentUserId ? <><SeloTipo tipo="pre" />{" "}</> : null}{c.cliente}{R.semAnexo(c) ? " ⚠️" : ""} <SeloLitoral c={c} /></div><div className="sb">{linha?.sub || c.produto || "—"}</div>{c.venda && c.venda.numero ? <SeloVenda c={c} curto /> : null}</div>
       <div className="mv-card-d"><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span>{cor ? <span className="mv-cor" style={{ background: cc.cor, color: cor === "ctt" ? "#3a2a00" : "#fff" }}>{cc.txt}</span> : null}{cor === "loja" && <SeloVinda c={c} />}</div>
     </button>
   );
@@ -239,8 +239,11 @@ function ConsHoje({ abrir, ir }: any) {
       <Num n={d.semAnexo.length} l="Sem anexo" cor={d.semAnexo.length ? "#b07a00" : undefined} on={() => ir("clientes")} />
       <Num n={md.aFazer.length} l="📐 Medidas" cor={md.atrasadas.length ? "var(--danger)" : "#7c3aed"} on={() => ir("clientes")} />
     </div>
+    <div style={{ display: "flex", gap: 6, margin: "2px 0 10px" }}>{(["pre", "confirmacao", "pos"] as const).map(k => { const x = TIPO_CLIENTE[k]; const n = k === "pre" ? d.aFazer.length : md.aFazer.filter((c: any) => tipoMedida(c, st) === k).length;
+      return <div key={k} style={{ flex: 1, minWidth: 0, background: x.bg, border: "1.5px solid " + x.cor, borderRadius: 10, padding: "6px 8px", textAlign: "center" }}>
+        <b style={{ color: x.cor, fontSize: 20, display: "block" }}>{n}</b><span style={{ fontSize: 11, fontWeight: 800, color: x.cor }}>{x.ic} {k === "pre" ? "Venda" : k === "pos" ? "Pós-venda" : "Confirmação"}</span></div>; })}</div>
     {prox ? <div className="mv-hero" onClick={() => abrir(prox.id)}>
-      <div className="mv-hero-l">{d.atrasadas.includes(prox) ? "Visita atrasada" : "Próxima visita"}</div>
+      <div className="mv-hero-l">{d.atrasadas.includes(prox) ? "Visita atrasada" : "Próxima visita"} · 🟢 visita de venda</div>
       <div className="mv-hero-q">{diaCurto(prox.dataVisita)} {hora(prox.dataVisita)}</div>
       <div className="mv-hero-n">{prox.cliente}</div>
       <div className="mv-hero-s">{prox.endereco || "sem endereço"}</div>
@@ -252,8 +255,9 @@ function ConsHoje({ abrir, ir }: any) {
       {d.deHoje.filter((c: any) => c !== prox).map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: "hoje", sub: c.endereco }} />)}</>}
     {d.cancelados.length > 0 && <><div className="mv-sec">❌ Cancelaram a visita — toque para reabilitar com nova data</div>
       {d.cancelados.slice(0, 8).map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: "", dia: c.tratativa?.cancelouEm ? diaCurto(c.tratativa.cancelouEm) : "", sub: "♻️ Reabilitar e marcar nova visita" + (c.tratativa?.situacaoObs ? " · " + c.tratativa.situacaoObs : "") }} />)}</>}
-    {md.aFazer.length > 0 && <div className="mv-med-sec"><div className="mv-med-t">📐 SOLICITAÇÕES DE MEDIDA <small>pós-venda · não é visita de venda · {R.cfg().pagamentoVisita ? "R$ " + R.cfg().pagamentoVisita + " cada, sem comissão" : ""}</small></div>
-      {md.aFazer.map((c: any) => <CartaoMedida key={c.id} c={c} abrir={abrir} />)}</div>}
+    {(["confirmacao", "pos"] as const).map(k => { const l = md.aFazer.filter((c: any) => tipoMedida(c, st) === k); const x = TIPO_CLIENTE[k]; return l.length > 0 && <div key={k} className="mv-med-sec" style={{ borderColor: x.cor, background: x.bg }}>
+      <div className="mv-med-t" style={{ color: x.cor }}>{x.ic} {x.t} <small>{x.s}{k === "pos" && R.cfg().pagamentoVisita ? " · R$ " + R.cfg().pagamentoVisita + " cada" : ""}</small></div>
+      {l.map((c: any) => <CartaoMedida key={c.id} c={c} abrir={abrir} />)}</div>; })}
   </>;
 }
 // busca por nome, telefone, produto, endereço ou nº do chamado
@@ -494,6 +498,7 @@ function Folha({ id, fechar, perfil }: any) {
       <div className="mv-folha-top"><button className="mv-voltar" onClick={fechar}>‹ Voltar</button><span className={"sc sc-" + sc}>{STATUS_CLIENTE[sc] || "—"}</span></div>
       <div className="mv-folha-corpo">
         <div className="mv-cli">{c.cliente}</div>
+        {perfil === "consultor" && c.tipo === "visita_consultor" && <SeloTipo tipo="pre" grande />}
         <div className="mv-cli-s">{c.produto || "—"}{R.ehProspeccao(c) ? " · 🧭 prospecção própria do consultor" : c.solicitante ? " · marcado por " + primeiro(c.solicitante) : ""}</div>
         <div className="mv-info">
           {c.dataVisita && perfil === "consultor" && <div><span>Visita</span><b>{fmtDateTime(c.dataVisita)}</b></div>}

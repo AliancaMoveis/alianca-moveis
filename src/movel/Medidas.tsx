@@ -18,6 +18,32 @@ export function medDados(R: any) {
   return { todas, aFazer, hoje, atrasadas, feitas };
 }
 
+/** os 3 tipos de cliente do consultor no celular — o que muda é a comissão:
+ *  pré-venda (visita para vender, gera comissão) · medida pós-venda (cliente já comprou, só medir, sem comissão)
+ *  · confirmação (cliente que ele mesmo visitou antes da venda: conferir as medidas que já tirou). */
+export type TipoCliente = "pre" | "pos" | "confirmacao";
+export const TIPO_CLIENTE: Record<TipoCliente, { ic: string; t: string; s: string; cor: string; bg: string }> = {
+  pre: { ic: "🟢", t: "VISITA DE VENDA", s: "pré-venda · você vai vender · gera comissão", cor: "#1f7a3a", bg: "rgba(47,122,63,.12)" },
+  pos: { ic: "🟣", t: "MEDIDA PÓS-VENDA", s: "o cliente já comprou · só medir · não é venda · sem comissão", cor: "#7c3aed", bg: "rgba(124,58,237,.12)" },
+  confirmacao: { ic: "🔵", t: "CONFIRMAÇÃO DE MEDIDA", s: "cliente que você visitou e comprou · conferir as medidas que você já tirou", cor: "#1d6fd1", bg: "rgba(29,111,209,.12)" },
+};
+const tel8 = (x: any) => String(x || "").replace(/\D/g, "").slice(-8);
+/** medida: confirmação (quem mede é o consultor que visitou o cliente antes da venda) ou pós-venda; a Gestão / Medidas pode trocar */
+export function tipoMedida(c: any, st: any): "pos" | "confirmacao" {
+  const m = (c.tratativa && c.tratativa.medida) || {};
+  if (m.tipoVisita === "pos" || m.tipoVisita === "confirmacao") return m.tipoVisita;
+  if (m.consultorVisita && m.consultorVisita === c.medidorId) return "confirmacao";
+  const t = tel8(c.telefone);
+  if (t.length < 8 || !c.medidorId) return "pos";
+  return (st.chamados || []).some((v: any) => v.tipo === "visita_consultor" && v.consultorId === c.medidorId && tel8(v.telefone) === t && String(v.criadoEm || "") < String(c.criadoEm || "9")) ? "confirmacao" : "pos";
+}
+export function SeloTipo({ tipo, grande }: { tipo: TipoCliente; grande?: boolean }) {
+  const x = TIPO_CLIENTE[tipo];
+  return grande ? <div style={{ background: x.bg, border: "2px solid " + x.cor, borderRadius: 12, padding: "10px 12px", margin: "6px 0 10px" }}>
+    <div style={{ color: x.cor, fontWeight: 900, fontSize: 16 }}>{x.ic} {x.t}</div><div style={{ fontSize: 13.5, marginTop: 2 }}>{x.s}</div></div>
+    : <span style={{ display: "inline-block", fontSize: 10, fontWeight: 900, letterSpacing: ".03em", background: x.cor, color: "#fff", borderRadius: 5, padding: "1px 6px", verticalAlign: 2 }}>{x.ic} {x.t}</span>;
+}
+
 /** data do checklist da mesma venda e o limite da medida (5 dias antes) */
 export function prazoMedida(st: any, c: any): { ck: string; limite: string } | null {
   const p = String(c.pedido || "").trim(); if (!p) return null;
@@ -38,7 +64,7 @@ export function CartaoMedida({ c, abrir }: any) {
   return (
     <button className={"mv-card med" + (estourou ? " atras" : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{hora(c.dataMedida)}</b><small>{diaCurto(c.dataMedida)}</small></div>
-      <div className="mv-card-c"><div className="nm"><span className="tag-med">📐 MEDIDA</span> {c.cliente}{!(c.anexos || []).length && aFazer ? " ⚠️" : ""}</div>
+      <div className="mv-card-c"><div className="nm"><SeloTipo tipo={tipoMedida(c, st)} /> {c.cliente}{!(c.anexos || []).length && aFazer ? " ⚠️" : ""}</div>
         <div className="sb">{pz ? "Checklist " + fmtDate(pz.ck).slice(0, 5) + " · medir até " + fmtDate(pz.limite).slice(0, 5) : (c.endereco || c.produto || "—")}</div>
         {estourou && <div className="sb" style={{ color: "var(--danger)", fontWeight: 700 }}>⚠️ Fora do prazo (5 dias antes do checklist)</div>}</div>
       <div className="mv-card-d"><span className={"sc sc-med-" + etapa}>{etapa === "agendada" ? "A medir" : etapa === "realizada" ? "Feita" : etapa === "liberada" ? "Liberada" : "Validar"}</span>
@@ -90,6 +116,7 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
   const souEu = c.medidorId === R.currentUserId;
   return <>
     <div className="mv-cli">📐 {c.cliente}</div>
+    <SeloTipo tipo={tipoMedida(c, R.state)} grande />
     <div className="mv-cli-s">Medida · {c.produto || "—"} · <b>{ETAPA_MEDIDA[etapa] || etapa}</b></div>
     <div className="mv-info">
       {c.dataMedida && <div><span>Medida</span><b>{fmtDateTime(c.dataMedida)}</b></div>}
