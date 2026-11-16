@@ -255,8 +255,10 @@ function ListaMedidas({ aba }: { aba: string }) {
   if (dDe || dAte) lista = lista.filter((c: any) => { const x = dataMed(c); return !!x && (!dDe || x >= dDe) && (!dAte || x <= dAte); });
   if (cDe || cAte) lista = lista.filter((c: any) => { const x = diaCk(c).slice(0, 10); return !!x && (!cDe || x >= cDe) && (!cAte || x <= cAte); });
   const temFiltro = !!(fQuem || dDe || dAte || cDe || cAte);
-  // "para fazer": o checklist mais próximo vem primeiro (urgência), depois a data marcada da medição
-  const ord = (c: any) => aba === "minhas" ? (diaCk(c) || "9") + String(c.dataMedida || "9") : aba === "agendadas" ? String(c.dataMedida || "9") : aba === "minhasfeitas" ? "9" : diaCk(c) || "9" + String(c.criadoEm);
+  // a medir: o checklist mais próximo (limite = 5 dias antes) vem primeiro; depois a data marcada da medição
+  // sem checklist marcado: a venda mais antiga primeiro
+  const ckOuExact = (c: any) => diaCk(c) || String(c.tratativa?.medida?.dataChecklistExact || "").slice(0, 16);
+  const ord = (c: any) => aba === "minhasfeitas" ? "9" : (ckOuExact(c) ? "0" + ckOuExact(c) + String(c.dataMedida || "9") : "1" + String(c.dataVenda || "9") + String(c.criadoEm || ""));
   lista = lista.slice().sort((a: any, b: any) => ord(a).localeCompare(ord(b)));
   const em3 = (iso: string) => { if (!iso) return false; const lim = new Date(); lim.setDate(lim.getDate() + 3); return iso.slice(0, 10) <= lim.toISOString().slice(0, 10); };
   return (
