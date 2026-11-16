@@ -400,7 +400,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const trPendPara = (c: Chamado) => !!(c.transferencia && c.transferencia.status === "pendente" && c.transferencia.para === currentUserId);
   function podeVer(c: Chamado) {
     const u = me();
-    if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || trPendPara(c) || (c.tipo === "erro_venda" && (c as any).tratativa?.erroVenda?.vendedorId === currentUserId);
+    // consultor externo / medidor: o que é dele — inclusive a MEDIDA direcionada a ele (medidorId), como na regra do banco (pode_ver_chamado_ctx)
+    if (u && u.somenteAtribuidos) return c.consultorId === currentUserId || c.atendenteId === currentUserId || (!!c.medidorId && c.medidorId === currentUserId) || trPendPara(c) || (c.tipo === "erro_venda" && (c as any).tratativa?.erroVenda?.vendedorId === currentUserId);
     if (ehGestao()) return true;
     if (c.tipo === "juridico") return mySetores().includes("juridico"); // caso jurídico: só o Jurídico e a Gestão
     if (c.tipo === "porta") return mySetores().some((x: string) => x === "presenca" || x === "gerente_loja") || c.solicitanteId === currentUserId;
@@ -411,7 +412,9 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (verTudo()) return !(mySetores().includes("supervisao") && ["checklist", "medidas"].includes(c.tipo) && !mySetores().includes(c.setorDestino));
     if (mySetores().includes("callcenter")) return true;
     // gerente de loja: só o que é da loja/vendedores — no call center, só o que ele mesmo abriu (cai no return abaixo)
-    return mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId;
+    // medidor do chamado e Checklist / Supervisão de Medidas nas medidas: como na regra do banco (pode_ver_chamado_ctx)
+    return mySetores().includes(c.setorDestino) || c.solicitanteId === currentUserId || (!!c.medidorId && c.medidorId === currentUserId)
+      || (c.tipo === "medidas" && mySetores().some((x: string) => x === "checklist" || x === "medidas_supervisao"));
   }
   // fila de trabalho: o que é do meu setor ou o que eu abri (o call center vê tudo, mas a fila dele é esta)
   function naMinhaFila(c: Chamado) {
