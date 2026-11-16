@@ -305,7 +305,15 @@ function ListaMedidas({ aba }: { aba: string }) {
             onChange={async e => { try { await A.medidaTipoVisita(c.id, e.target.value as any); await recarregar(); toast("Tipo da medida atualizado"); } catch (x: any) { toast(x.message); } }}>
             <option value="">{!m.tipoVisita ? "automático" : "voltar ao automático"}</option><option value="confirmacao">🔵 Confirmação</option><option value="pos">🟣 Pós-venda</option></select>}</span>}
         {m.origem === "minha_visita" && <span className="md-end">Minha Visita · sem pagamento</span>}</>; } },
-    ...(souEu ? [] : [{ k: "quem", t: "Quem mede", w: "minmax(105px,.8fr)", cel: (c: any) => { const n = quemMede(c); return n === "Sem medidor" ? <span className="md-vazio">sem medidor</span> : n; } }]),
+    ...(souEu ? [] : [{ k: "quem", t: "Quem mede", w: "minmax(120px,.9fr)", cel: (c: any) => { const n = quemMede(c);
+      if (n !== "Sem medidor") return n;
+      // ainda sem medidor definido: mostra quem já visitou o cliente antes da venda (é para esse que a medida deve ir)
+      const a = antesDaVenda(R, st, c);
+      return a.nomes.length ? <>
+        <span className="md-vazio">a definir</span>
+        <span className="md-end" title={"Consultor que visitou este cliente antes da venda" + (a.em ? " em " + fmtDate(a.em.slice(0, 10)) : "") + " — a medida deve ir para ele"}>
+          📷 visitou: <b style={{ color: "#6a2f9e" }}>{a.nomes.slice(0, 2).join(", ")}</b>{a.nomes.length > 2 ? " +" + (a.nomes.length - 2) : ""}</span></>
+        : <span className="md-vazio">sem medidor</span>; } }]),
     { k: "data", t: rotData, w: "105px", cel: (c: any) => { if (R.etapaMedida(c) === "agendada" && c.dataMedida) return fmtDateTime(c.dataMedida);
       const x = dataMed(c); return x ? fmtDate(x) : <span className="md-vazio">—</span>; } },
     { k: "prazo", t: "Prazo / checklist", w: "minmax(150px,1.1fr)", cel: (c: any) => { const e = R.etapaMedida(c); const dck = diaCk(c); const al = aba !== "aprovados" && dck && em3(dck);
@@ -572,9 +580,13 @@ export function ondeMedida(R: any, st: any, c: any): { k: "no360" | "visita" | "
   return { k: "", txt: "", n: 0 };
 }
 /** medida feita ANTES da venda: o consultor visitou o cliente antes de vender (as fotos ficam na visita, não na medida) */
-export function antesDaVenda(R: any, st: any, c: any): { visitado: boolean; fotos: number } {
+export function antesDaVenda(R: any, st: any, c: any): { visitado: boolean; fotos: number; nomes: string[]; em: string } {
   const vis = achar360(R, st, c);
-  return { visitado: vis.length > 0, fotos: vis.reduce((s: number, v: any) => s + (v.anexos || []).filter((x: any) => x.tipo === "img").length, 0) };
+  // quem visitou: o consultor da visita (serve para mandar a medida para ele, que já conhece o cliente)
+  const nomes: string[] = [];
+  vis.forEach((v: any) => { const n = v.consultorId ? R.nomeUser(v.consultorId) : ""; if (n && n !== "—" && !nomes.includes(n)) nomes.push(n); });
+  const em = vis.map((v: any) => String(v.dataVisita || v.criadoEm || "")).filter(Boolean).sort().reverse()[0] || "";
+  return { visitado: vis.length > 0, fotos: vis.reduce((s: number, v: any) => s + (v.anexos || []).filter((x: any) => x.tipo === "img").length, 0), nomes, em };
 }
 /** a mesma venda já tem outra medida aprovada (medida oficial) — esta aqui virou trabalho repetido */
 export function jaAprovadaNaVenda(R: any, st: any, c: any): boolean {
