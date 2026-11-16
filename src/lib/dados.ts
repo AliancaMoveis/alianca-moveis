@@ -37,19 +37,39 @@ function competencia(dv: string, reg: string) {
   return dv.slice(0, 7) < regMes ? { dataVenda: regMes + "-01", dataVendaReal: dv } : { dataVenda: dv, dataVendaReal: dv };
 }
 
-// ordem precisa ser ÚNICA para paginar de 1.000 em 1.000: com empate (ex.: chamados importados no mesmo instante),
-// o banco pode devolver a mesma linha em duas páginas e pular outra — e cada pessoa via um total diferente.
+// ordem precisa ser ÚNICA para paginar: com empate (ex.: chamados importados no mesmo instante), o banco pode
+// devolver a mesma linha em duas páginas e pular outra — e cada pessoa via um total diferente.
+//
+// Páginas grandes de propósito: a regra de permissão do banco é conferida UMA vez por pedido, varrendo todos os
+// chamados. Com páginas de 1.000 isso se repetia 30+ vezes por tela e estourava o limite de 8s do banco — a tela
+// vinha vazia com "canceling statement due to statement timeout". Com 10.000, são 3 ou 4 pedidos.
+//
+// Avança pelo número de linhas que REALMENTE vieram (se o servidor tiver um teto menor por pedido, continua certo)
+// e só para quando um pedido volta vazio — nunca por supor que a página veio curta.
+const PASSOS = [10000, 5000, 2000, 500];
+/** quantas linhas o servidor entrega de fato por pedido — descoberto uma vez e reaproveitado */
+let tetoServidor = 0;
 async function todos<T = any>(tabela: string, colunas = "*", ordem?: string, desempate?: string): Promise<T[]> {
   const out: T[] = [];
-  const passo = 1000;
-  for (let de = 0; ; de += passo) {
+  let nivel = 0, de = 0;
+  for (;;) {
+    const passo = PASSOS[nivel];
     let q = sb.from(tabela).select(colunas).range(de, de + passo - 1);
     if (ordem) q = q.order(ordem, { ascending: true });
     if (desempate && desempate !== ordem) q = q.order(desempate, { ascending: true });
     const { data, error } = await q;
-    if (error) throw error;
-    out.push(...((data as T[]) || []));
-    if (!data || data.length < passo) break;
+    if (error) {
+      // banco sobrecarregado (estouro de tempo): tenta de novo com página menor em vez de deixar a tela vazia
+      const demorou = /timeout|57014|canceling statement/i.test(error.message || "");
+      if (demorou && nivel < PASSOS.length - 1) { nivel++; await new Promise(r => setTimeout(r, 400)); continue; }
+      throw error;
+    }
+    const n = (data as T[] | null)?.length || 0;
+    if (n) { out.push(...(data as T[])); de += n; }
+    if (n >= passo) { if (passo > tetoServidor) tetoServidor = passo; continue; }   // página cheia: tem mais
+    // página curta: acabou — a não ser que o servidor tenha um teto menor por pedido e ainda não saibamos qual
+    if (!n || (tetoServidor && n < tetoServidor)) break;
+    tetoServidor = n;   // primeira página curta sem teto conhecido: confere com mais um pedido
   }
   return out;
 }
