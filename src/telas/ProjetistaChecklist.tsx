@@ -470,7 +470,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
     ambientes: ambs.map(({ _k, ...a }) => ({ ...a, nome: a.nome.trim(), conferir: conferirAmb(a) })),
     ambientesConfirmados: confirmados, naoInclusos: naoInc, obs, ferragens, arquivos, listagem: meta, imagensProjeto: imgsProj.map(({ url, ...x }: any) => x), ...extra,
   });
-  async function salvar(acao: "salvar" | "iniciar" | "impressao" | "assinado" | "realizado" = "salvar", extra: any = {}, ok = "Checklist salvo") {
+  async function salvar(acao: "salvar" | "iniciar" | "impressao" | "assinado" | "realizado" | "reabrir" = "salvar", extra: any = {}, ok = "Checklist salvo") {
     setOcupado(acao);
     try { await A.ckProjetistaSalvar(c.id, dados(extra), acao); setMudou(false); if (ok) toast(ok); await recarregar(); return true; }
     catch (e: any) { toast(e.message || "Não foi possível salvar"); return false; }
@@ -524,7 +524,9 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
         <div className="acts">
           {tels[0] && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }} onClick={() => abrirWhats("https://wa.me/" + sanitizeWhats(tels[0]))}>💬 WhatsApp</button>}
           {reserva ? <span className="selo" style={{ background: "#faf1df", color: "#8a5d00" }}>⏳ Reserva · aguardando o cliente</span>
-            : e5 ? <span className="selo" style={{ background: "#e6f4e9", color: "#3f8f4f" }}>✅ Realizado · {fmtDateTime(t0.finalizadoEm)}</span>
+            : e5 ? <><span className="selo" style={{ background: "#e6f4e9", color: "#3f8f4f" }}>✅ Realizado · {fmtDateTime(t0.finalizadoEm)}</span>
+              <button className="btn sm" disabled={!!ocupado} title="Volta o checklist para ajustes (gerar contrato de novo, corrigir ambientes). O contrato assinado continua guardado."
+                onClick={async () => { if (!confirm(`Reabrir o checklist de ${c.cliente}?\n\nEle volta para ajustes (dá para gerar o contrato de novo). O contrato já assinado continua guardado no histórico.`)) return; if (await salvar("reabrir", {}, "Checklist reaberto")) { setAba("checklist"); setEtapa(3); } }}>↺ Reabrir checklist</button></>
             : t0.iniciadoEm ? <span className="selo">⏱ Checklist em andamento · desde {hm(new Date(new Date(t0.iniciadoEm).getTime() - new Date().getTimezoneOffset() * 6e4).toISOString())}</span>
             : <button className="btn primary sm" disabled={!!ocupado} onClick={async () => { if (await salvar("iniciar", {}, "Checklist iniciado")) { setAba("checklist"); setEtapa(1); } }}>▶ Iniciar checklist</button>}
           {!reserva && !e5 && <button className="btn sm" style={podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .55 }} title={podeRealizar ? "" : "Libera quando o cliente assinar o contrato"} disabled={!!ocupado} onClick={marcarRealizado}>✅ Marcar realizado</button>}
