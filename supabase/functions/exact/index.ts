@@ -2,6 +2,7 @@
 // · sync: lê o quadro do checklist e o calendário do Exact e aplica no 360 (rpc exact_aplicar)
 // · enderecos: completa o endereço das medidas (e do checklist da mesma venda) que estão sem endereço, pelo cartão de medição do Exact
 // · montagem: relatório de pagamento de montagem (o mesmo "Exportar em Massa" do Exact) → montagem_efet (tela Pagamento de Montagem)
+// · agendamentos: relatório de agendamentos de montagem (quem agendou, montador, datas) → montagem_agend (tela Agendamentos de Montagem)
 // · push: envia para o Exact o agendamento de um checklist do 360 (cria / altera / exclui eventos)
 // Chamada pelo banco (pg_net / pg_cron) com o cabeçalho x-exact-segredo. A chave do Exact fica no segredo EXACT_TOKEN.
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -86,6 +87,30 @@ function montagensDoCsv(txt: string) {
   return Array.from(m.values());
 }
 
+/** relatório de agendamentos (mesmo critério da importação na tela Agendamentos: chave = O.S. ¦ montador ¦ data de montagem ¦ agendadora;
+ *  a mesma O.S. em 2 linhas — Linha Pronta + Planejada — vira 1 agendamento) */
+function agendamentosDoCsv(txt: string) {
+  const ls = lerCsv(txt); if (!ls.length) return [];
+  const cab = ls[0].map(x => x.trim());
+  const ix = (...n: string[]) => cab.findIndex(c => n.some(k => c.toLowerCase() === k.toLowerCase()));
+  const iL = ix("Lider", "Líder"), iM = ix("Montador"), iO = ix("os", "O.S."), iS = ix("status"), iI = ix("Cliente indisponível para montagem"),
+        iInc = ix("Data Inclusao", "Data Inclusão"), iD = ix("Data Montagem"), iF = ix("Data Finalizacao", "Data Finalização"), iT = ix("Tipo"), iTot = ix("Total OS");
+  if (iL < 0 || iO < 0 || iD < 0) throw new Error("Relatório de agendamentos do Exact mudou de formato: " + cab.join(", "));
+  const m = new Map<string, any>();
+  for (const l of ls.slice(1)) {
+    const osFull = String(l[iO] || "").trim(), lider = String(l[iL] || "").trim(), mont = iM >= 0 ? String(l[iM] || "").trim() : "";
+    if (!osFull || !lider) continue;
+    const os = osFull.split("|")[0].trim(), dm = dataIso(l[iD]), chave = [os, mont, dm, lider].join("¦");
+    const tipo = iT >= 0 ? String(l[iT] || "").trim() : "", tot = iTot >= 0 ? numero(l[iTot]) : 0;
+    const bruto = Object.fromEntries(cab.map((c, k) => [c, l[k] ?? ""]));
+    const ex = m.get(chave);
+    if (ex) { ex.total = r2(ex.total + tot); if (tipo && !ex.tipos.includes(tipo)) ex.tipos = ex.tipos ? ex.tipos + " + " + tipo : tipo; ex.bruto.push(bruto); continue; }
+    m.set(chave, { chave, os, lider, montador: mont, status: iS >= 0 ? String(l[iS] || "").trim() : "", indisp: iI >= 0 && /^sim/i.test(String(l[iI] || "")),
+      inc: iInc >= 0 ? dataIso(l[iInc]) : "", mont: dm, fin: iF >= 0 ? dataIso(l[iF]) : "", tipos: tipo, total: tot, bruto: [bruto] });
+  }
+  return Array.from(m.values());
+}
+
 Deno.serve(async (req: Request) => {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   const { data: cfg } = await sb.from("exact_config").select("*").eq("id", 1).maybeSingle();
@@ -115,6 +140,23 @@ Deno.serve(async (req: Request) => {
       const soma = r2(lin.reduce((s: number, x: any) => s + x.total, 0));
       const res = { ok: true, de, ate, por, linhas: lin.length, soma, ...r };
       await sb.from("exact_log").insert({ tipo: "montagem", ok: true, detalhe: JSON.stringify({ ...res, quem: b.quem || "" }) });
+      return json(res);
+    }
+
+    // ---------- agendamentos de montagem (relatório de agendamentos do Exact, pela data de inclusão) → 360 ----------
+    if (b.acao === "agendamentos") {
+      const de = String(b.de || "").slice(0, 10), ate = String(b.ate || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(de) || !/^\d{4}-\d{2}-\d{2}$/.test(ate)) return json({ erro: "período inválido" }, 400);
+      const csv = await exact(token, "GET", `/tickets/schedule-report?start=${de}&end=${ate}`);
+      const lin = agendamentosDoCsv(typeof csv === "string" ? csv : String(csv ?? ""));
+      let r: any = { novos: 0, atualizados: 0, total: 0 };
+      for (let i = 0; i < lin.length; i += 300) {
+        const { data, error } = await sb.rpc("_montagem_agend_aplicar", { p: lin.slice(i, i + 300) });
+        if (error) throw new Error(error.message);
+        r = { novos: r.novos + data.novos, atualizados: r.atualizados + data.atualizados, total: data.total };
+      }
+      const res = { ok: true, de, ate, linhas: lin.length, agendadoras: new Set(lin.map((x: any) => x.lider)).size, ...r };
+      await sb.from("exact_log").insert({ tipo: "agendamentos", ok: true, detalhe: JSON.stringify({ ...res, quem: b.quem || "" }) });
       return json(res);
     }
 
