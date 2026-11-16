@@ -1,0 +1,6 @@
+-- 0198: o que muda na medida DENTRO do 360 vai para o Exact
+-- O gatilho agora dispara em qualquer mudança de etapa feita no 360 (direcionar, medir, aprovar, obra,
+-- cancelar) e chama a função exact-fotos, que sobe as fotos novas e move o cartão no quadro de Medição.
+-- Guarda contra ida e volta: mudança vinda do sincronismo (alianca.medsync = 1) não é devolvida ao Exact.
+-- Também mantém a marcação do checklist quando a medida é aprovada por qualquer caminho.
+-- (corpo idêntico ao aplicado no banco)
