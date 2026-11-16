@@ -9,6 +9,7 @@ import { A } from "../lib/acoes";
 import { lerXlsx } from "../lib/planilha";
 import { linhaMedida } from "../lib/medidasPlanilha";
 import { Modal } from "../comp/Modal";
+import { tipoMedida, SeloTipo } from "../movel/Medidas";
 import { ETAPA_MEDIDA, fmtDateTime, grupoMedida, itensVenda } from "../lib/regras";
 import { tipoPlanilha } from "../lib/cruzarVendas";
 
@@ -217,7 +218,7 @@ const ABAS_MD: Record<string, [string, string]> = {
   minhas: ["Medidas para fazer", "Solicitações de MEDIDA — não é visita de venda: paga R$ 40 por cliente, sem comissão. Depois de medir, anexe as fotos/planta e finalize."],
 };
 function ListaMedidas({ aba }: { aba: string }) {
-  const { R, st, abrirDetalhe, executar: ex } = useApp() as any;
+  const { R, st, abrirDetalhe, executar: ex, recarregar, toast } = useApp() as any;
   // aprovar direto da lista (quando a análise foi feita em outro sistema)
   const aprovar = (c: any) => { if (!confirm("Aprovar a medida de " + c.cliente + " (venda " + (c.pedido || "—") + ") como medida oficial?")) return; ex(() => A.medidaLiberar(c.id, "Aprovada pela lista"), "Medida aprovada — medida oficial"); };
   const [q, setQ] = useState("");
@@ -287,6 +288,10 @@ function ListaMedidas({ aba }: { aba: string }) {
                 {/* dois tipos de medida, bem separados: do CONSULTOR (antes da venda) e do MEDIDOR (pedida depois da venda — mesmo que quem foi seja um consultor) */}
                 {(() => { const o = origemMedida(R, c); return o.txt ? <> <span className={"md-tipo " + o.cls}>{o.txt}</span> {o.quem}</> : o.quem ? <> · {o.quem}</> : null; })()}
                 {(() => { const w = ondeMedida(R, st, c); return w.k ? <span className={"md-onde " + w.k}>{w.txt}</span> : null; })()}
+                {c.medidorId && (() => { const tp = tipoMedida(c, st), auto = !m.tipoVisita; return <span style={{ marginLeft: 6 }} onClick={e => e.stopPropagation()}>
+                  <SeloTipo tipo={tp} />{R.ehSupMedidas() || R.ehGestao() ? <select value={m.tipoVisita || ""} title="Como aparece para o consultor/medidor (define se é comissão ou medida)" style={{ marginLeft: 4, padding: "0 4px", fontSize: 11.5, width: "auto" }}
+                    onChange={async e => { try { await A.medidaTipoVisita(c.id, e.target.value as any); await recarregar(); toast("Tipo da medida atualizado"); } catch (x: any) { toast(x.message); } }}>
+                    <option value="">{auto ? "automático" : "voltar ao automático"}</option><option value="confirmacao">🔵 Confirmação</option><option value="pos">🟣 Pós-venda</option></select> : null}</span>; })()}
                 {c.dataMedida && ["agendada"].includes(R.etapaMedida(c)) ? <> · {fmtDateTime(c.dataMedida)}</> : null}
                 {m.origem === "minha_visita" && <span className="pill" style={{ marginLeft: 6 }}>Minha Visita · sem pagamento</span>}
                 {m.etapa === "em_obra" && m.previsaoObra && <span className="pill" style={{ marginLeft: 6 }}>previsão {String(m.previsaoObra).split("-").reverse().join("/")}</span>}
