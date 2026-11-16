@@ -198,6 +198,7 @@ export default function ProjetistaChecklist() {
   const [dia, setDia] = useState(hj);
   const [sel, setSel] = useState<string | null>(null);
   const sujo = useRef(false);
+  const ultimoAberto = useRef<any>(null);   // último cliente aberto, para a ficha não sumir se a lista recarregar
   const segura = Number(st?.config?.checklistAgenda?.seguraDias ?? 2);
 
   useEffect(() => {
@@ -239,14 +240,19 @@ export default function ProjetistaChecklist() {
   const [q, setQ] = useState("");
   const [verAgenda, setVerAgenda] = useState(false);
   const abrir = (id: string) => { sujo.current = false; setSel(id); window.scrollTo({ top: 0 }); };
-  const voltar = () => { if (sujo.current && !confirm("Há alterações no checklist que não foram salvas. Voltar para a lista mesmo assim?")) return; sujo.current = false; setSel(null); carregar(); };
+  const voltar = () => { if (sujo.current && !confirm("Há alterações no checklist que não foram salvas. Voltar para a lista mesmo assim?")) return; sujo.current = false; ultimoAberto.current = null; setSel(null); carregar(); };
 
   if (erro && !eu) return <section className="view active"><div className="empty">{erro}</div></section>;
   if (!eu) return <section className="view active"><div className="empty">Carregando…</div></section>;
   if (!eu.projetista && !eu.podeTodos) return <section className="view active"><div className="view-head"><div><h2>Área do projetista</h2></div></div>
     <div className="card" style={{ padding: 18 }}>Seu usuário tem o acesso de projetista do checklist, mas o nome dele não bate com nenhum projetista da agenda do checklist. Peça para a Gestão conferir o nome no cadastro (tem que ser igual ao da lista de projetistas da agenda).</div></section>;
 
-  const atual = sel ? (lista || []).find(c => c.id === sel) : null;
+  // o cliente aberto NÃO some do meio do trabalho: se a lista recarregar (ou o filtro de projetista mudar) e
+  // ele não vier, a ficha continua na tela com o que já estava carregado, avisando o motivo.
+  const achado = sel ? (lista || []).find(c => c.id === sel) : null;
+  if (achado) ultimoAberto.current = achado;
+  const atual = achado || (sel ? ultimoAberto.current : null);
+  const foraDoFiltro = !!(sel && !achado && lista);
   // ---------- cliente aberto: ficha em tela cheia ----------
   if (atual) return (
     <section className="view active pj" id="view-projetista-ck">
@@ -255,6 +261,7 @@ export default function ProjetistaChecklist() {
         <button className="btn sm" onClick={voltar}>← Voltar para a lista</button>
         <span className="sub">{eu.podeTodos ? "Projetista: " + proj : "Minha agenda de checklist"}</span>
       </div>
+      {foraDoFiltro && <div className="alert" style={{ marginBottom: 10 }}>⚠️ Este cliente não aparece no filtro atual{eu.podeTodos && proj !== "*" ? " (projetista " + proj + ")" : ""} — o checklist dele continua aberto aqui e pode ser preenchido normalmente.{eu.podeTodos && proj !== "*" && <> <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => { try { localStorage.setItem("a360-ck-proj", "*"); } catch { /* */ } setProj("*"); }}>Ver todos os projetistas</button></>}</div>}
       <Ficha key={atual.id} c={atual} proj={proj} recarregar={carregar} setSujo={(v: boolean) => (sujo.current = v)} toast={toast} />
     </section>
   );
