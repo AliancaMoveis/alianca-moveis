@@ -72,6 +72,8 @@ export const A = {
   medidaPendente: (id: string, obs: string) => rpc("medida_pendente", { p_id: id, p_obs: obs || "" }),
   medidasImportar: (linhas: any[], aplicar: boolean) => rpc<any>("medidas_importar", { p: linhas, p_aplicar: aplicar }),
   medidaLiberar: (id: string, obs: string) => rpc<string>("medida_liberar", { p_id: id, p_obs: obs || "" }),
+  /** cobra a medida: apita no celular de quem vai medir (Supervisão de Medidas / Gestão) */
+  medidaCobrar: (id: string, obs: string) => rpc<{ quem: string; vezes: number }>("medida_cobrar", { p_id: id, p_obs: obs || "" }),
   medidaAprovarVisita360: (id: string, visita: string, obs = "") => rpc<string>("medida_aprovar_visita360", { p_id: id, p_visita: visita, p_obs: obs }),
   solicitarReembolso: async (uid: string, tipo: string, valor: number, data: string, descricao: string, foto: Blob, chamado?: string) => {
     const pdf = foto.type === "application/pdf";

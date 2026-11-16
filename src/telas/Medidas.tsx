@@ -224,6 +224,10 @@ function ListaMedidas({ aba }: { aba: string }) {
   const [q, setQ] = useState("");
   // filtros da Supervisão: quem mede, data da medição e data do checklist
   const [fQuem, setFQuem] = useState(""); const [dDe, setDDe] = useState(""); const [dAte, setDAte] = useState(""); const [cDe, setCDe] = useState(""); const [cAte, setCAte] = useState("");
+  // medida antes da venda (Pendentes / Medidas do 360), tipo e atraso (Aguardando medição), e as repetidas do 360
+  const [antes, setAntes] = useState<"" | "comfoto" | "semfoto" | "sem">("");
+  const [fSit, setFSit] = useState<"" | "confirmacao" | "pos" | "atrasadas" | "semlimite">("");
+  const [verRepetidas, setVerRepetidas] = useState(false);
   const [t, d] = ABAS_MD[aba] || ABAS_MD.pendentes;
   const eu = R.currentUserId;
   const ckPorVenda: Record<string, any> = {};
@@ -232,9 +236,21 @@ function ListaMedidas({ aba }: { aba: string }) {
   lista = aba === "minhas" ? lista.filter((c: any) => c.medidorId === eu && ["agendada"].includes(R.etapaMedida(c)))
     : aba === "minhasfeitas" ? lista.filter((c: any) => c.medidorId === eu && ["realizada", "validar", "liberada"].includes(R.etapaMedida(c)))
     : lista.filter((c: any) => grupoMedida(R.etapaMedida(c)) === aba);
-  const [onde, setOnde] = useState<"" | "no360" | "visita" | "fora">("");
+  const [onde, setOnde] = useState<"" | "no360" | "visita" | "exact" | "fora">("");
   const contaOnde = aba === "aprovados" ? lista.reduce((acc: any, c: any) => { const k = ondeMedida(R, st, c).k; acc[k] = (acc[k] || 0) + 1; return acc; }, {}) : {};
   if (aba === "aprovados" && onde) lista = lista.filter((c: any) => ondeMedida(R, st, c).k === onde);
+  // "Medidas do 360 para validar": a venda que já tem medida oficial aprovada não precisa ser validada de novo
+  const temAntes = aba === "pendentes" || aba === "no360";
+  const repetidas = aba === "no360" ? lista.filter((c: any) => jaAprovadaNaVenda(R, st, c)).length : 0;
+  if (aba === "no360" && !verRepetidas) lista = lista.filter((c: any) => !jaAprovadaNaVenda(R, st, c));
+  // filtro "medida antes da venda": quem o consultor já visitou antes de vender (com foto dá para aprovar na hora)
+  const classeAntes = (c: any) => { const a = antesDaVenda(R, st, c); return a.fotos > 0 ? "comfoto" : a.visitado ? "semfoto" : "sem"; };
+  const contaAntes = temAntes ? lista.reduce((acc: any, c: any) => { const k = classeAntes(c); acc[k] = (acc[k] || 0) + 1; return acc; }, {}) : {};
+  if (temAntes && antes) lista = lista.filter((c: any) => classeAntes(c) === antes);
+  // filtro da aba "Aguardando medição": tipo da medida e atraso
+  const classeSit = (c: any) => { const pz = prazoMedida(st, c); return !pz ? "semlimite" : hojeISO() > pz.limite ? "atrasadas" : ""; };
+  const contaSit = aba === "agendadas" ? lista.reduce((acc: any, c: any) => { const t2 = c.medidorId ? tipoMedida(c, st) : ""; if (t2) acc[t2] = (acc[t2] || 0) + 1; const s = classeSit(c); if (s) acc[s] = (acc[s] || 0) + 1; return acc; }, {}) : {};
+  if (aba === "agendadas" && fSit) lista = lista.filter((c: any) => fSit === "confirmacao" || fSit === "pos" ? (c.medidorId ? tipoMedida(c, st) === fSit : false) : classeSit(c) === fSit);
   const busca = tira(q), dig = so(q);
   if (q) lista = lista.filter((c: any) => tira(c.cliente + " " + R.nomeUser(c.medidorId || "")).includes(busca) || (dig.length >= 3 && (String(c.pedido).includes(dig) || so(c.telefone).includes(dig))));
   const [ckMeu, setCkMeu] = useState<Record<string, string>>({});
@@ -254,7 +270,7 @@ function ListaMedidas({ aba }: { aba: string }) {
   if (fQuem) lista = lista.filter((c: any) => quemMede(c) === fQuem);
   if (dDe || dAte) lista = lista.filter((c: any) => { const x = dataMed(c); return !!x && (!dDe || x >= dDe) && (!dAte || x <= dAte); });
   if (cDe || cAte) lista = lista.filter((c: any) => { const x = diaCk(c).slice(0, 10); return !!x && (!cDe || x >= cDe) && (!cAte || x <= cAte); });
-  const temFiltro = !!(fQuem || dDe || dAte || cDe || cAte);
+  const temFiltro = !!(fQuem || dDe || dAte || cDe || cAte || antes || fSit);
   // a medir: o checklist mais próximo (limite = 5 dias antes) vem primeiro; depois a data marcada da medição
   // sem checklist marcado: a venda mais antiga primeiro
   const ckOuExact = (c: any) => diaCk(c) || String(c.tratativa?.medida?.dataChecklistExact || "").slice(0, 16);
@@ -262,12 +278,62 @@ function ListaMedidas({ aba }: { aba: string }) {
     return pz ? "0" + pz.limite + String(c.dataMedida || "9") : ckOuExact(c) ? "0" + ckOuExact(c) + String(c.dataMedida || "9") : "1" + String(c.dataVenda || "9") + String(c.criadoEm || ""); };
   lista = lista.slice().sort((a: any, b: any) => ord(a).localeCompare(ord(b)));
   const em3 = (iso: string) => { if (!iso) return false; const lim = new Date(); lim.setDate(lim.getDate() + 3); return iso.slice(0, 10) <= lim.toISOString().slice(0, 10); };
+  // cobrar a medida: apita no celular de quem vai medir
+  const cobrar = (c: any) => {
+    const mm = (c.tratativa && c.tratativa.medida) || {};
+    const quem = R.nomeUser(c.medidorId);
+    const ja = mm.cobradaEm ? "\n\nJá foi cobrada em " + fmtDateTime(mm.cobradaEm) + (mm.cobradaPor ? " por " + mm.cobradaPor : "") + "." : "";
+    const obs = prompt("Cobrar a medida de " + c.cliente + " com " + quem + "?" + ja + "\n\nRecado (opcional) — vai junto no aviso do celular:", "");
+    if (obs === null) return;
+    ex(() => A.medidaCobrar(c.id, obs.trim()), "⏰ Cobrança enviada para o celular de " + quem);
+  };
+  // colunas da lista: o cabeçalho e as linhas saem desta mesma lista, para nunca desalinhar
+  const souEu = aba === "minhas" || aba === "minhasfeitas";
+  const podeSup = R.ehSupMedidas();
+  const rotData = aba === "agendadas" ? "Data da medição" : aba === "aprovados" ? "Aprovada em" : aba === "analise" || aba === "minhasfeitas" ? "Mediu em" : "Entrada";
+  const cols: { k: string; t: string; w: string; dir?: boolean; cel: (c: any) => any }[] = [
+    { k: "cli", t: "Cliente", w: "minmax(200px,1.5fr)", cel: (c: any) => <>
+      <div className="md-cli">{c.cliente} <Selo360 c={c} /></div>
+      <span className="md-end" title={c.endereco || ""}>{c.endereco ? "📍 " + c.endereco : "sem endereço"}</span></> },
+    { k: "venda", t: "Venda", w: "88px", cel: (c: any) => c.pedido || <span className="md-vazio">—</span> },
+    { k: "tipo", t: "Tipo da medida", w: "minmax(145px,1fr)", cel: (c: any) => { const o = origemMedida(R, c); const m = (c.tratativa && c.tratativa.medida) || {};
+      return <>
+        {o.txt ? <span className={"md-tipo " + o.cls}>{o.txt}</span> : <span className="md-vazio">—</span>}
+        {c.medidorId && <span onClick={e => e.stopPropagation()} style={{ display: "inline-flex", gap: 4, alignItems: "center", marginTop: 3, flexWrap: "wrap" }}>
+          <SeloTipo tipo={tipoMedida(c, st)} />
+          {(podeSup || R.ehGestao()) && <select value={m.tipoVisita || ""} title="Como aparece para o consultor/medidor (define se é comissão ou medida)" style={{ padding: "0 2px", fontSize: 11, width: "auto" }}
+            onChange={async e => { try { await A.medidaTipoVisita(c.id, e.target.value as any); await recarregar(); toast("Tipo da medida atualizado"); } catch (x: any) { toast(x.message); } }}>
+            <option value="">{!m.tipoVisita ? "automático" : "voltar ao automático"}</option><option value="confirmacao">🔵 Confirmação</option><option value="pos">🟣 Pós-venda</option></select>}</span>}
+        {m.origem === "minha_visita" && <span className="md-end">Minha Visita · sem pagamento</span>}</>; } },
+    ...(souEu ? [] : [{ k: "quem", t: "Quem mede", w: "minmax(105px,.8fr)", cel: (c: any) => { const n = quemMede(c); return n === "Sem medidor" ? <span className="md-vazio">sem medidor</span> : n; } }]),
+    { k: "data", t: rotData, w: "105px", cel: (c: any) => { if (R.etapaMedida(c) === "agendada" && c.dataMedida) return fmtDateTime(c.dataMedida);
+      const x = dataMed(c); return x ? fmtDate(x) : <span className="md-vazio">—</span>; } },
+    { k: "prazo", t: "Prazo / checklist", w: "minmax(150px,1.1fr)", cel: (c: any) => { const e = R.etapaMedida(c); const dck = diaCk(c); const al = aba !== "aprovados" && dck && em3(dck);
+      const m = (c.tratativa && c.tratativa.medida) || {};
+      return <>
+        {["agendada", "pendente"].includes(e) && (() => { const pz = prazoMedida(st, c); const atras = pz && hojeISO() > pz.limite;
+          return <span onClick={ev => ev.stopPropagation()} style={{ display: "inline-flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="pill" title={pz ? "Data limite: " + rotPrazo(pz) : "Sem data limite — vai pela data da venda"} style={{ fontWeight: 700, background: !pz ? undefined : atras ? "var(--danger)" : "#7c3aed", color: pz ? "#fff" : undefined }}>
+              {pz ? (atras ? "⚠️ " : "📅 ") + "até " + fmtDate(pz.limite).slice(0, 5) + (pz.fonte === "360" ? " ✍️" : pz.fonte === "exact" ? " (Exact)" : " (ck)") : "sem limite"}</span>
+            {podeSup && <DataLimite c={c} compacto />}</span>; })()}
+        {dck ? <span className="md-end" style={al ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{(al ? "⚠️ " : "") + "checklist " + fmtDateTime(dck)}</span> : null}
+        {e === "em_obra" && m.previsaoObra ? <span className="md-end">previsão {String(m.previsaoObra).split("-").reverse().join("/")}</span> : null}</>; } },
+    ...(souEu ? [] : [{ k: "onde", t: "Medidas", w: "minmax(130px,1fr)", cel: (c: any) => { const w = ondeMedida(R, st, c); return w.k ? <span className={"md-onde " + w.k}>{w.txt}</span> : <span className="md-vazio">—</span>; } }]),
+    { k: "sit", t: "Situação", w: "minmax(150px,auto)", dir: true, cel: (c: any) => <>
+      <span className="pill">{ETAPA_MEDIDA[R.etapaMedida(c)] || ""}</span>
+      {aba === "minhas" && <span className="pill" style={{ background: "var(--st-concluida)", color: "#fff" }}>R$ 40</span>}
+      {(aba === "analise" || aba === "no360") && podeSup && <button className="btn primary sm" onClick={e => { e.stopPropagation(); aprovar(c); }}>✅ Aprovar</button>}
+      {(aba === "pendentes" || aba === "agendadas") && podeSup && c.medidorId &&
+        <button className="btn sm" title="Avisa no celular de quem vai medir que a medida está atrasada" onClick={e => { e.stopPropagation(); cobrar(c); }}>⏰ Cobrar</button>}</> },
+  ];
+  const gt = cols.map(x => x.w).join(" ");
+
   return (
     <section className="view active">
       <div className="view-head"><div><h2>📐 {t}</h2><p>{d}</p></div></div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
         <span className="pill">{lista.length} cliente(s)</span>
-        {aba === "aprovados" && <div className="chips" style={{ margin: 0 }}>{([["", "Todas"], ["no360", "📎 Medidas no 360"], ["visita", "📷 Fotos da visita do consultor"], ["fora", "🗂 No outro sistema"]] as [any, string][]).map(([k, l]) =>
+        {aba === "aprovados" && <div className="chips" style={{ margin: 0 }}>{([["", "Todas"], ["no360", "📎 Medidas no 360"], ["visita", "📷 Visita do consultor"], ["exact", "📷 Fotos no Exact"], ["fora", "🗂 Sem foto em lugar nenhum"]] as [any, string][]).map(([k, l]) =>
           <button key={k} className={"chip" + (onde === k ? " on" : "")} onClick={() => setOnde(k)}>{l}{k ? " (" + (contaOnde[k] || 0) + ")" : ""}</button>)}</div>}
         {aba !== "minhas" && aba !== "minhasfeitas" && R.ehSupMedidas() && <ImportarExact />}
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, venda, telefone ou quem mede" style={{ marginLeft: "auto", maxWidth: 320 }} />
@@ -278,39 +344,40 @@ function ListaMedidas({ aba }: { aba: string }) {
         <div className="field" style={{ margin: 0 }}><label>até</label><input type="date" value={dAte} onChange={e => setDAte(e.target.value)} /></div>
         <div className="field" style={{ margin: 0 }}><label>Data do checklist — de</label><input type="date" value={cDe} onChange={e => setCDe(e.target.value)} /></div>
         <div className="field" style={{ margin: 0 }}><label>até</label><input type="date" value={cAte} onChange={e => setCAte(e.target.value)} /></div>
-        {temFiltro && <button className="btn sm" onClick={() => { setFQuem(""); setDDe(""); setDAte(""); setCDe(""); setCAte(""); }}>Limpar filtros</button>}
+        {temFiltro && <button className="btn sm" onClick={() => { setFQuem(""); setDDe(""); setDAte(""); setCDe(""); setCAte(""); setAntes(""); setFSit(""); }}>Limpar filtros</button>}
+      </div>}
+      {temAntes && <div className="md-chips">
+        <span className="lbl">Medida antes da venda:</span>
+        {([["", "Todas", (contaAntes.comfoto || 0) + (contaAntes.semfoto || 0) + (contaAntes.sem || 0)],
+           ["comfoto", "📷 Visitado antes da venda · com foto", contaAntes.comfoto || 0],
+           ["semfoto", "🔎 Visitado, sem foto", contaAntes.semfoto || 0],
+           ["sem", "— Sem visita antes da venda", contaAntes.sem || 0]] as [any, string, number][]).map(([k, l, n]) =>
+          <button key={k} className={"chip" + (antes === k ? " on" : "")} onClick={() => setAntes(k)}>{l} ({n})</button>)}
+        <span className="hint">quem tem foto da visita dá para aprovar sem mandar medir de novo</span>
+      </div>}
+      {aba === "agendadas" && <div className="md-chips">
+        <span className="lbl">Situação:</span>
+        {([["", "Todas", lista.length], ["atrasadas", "⚠️ Passou do limite", contaSit.atrasadas || 0], ["semlimite", "📅 Sem data limite", contaSit.semlimite || 0],
+           ["confirmacao", "🔵 Confirmação", contaSit.confirmacao || 0], ["pos", "🟣 Pós-venda", contaSit.pos || 0]] as [any, string, number][]).map(([k, l, n]) =>
+          <button key={k} className={"chip" + (fSit === k ? " on" : "")} onClick={() => setFSit(k)}>{l}{k ? " (" + n + ")" : ""}</button>)}
+      </div>}
+      {aba === "no360" && repetidas > 0 && <div className="md-chips">
+        <span className="hint">{repetidas} desta fila já {repetidas === 1 ? "tem" : "têm"} medida oficial aprovada na mesma venda{verRepetidas ? "" : " — escondidas"}.</span>
+        <button className="chip" onClick={() => setVerRepetidas(!verRepetidas)}>{verRepetidas ? "Esconder as já aprovadas" : "Mostrar as já aprovadas"}</button>
       </div>}
       {!lista.length ? <div className="card" style={{ padding: 20, textAlign: "center", color: "var(--ink-faint)" }}>Nenhum cliente aqui.</div> :
-        <div className="card" style={{ padding: 0 }}>{lista.map((c: any) => {
-          const m = (c.tratativa && c.tratativa.medida) || {}, dck = diaCk(c), alerta = aba !== "aprovados" && dck && em3(dck);
-          // aguardando análise: linha em roxo claro quando tem foto (da medida ou da visita do consultor no 360)
-          const temFoto = (aba === "analise" || aba === "no360") && ((c.anexos || []).some((x: any) => x.tipo === "img") || achar360(R, st, c).some((v: any) => (v.anexos || []).some((x: any) => x.tipo === "img")));
-          return (
-            <div key={c.id} className={"acao" + (temFoto ? " md-comfoto" : "")} title={temFoto ? "Tem foto" : undefined} style={{ borderLeftColor: alerta ? "var(--critico)" : temFoto ? "#7a3fb0" : "var(--line)", margin: 0, borderRadius: 0, borderBottom: "1px solid var(--line-soft)" }} onClick={() => abrirDetalhe(c.id)}>
-              <span><b>{c.cliente}</b> · venda {c.pedido || "—"} <Selo360 c={c} />
-                {/* dois tipos de medida, bem separados: do CONSULTOR (antes da venda) e do MEDIDOR (pedida depois da venda — mesmo que quem foi seja um consultor) */}
-                {(() => { const o = origemMedida(R, c); return o.txt ? <> <span className={"md-tipo " + o.cls}>{o.txt}</span> {o.quem}</> : o.quem ? <> · {o.quem}</> : null; })()}
-                {(() => { const w = ondeMedida(R, st, c); return w.k ? <span className={"md-onde " + w.k}>{w.txt}</span> : null; })()}
-                {c.medidorId && (() => { const tp = tipoMedida(c, st), auto = !m.tipoVisita; return <span style={{ marginLeft: 6 }} onClick={e => e.stopPropagation()}>
-                  <SeloTipo tipo={tp} />{R.ehSupMedidas() || R.ehGestao() ? <select value={m.tipoVisita || ""} title="Como aparece para o consultor/medidor (define se é comissão ou medida)" style={{ marginLeft: 4, padding: "0 4px", fontSize: 11.5, width: "auto" }}
-                    onChange={async e => { try { await A.medidaTipoVisita(c.id, e.target.value as any); await recarregar(); toast("Tipo da medida atualizado"); } catch (x: any) { toast(x.message); } }}>
-                    <option value="">{auto ? "automático" : "voltar ao automático"}</option><option value="confirmacao">🔵 Confirmação</option><option value="pos">🟣 Pós-venda</option></select> : null}</span>; })()}
-                {c.dataMedida && ["agendada"].includes(R.etapaMedida(c)) ? <> · {fmtDateTime(c.dataMedida)}</> : null}
-                {["agendada", "pendente"].includes(R.etapaMedida(c)) && (() => { const pz = prazoMedida(st, c); const atras = pz && hojeISO() > pz.limite;
-                  return <span style={{ marginLeft: 6, display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
-                    <span className="pill" title={pz ? "Data limite: " + rotPrazo(pz) : "Sem data limite — vai pela data da venda"} style={{ fontWeight: 700, background: !pz ? undefined : atras ? "var(--danger)" : "#7c3aed", color: pz ? "#fff" : undefined }}>
-                      {pz ? (atras ? "⚠️ " : "📅 ") + "medir até " + fmtDate(pz.limite).slice(0, 5) + (pz.fonte === "360" ? " ✍️" : pz.fonte === "exact" ? " (Exact)" : " (checklist)") : "📅 sem data limite"}</span>
-                    {R.ehSupMedidas() && <DataLimite c={c} compacto />}
-                    <span className="pill" style={{ fontWeight: 600 }}>📍 {c.endereco || "sem endereço"}</span></span>; })()}
-                {m.origem === "minha_visita" && <span className="pill" style={{ marginLeft: 6 }}>Minha Visita · sem pagamento</span>}
-                {m.etapa === "em_obra" && m.previsaoObra && <span className="pill" style={{ marginLeft: 6 }}>previsão {String(m.previsaoObra).split("-").reverse().join("/")}</span>}
-                {(aba === "minhas" || aba === "minhasfeitas") && <span className="pill" style={{ marginLeft: 6 }}>{ETAPA_MEDIDA[R.etapaMedida(c)] || ""}</span>}
-                {aba === "minhas" && <span className="pill" style={{ marginLeft: 6, background: "var(--st-concluida)", color: "#fff" }}>MEDIDA · R$ 40 · sem comissão</span>}
-                {c.endereco ? <span className="hint"> · {c.endereco}</span> : null}</span>
-              <span className="g" style={alerta ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{dck ? (alerta ? "⚠️ " : "") + "checklist " + fmtDateTime(dck) : ""}
-                {(aba === "analise" || aba === "no360") && R.ehSupMedidas() && <button className="btn primary sm" style={{ marginLeft: 8 }} onClick={e => { e.stopPropagation(); aprovar(c); }}>✅ Aprovar</button>}</span>
-            </div>);
-        })}</div>}
+        <div className="card md-tab" style={{ padding: 0 }}>
+          <div className="md-h" style={{ gridTemplateColumns: gt }}>{cols.map(k => <div key={k.k} className={"md-cel" + (k.dir ? " dir" : "")}>{k.t}</div>)}</div>
+          {lista.map((c: any) => {
+            const dck = diaCk(c), alerta = aba !== "aprovados" && dck && em3(dck);
+            // tem foto para conferir: da própria medida ou da visita do consultor antes da venda
+            const temFoto = (aba === "analise" || aba === "no360") && ((c.anexos || []).some((x: any) => x.tipo === "img") || antesDaVenda(R, st, c).fotos > 0);
+            return <div key={c.id} className={"md-r" + (alerta ? " alerta" : "") + (temFoto ? " comfoto" : "")} style={{ gridTemplateColumns: gt }}
+              title={temFoto ? "Tem foto para conferir" : undefined} onClick={() => abrirDetalhe(c.id)}>
+              {cols.map(k => <div key={k.k} className={"md-cel" + (k.dir ? " dir" : "")}><i className="md-lb">{k.t}</i>{k.cel(c)}</div>)}
+            </div>;
+          })}
+        </div>}
     </section>
   );
 }
@@ -454,14 +521,20 @@ function Tratar({ m }: { m: any }) {
 }
 
 function Resultados() {
-  const { st } = useApp() as any;
-  const [f, setF] = useState<"todos" | "ok" | "sem">("todos"); const [q, setQ] = useState(""); const [fc, setFc] = useState<Conf>("nao");
+  const { R, st } = useApp() as any;
+  // abre no que BATEU (é o que importa). O "sem par" fica guardado, mas escondido — e o que tem visita no 360 vira uma fila à parte:
+  // "sem par" só quer dizer que o comprador não estava na planilha do Minha Visita que foi subida, não que ele nunca foi visitado.
+  const [f, setF] = useState<"todos" | "ok" | "sem" | "recup">("ok"); const [q, setQ] = useState(""); const [fc, setFc] = useState<Conf>("nao");
   const todos: any[] = useMemo(() => Object.values(st.medidasCruz || {}).sort((a: any, b: any) => String(b.cruzadoEm).localeCompare(String(a.cruzadoEm))), [st.medidasCruz]);
   const ck = new Set(st.chamados.filter((c: any) => c.tipo === "checklist").map((c: any) => c.pedido));
   const busca = tira(q), dig = so(q);
   const nConf = todos.filter(conferido).length;
   const daSit = todos.filter(m => fc === "todos" || (fc === "sim") === conferido(m));
-  const lista = daSit.filter(m => (f === "todos" || m.resultado === f)
+  // "sem par" que na verdade TEM visita do consultor registrada no 360 (a planilha subida não cobria esse cliente)
+  const visita360De = (m: any) => achar360(R, st, { id: "", telefone: m.telefone, cliente: m.comprador });
+  const recuperavel = (m: any) => m.resultado === "sem" && visita360De(m).some((v: any) => (v.anexos || []).some((x: any) => x.tipo === "img"));
+  const nRecup = daSit.filter(recuperavel).length;
+  const lista = daSit.filter(m => (f === "todos" || (f === "recup" ? recuperavel(m) : m.resultado === f))
     && (!q || tira(m.comprador + m.visitado + m.consultor).includes(busca) || (dig.length >= 3 && (m.venda.includes(dig) || so(m.telefone).includes(dig)))));
   return (
     <section className="view active">
@@ -470,12 +543,13 @@ function Resultados() {
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "10px 0" }}>
         <ChipsConf v={fc} set={setFc} nNao={todos.length - nConf} nSim={nConf} />
         <div className="chips">
-          {([["todos", "Todos", daSit.length], ["ok", "✅ Medidas oficiais ok", daSit.filter(m => m.resultado === "ok").length], ["sem", "⚠️ Sem medidas", daSit.filter(m => m.resultado === "sem").length]] as [any, string, number][])
+          {([["ok", "✅ Medidas oficiais ok", daSit.filter(m => m.resultado === "ok").length], ["recup", "📷 Sem par, mas visitado no 360", nRecup], ["sem", "⚠️ Sem medidas", daSit.filter(m => m.resultado === "sem").length], ["todos", "Todos", daSit.length]] as [any, string, number][])
             .map(([k, l, n]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{n}</span></button>)}
         </div>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar nome, venda, telefone ou consultor" style={{ marginLeft: "auto", maxWidth: 320 }} />
       </div>
-      <div className="hint" style={{ marginBottom: 6 }}>{todos.filter(m => ck.has(m.venda)).length} dessas vendas estão no Checklist.</div>
+      <div className="hint" style={{ marginBottom: 6 }}>{todos.filter(m => ck.has(m.venda)).length} dessas vendas estão no Checklist.
+        {f === "sem" && <> · <b>Atenção:</b> “sem medidas” aqui só quer dizer que o comprador não estava na planilha do Minha Visita que foi subida — não que ele nunca foi visitado. Veja a fila <b>“sem par, mas visitado no 360”</b>.</>}</div>
       <Tabela linhas={lista.map(m => ({ ...m, salvo: m }))} />
     </section>
   );
@@ -483,7 +557,7 @@ function Resultados() {
 
 /** situação da medida de uma venda (para o checklist): medida oficial aprovada, em análise, agendada, pendente ou em obra */
 /** onde estão as medidas: anexadas no 360, nas fotos da visita do consultor, ou (aprovada sem anexo) no outro sistema */
-export function ondeMedida(R: any, st: any, c: any): { k: "no360" | "visita" | "fora" | ""; txt: string; n: number } {
+export function ondeMedida(R: any, st: any, c: any): { k: "no360" | "visita" | "exact" | "fora" | ""; txt: string; n: number } {
   if (!c) return { k: "", txt: "", n: 0 };
   const n = (c.anexos || []).length;
   if (n) return { k: "no360", txt: "📎 Medidas no 360 (" + n + " anexo" + (n > 1 ? "s" : "") + ")", n };
@@ -491,8 +565,20 @@ export function ondeMedida(R: any, st: any, c: any): { k: "no360" | "visita" | "
   const vis = [m.visita360 && st.chamados.find((x: any) => x.id === m.visita360), ...achar360(R, st, c)].filter(Boolean);
   const nv = vis.reduce((s: number, v: any) => s + (v.anexos || []).length, 0);
   if (nv) return { k: "visita", txt: "📷 Fotos da visita do consultor (" + nv + ")", n: nv };
-  if (R.etapaMedida(c) === "liberada") return { k: "fora", txt: "🗂 Medidas no outro sistema (sem anexo no 360)", n: 0 };
+  // com a integração do Exact, a medição de lá traz as fotos: o sincronismo marca exactAnexos e as fotos
+  // aparecem ao abrir a medida (não são copiadas para o 360 — vêm do Exact na hora)
+  if (m.exactAnexos) return { k: "exact", txt: "📷 Fotos no Exact", n: 0 };
+  if (R.etapaMedida(c) === "liberada") return { k: "fora", txt: "🗂 Sem foto no 360 nem no Exact", n: 0 };
   return { k: "", txt: "", n: 0 };
+}
+/** medida feita ANTES da venda: o consultor visitou o cliente antes de vender (as fotos ficam na visita, não na medida) */
+export function antesDaVenda(R: any, st: any, c: any): { visitado: boolean; fotos: number } {
+  const vis = achar360(R, st, c);
+  return { visitado: vis.length > 0, fotos: vis.reduce((s: number, v: any) => s + (v.anexos || []).filter((x: any) => x.tipo === "img").length, 0) };
+}
+/** a mesma venda já tem outra medida aprovada (medida oficial) — esta aqui virou trabalho repetido */
+export function jaAprovadaNaVenda(R: any, st: any, c: any): boolean {
+  return !!c.pedido && st.chamados.some((o: any) => o.tipo === "medidas" && o.id !== c.id && o.pedido === c.pedido && R.etapaMedida(o) === "liberada");
 }
 /** quem mediu: consultor (antes da venda), medidor (depois da venda), pós-venda ou aprovada fora do 360 */
 export function origemMedida(R: any, c: any): { cls: string; txt: string; quem: string } {
