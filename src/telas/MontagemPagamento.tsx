@@ -125,6 +125,21 @@ async function enviar(ef: Ef[]) {
   }
   return r;
 }
+/** puxa do Exact o relatório "Exportar em Massa" (pagamento de montagem) do período — o servidor grava e devolve o resumo */
+async function atualizarDoExact(de: string, ate: string, por: "assemble" | "schedule"): Promise<any> {
+  if (MOCK) return { linhas: 0, novos: 0, atualizados: 0, soma: 0 };
+  const { data: id, error } = await sb.rpc("montagem_exact_atualizar", { p_de: de, p_ate: ate, p_por: por }); if (error) throw new Error(error.message);
+  for (let i = 0; i < 75; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const { data, error: e2 } = await sb.rpc("montagem_exact_resultado", { p_req: id }); if (e2) throw new Error(e2.message);
+    if (data) { if ((data as any).erro) throw new Error((data as any).erro); return data; }
+  }
+  throw new Error("O Exact está demorando. A atualização segue sozinha; recarregue a tela em alguns minutos.");
+}
+async function ultimaDoExact(): Promise<any> {
+  if (MOCK) return null;
+  const { data } = await sb.rpc("montagem_exact_ultima"); return data;
+}
 async function salvarAvulsa(p: any): Promise<string> {
   if (MOCK) { const ch = p.chave || "AVULSA¦" + Math.random().toString(36).slice(2); const prod = Number(p.prod) || 0, adic = Number(p.adic) || 0;
     mockEf = [...mockEf.filter(a => a.chave !== ch), { chave: ch, os: "Ordem avulsa", montador: p.montador, status: p.status === "aprovado" ? "PAGAMENTO EFETUADO" : "AGUARDANDO APROVAÇÃO DE PAGAMENTO", data_montagem: p.de, data_finalizacao: p.ate, produtos: prod, adicionais: adic, total: prod + adic, origem: "avulsa", descricao: p.descricao, tipo: p.tipo, criado_por: "você" }]; return ch; }
@@ -207,6 +222,8 @@ export default function MontagemPagamento() {
   const [fs, setFs] = useState<"todos" | "aprov" | "agu">("todos");
   const [q, setQ] = useState(""); const [aberto, setAberto] = useState("");
   const [enviando, setEnviando] = useState(""); const inp = useRef<HTMLInputElement>(null);
+  const [ultEx, setUltEx] = useState<any>(null);
+  useEffect(() => { ultimaDoExact().then(setUltEx).catch(() => setUltEx(null)); }, []);
   const [tela, setTela] = useState<"periodo" | "hist">("periodo");
   const [ord, setOrd] = useState<{ k: string; desc: boolean }>({ k: "nome", desc: false });
   const [sel, setSel] = useState<Set<string>>(new Set()); const [aprovando, setAprovando] = useState(false);
@@ -247,6 +264,18 @@ export default function MontagemPagamento() {
       await recarregar();
     } catch (e: any) { toast(e.message || "Não foi possível enviar"); }
     finally { setEnviando(""); if (inp.current) inp.current.value = ""; }
+  };
+
+  const puxarExact = async () => {
+    // pela data de montagem; o período escolhido na tela (o relatório da finalização vem junto: o Exact traz as duas datas)
+    const d0 = somaDias(de, pelo === "fin" ? -45 : 0);
+    setEnviando("Buscando no Exact…");
+    try {
+      const r = await atualizarDoExact(d0, ate, "assemble");
+      toast("Exact: " + r.linhas + " O.S. · " + r.novos + " novas · " + r.atualizados + " atualizadas");
+      await recarregar(); ultimaDoExact().then(setUltEx).catch(() => {});
+    } catch (e: any) { toast(e.message || "Não foi possível buscar no Exact"); }
+    finally { setEnviando(""); }
   };
 
   const dataDe = (e: Ef) => (pelo === "fin" ? e.data_finalizacao || e.data_montagem : e.data_montagem) || "";
@@ -327,8 +356,11 @@ export default function MontagemPagamento() {
       <div className="card ma-topo">
         <div className="ma-envio">
           <input ref={inp} type="file" accept=".csv,.xlsx" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) subir(f); }} />
-          {gest && <button className="btn primary" disabled={!!enviando} onClick={() => inp.current?.click()}>{enviando || "📤 Enviar relatório de montagens efetivadas (CSV ou Excel)"}</button>}
-          <span className="hint">{dados ? dados.ef.length + " montagens guardadas. Pode enviar o mesmo período de novo: não duplica, só atualiza status e valores." : erro || "Carregando…"}</span>
+          {gest && <button className="btn primary" disabled={!!enviando} onClick={puxarExact} title="Puxa do Exact o relatório de pagamento (o mesmo do “Exportar em Massa”) do período escolhido abaixo">{enviando || "🔄 Atualizar do Exact agora"}</button>}
+          {gest && <button className="btn ghost sm" disabled={!!enviando} onClick={() => inp.current?.click()} title="Reserva: enviar o arquivo exportado do Exact">📤 Enviar arquivo (CSV ou Excel)</button>}
+          <span className="hint">{ultEx?.em ? (ultEx.ok ? "✅ Atualizado do Exact " + new Date(ultEx.em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + (ultEx.detalhe?.quem === "automático" ? " (automático)" : ultEx.detalhe?.quem ? " por " + ultEx.detalhe.quem : "") + " · o 360 busca sozinho a cada 2 horas (mês anterior e atual). "
+              : "⚠️ Última busca no Exact falhou " + new Date(ultEx.em).toLocaleString("pt-BR") + ". ") : ""}
+            {dados ? dados.ef.length + " montagens guardadas. Buscar de novo não duplica, só atualiza status e valores." : erro || "Carregando…"}</span>
         </div>
         <div className="ma-filtros">
           <div className="field"><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
