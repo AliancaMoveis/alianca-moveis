@@ -55,16 +55,25 @@ export function SeloTipo({ tipo, grande }: { tipo: TipoCliente; grande?: boolean
     : <span style={{ display: "inline-block", fontSize: 10, fontWeight: 900, letterSpacing: ".03em", background: x.cor, color: "#fff", borderRadius: 5, padding: "1px 6px", verticalAlign: 2 }}>{x.ic} {x.t}</span>;
 }
 
-/** data do checklist da mesma venda e o limite da medida (5 dias antes) */
-export function prazoMedida(st: any, c: any): { ck: string; limite: string } | null {
-  const p = String(c.pedido || "").trim(); if (!p) return null;
-  const ds = st.chamados.filter((k: any) => k.tipo === "checklist" && String(k.pedido || "").trim() === p && ["agendado", "realizado"].includes(((k.tratativa || {}).checklist || {}).etapa))
+/** prazo da medida: a data limite definida pela Supervisão de Medidas (Luciene) no 360 vale acima de tudo;
+ *  senão, a mais cedo entre a data limite do Exact e 5 dias antes do checklist marcado. */
+export type Prazo = { ck: string; limite: string; fonte: "360" | "exact" | "checklist" };
+const ROT_FONTE: Record<string, string> = { "360": "definida pela Supervisão de Medidas", exact: "data limite do Exact", checklist: "5 dias antes do checklist" };
+export const rotPrazo = (pz: Prazo) => ROT_FONTE[pz.fonte];
+export function prazoMedida(st: any, c: any): Prazo | null {
+  const m = (c.tratativa && c.tratativa.medida) || {};
+  const p = String(c.pedido || "").trim();
+  const ds = !p ? [] : (st.chamados || []).filter((k: any) => k.tipo === "checklist" && String(k.pedido || "").trim() === p && ["agendado", "realizado"].includes(((k.tratativa || {}).checklist || {}).etapa))
     .map((k: any) => String(k.tratativa.checklist.agendadoPara || "")).filter(Boolean).sort();
-  const ex = String((c.tratativa && c.tratativa.medida && c.tratativa.medida.dataChecklistExact) || "").slice(0, 16);
+  const ex = String(m.dataChecklistExact || "").slice(0, 16);
   if (!ds.length && ex) ds.push(ex);
-  if (!ds.length) return null;
-  const d = new Date(ds[0].slice(0, 10) + "T12:00:00"); d.setDate(d.getDate() - 5);
-  return { ck: ds[0], limite: isoLocal(d).slice(0, 10) };
+  const ck = ds[0] || "";
+  if (m.dataLimite) return { ck, limite: String(m.dataLimite).slice(0, 10), fonte: "360" };
+  const op: Prazo[] = [];
+  if (ck) { const d = new Date(ck.slice(0, 10) + "T12:00:00"); d.setDate(d.getDate() - 5); op.push({ ck, limite: isoLocal(d), fonte: "checklist" }); }
+  if (m.prazoExact) { const d = new Date(String(m.prazoExact).replace(" ", "T").replace(/\+00$/, "+00:00")); if (!isNaN(+d)) op.push({ ck, limite: isoLocal(d), fonte: "exact" }); }
+  if (!op.length) return null;
+  return op.sort((a, b) => a.limite.localeCompare(b.limite))[0];
 }
 
 export function CartaoMedida({ c, abrir }: any) {
@@ -78,8 +87,9 @@ export function CartaoMedida({ c, abrir }: any) {
     <button className={"mv-card med" + (estourou ? " atras" : "")} onClick={() => abrir(c.id)}>
       <div className="mv-card-h"><b>{hora(c.dataMedida)}</b><small>{diaCurto(c.dataMedida)}</small></div>
       <div className="mv-card-c"><div className="nm"><SeloTipo tipo={tipoMedida(c, st)} /> {c.cliente}{!(c.anexos || []).length && aFazer ? " ⚠️" : ""}</div>
-        <div className="sb">{pz ? "Checklist " + fmtDate(pz.ck).slice(0, 5) + " · medir até " + fmtDate(pz.limite).slice(0, 5) : (c.endereco || c.produto || "—")}</div>
-        {estourou && <div className="sb" style={{ color: "var(--danger)", fontWeight: 700 }}>⚠️ Fora do prazo (5 dias antes do checklist)</div>}</div>
+        <div className="sb">{pz ? (pz.ck ? "Checklist " + fmtDate(pz.ck).slice(0, 5) + " · " : "") + "medir até " + fmtDate(pz.limite).slice(0, 5) : "sem data limite · venda " + (c.dataVenda ? fmtDate(c.dataVenda).slice(0, 5) : "—")}</div>
+        <div className="sb">📍 {c.endereco || "sem endereço"}</div>
+        {estourou && <div className="sb" style={{ color: "var(--danger)", fontWeight: 700 }}>⚠️ Fora do prazo ({rotPrazo(pz!)})</div>}</div>
       <div className="mv-card-d"><span className={"sc sc-med-" + etapa}>{etapa === "agendada" ? "A medir" : etapa === "realizada" ? "Feita" : etapa === "liberada" ? "Liberada" : "Validar"}</span>
         {aFazer && <span className={"mv-cor " + (m.contatoEm ? "ctt" : "semctt")}>{m.contatoEm ? (m.dataCombinadaEm ? "📅 Data combinada" : "📞 Em contato") : "⏳ Sem contato"}</span>}</div>
     </button>
@@ -144,8 +154,9 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
       {m.realizadaEm && <div><span>Feita em</span><b>{fmtDateTime(m.realizadaEm)}</b></div>}
     </div>
     {(() => { const pz = prazoMedida(R.state, c); return pz ? <div className={"mv-prazo-med" + (hojeISO() > pz.limite && etapa === "agendada" ? " atras" : "")}>
-      <div><span>Checklist</span><b>{fmtDateTime(pz.ck)}</b></div><div><span>Medir até</span><b>{fmtDate(pz.limite)}</b></div>
-      <small>As medidas precisam estar prontas 5 dias antes do checklist.</small></div> : null; })()}
+      {pz.ck && <div><span>Checklist</span><b>{fmtDateTime(pz.ck)}</b></div>}<div><span>Medir até</span><b>{fmtDate(pz.limite)}</b></div>
+      <small>Data limite: {rotPrazo(pz)}{pz.fonte === "360" && m.dataLimitePor ? " (" + m.dataLimitePor + ")" : ""}.</small></div> : null; })()}
+    {R.ehSupMedidas() && ["agendada", "pendente"].includes(etapa) && <DataLimite c={c} />}
     {conf ? <>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, margin: "6px 0 8px" }}>{([["falta", "⚠️", "O que falta"], ["anteriores", "📷", "Fotos e medidas anteriores"], ["venda", "🖼", "Imagem da venda"]] as const).map(([k, ic, l]) =>
         <button key={k} type="button" onClick={() => setAba(k)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "9px 4px", minHeight: 64, borderRadius: 12, font: "inherit", fontSize: 12.5, fontWeight: 800, lineHeight: 1.15, textAlign: "center", cursor: "pointer",
@@ -172,6 +183,24 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
     {etapa === "liberada" && <div className="mv-ok">✓ Medidas liberadas para o checklist</div>}
     <button className="mv-link" onClick={() => abrirDetalhe(c.id)}>Ver ficha completa e histórico ›</button>
   </>;
+}
+
+/** a Supervisão de Medidas define a data limite da medida (vale acima da do Exact e do checklist) */
+export function DataLimite({ c, compacto }: { c: any; compacto?: boolean }) {
+  const { executar: ex } = useApp() as any;
+  const m = (c.tratativa && c.tratativa.medida) || {};
+  const [d, setD] = useState(String(m.dataLimite || "").slice(0, 10));
+  useEffect(() => { setD(String(m.dataLimite || "").slice(0, 10)); }, [m.dataLimite]);
+  const salvar = (v: string) => ex(() => A.medidaDataLimite(c.id, v || null), v ? "Data limite: " + fmtDate(v) : "Data limite removida");
+  return <div className={compacto ? "" : "mv-bloco"} style={compacto ? { display: "inline-flex", gap: 4, alignItems: "center" } : undefined} onClick={e => e.stopPropagation()}>
+    {!compacto && <div className="mv-bloco-t">📅 Data limite da medida</div>}
+    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <input type="date" value={d} onChange={e => setD(e.target.value)} style={{ width: compacto ? 140 : "auto", flex: compacto ? "none" : 1 }} title="Data limite da medida" />
+      <button type="button" className={compacto ? "btn sm" : "mv-principal"} style={compacto ? undefined : { width: "auto", padding: "8px 14px" }} disabled={d === String(m.dataLimite || "").slice(0, 10)} onClick={() => salvar(d)}>Salvar</button>
+      {m.dataLimite && <button type="button" className={compacto ? "btn sm ghost" : "mv-link"} onClick={() => { setD(""); salvar(""); }}>limpar</button>}
+    </div>
+    {!compacto && <div className="mv-dica">Vale acima da data limite do Exact e do checklist.</div>}
+  </div>;
 }
 
 /** o que a supervisora apontou como faltando: quem mede vai marcando o que já resolveu */
@@ -257,7 +286,7 @@ function ContatoMedida({ c }: any) {
   const [dt, setDt] = useState(c.dataMedida ? String(c.dataMedida).slice(0, 16).replace(" ", "T") : "");
   const salvarData = () => {
     if (!dt || dt.length < 16) { toast("Escolha o dia e o horário combinados"); return; }
-    if (pz && dt.slice(0, 10) > pz.limite) { toast("A medida precisa ser até " + fmtDate(pz.limite) + " (5 dias antes do checklist)"); return; }
+    if (pz && dt.slice(0, 10) > pz.limite && !confirm("A data limite desta medida é " + fmtDate(pz.limite) + " (" + rotPrazo(pz) + ").\n\nMarcar mesmo assim, depois do limite?")) return;
     ex(() => A.medidaContato(c.id, dt), "Data da medida combinada ✓");
   };
   return <div className="mv-bloco">
