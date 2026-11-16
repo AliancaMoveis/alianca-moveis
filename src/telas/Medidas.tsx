@@ -9,8 +9,8 @@ import { A } from "../lib/acoes";
 import { lerXlsx } from "../lib/planilha";
 import { linhaMedida } from "../lib/medidasPlanilha";
 import { Modal } from "../comp/Modal";
-import { tipoMedida, SeloTipo } from "../movel/Medidas";
-import { ETAPA_MEDIDA, fmtDateTime, grupoMedida, itensVenda } from "../lib/regras";
+import { tipoMedida, SeloTipo, prazoMedida, rotPrazo, DataLimite } from "../movel/Medidas";
+import { ETAPA_MEDIDA, fmtDate, fmtDateTime, grupoMedida, hojeISO, itensVenda } from "../lib/regras";
 import { tipoPlanilha } from "../lib/cruzarVendas";
 
 type Linha = Record<string, string>;
@@ -258,7 +258,8 @@ function ListaMedidas({ aba }: { aba: string }) {
   // a medir: o checklist mais próximo (limite = 5 dias antes) vem primeiro; depois a data marcada da medição
   // sem checklist marcado: a venda mais antiga primeiro
   const ckOuExact = (c: any) => diaCk(c) || String(c.tratativa?.medida?.dataChecklistExact || "").slice(0, 16);
-  const ord = (c: any) => aba === "minhasfeitas" ? "9" : (ckOuExact(c) ? "0" + ckOuExact(c) + String(c.dataMedida || "9") : "1" + String(c.dataVenda || "9") + String(c.criadoEm || ""));
+  const ord = (c: any) => { if (aba === "minhasfeitas") return "9"; const pz = prazoMedida(st, c);
+    return pz ? "0" + pz.limite + String(c.dataMedida || "9") : ckOuExact(c) ? "0" + ckOuExact(c) + String(c.dataMedida || "9") : "1" + String(c.dataVenda || "9") + String(c.criadoEm || ""); };
   lista = lista.slice().sort((a: any, b: any) => ord(a).localeCompare(ord(b)));
   const em3 = (iso: string) => { if (!iso) return false; const lim = new Date(); lim.setDate(lim.getDate() + 3); return iso.slice(0, 10) <= lim.toISOString().slice(0, 10); };
   return (
@@ -295,6 +296,12 @@ function ListaMedidas({ aba }: { aba: string }) {
                     onChange={async e => { try { await A.medidaTipoVisita(c.id, e.target.value as any); await recarregar(); toast("Tipo da medida atualizado"); } catch (x: any) { toast(x.message); } }}>
                     <option value="">{auto ? "automático" : "voltar ao automático"}</option><option value="confirmacao">🔵 Confirmação</option><option value="pos">🟣 Pós-venda</option></select> : null}</span>; })()}
                 {c.dataMedida && ["agendada"].includes(R.etapaMedida(c)) ? <> · {fmtDateTime(c.dataMedida)}</> : null}
+                {["agendada", "pendente"].includes(R.etapaMedida(c)) && (() => { const pz = prazoMedida(st, c); const atras = pz && hojeISO() > pz.limite;
+                  return <span style={{ marginLeft: 6, display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
+                    <span className="pill" title={pz ? "Data limite: " + rotPrazo(pz) : "Sem data limite — vai pela data da venda"} style={{ fontWeight: 700, background: !pz ? undefined : atras ? "var(--danger)" : "#7c3aed", color: pz ? "#fff" : undefined }}>
+                      {pz ? (atras ? "⚠️ " : "📅 ") + "medir até " + fmtDate(pz.limite).slice(0, 5) + (pz.fonte === "360" ? " ✍️" : pz.fonte === "exact" ? " (Exact)" : " (checklist)") : "📅 sem data limite"}</span>
+                    {R.ehSupMedidas() && <DataLimite c={c} compacto />}
+                    <span className="pill" style={{ fontWeight: 600 }}>📍 {c.endereco || "sem endereço"}</span></span>; })()}
                 {m.origem === "minha_visita" && <span className="pill" style={{ marginLeft: 6 }}>Minha Visita · sem pagamento</span>}
                 {m.etapa === "em_obra" && m.previsaoObra && <span className="pill" style={{ marginLeft: 6 }}>previsão {String(m.previsaoObra).split("-").reverse().join("/")}</span>}
                 {(aba === "minhas" || aba === "minhasfeitas") && <span className="pill" style={{ marginLeft: 6 }}>{ETAPA_MEDIDA[R.etapaMedida(c)] || ""}</span>}
