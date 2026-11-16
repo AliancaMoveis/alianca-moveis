@@ -116,6 +116,22 @@ async function enviar(ags: Ag[]): Promise<{ novos: number; atualizados: number; 
   return r;
 }
 
+/** puxa do Exact o relatório de agendamentos (pela data em que foi agendado) — o servidor grava e devolve o resumo */
+async function atualizarDoExact(de: string, ate: string): Promise<any> {
+  if (MOCK) return { linhas: 0, novos: 0, atualizados: 0 };
+  const { data: id, error } = await sb.rpc("montagem_exact_atualizar", { p_de: de, p_ate: ate, p_por: "agendamentos" }); if (error) throw new Error(error.message);
+  for (let i = 0; i < 75; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const { data, error: e2 } = await sb.rpc("montagem_exact_resultado", { p_req: id }); if (e2) throw new Error(e2.message);
+    if (data) { if ((data as any).erro) throw new Error((data as any).erro); return data; }
+  }
+  throw new Error("O Exact está demorando. A atualização segue sozinha; recarregue a tela em alguns minutos.");
+}
+async function ultimaDoExact(): Promise<any> {
+  if (MOCK) return null;
+  const { data } = await sb.rpc("montagem_exact_ultima_de", { p_tipo: "agendamentos" }); return data;
+}
+
 type Grupo = { nome: string; n: number; mont: number; assist: number; fora: number; total: number; dias: Record<string, number> };
 function agrupar(lista: Ag[], chave: (a: Ag) => string, dia: (a: Ag) => string): Grupo[] {
   const m: Record<string, Grupo> = {};
@@ -142,6 +158,8 @@ export default function MontagemAgend() {
   const [tipoM, setTipoM] = useState<"todos" | "mont" | "assist">("todos");
   const [aberto, setAberto] = useState("");
   const [enviando, setEnviando] = useState(""); const inp = useRef<HTMLInputElement>(null);
+  const [ultEx, setUltEx] = useState<any>(null);
+  useEffect(() => { ultimaDoExact().then(setUltEx).catch(() => setUltEx(null)); }, []);
   const recarregar = () => carregar().then(setDados).catch(e => setErro(e.message));
   useEffect(() => { recarregar(); }, []);
   if (!(R.mySetores().includes("gestao") || R.mySetores().includes("financeiro"))) return <section className="view active"><div className="empty">Só a Gestão e o Financeiro veem esta tela.</div></section>;
@@ -162,6 +180,16 @@ export default function MontagemAgend() {
       await recarregar();
     } catch (e: any) { toast(e.message || "Não foi possível enviar"); }
     finally { setEnviando(""); if (inp.current) inp.current.value = ""; }
+  };
+
+  const puxarExact = async () => {
+    setEnviando("Buscando no Exact…");
+    try {
+      const r = await atualizarDoExact(de, ate);
+      toast("Exact: " + r.linhas + " agendamentos · " + r.novos + " novos · " + r.atualizados + " atualizados");
+      await recarregar(); ultimaDoExact().then(setUltEx).catch(() => {});
+    } catch (e: any) { toast(e.message || "Não foi possível buscar no Exact"); }
+    finally { setEnviando(""); }
   };
 
   const vU = num(valor);
@@ -192,8 +220,11 @@ export default function MontagemAgend() {
       <div className="card ma-topo">
         <div className="ma-envio" style={soLeitura ? { display: "none" } : undefined}>
           <input ref={inp} type="file" accept=".csv,.xlsx" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) subir(f); }} />
-          <button className="btn primary" disabled={!!enviando} onClick={() => inp.current?.click()}>{enviando || "📤 Enviar relatório do Exact (CSV ou Excel)"}</button>
-          <span className="hint">{dados ? dados.length + " agendamentos guardados" + (ultimaData ? " · último agendado em " + br(ultimaData) : "") + ". Pode enviar o mesmo período de novo: não duplica, só atualiza o status." : erro || "Carregando…"}</span>
+          <button className="btn primary" disabled={!!enviando} onClick={puxarExact} title="Puxa do Exact os agendamentos feitos no período escolhido abaixo (pela data do agendamento)">{enviando || "🔄 Atualizar do Exact agora"}</button>
+          <button className="btn ghost sm" disabled={!!enviando} onClick={() => inp.current?.click()} title="Reserva: enviar o arquivo exportado do Exact">📤 Enviar arquivo (CSV ou Excel)</button>
+          <span className="hint">{ultEx?.em ? (ultEx.ok ? "✅ Atualizado do Exact " + new Date(ultEx.em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + (ultEx.detalhe?.quem === "automático" ? " (automático)" : ultEx.detalhe?.quem ? " por " + ultEx.detalhe.quem : "") + " · o 360 busca sozinho a cada 2 horas (mês anterior e atual). "
+              : "⚠️ Última busca no Exact falhou " + new Date(ultEx.em).toLocaleString("pt-BR") + ". ") : ""}
+            {dados ? dados.length + " agendamentos guardados" + (ultimaData ? " · último agendado em " + br(ultimaData) : "") + ". Buscar de novo não duplica: se mudou o montador ou o dia da montagem, atualiza o mesmo agendamento." : erro || "Carregando…"}</span>
         </div>
         <div className="ma-filtros">
           <div className="field"><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
