@@ -838,6 +838,11 @@ function MedidaBloco({ c }: any) {
         <button className="btn primary sm" style={{ marginTop: 10 }} onClick={() => { if (!(c.anexos || []).length) { toast("Anexe as fotos/planta da medição primeiro"); return; } ex(() => A.medidaRealizada(c.id, med.trim(), mobs.trim()), "Medida registrada — a supervisora vai conferir"); }}>✓ Medida realizada</button>
       </div>}
 
+      <details style={{ margin: "8px 0" }}><summary style={{ cursor: "pointer", fontWeight: 800 }}>🖼 Imagem da venda</summary><ImagensVenda c={c} /></details>
+      {/* fotos para conferir antes de aprovar: as do 360, as da medição no Exact e as da visita do consultor — abre sozinho quando a medida espera aprovação */}
+      <details style={{ margin: "8px 0" }} open={sup && ["validar", "realizada"].includes(etapa)}>
+        <summary style={{ cursor: "pointer", fontWeight: 800 }}>📷 Fotos da medida — do 360, da medição no Exact e da visita do consultor</summary>
+        <Anteriores c={c} /></details>
       {sup && ["validar", "realizada"].includes(etapa) && <div className="resp-box" style={{ marginTop: 12, borderColor: "var(--st-concluida)" }}><h4>✅ Medidas certas — aprovar como medida oficial</h4>
         <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>O checklist da venda passa a mostrar “medida oficial” e as fotos desta ficha ficam disponíveis para o projetista.</div>
         <div className="inline-2"><div className="field"><input value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação para o checklist (opcional)" /></div>
@@ -850,8 +855,6 @@ function MedidaBloco({ c }: any) {
       {sup && etapa === "em_obra" && <div style={{ marginTop: 12 }}><button className="btn sm" onClick={() => ex(() => A.medidaPendente(c.id, "obra terminou"), "Voltou para pendente para medir")}>Obra terminou → pendente para medir</button></div>}
 
       {sup && ["realizada", "validar"].includes(etapa) && <DevolverMedida c={c} />}
-      <details style={{ margin: "8px 0" }}><summary style={{ cursor: "pointer", fontWeight: 800 }}>🖼 Imagem da venda</summary><ImagensVenda c={c} /></details>
-      <details style={{ margin: "8px 0" }}><summary style={{ cursor: "pointer", fontWeight: 800 }}>📷 Fotos e medidas anteriores</summary><Anteriores c={c} /></details>
 
       {sup && etapa !== "liberada" && <div className="resp-box" style={{ marginTop: 12 }}><h4>📐 {etapa === "agendada" ? "Redirecionar" : "Direcionar"} a medição</h4>
         <div className="grid">
