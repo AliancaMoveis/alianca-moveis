@@ -270,7 +270,7 @@ export const A = {
   ckProjetistaEu: () => rpc<{ projetista: string | null; podeTodos: boolean; projetistas: string[] }>("ck_projetista_eu"),
   ckProjetistaAgenda: (proj: string | null, de: string, ate: string) => rpc<any[]>("ck_projetista_agenda", { p_proj: proj, p_de: de, p_ate: ate }),
   /** acao: salvar · iniciar · impressao · assinado · realizado (realizado só com impressão + digitalizado assinado) */
-  ckProjetistaSalvar: (id: string, p: any, acao: "salvar" | "iniciar" | "impressao" | "assinado" | "realizado" = "salvar") => rpc("ck_projetista_salvar", { p_id: id, p, p_acao: acao }),
+  ckProjetistaSalvar: (id: string, p: any, acao: "salvar" | "iniciar" | "impressao" | "assinado" | "realizado" | "reabrir" = "salvar") => rpc("ck_projetista_salvar", { p_id: id, p, p_acao: acao }),
   /** arquivos da venda (Exact), fotos da medição (Exact + medidas do 360) e o que o checklist subiu — função checklist-arquivos */
   ckArquivos: async (id: string) => {
     const { data, error } = await sb.functions.invoke("checklist-arquivos", { body: { acao: "arquivos", id } });
