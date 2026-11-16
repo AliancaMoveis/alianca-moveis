@@ -2,9 +2,32 @@
 // Mesma ordem do papel: 1) termo de ciência do material (vem preenchido e o cliente pode corrigir) · 2) geral (29 itens "Sim")
 // · 3) imagens do projeto de cada ambiente · 4) nome, CPF, assinatura e selfie.
 import { useEffect, useRef, useState } from "react";
-import { blobParaJpeg, contratoApi } from "../lib/contratoUtil";
+import { blobParaJpeg, contratoApi, contratoCopia } from "../lib/contratoUtil";
 import { CONDICOES_CONTRATO, INFO_TECNICAS, LOGO_URL, contratoHtml, cpfValido, diferencasTermo, faltaNoTermo, fmtCpf, type ContratoDados, type TermoAmb } from "../lib/contratoDoc";
 import TermoMaterial from "../comp/TermoMaterial";
+
+/** via do cliente: baixa/abre o contrato que ele acabou de assinar (e continua valendo se reabrir o link) */
+function BaixarContrato({ token }: { token: string }) {
+  const [indo, setIndo] = useState(false); const [erro, setErro] = useState("");
+  const abrir = async () => {
+    setIndo(true); setErro("");
+    const w = window.open("", "_blank");
+    try {
+      const r = await contratoCopia({ token });
+      const h = await (await fetch(r.url)).text();
+      if (w) { w.document.open(); w.document.write(h); w.document.close(); }
+      else { const b = new Blob([h], { type: "text/html" }); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = "Contrato_assinado.html"; a.click(); setTimeout(() => URL.revokeObjectURL(u), 5000); }
+    } catch (e: any) { if (w) w.close(); setErro(e.message || "Não consegui abrir agora"); }
+    finally { setIndo(false); }
+  };
+  return <div style={{ marginTop: 14 }}>
+    <button type="button" onClick={abrir} disabled={indo}
+      style={{ padding: "13px 20px", fontSize: 16, fontWeight: 800, color: "#fff", background: indo ? "#9aa3b0" : "#284b8f", border: 0, borderRadius: 12 }}>
+      {indo ? "Abrindo…" : "📄 Ver / baixar a minha via"}</button>
+    {erro && <div style={{ color: "#9b1c1c", fontSize: 13, marginTop: 8 }}>{erro}</div>}
+    <div style={{ fontSize: 12.5, color: "#5a6270", marginTop: 8 }}>Abre o contrato completo, com a sua assinatura. Dá para salvar ou imprimir pelo navegador.</div>
+  </div>;
+}
 
 const COR = { pri: "#284b8f", ok: "#2f7a3f", okbg: "#e6f4e9", s: "#5a6270", l: "#e0e3e8", r: "#9b1c1c", verde: "#0f5e3a" };
 const PASSOS = ["Materiais", "Termo geral", "Imagens", "Assinatura"];
@@ -76,7 +99,8 @@ export default function Contrato() {
 
   if (feito) return casca(<div style={{ ...card, textAlign: "center", padding: "34px 18px" }}>
     <div style={{ fontSize: 54 }}>✅</div><h2 style={{ margin: "6px 0" }}>Contrato assinado</h2>
-    <p style={{ color: COR.s }}>Obrigado{feito.nome ? ", " + String(feito.nome).split(" ")[0] : ""}! Sua assinatura foi registrada{feito.em ? " em " + new Date(feito.em).toLocaleString("pt-BR") : ""}.<br />O projetista já recebeu a confirmação. Se quiser uma cópia, peça a ele — o contrato pode ser impresso na loja.</p>
+    <p style={{ color: COR.s }}>Obrigado{feito.nome ? ", " + String(feito.nome).split(" ")[0] : ""}! Sua assinatura foi registrada{feito.em ? " em " + new Date(feito.em).toLocaleString("pt-BR") : ""}.<br />O projetista já recebeu a confirmação. Guarde a sua via abaixo — ela fica disponível por 30 dias neste link.</p>
+    <BaixarContrato token={token} />
     {feito.teste && <div style={{ marginTop: 16, padding: 14, borderRadius: 12, background: "#fff8e6", border: "1px solid #f0d9a6" }}>
       <b>🧪 Link de teste</b><div style={{ fontSize: 13.5, color: COR.s, margin: "4px 0 10px" }}>Este link continua aberto para outras pessoas testarem.</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>

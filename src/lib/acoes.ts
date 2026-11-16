@@ -317,6 +317,13 @@ export const A = {
     if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível enviar " + file.name);
     return j as { path: string; nome: string; tipo: string; url: string; exact: boolean; exactErro: string };
   },
+  /** abre um contrato assinado guardado na ficha (inclusive os de rodadas anteriores) */
+  ckContratoAbrir: async (id: string, path: string) => {
+    const r = await chamarFuncao("ck-contrato-copia", JSON.stringify({ id, path }), "application/json");
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível abrir o contrato assinado");
+    return j as { url: string };
+  },
   /** contrato do checklist com assinatura online (função "contrato"): criar · status · cancelar */
   ckContrato: async (acao: "criar" | "status" | "cancelar", id: string, extra: any = {}) => {
     const r = await chamarFuncao("contrato", JSON.stringify({ acao, id, ...extra }), "application/json");

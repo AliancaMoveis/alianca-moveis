@@ -1093,6 +1093,20 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
 }
 
 // ---------------- etapa 4: contrato assinado (online) ou digitalizado do papel ----------------
+/** abre o contrato assinado guardado na ficha (vale para os de rodadas anteriores, não só o último) */
+function AbrirAssinado({ id, path, toast }: { id: string; path: string; toast: (m: string) => void }) {
+  const [indo, setIndo] = useState(false);
+  return <button className="btn sm" disabled={indo} title="Abrir o contrato assinado" onClick={async e => {
+    e.stopPropagation(); setIndo(true);
+    const w = window.open("", "_blank");
+    if (!w) { setIndo(false); toast("Libere as janelas (pop-up) do navegador"); return; }
+    w.document.write("<p style='font:16px system-ui;padding:30px'>Abrindo o contrato assinado…</p>");
+    try { const r = await A.ckContratoAbrir(id, path); const h = await (await fetch(r.url)).text(); w.document.open(); w.document.write(h); w.document.close(); }
+    catch (x: any) { w.close(); toast(x.message || "Não consegui abrir"); }
+    finally { setIndo(false); }
+  }}>{indo ? "abrindo…" : "📄 abrir"}</button>;
+}
+
 function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: any) {
   const ass: any[] = t0.assinados || [];
   return <div>
@@ -1100,7 +1114,8 @@ function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: 
     {ct?.status === "assinado" && <ContratoAssinado ct={ct} toast={toast} />}
     {!ass.length && <div className="alert">{liberado ? "Aguardando o cliente assinar pelo QR Code (etapa 3)." : "Gere o contrato na etapa 3."}</div>}
     {ass.length > 0 && <div style={{ marginBottom: 12 }}>{ass.map((a, i) => <div key={i} className="pjrow on"><b>{a.online ? "✍️" : "📎"} {a.nome}</b><span className="hint">{fmtDateTime(a.em)}{a.por ? " · " + a.por : ""}</span>
-      <span className={"pjpill " + (a.exact ? "p-ok" : "p-w")} style={{ margin: 0 }}>{a.exact ? "Exact ✓" : "só no 360"}</span></div>)}</div>}
+      <span className={"pjpill " + (a.exact ? "p-ok" : "p-w")} style={{ margin: 0 }}>{a.exact ? "Exact ✓" : "só no 360"}</span>
+      {a.path && <AbrirAssinado id={c.id} path={a.path} toast={toast} />}</div>)}</div>}
     <div className="sec" style={{ marginTop: 6 }}>Assinou no papel? <span className="src p-g">alternativa</span></div>
     <Soltar aceita="application/pdf,image/*" multiplo ocupado={ocupado === "assinado"} estilo={{ padding: 14 }}
       texto={<>⬆ Suba o PDF escaneado com as assinaturas do cliente<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>ou foto pelo celular · pode subir mais de um arquivo</span></>}

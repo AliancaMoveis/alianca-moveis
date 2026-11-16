@@ -45,6 +45,17 @@ export async function pdfParaImagens(b: Blob, maxPags = 12, largura = 1600): Pro
 }
 
 /** endereço da função "contrato" (chamada sem login pelo cliente) */
+/** cópia do contrato ASSINADO: {token} para o cliente (sem login) ou {id, path} para o projetista logado */
+export async function contratoCopia(corpo: { token?: string; id?: string; path?: string }, token?: string): Promise<any> {
+  const { sb } = await import("./supabase");
+  const base = (sb as any).supabaseUrl || "";
+  const r = await fetch(base + "/functions/v1/ck-contrato-copia", { method: "POST", body: JSON.stringify(corpo),
+    headers: { "Content-Type": "application/json", apikey: (sb as any).supabaseKey || "", ...(token ? { Authorization: "Bearer " + token } : {}) } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível pegar o contrato (" + r.status + ")");
+  return j;
+}
+
 export async function contratoApi(corpo: any, token?: string): Promise<any> {
   const { sb } = await import("./supabase");
   const base = (sb as any).supabaseUrl || "";
