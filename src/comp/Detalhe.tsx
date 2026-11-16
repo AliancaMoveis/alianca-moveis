@@ -1,5 +1,6 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
 import { jaResolvido } from "../lib/resolvido";
+import { ImagensVenda, Anteriores } from "./MedidaArquivos";
 import { DataCalendario } from "./DataCalendario";
 import { confirmarConsultor, marcaConsultor, sugestaoConsultor, textoConflito } from "../lib/agendaConsultor";
 import { EditarCliente, RemarcarData } from "./Remarcar";
@@ -848,9 +849,9 @@ function MedidaBloco({ c }: any) {
           <button className="btn sm" onClick={() => ex(() => A.medidaEmObra(c.id, prevObra, obsObra.trim()), "Marcado como em obra")}>Em obra</button></div></div>}
       {sup && etapa === "em_obra" && <div style={{ marginTop: 12 }}><button className="btn sm" onClick={() => ex(() => A.medidaPendente(c.id, "obra terminou"), "Voltou para pendente para medir")}>Obra terminou → pendente para medir</button></div>}
 
-      {sup && etapa === "realizada" && <div className="resp-box" style={{ marginTop: 12 }}><h4>↩️ Pedir para refazer</h4>
-        <div className="inline-2"><div className="field"><input value={mot} onChange={e => setMot(e.target.value)} placeholder="O que precisa ser refeito" /></div>
-          <button className="btn sm" onClick={() => { if (mot.trim().length < 3) { toast("Diga o que precisa ser refeito"); return; } ex(() => A.medidaRefazer(c.id, mot.trim()), "Devolvido para refazer"); }}>Refazer</button></div></div>}
+      {sup && ["realizada", "validar"].includes(etapa) && <DevolverMedida c={c} />}
+      <details style={{ margin: "8px 0" }}><summary style={{ cursor: "pointer", fontWeight: 800 }}>🖼 Imagem da venda</summary><ImagensVenda c={c} /></details>
+      <details style={{ margin: "8px 0" }}><summary style={{ cursor: "pointer", fontWeight: 800 }}>📷 Fotos e medidas anteriores</summary><Anteriores c={c} /></details>
 
       {sup && etapa !== "liberada" && <div className="resp-box" style={{ marginTop: 12 }}><h4>📐 {etapa === "agendada" ? "Redirecionar" : "Direcionar"} a medição</h4>
         <div className="grid">
@@ -1238,4 +1239,25 @@ function CobrancaFabrica({ c }: any) {
       </div>
     </div>
   );
+}
+
+const FALTANDO_PADRAO = ["Fotos de todas as paredes do ambiente", "Medidas de largura das paredes", "Medida do pé-direito", "Vãos de portas e janelas",
+  "Pontos de água e esgoto (posição e altura)", "Tomadas e interruptores (posição e altura)", "Ponto de gás", "Vigas, colunas, rodapés e sancas",
+  "Esquadro / prumo das paredes", "Croqui / planta da medição", "Confirmação dos ambientes com o cliente"];
+/** a supervisora devolve a medida marcando o que está faltando — quem mede recebe como "Confirmação de medida" com essa lista */
+function DevolverMedida({ c }: { c: any }) {
+  const { executar: ex, toast } = useApp() as any;
+  const [sel, setSel] = useState<string[]>([]); const [outro, setOutro] = useState(""); const [mot, setMot] = useState("");
+  const itens = [...sel, ...(outro.trim() ? [outro.trim()] : [])];
+  return <div className="resp-box" style={{ marginTop: 12, borderColor: "#1d6fd1" }}><h4>↩️ Devolver — o que está faltando nas medidas</h4>
+    <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>Volta para quem mediu como <b>🔵 Confirmação de medida</b>, com esta lista para ele completar.</div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: "2px 12px" }}>
+      {FALTANDO_PADRAO.map(t => <label key={t} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
+        <input type="checkbox" style={{ width: "auto" }} checked={sel.includes(t)} onChange={e => setSel(x => e.target.checked ? [...x, t] : x.filter(y => y !== t))} /> {t}</label>)}</div>
+    <div className="inline-2" style={{ marginTop: 8 }}><div className="field"><input value={outro} onChange={e => setOutro(e.target.value)} placeholder="Outro item que está faltando (opcional)" /></div>
+      <div className="field"><input value={mot} onChange={e => setMot(e.target.value)} placeholder="Observação para quem vai medir (opcional)" /></div></div>
+    <button className="btn sm" style={{ marginTop: 6, background: "#1d6fd1", color: "#fff", borderColor: "#1d6fd1" }} onClick={() => {
+      if (!itens.length && mot.trim().length < 3) { toast("Marque o que está faltando ou escreva a observação"); return; }
+      ex(() => A.medidaDevolver(c.id, itens, mot.trim()), "Medida devolvida com a lista do que falta"); }}>↩️ Devolver ({itens.length} item{itens.length === 1 ? "" : "s"})</button>
+  </div>;
 }
