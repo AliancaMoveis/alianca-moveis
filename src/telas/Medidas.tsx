@@ -314,7 +314,8 @@ function ListaMedidas({ aba }: { aba: string }) {
         <span className="md-end" title={"Consultor que visitou este cliente antes da venda" + (a.em ? " em " + fmtDate(a.em.slice(0, 10)) : "") + " — a medida deve ir para ele"}>
           📷 visitou: <b style={{ color: "#6a2f9e" }}>{a.nomes.slice(0, 2).join(", ")}</b>{a.nomes.length > 2 ? " +" + (a.nomes.length - 2) : ""}</span></>
         : <span className="md-vazio">sem medidor</span>; } }]),
-    { k: "data", t: rotData, w: "105px", cel: (c: any) => { if (R.etapaMedida(c) === "agendada" && c.dataMedida) return fmtDateTime(c.dataMedida);
+    { k: "data", t: rotData, w: "105px", cel: (c: any) => { const e = R.etapaMedida(c);
+      if (e === "agendada") return c.dataMedida ? fmtDateTime(c.dataMedida) : <span className="md-vazio" title="Quem vai medir combina a data com o cliente">a combinar</span>;
       const x = dataMed(c); return x ? fmtDate(x) : <span className="md-vazio">—</span>; } },
     { k: "prazo", t: "Prazo / checklist", w: "minmax(150px,1.1fr)", cel: (c: any) => { const e = R.etapaMedida(c); const dck = diaCk(c); const al = aba !== "aprovados" && dck && em3(dck);
       const m = (c.tratativa && c.tratativa.medida) || {};

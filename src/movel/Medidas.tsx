@@ -85,7 +85,7 @@ export function CartaoMedida({ c, abrir }: any) {
   const estourou = aFazer && pz && ((c.dataMedida && dia(c.dataMedida) > pz.limite) || hojeISO() > pz.limite);
   return (
     <button className={"mv-card med" + (estourou ? " atras" : "")} onClick={() => abrir(c.id)}>
-      <div className="mv-card-h"><b>{hora(c.dataMedida)}</b><small>{diaCurto(c.dataMedida)}</small></div>
+      <div className="mv-card-h"><b>{hora(c.dataMedida)}</b><small>{c.dataMedida ? diaCurto(c.dataMedida) : aFazer ? "combine a data" : "sem data"}</small></div>
       <div className="mv-card-c"><div className="nm"><SeloTipo tipo={tipoMedida(c, st)} /> {c.cliente}{!(c.anexos || []).length && aFazer ? " ⚠️" : ""}</div>
         <div className="sb">{pz ? (pz.ck ? "Checklist " + fmtDate(pz.ck).slice(0, 5) + " · " : "") + "medir até " + fmtDate(pz.limite).slice(0, 5) : "sem data limite · venda " + (c.dataVenda ? fmtDate(c.dataVenda).slice(0, 5) : "—")}</div>
         <div className="sb">📍 {c.endereco || "sem endereço"}</div>

@@ -858,10 +858,13 @@ function MedidaBloco({ c }: any) {
           <div className="field"><label>Quem vai medir</label><select value={quem} onChange={e => setQuem(e.target.value)}><option value="">Selecione…</option>
             <optgroup label="Medidores">{medidores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</optgroup>
             <optgroup label="Consultores externos">{consultores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}{u.id === m.consultorVisita ? " (fez a visita)" : ""}</option>)}</optgroup></select></div>
-          <div className="field"><label>Data e horário</label><input type="datetime-local" value={quando} onChange={e => setQuando(e.target.value)} /></div>
+          <div className="field"><label>Data e horário <span className="hint">(opcional)</span></label><input type="datetime-local" value={quando} onChange={e => setQuando(e.target.value)} />
+            <div className="hint">Pode deixar vazio: quem vai medir entra em contato com o cliente e combina. O aviso no celular pede para combinar a data.</div></div>
           <div className="field full"><label>Endereço</label><input value={end} onChange={e => setEnd(e.target.value)} /></div>
         </div>
-        <button className="btn sm" style={{ marginTop: 10 }} onClick={() => { if (!quem) { toast("Escolha quem vai medir"); return; } if (!quando || quando.length < 16) { toast("Informe a data e o horário"); return; } ex(() => A.medidaDirecionar(c.id, quem, quando, end.trim()), "Medição direcionada — avisado no celular"); }}>Direcionar</button>
+        <button className="btn sm" style={{ marginTop: 10 }} onClick={() => { if (!quem) { toast("Escolha quem vai medir"); return; }
+          if (quando && quando.length < 16) { toast("Complete a data e o horário, ou deixe o campo vazio para combinar depois"); return; }
+          ex(() => A.medidaDirecionar(c.id, quem, quando, end.trim()), "Medição direcionada — avisado no celular" + (quando ? "" : " (data a combinar)")); }}>Direcionar</button>
       </div>}
     </div>
   );
