@@ -1,5 +1,6 @@
 // App de campo: medidas (medidor e consultor) e pedidos de reembolso (pedágio, estacionamento…).
 import { useEffect, useState } from "react";
+import { ImagensVenda, Anteriores } from "../comp/MedidaArquivos";
 import { useApp } from "../estado";
 import { A, comprimir } from "../lib/acoes";
 import { DataCalendario } from "../comp/DataCalendario";
@@ -18,25 +19,24 @@ export function medDados(R: any) {
   return { todas, aFazer, hoje, atrasadas, feitas };
 }
 
-/** os 3 tipos de cliente do consultor no celular — o que muda é a comissão:
+/** os 3 tipos de cliente do consultor no celular:
  *  pré-venda (visita para vender, gera comissão) · medida pós-venda (cliente já comprou, só medir, sem comissão)
- *  · confirmação (cliente que ele mesmo visitou antes da venda: conferir as medidas que já tirou). */
+ *  · confirmação (medida que já foi feita, não foi aprovada e voltou com a lista do que está faltando). */
 export type TipoCliente = "pre" | "pos" | "confirmacao";
 export const TIPO_CLIENTE: Record<TipoCliente, { ic: string; t: string; s: string; cor: string; bg: string }> = {
   pre: { ic: "🟢", t: "VISITA DE VENDA", s: "pré-venda · você vai vender · gera comissão", cor: "#1f7a3a", bg: "rgba(47,122,63,.12)" },
   pos: { ic: "🟣", t: "MEDIDA PÓS-VENDA", s: "o cliente já comprou · só medir · não é venda · sem comissão", cor: "#7c3aed", bg: "rgba(124,58,237,.12)" },
-  confirmacao: { ic: "🔵", t: "CONFIRMAÇÃO DE MEDIDA", s: "cliente que você visitou e comprou · conferir as medidas que você já tirou", cor: "#1d6fd1", bg: "rgba(29,111,209,.12)" },
+  confirmacao: { ic: "🔵", t: "CONFIRMAÇÃO DE MEDIDA", s: "medida devolvida · complete o que está faltando", cor: "#1d6fd1", bg: "rgba(29,111,209,.12)" },
 };
 const tel8 = (x: any) => String(x || "").replace(/\D/g, "").slice(-8);
-/** medida: confirmação (quem mede é o consultor que visitou o cliente antes da venda) ou pós-venda; a Gestão / Medidas pode trocar */
-export function tipoMedida(c: any, st: any): "pos" | "confirmacao" {
+/** medida: confirmação (foi feita, não foi aprovada e voltou — no 360 ou pelo Exact) ou pós-venda; a Gestão / Medidas pode trocar */
+export function tipoMedida(c: any, _st?: any): "pos" | "confirmacao" {
   const m = (c.tratativa && c.tratativa.medida) || {};
-  if (m.tipoVisita === "pos" || m.tipoVisita === "confirmacao") return m.tipoVisita;
-  if (m.consultorVisita && m.consultorVisita === c.medidorId) return "confirmacao";
-  const t = tel8(c.telefone);
-  if (t.length < 8 || !c.medidorId) return "pos";
-  return (st.chamados || []).some((v: any) => v.tipo === "visita_consultor" && v.consultorId === c.medidorId && tel8(v.telefone) === t && String(v.criadoEm || "") < String(c.criadoEm || "9")) ? "confirmacao" : "pos";
+  if (m.tipoVisita === "pos") return "pos";
+  if (m.tipoVisita === "confirmacao") return "confirmacao";
+  return (m.faltando && m.faltando.length) || m.refazer || m.motivoNovaExact ? "confirmacao" : "pos";
 }
+void tel8;
 export function SeloTipo({ tipo, grande }: { tipo: TipoCliente; grande?: boolean }) {
   const x = TIPO_CLIENTE[tipo];
   return grande ? <div style={{ background: x.bg, border: "2px solid " + x.cor, borderRadius: 12, padding: "10px 12px", margin: "6px 0 10px" }}>
@@ -114,6 +114,8 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
   const etapa = R.etapaMedida(c);
   const [med, setMed] = useState(m.medidas || ""); const [obs, setObs] = useState(m.obs || "");
   const souEu = c.medidorId === R.currentUserId;
+  const conf = tipoMedida(c) === "confirmacao";
+  const [aba, setAba] = useState<"falta" | "anteriores" | "venda">("falta");
   return <>
     <div className="mv-cli">📐 {c.cliente}</div>
     <SeloTipo tipo={tipoMedida(c, R.state)} grande />
@@ -123,12 +125,21 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
       {c.endereco && <div><span>Endereço</span><b>{c.endereco}</b></div>}
       {m.consultorVisita && <div><span>Consultor da visita</span><b>{R.nomeUser(m.consultorVisita)}</b></div>}
       {m.medidasConsultor && <div><span>Medidas do consultor</span><b>{m.medidasConsultor}</b></div>}
-      {m.refazer && etapa === "agendada" && <div><span>Refazer</span><b style={{ color: "var(--danger)" }}>{m.refazer}</b></div>}
+      {m.refazer && etapa === "agendada" && !(m.faltando || []).length && <div><span>Refazer</span><b style={{ color: "var(--danger)" }}>{m.refazer}</b></div>}
+      {m.motivoNovaExact && etapa === "agendada" && <div><span>Motivo (Exact)</span><b style={{ color: "var(--danger)" }}>{m.motivoNovaExact}</b></div>}
       {m.realizadaEm && <div><span>Feita em</span><b>{fmtDateTime(m.realizadaEm)}</b></div>}
     </div>
     {(() => { const pz = prazoMedida(R.state, c); return pz ? <div className={"mv-prazo-med" + (hojeISO() > pz.limite && etapa === "agendada" ? " atras" : "")}>
       <div><span>Checklist</span><b>{fmtDateTime(pz.ck)}</b></div><div><span>Medir até</span><b>{fmtDate(pz.limite)}</b></div>
       <small>As medidas precisam estar prontas 5 dias antes do checklist.</small></div> : null; })()}
+    {conf ? <>
+      <div className="mv-seg" style={{ margin: "4px 0 6px" }}>{([["falta", "⚠️ O que falta"], ["anteriores", "📷 Fotos e medidas anteriores"], ["venda", "🖼 Imagem da venda"]] as const).map(([k, l]) =>
+        <button key={k} className={aba === k ? "on" : ""} onClick={() => setAba(k)}>{l}</button>)}</div>
+      {aba === "falta" && ((m.faltando || []).length > 0 ? <Faltando c={c} pode={souEu || R.ehSupMedidas()} />
+        : <div className="mv-dica" style={{ margin: "6px 0 10px" }}>{m.refazer || m.motivoNovaExact || "Medida devolvida — veja as fotos e medidas anteriores."}</div>)}
+      {aba === "anteriores" && <Anteriores c={c} />}
+      {aba === "venda" && <ImagensVenda c={c} />}
+    </> : <ImagensVenda c={c} />}
     <Contato c={c} rota />
     {(souEu || R.ehSupMedidas()) && etapa === "agendada" && <ContatoMedida c={c} />}
     <Anexar c={c} />
@@ -136,13 +147,32 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
       <div className="mv-bloco-t">Registrar a medida</div>
       <textarea rows={3} value={med} onChange={e => setMed(e.target.value)} placeholder="Medidas: parede 3,20m x pé-direito 2,60m…" />
       <input value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação (opcional)" />
-      <button className="mv-principal" onClick={() => { if (!(c.anexos || []).length) { toast("Anexe as fotos/planta da medição primeiro"); return; } ex(() => A.medidaRealizada(c.id, med.trim(), obs.trim()), "Medida registrada ✓"); }}>✓ Medida realizada</button>
+      <button className="mv-principal" onClick={() => { if (!(c.anexos || []).length) { toast("Anexe as fotos/planta da medição primeiro"); return; }
+        const fl = (m.faltando || []).filter((x: any) => !x.ok); if (fl.length && !confirm("Ainda falta marcar " + fl.length + " item(ns) do que estava faltando:\n\n• " + fl.map((x: any) => x.t).join("\n• ") + "\n\nEnviar mesmo assim?")) return;
+        ex(() => A.medidaRealizada(c.id, med.trim(), obs.trim()), "Medida registrada ✓"); }}>✓ {(m.faltando || []).length ? "Enviar a medida completa" : "Medida realizada"}</button>
       <div className="mv-dica">A medida paga {fmtMoeda(R.cfg().pagamentoVisita)} (sem comissão). A supervisora confere e libera para o checklist.</div>
     </div>}
     {etapa === "realizada" && <div className="mv-ok">✓ Medida enviada — aguardando a supervisora conferir</div>}
     {etapa === "liberada" && <div className="mv-ok">✓ Medidas liberadas para o checklist</div>}
     <button className="mv-link" onClick={() => abrirDetalhe(c.id)}>Ver ficha completa e histórico ›</button>
   </>;
+}
+
+/** o que a supervisora apontou como faltando: quem mede vai marcando o que já resolveu */
+function Faltando({ c, pode }: { c: any; pode: boolean }) {
+  const { executar: ex } = useApp() as any;
+  const m = (c.tratativa && c.tratativa.medida) || {};
+  const f: any[] = m.faltando || [];
+  const ok = f.filter(x => x.ok).length;
+  return <div style={{ border: "2px solid #1d6fd1", background: "rgba(29,111,209,.10)", borderRadius: 12, padding: "10px 12px", margin: "8px 0 12px" }}>
+    <div style={{ fontWeight: 900, color: "#1d6fd1", fontSize: 15 }}>⚠️ O QUE ESTÁ FALTANDO <span style={{ fontWeight: 700, fontSize: 12.5 }}>· {ok} de {f.length} resolvido{f.length === 1 ? "" : "s"}</span></div>
+    {m.devolvidaEm && <div style={{ fontSize: 12, opacity: .85, margin: "2px 0 6px" }}>Devolvida {m.devolvidaPor ? "por " + m.devolvidaPor + " " : ""}em {fmtDateTime(m.devolvidaEm)}{m.devolucoes > 1 ? " · " + m.devolucoes + "ª devolução" : ""}</div>}
+    {f.map((x, i) => <label key={i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: i ? "1px solid rgba(29,111,209,.25)" : 0, cursor: pode ? "pointer" : "default" }}>
+      <input type="checkbox" checked={!!x.ok} disabled={!pode} onChange={e => ex(() => A.medidaFaltandoMarcar(c.id, i, e.target.checked), e.target.checked ? "Marcado como resolvido" : "Desmarcado")} style={{ width: 22, height: 22, flex: "none", accentColor: "#1d6fd1" }} />
+      <span style={{ fontSize: 14.5, fontWeight: 600, textDecoration: x.ok ? "line-through" : "none", opacity: x.ok ? .65 : 1 }}>{x.t}</span></label>)}
+    {m.faltandoObs && <div style={{ fontSize: 13.5, marginTop: 6 }}><b>Observação:</b> {m.faltandoObs}</div>}
+    <div style={{ fontSize: 12, marginTop: 6, opacity: .85 }}>Anexe as fotos do que faltava e envie a medida de novo.</div>
+  </div>;
 }
 
 // ---------- reembolso ----------
