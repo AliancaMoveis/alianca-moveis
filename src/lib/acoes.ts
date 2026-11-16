@@ -45,6 +45,26 @@ export const A = {
   medidaRealizada: (id: string, medidas: string, obs: string) => rpc("medida_realizada", { p_id: id, p_medidas: medidas || "", p_obs: obs || "" }),
   medidaContato: (id: string, data: string | null, obs = "") => rpc("medida_contato", { p_id: id, p_data: data ? (data.length === 10 ? data + "T09:00" : data) : null, p_obs: obs }),
   medidaRefazer: (id: string, motivo: string) => rpc("medida_refazer", { p_id: id, p_motivo: motivo }),
+  /** devolve a medida com a lista do que está faltando (vira "Confirmação de medida" para quem mede) */
+  medidaDevolver: (id: string, itens: string[], motivo: string) => rpc("medida_devolver", { p_id: id, p_itens: itens, p_motivo: motivo }),
+  medidaFaltandoMarcar: (id: string, idx: number, ok: boolean) => rpc("medida_faltando_marcar", { p_id: id, p_idx: idx, p_ok: ok }),
+  /** imagens do projeto da venda para quem vai medir (só imagens) — função medida-arquivos */
+  medidaImagens: async (id: string) => {
+    const r = await chamarFuncao("medida-arquivos", JSON.stringify({ acao: "imagens", id }), "application/json");
+    const j = await r.json().catch(() => ({})); if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível buscar as imagens da venda");
+    return j as { imagens: { fonte: string; id: string; nome: string; url: string; em?: string }[]; avisos?: string[]; aviso?: string };
+  },
+  medidaBaixar: async (id: string, anexo: string) => {
+    const r = await chamarFuncao("medida-arquivos", JSON.stringify({ acao: "baixar", id, anexo }), "application/json");
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.erro || "Não foi possível abrir a imagem"); }
+    return await r.blob();
+  },
+  /** fotos da medição no Exact e da visita do consultor (antes da venda) */
+  medidaAnteriores: async (id: string) => {
+    const r = await chamarFuncao("medida-arquivos", JSON.stringify({ acao: "anteriores", id }), "application/json");
+    const j = await r.json().catch(() => ({})); if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível buscar as fotos anteriores");
+    return j as { exact: { fotos: any[]; notas: string }; visita: any[]; avisos: string[] };
+  },
   /** tipo da medida para o consultor: "pos" (só medir, sem comissão), "confirmacao" (cliente que ele visitou antes da venda) ou "" (automático) */
   medidaTipoVisita: (id: string, tipo: "" | "pos" | "confirmacao") => rpc("medida_tipo_visita", { p_id: id, p_tipo: tipo }),
   medidaEmObra: (id: string, previsao: string, obs: string) => rpc("medida_em_obra", { p_id: id, p_previsao: previsao || null, p_obs: obs || "" }),
