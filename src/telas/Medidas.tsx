@@ -292,11 +292,11 @@ function ListaMedidas({ aba }: { aba: string }) {
   const podeSup = R.ehSupMedidas();
   const rotData = aba === "agendadas" ? "Data da medição" : aba === "aprovados" ? "Aprovada em" : aba === "analise" || aba === "minhasfeitas" ? "Mediu em" : "Entrada";
   const cols: { k: string; t: string; w: string; dir?: boolean; cel: (c: any) => any }[] = [
-    { k: "cli", t: "Cliente", w: "minmax(200px,1.5fr)", cel: (c: any) => <>
+    { k: "cli", t: "Cliente", w: "minmax(0,1.6fr)", cel: (c: any) => <>
       <div className="md-cli">{c.cliente} <Selo360 c={c} /></div>
       <span className="md-end" title={c.endereco || ""}>{c.endereco ? "📍 " + c.endereco : "sem endereço"}</span></> },
-    { k: "venda", t: "Venda", w: "88px", cel: (c: any) => c.pedido || <span className="md-vazio">—</span> },
-    { k: "tipo", t: "Tipo da medida", w: "minmax(145px,1fr)", cel: (c: any) => { const o = origemMedida(R, c); const m = (c.tratativa && c.tratativa.medida) || {};
+    { k: "venda", t: "Venda", w: "84px", cel: (c: any) => c.pedido || <span className="md-vazio">—</span> },
+    { k: "tipo", t: "Tipo da medida", w: "minmax(0,1.15fr)", cel: (c: any) => { const o = origemMedida(R, c); const m = (c.tratativa && c.tratativa.medida) || {};
       return <>
         {o.txt ? <span className={"md-tipo " + o.cls}>{o.txt}</span> : <span className="md-vazio">—</span>}
         {c.medidorId && <span onClick={e => e.stopPropagation()} style={{ display: "inline-flex", gap: 4, alignItems: "center", marginTop: 3, flexWrap: "wrap" }}>
@@ -305,7 +305,7 @@ function ListaMedidas({ aba }: { aba: string }) {
             onChange={async e => { try { await A.medidaTipoVisita(c.id, e.target.value as any); await recarregar(); toast("Tipo da medida atualizado"); } catch (x: any) { toast(x.message); } }}>
             <option value="">{!m.tipoVisita ? "automático" : "voltar ao automático"}</option><option value="confirmacao">🔵 Confirmação</option><option value="pos">🟣 Pós-venda</option></select>}</span>}
         {m.origem === "minha_visita" && <span className="md-end">Minha Visita · sem pagamento</span>}</>; } },
-    ...(souEu ? [] : [{ k: "quem", t: "Quem mede", w: "minmax(120px,.9fr)", cel: (c: any) => { const n = quemMede(c);
+    ...(souEu ? [] : [{ k: "quem", t: "Quem mede", w: "minmax(0,.85fr)", cel: (c: any) => { const n = quemMede(c);
       if (n !== "Sem medidor") return n;
       // ainda sem medidor definido: mostra quem já visitou o cliente antes da venda (é para esse que a medida deve ir)
       const a = antesDaVenda(R, st, c);
@@ -314,10 +314,10 @@ function ListaMedidas({ aba }: { aba: string }) {
         <span className="md-end" title={"Consultor que visitou este cliente antes da venda" + (a.em ? " em " + fmtDate(a.em.slice(0, 10)) : "") + " — a medida deve ir para ele"}>
           📷 visitou: <b style={{ color: "#6a2f9e" }}>{a.nomes.slice(0, 2).join(", ")}</b>{a.nomes.length > 2 ? " +" + (a.nomes.length - 2) : ""}</span></>
         : <span className="md-vazio">sem medidor</span>; } }]),
-    { k: "data", t: rotData, w: "105px", cel: (c: any) => { const e = R.etapaMedida(c);
+    { k: "data", t: rotData, w: "92px", cel: (c: any) => { const e = R.etapaMedida(c);
       if (e === "agendada") return c.dataMedida ? fmtDateTime(c.dataMedida) : <span className="md-vazio" title="Quem vai medir combina a data com o cliente">a combinar</span>;
       const x = dataMed(c); return x ? fmtDate(x) : <span className="md-vazio">—</span>; } },
-    { k: "prazo", t: "Prazo / checklist", w: "minmax(150px,1.1fr)", cel: (c: any) => { const e = R.etapaMedida(c); const dck = diaCk(c); const al = aba !== "aprovados" && dck && em3(dck);
+    { k: "prazo", t: "Prazo / checklist", w: "minmax(0,1.1fr)", cel: (c: any) => { const e = R.etapaMedida(c); const dck = diaCk(c); const al = aba !== "aprovados" && dck && em3(dck);
       const m = (c.tratativa && c.tratativa.medida) || {};
       return <>
         {["agendada", "pendente"].includes(e) && (() => { const pz = prazoMedida(st, c); const atras = pz && hojeISO() > pz.limite;
@@ -327,8 +327,8 @@ function ListaMedidas({ aba }: { aba: string }) {
             {podeSup && <DataLimite c={c} compacto />}</span>; })()}
         {dck ? <span className="md-end" style={al ? { color: "var(--critico)", fontWeight: 700 } : undefined}>{(al ? "⚠️ " : "") + "checklist " + fmtDateTime(dck)}</span> : null}
         {e === "em_obra" && m.previsaoObra ? <span className="md-end">previsão {String(m.previsaoObra).split("-").reverse().join("/")}</span> : null}</>; } },
-    ...(souEu ? [] : [{ k: "onde", t: "Medidas", w: "minmax(130px,1fr)", cel: (c: any) => { const w = ondeMedida(R, st, c); return w.k ? <span className={"md-onde " + w.k}>{w.txt}</span> : <span className="md-vazio">—</span>; } }]),
-    { k: "sit", t: "Situação", w: "minmax(150px,auto)", dir: true, cel: (c: any) => <>
+    ...(souEu ? [] : [{ k: "onde", t: "Medidas", w: "minmax(0,1fr)", cel: (c: any) => { const w = ondeMedida(R, st, c); return w.k ? <span className={"md-onde " + w.k}>{w.txt}</span> : <span className="md-vazio">—</span>; } }]),
+    { k: "sit", t: "Situação", w: "146px", dir: true, cel: (c: any) => <>
       <span className="pill">{ETAPA_MEDIDA[R.etapaMedida(c)] || ""}</span>
       {aba === "minhas" && <span className="pill" style={{ background: "var(--st-concluida)", color: "#fff" }}>R$ 40</span>}
       {(aba === "analise" || aba === "no360") && podeSup && <button className="btn primary sm" onClick={e => { e.stopPropagation(); aprovar(c); }}>✅ Aprovar</button>}

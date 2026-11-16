@@ -1774,7 +1774,8 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .md-onde.no360{background:#e6f4ea;color:#1f7a44;border-color:#9fd3ae}.md-onde.visita{background:#f1e8fa;color:#6a2f9e;border-color:#cdb2e8}.md-onde.fora{background:#fff4dc;color:#8a5a00;border-color:#f0cf86}
 .md-onde.exact{background:#e8f1ff;color:#1b4b8f;border-color:#a9c6ec}
 /* 📐 Medidas — lista em colunas (supervisão, suporte e consultor usam a mesma tabela) */
-.md-tab{display:flex;flex-direction:column;overflow:hidden}
+.md-tab{display:flex;flex-direction:column;overflow:hidden;max-width:100%}
+.md-h,.md-r{max-width:100%}
 .md-h,.md-r{display:grid;gap:10px;align-items:center}
 .md-h{padding:9px 12px;font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);background:var(--surface-2);border-bottom:1px solid var(--line)}
 .md-r{padding:9px 12px;border-bottom:1px solid var(--line-soft);border-left:4px solid transparent;cursor:pointer;font-size:12.5px}
@@ -1783,7 +1784,9 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .md-r.alerta{border-left-color:var(--critico)}
 .md-r.comfoto{border-left-color:#7a3fb0;background:#faf7fe}
 .md-r.comfoto:hover{background:#f1e8fb}
-.md-cel{min-width:0}
+.md-cel{min-width:0;overflow:hidden}
+.md-cel .btn{max-width:100%;white-space:nowrap}
+.md-cel .pill{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .md-cel .md-tipo,.md-cel .md-onde{margin-left:0}
 .md-cel.dir{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;align-items:center}
 .md-cli{font-weight:800;font-size:13px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -1793,7 +1796,7 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .md-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
 .md-chips .lbl{font-size:11.5px;font-weight:800;color:var(--ink-soft)}
 .md-chips .hint{font-size:11.5px}
-@media(max-width:1180px){
+@media(max-width:1240px){
   .md-h{display:none}
   .md-r{grid-template-columns:1fr !important;gap:3px;padding:12px}
   .md-lb{display:inline;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-faint);margin-right:6px}
