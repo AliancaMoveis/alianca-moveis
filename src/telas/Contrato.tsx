@@ -3,7 +3,7 @@
 // · 3) imagens do projeto de cada ambiente · 4) nome, CPF, assinatura e selfie.
 import { useEffect, useRef, useState } from "react";
 import { blobParaJpeg, contratoApi, contratoCopia } from "../lib/contratoUtil";
-import { CONDICOES_CONTRATO, INFO_TECNICAS, LOGO_URL, contratoHtml, cpfValido, diferencasTermo, faltaNoTermo, fmtCpf, type ContratoDados, type TermoAmb } from "../lib/contratoDoc";
+import { CONDICOES_CONTRATO, INFO_TECNICAS, LOGO_URL, contratoHtml, cpfValido, diferencasTermo, faltaNoTermo, fmtCpf, type ContratoDados, type TermoAmb, INICIO_MONTAGEM } from "../lib/contratoDoc";
 import TermoMaterial from "../comp/TermoMaterial";
 
 /** via do cliente: baixa/abre o contrato que ele acabou de assinar (e continua valendo se reabrir o link) */
@@ -129,7 +129,7 @@ export default function Contrato() {
     {passo === 0 && <>
       <div style={card}>
         <h3 style={{ margin: "0 0 6px" }}>1 · Termo de ciência do material</h3>
-        <p style={{ margin: 0, color: COR.s, fontSize: 14 }}>Os materiais abaixo vieram do seu projeto. <b>Confira com o projetista</b>: se algo estiver diferente, corrija aqui mesmo — a alteração fica registrada no contrato.</p>
+        <p style={{ margin: 0, color: COR.s, fontSize: 14 }}>Estes são os materiais definidos no seu projeto pelo projetista. <b>Confira item por item.</b> Se algo estiver diferente do combinado, <b>não assine</b> e fale com o projetista — ele corrige e gera um contrato novo.</p>
         <div style={{ fontSize: 12.5, color: COR.s, marginTop: 8 }}>{INFO_TECNICAS.map((x, i) => <div key={i}>• {x}</div>)}</div>
       </div>
       {d.ambientes.map((a, i) => {
@@ -137,8 +137,8 @@ export default function Contrato() {
         return <div key={i} style={{ ...card, borderColor: matOk[i] ? "#9fc5a8" : COR.l }}>
           <h3 style={{ margin: "0 0 10px" }}>Ambiente {i + 1} de {d.ambientes.length}: {a.nome}</h3>
           {a.fichaObs && <div style={{ fontSize: 13.5, background: "#fff8e6", border: "1px solid #f0d9a6", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}><b>Observações:</b> {a.fichaObs}</div>}
-          {termos[i] && <TermoMaterial v={termos[i]} orig={a.termo} onChange={t => { setTermos(ts => ts.map((x, j) => j === i ? t : x)); setMatOk(m => m.map((x, j) => j === i ? false : x)); }} />}
-          {falta.length > 0 && <div style={{ marginTop: 10, color: "#8a5d00", fontSize: 13.5, fontWeight: 600 }}>Falta preencher: {falta.join(", ")}</div>}
+          {termos[i] && <TermoMaterial v={termos[i]} orig={a.termo} somenteLeitura onChange={() => { /* o cliente não altera o material */ }} />}
+          {falta.length > 0 && <div style={{ marginTop: 10, color: "#8a5d00", fontSize: 13.5, fontWeight: 600 }}>Este ambiente está incompleto ({falta.join(", ")}). Peça ao projetista para completar e gerar o contrato de novo.</div>}
           {ciente(!!matOk[i], v => setMatOk(m => m.map((x, j) => j === i ? v : x)), `Conferi os materiais do ambiente ${a.nome} e estou ciente`, falta.length > 0)}
         </div>;
       })}
@@ -151,6 +151,9 @@ export default function Contrato() {
         <p style={{ margin: 0, color: COR.s, fontSize: 14 }}>Leia cada item e marque <b>Sim</b>. ({geral.filter(Boolean).length} de {CONDICOES_CONTRATO.length})</p>
       </div>
       <div style={card}>{CONDICOES_CONTRATO.map((t, i) => <div key={i} style={{ padding: "10px 0", borderBottom: i < CONDICOES_CONTRATO.length - 1 ? "1px solid #eef0f2" : 0 }}>
+        {i === INICIO_MONTAGEM && <div style={{ margin: "6px 0 12px", padding: "8px 12px", borderRadius: 10, background: "#eef3ff", border: "1.5px solid #c9d8f5" }}>
+          <b style={{ fontSize: 15.5, color: COR.pri }}>🔧 Montagem</b>
+          <div style={{ fontSize: 13, color: COR.s }}>Como funciona a montagem do seu móvel.</div></div>}
         <div style={{ fontSize: 14.5 }}><b>{i + 1} - </b>{t}</div>
         <label style={{ display: "inline-flex", gap: 8, alignItems: "center", marginTop: 7, padding: "6px 14px", borderRadius: 9, cursor: "pointer", fontWeight: 800, background: geral[i] ? COR.okbg : "#f6f7f9", border: "1.5px solid " + (geral[i] ? "#9fc5a8" : COR.l) }}>
           <input type="checkbox" checked={geral[i]} onChange={e => setGeral(g => g.map((x, j) => j === i ? e.target.checked : x))} style={{ width: 22, height: 22, accentColor: COR.ok }} /> Sim</label>
@@ -172,7 +175,7 @@ export default function Contrato() {
           : <div style={{ color: COR.s }}>Sem imagens anexadas para este ambiente.</div>}
         {(a.itens || []).length > 0 && <details style={{ marginTop: 10 }}><summary style={{ cursor: "pointer", fontWeight: 700, color: COR.pri }}>O que foi comprado ({a.itens!.length} itens)</summary>
           <div style={{ fontSize: 13.5, marginTop: 6 }}>{a.itens!.map((x, j) => <div key={j} style={{ padding: "4px 0", borderBottom: "1px solid #eef0f2" }}>{x.qtd} · {x.descricao} <span style={{ color: COR.s }}>({x.medidas})</span></div>)}</div></details>}
-        {ciente(!!imgOk[i], v => setImgOk(m => m.map((x, j) => j === i ? v : x)), a.imagens.length ? `Vi as imagens do projeto do ambiente ${a.nome} e estou de acordo` : `Estou ciente do projeto do ambiente ${a.nome}`)}
+        {ciente(!!imgOk[i], v => setImgOk(m => m.map((x, j) => j === i ? v : x)), a.imagens.length ? `Vi todas as imagens acima e declaro que elas representam o projeto do ambiente ${a.nome} conforme eu solicitei` : `Estou ciente do projeto do ambiente ${a.nome}`)}
       </div>)}
       {botao(ok3 ? "Continuar → Assinatura" : "Confirme as imagens de cada ambiente", ok3, () => setPasso(3))}
     </>}

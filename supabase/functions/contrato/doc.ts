@@ -31,7 +31,7 @@ export const INFO_TECNICAS = [
   "Ambos os materiais são amplamente utilizados na indústria moveleira e possuem qualidade e durabilidade comprovadas.",
 ];
 
-/** "Geral" — os 29 itens do termo da loja (cada um com "Sim") */
+/** "Geral" — os itens do termo da loja (cada um com "Sim"); os últimos são os da MONTAGEM */
 export const CONDICOES_CONTRATO = [
   "O cliente está ciente de que a Aliança não fará nenhum tipo de instalações ou alterações elétricas, hidráulicas ou de gás.",
   "O cliente está ciente que deverá fornecer planta elétrica, hidráulica e de gás para que o montador possa furar as paredes, diminuindo o risco de um incidente.",
@@ -62,7 +62,13 @@ export const CONDICOES_CONTRATO = [
   "O cliente está ciente de que a loja não vende e nem bonifica nenhum tipo de granito/mármore/quartzo, porém poderá dar indicações.",
   "Em casos onde o móvel irá sobrepor registros, tomadas, interruptores etc., o cliente foi informado de que o recorte será realizado de forma manual pelo próprio montador, com serra copo e furadeira.",
   "No caso de móveis com cantos retos, o cliente está ciente de que o móvel não poderá ir até o final da parede, devido a possíveis diferenças de angulação que o imóvel pode apresentar, deixando assim um vão livre (sem utilidade), o qual não ficará visível, mas sim irá garantir que não haja margem de erro no móvel.",
+  // ---- montagem (o contrato mostra estes itens sob o título "Montagem") ----
+  "A montagem do móvel será agendada pelo departamento de montagens da Aliança Móveis, que entrará em contato com o cliente para combinar o dia.",
+  "O cliente está ciente de que pode ser necessário realizar recortes no móvel no próprio local da montagem.",
+  "O cliente está ciente de que o montador recolhe os resíduos do serviço que realizou, porém a limpeza geral do local não é de responsabilidade do montador nem da Aliança Móveis.",
 ];
+/** a partir deste item, as condições são da MONTAGEM (o contrato e a tela mostram um título antes) */
+export const INICIO_MONTAGEM = CONDICOES_CONTRATO.length - 3;
 
 export const termoVazio = (): TermoAmb => ({ estrutura: { mat: null, cor: "" }, portas: { mat: null, cor: "" }, envoltorio: { mat: null, cor: "" }, paineis: { mat: null, cor: "" }, corredicas: null, dobradicas: null });
 
@@ -164,7 +170,7 @@ ${assinado ? "" : `<div class="ass"><div>Assinatura do cliente</div><div>Data: _
 
   // 2) geral
   const pGeral = `<div class="pg quebra">${cab("GERAL")}<h2>GERAL</h2><div class="g">
-${CONDICOES_CONTRATO.map((t, i) => `<div class="it"><b>${i + 1} - </b>${esc(t)}<div class="sim">${bx(!!(r && r.geral?.[i]))}Sim</div></div>`).join("")}</div>${rodape}</div>`;
+${CONDICOES_CONTRATO.map((t, i) => `${i === INICIO_MONTAGEM ? `<h3 style="margin:8px 0 4px">Montagem</h3>` : ""}<div class="it"><b>${i + 1} - </b>${esc(t)}<div class="sim">${bx(!!(r && r.geral?.[i]))}Sim</div></div>`).join("")}</div>${rodape}</div>`;
 
   // 3) projeto de cada ambiente: imagens + checklist do projetista + o que foi comprado
   const pAmb = d.ambientes.map((amb, i) => {
@@ -174,7 +180,7 @@ ${amb.imagens.length ? `<div class="imgs">${amb.imagens.map(x => `<figure><img s
 ${fic.length ? `<h3>Checklist do ambiente <i>(conferido pelo projetista com o cliente)</i></h3><table>${fic.map(([k, v]) => `<tr><td>${esc(k)}</td><td style="width:22mm">${bx(v === true)}Sim</td><td style="width:22mm">${bx(v === false)}Não</td></tr>`).join("")}</table>` : ""}
 ${amb.fichaObs ? `<h3>Observações do ambiente</h3><p class="cor">${esc(amb.fichaObs)}</p>` : ""}
 ${amb.itens?.length ? `<h3>Resumo do que foi comprado <i>(sem valores)</i></h3><table class="it2"><tr><th style="width:18mm">Qtd</th><th>Descrição</th><th style="width:38mm">Medidas (L × A × P)</th></tr>${amb.itens.map(x => `<tr><td>${esc(x.qtd)}</td><td>${esc(x.descricao)}</td><td>${esc(x.medidas)}</td></tr>`).join("")}</table>` : ""}
-${assinado ? `<div class="ok">☑ O cliente visualizou as imagens do projeto deste ambiente e está de acordo.</div>` : ""}${rodape}</div>`;
+${assinado ? `<div class="ok">☑ O cliente visualizou as imagens do projeto deste ambiente e declarou que elas representam o projeto conforme solicitado.</div>` : ""}${rodape}</div>`;
   }).join("");
 
   // 4) assinatura eletrônica
@@ -191,9 +197,9 @@ ${assinado ? `<div class="ok">☑ O cliente visualizou as imagens do projeto des
 <tr><td>Projetista</td><td>${esc(a!.projetista || d.projetista)}</td></tr></table>
 <h3>O que o cliente confirmou</h3><div class="info">
 <p>☑ Termo de ciência do material — ${d.ambientes.length} ambiente${d.ambientes.length === 1 ? "" : "s"} conferido${d.ambientes.length === 1 ? "" : "s"}</p>
-<p>☑ Geral — ${CONDICOES_CONTRATO.length} itens marcados "Sim"</p>
+<p>☑ Geral — ${CONDICOES_CONTRATO.length} itens marcados "Sim" (inclusive os da montagem)</p>
 <p>☑ Imagens do projeto — visualizadas e de acordo em todos os ambientes</p></div>
-${alts.length ? `<h3>Alterações feitas pelo cliente no termo do material</h3><div class="info">${alts.map(x => `<p>• ${esc(x)}</p>`).join("")}</div>` : `<p class="rub">O cliente confirmou o termo do material como veio do sistema, sem alterações.</p>`}
+${alts.length ? `<h3>Alterações feitas pelo cliente no termo do material</h3><div class="info">${alts.map(x => `<p>• ${esc(x)}</p>`).join("")}</div>` : `<p class="rub">O material foi definido pelo projetista e confirmado pelo cliente, sem alterações.</p>`}
 <div style="display:flex;gap:18px;align-items:flex-end;margin-top:10px">
 <div style="flex:1;text-align:center"><img src="${esc(a!.assinatura)}" style="max-width:100%;max-height:120px;border-bottom:1px solid #111" alt=""><div style="font-size:9pt;margin-top:3px">Assinatura do cliente — ${esc(a!.nome)}</div></div>
 <div style="width:150px;text-align:center"><img src="${esc(a!.selfie)}" style="width:150px;height:190px;object-fit:cover;border-radius:6px;border:1px solid #999" alt=""><div style="font-size:8pt;margin-top:3px">Selfie no momento da assinatura</div></div></div>

@@ -4,9 +4,20 @@ import { AMORT, AMORT_ROT, LINHAS_TERMO, MAT_ROT, type Amort, type LinhaTermo, t
 
 const COR = { pri: "#284b8f", l: "#d5dae2", s: "#5a6270", alt: "#9b1c1c", altbg: "#fdf1f1" };
 
-export default function TermoMaterial({ v, orig, onChange, compacto, sugCores }: {
-  v: TermoAmb; orig?: TermoAmb; onChange: (t: TermoAmb) => void; compacto?: boolean; sugCores?: string[];
+export default function TermoMaterial({ v, orig, onChange, compacto, sugCores, somenteLeitura }: {
+  v: TermoAmb; orig?: TermoAmb; onChange: (t: TermoAmb) => void; compacto?: boolean; sugCores?: string[]; somenteLeitura?: boolean;
 }) {
+  // só leitura (assinatura do cliente): o material é definido pelo projetista; o cliente confere e dá ciência
+  if (somenteLeitura) return <div style={{ display: "grid", gap: 8 }}>
+    {LINHAS_TERMO.map(([k, rot]) => { const l = v[k] as LinhaTermo;
+      return <div key={k} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "center", padding: "7px 0", borderBottom: "1px solid #eef0f2" }}>
+        <b style={{ fontSize: 15 }}>{rot}</b>
+        <span style={{ fontSize: 15, textAlign: "right" }}>{l?.mat === "NAO" ? <span style={{ color: COR.s }}>não se aplica</span>
+          : <>{MAT_ROT[String(l?.mat || "")] || "—"}{l?.cor ? <> · <b>{l.cor}</b></> : null}</>}</span></div>; })}
+    {AMORT.map(([k, rot]) => { const a = v[k] as Amort;
+      return <div key={k} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "center", padding: "7px 0" }}>
+        <b style={{ fontSize: 15 }}>{rot}</b><span style={{ fontSize: 15 }}>{AMORT_ROT[String(a || "")] || "—"}</span></div>; })}
+  </div>;
   const btn = (on: boolean, alterado: boolean): any => ({
     padding: compacto ? "4px 9px" : "8px 11px", fontSize: compacto ? 12.5 : 14, fontWeight: 700, borderRadius: 8, cursor: "pointer",
     border: "1.5px solid " + (on ? COR.pri : compacto ? "rgba(128,140,160,.45)" : COR.l), background: on ? COR.pri : compacto ? "transparent" : "#fff", color: on ? "#fff" : compacto ? "inherit" : "#1a1d21",
