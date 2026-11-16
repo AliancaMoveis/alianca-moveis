@@ -1,5 +1,6 @@
 // Integração ALIANÇA 360 ⇄ Exact (checklist)
 // · sync: lê o quadro do checklist e o calendário do Exact e aplica no 360 (rpc exact_aplicar)
+// · enderecos: completa o endereço das medidas (e do checklist da mesma venda) que estão sem endereço, pelo cartão de medição do Exact
 // · push: envia para o Exact o agendamento de um checklist do 360 (cria / altera / exclui eventos)
 // Chamada pelo banco (pg_net / pg_cron) com o cabeçalho x-exact-segredo. A chave do Exact fica no segredo EXACT_TOKEN.
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -19,6 +20,34 @@ async function exact(token: string, metodo: string, rota: string, corpo?: unknow
   return d && typeof d === "object" && "data" in d ? d.data : d;
 }
 
+const cap = (x: string) => String(x || "").trim().toLowerCase().replace(/(^|[\s\-\/(])([a-zà-ú])/g, (_m, a, b) => a + b.toUpperCase());
+/** endereço do cliente do Exact em uma linha: "Da Paz, 733 - Casa · Planta Deodoro, Piraquara-PR" */
+function enderecoExact(cli: any): string {
+  const a = cli?.deliveryAddress?.street ? cli.deliveryAddress : cli?.address; if (!a) return "";
+  const num = String(a.addressNumber || "").trim(); let rua = cap(a.street);
+  if (num && rua && !rua.includes(num)) rua += ", " + num;
+  if (String(a.add || "").trim()) rua += " - " + cap(a.add);
+  const uf = String(a.state || "").trim().toUpperCase();
+  const cid = [cap(a.neighbor), cap(a.city) + (uf ? "-" + uf : "")].filter(x => x && x !== "-" + uf).join(", ");
+  return [rua, cid].filter(Boolean).join(" · ");
+}
+async function completarEnderecos(sb: any, token: string, limite = 25) {
+  const { data: ls } = await sb.from("chamados").select("id,pedido,tratativa").eq("tipo", "medidas").or("endereco.is.null,endereco.eq.")
+    .not("tratativa->medida->>exactId", "is", null).neq("status", "concluida").limit(limite);
+  let ok = 0; const erros: string[] = [];
+  for (const c of ls || []) {
+    const ex = c.tratativa?.medida?.exactId; if (!ex) continue;
+    try {
+      const t = await exact(token, "GET", `/ticket/measuring/${ex}`);
+      const e = enderecoExact(t?.client); if (!e) continue;
+      await sb.from("chamados").update({ endereco: e }).eq("id", c.id).or("endereco.is.null,endereco.eq.");
+      if (c.pedido) await sb.from("chamados").update({ endereco: e }).eq("pedido", c.pedido).eq("tipo", "checklist").or("endereco.is.null,endereco.eq.");
+      ok++;
+    } catch (x: any) { erros.push(c.id + ": " + String(x?.message || x).slice(0, 80)); }
+  }
+  return { ok, vistos: (ls || []).length, erros };
+}
+
 Deno.serve(async (req: Request) => {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   const { data: cfg } = await sb.from("exact_config").select("*").eq("id", 1).maybeSingle();
@@ -32,6 +61,8 @@ Deno.serve(async (req: Request) => {
       const d = await exact(token, b.metodo, b.rota, b.corpo);
       return json({ ok: true, d });
     }
+
+    if (b.acao === "enderecos") return json({ ok: true, r: await completarEnderecos(sb, token, Math.min(Number(b.limite) || 40, 120)) });
 
     // ---------- Exact → 360 ----------
     if (b.acao === "sync") {
@@ -61,7 +92,16 @@ Deno.serve(async (req: Request) => {
       for (const c of cards) if (det[c.saleId]) Object.assign(c, det[c.saleId]);
       const { data: r, error } = await sb.rpc("exact_aplicar", { p: { agendas, cards, eventos, completo } });
       if (error) throw new Error(error.message);
-      return json({ ok: true, r });
+      // quadro de Medição do Exact → filas de Medidas do 360 (1 cartão = 1 medida)
+      let med: any = null;
+      try {
+        const qm = await exact(token, "GET", "/tickets/measuring/board");
+        const cm: any[] = []; for (const col of qm || []) for (const c of col.cards || []) cm.push({ ...c, _col: col.key });
+        if (cm.length) { const { data: rm, error: em } = await sb.rpc("exact_medidas_aplicar", { p: cm }); med = em ? { erro: em.message } : rm; }
+      } catch (x: any) { med = { erro: String(x.message || x).slice(0, 300) }; }
+      // endereço das medidas que chegaram sem endereço (a planilha do Tático não traz)
+      let end: any = null; try { end = await completarEnderecos(sb, token, 15); } catch (x: any) { end = { erro: String(x.message || x).slice(0, 200) }; }
+      return json({ ok: true, r, medidas: med, enderecos: end });
     }
 
     // ---------- bloqueio do 360 → evento manual no Exact ----------
