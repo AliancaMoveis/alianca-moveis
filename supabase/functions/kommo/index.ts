@@ -228,7 +228,18 @@ Deno.serve(async (req) => {
         return json({ ok: false, erro: `não consegui gravar os dados no lead (${up.st})` }, 200);
       }
 
-      const bot = Number(await segredo("kommo_bot_primeiro"));
+      // dois modelos aprovados: o primeiro contato e a nova data pedida pelo cliente.
+      // Cada um tem o seu bot na Kommo; o 360 diz qual usar.
+      const novaData = b.modelo === "nova_data";
+      let bot = 0;
+      try { bot = Number(await segredo(novaData ? "kommo_bot_novadata" : "kommo_bot_primeiro")); } catch { /* ainda não configurado */ }
+      if (!bot) {
+        const motivo = novaData
+          ? "o modelo de nova data ainda está em análise na Meta — assim que ela aprovar, o envio passa a funcionar sozinho"
+          : "o modelo do primeiro contato não está configurado na Kommo";
+        await salvarVinculo(String(it.id), { contato_id: g.contato_id, lead_id: g.lead_id, origem: g.origem, contatos: (g as any).contatos || null, envio_status: "falhou", envio_em: new Date().toISOString(), envio_erro: motivo });
+        return json({ ok: false, erro: motivo }, 200);
+      }
       const run = await kommo(`/api/v4/bots/${bot}/run`, {
         method: "POST", body: JSON.stringify({ entity_id: g.lead_id, entity_type: "leads" }),
       });

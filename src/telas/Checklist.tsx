@@ -70,6 +70,18 @@ const nomeCli = (c: any) => primeiroNome(String(c.cliente || "").toLowerCase().r
 export const fmtTel = (t: string) => { const d = String(t || "").replace(/\D/g, ""); return d.length === 11 ? `(${d.slice(0, 2)}) ${d[2]}-${d.slice(3, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : t; };
 
 export const MODELOS: Record<string, string> = { primeiro: "Primeiro contato (com data)", cobranca: "Cliente não respondeu", retorno: "Retorno (obra / outra data)", confirmacao: "Confirmação de presença (agendado)" };
+/** Texto EXATO dos modelos aprovados pela Meta (99542 e 99588) — é isso que sai pela Kommo. */
+export function modeloAprovado(tipo: string, c: any, data: string, remetente: string) {
+  const n = nomeCli(c), quando = dataLonga(data), pedido = c.pedido || "";
+  const meio = tipo === "retorno"
+    ? `Conforme você pediu, separei uma nova data para a revisão final do seu pedido ${pedido} (checklist).`
+    : `Seu pedido ${pedido} chegou na etapa de revisão final (checklist), que fazemos antes de enviar o projeto para a fábrica.`;
+  const obra = tipo === "retorno"
+    ? "Para o checklist acontecer, o ambiente precisa estar pronto para a montagem: sem obra ou reforma em andamento, com piso, pintura, gesso e elétrica finalizados."
+    : "Para o checklist acontecer, o ambiente precisa estar pronto para a montagem: sem obra ou reforma em andamento, com piso, pintura, gesso e elétrica finalizados. Se ainda estiver em obra, me informe a previsão de término.";
+  return `Olá, ${n}! Tudo bem?\n\nAqui é ${remetente}, da Aliança Móveis. ${meio}\n\nReservamos para você o horário de *${quando}*. Você confirma?\n\n${obra}\n\nNo dia, traga as medidas dos eletrodomésticos e do colchão que fazem parte do projeto.`;
+}
+
 export function mensagemCk(tipo: string, c: any, data: string, remetente: string) {
   const n = nomeCli(c), quando = dataLonga(data);
   const ola = `Olá, ${n}! Tudo bem?\n\nAqui é ${remetente}, da Aliança Móveis.`;
@@ -1434,8 +1446,10 @@ export function ModalWhats({ c, inicial }: any) {
   const [txt, setTxt] = useState(""); const [editado, setEditado] = useState(false);
   const [encaixe, setEncaixe] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const texto = editado ? txt : mensagemCk(tipo, c, data, rem);
-  const comData = tipo === "primeiro" || tipo === "retorno";
+  // primeiro contato e nova data saem pela Kommo, com modelo aprovado: texto travado
+  const peloKommo = tipo === "primeiro" || tipo === "retorno";
+  const texto = peloKommo ? modeloAprovado(tipo, c, data, rem) : editado ? txt : mensagemCk(tipo, c, data, rem);
+  const comData = peloKommo;
   // tempo que trava a agenda (não vai na mensagem): padrão pelo valor do cupom
   const sug = durSugeridaCk(c);
   const [dur, setDur] = useState<number>(Number(k.duracaoMin) || sug.min);
@@ -1454,10 +1468,11 @@ export function ModalWhats({ c, inicial }: any) {
     // Primeiro contato sai pelo número do checklist, pela Kommo. O horário só é
     // reservado depois que a Kommo confirma o envio: se falhar, o cliente continua
     // na fila com o motivo, em vez de ficar com um horário preso à toa.
-    if (tipo === "primeiro") {
+    if (peloKommo) {
       setEnviando(true);
       try {
-        await A.kommoEnviar({ chamado: c.id, cliente: c.cliente, telefone: n, pedido: c.pedido, atendente: rem, data: dataLonga(data) });
+        await A.kommoEnviar({ chamado: c.id, cliente: c.cliente, telefone: n, pedido: c.pedido, atendente: rem, data: dataLonga(data),
+          modelo: tipo === "retorno" ? "nova_data" : "primeiro" });
       } catch (x: any) { setEnviando(false); toast("Não enviou: " + x.message); return; }
       try {
         await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj, encaixe, texto, duracaoMin: dur, diasExtras: extras });
@@ -1465,7 +1480,9 @@ export function ModalWhats({ c, inicial }: any) {
       // fecha e avisa ANTES de recarregar: a recarga demora, e deixar a tela aberta
       // com o botão livre faz a pessoa achar que não foi e mandar de novo para o cliente
       fechar();
-      toast("✅ Mensagem enviada pelo WhatsApp do checklist — horário reservado");
+      toast(tipo === "retorno"
+        ? "✅ Nova data enviada pelo WhatsApp do checklist — horário reservado"
+        : "✅ Mensagem enviada pelo WhatsApp do checklist — horário reservado");
       recarregar();
       return;
     }
@@ -1494,14 +1511,14 @@ export function ModalWhats({ c, inicial }: any) {
         {comData && confExtras.length > 0 && !conflitosProj(st, data, proj, c.id, dur).length && <label className="full" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, fontWeight: 600, color: "var(--danger)" }}><input type="checkbox" style={{ width: "auto" }} checked={encaixe} onChange={ev => setEncaixe(ev.target.checked)} />Confirmo o encaixe nos dias adicionais</label>}
         {comData && <Sugestoes valor={data} excluirId={c.id} projetista={proj} durMin={dur} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); setEncaixe(false); setEditado(false); }} />}
         <div className="field full">
-          <label>{tipo === "primeiro" ? "Texto que o cliente vai receber (modelo aprovado — não editável)" : "Texto (pode editar antes de enviar)"}</label>
-          <textarea rows={13} value={texto} readOnly={tipo === "primeiro"} onChange={ev => { setTxt(ev.target.value); setEditado(true); }} />
-          {tipo === "primeiro" && <span className="hint">Sai do número do checklist (41 3316-9095), com os botões <b>Confirmo o horário</b> · <b>Outra data</b> · <b>Ainda em obra</b>. O texto é o modelo aprovado pela Meta: alterar aqui faria a mensagem não ser entregue, por isso ele vem travado.</span>}
+          <label>{peloKommo ? "Texto que o cliente vai receber (modelo aprovado — não editável)" : "Texto (pode editar antes de enviar)"}</label>
+          <textarea rows={13} value={texto} readOnly={peloKommo} onChange={ev => { setTxt(ev.target.value); setEditado(true); }} />
+          {peloKommo && <span className="hint">Sai do número do checklist (41 3316-9095), com os botões <b>Confirmo o horário</b> · <b>Outra data</b> · <b>Ainda em obra</b>. O texto é o modelo aprovado pela Meta: alterar aqui faria a mensagem não ser entregue, por isso ele vem travado.</span>}
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
         <button className="btn primary" disabled={enviando} onClick={enviar}>
-          {tipo === "primeiro"
+          {peloKommo
             ? (enviando ? "Enviando…" : "📨 Enviar mensagem pelo WhatsApp do checklist")
             : "Abrir WhatsApp" + (tipo === "confirmacao" ? "" : " e registrar o contato")}
         </button>
