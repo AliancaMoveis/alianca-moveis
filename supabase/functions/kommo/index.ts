@@ -171,18 +171,20 @@ async function salvarVinculo(chamado_id: string, v: Record<string, unknown>) {
 async function garantirLead(it: any) {
   const s = await situacao(String(it.telefone || ""));
   if (!s.ok) return { ok: false, motivo: (s as any).motivo };
+  // todos os cadastros duplicados do cliente: a resposta dele pode voltar por qualquer um
+  const contatos: number[] = (s as any).contatos || [];
   const jaCk = s.achou ? s.leads.find((l: any) => l.funil === FUNIL_CK) : null;
-  if (jaCk) return { ok: true, lead_id: jaCk.id, contato_id: s.contato_id, origem: "encontrado" };
+  if (jaCk) return { ok: true, lead_id: jaCk.id, contato_id: s.contato_id, origem: "encontrado", contatos };
   const noPre = s.achou ? s.leads.find((l: any) => l.funil === FUNIL_PRE) : null;
   if (noPre && noPre.etapa !== ETAPA_PRE_COMPROU) {
     const { st } = await kommo(`/api/v4/leads/${noPre.id}`, {
       method: "PATCH", body: JSON.stringify({ pipeline_id: FUNIL_CK, status_id: ETAPA_CK_ENTRADA }),
     });
-    if (st === 200) return { ok: true, lead_id: noPre.id, contato_id: s.contato_id, origem: "movido", etapa_anterior: noPre.nome_etapa };
+    if (st === 200) return { ok: true, lead_id: noPre.id, contato_id: s.contato_id, origem: "movido", etapa_anterior: noPre.nome_etapa, contatos };
   }
   const c = await criarCliente(it, s.achou ? s.contato_id : null);
   if (!c.ok) return { ok: false, motivo: `não consegui criar o cliente na Kommo (${(c as any).st})` };
-  return { ok: true, lead_id: c.lead_id, contato_id: c.contato_id, origem: "criado" };
+  return { ok: true, lead_id: c.lead_id, contato_id: c.contato_id, origem: "criado", contatos: [...contatos, c.contato_id].filter(Boolean) as number[] };
 }
 
 Deno.serve(async (req) => {
@@ -230,7 +232,7 @@ Deno.serve(async (req) => {
       });
       const ok = run.st >= 200 && run.st < 300;
       await salvarVinculo(String(it.id), {
-        contato_id: g.contato_id, lead_id: g.lead_id, origem: g.origem,
+        contato_id: g.contato_id, lead_id: g.lead_id, origem: g.origem, contatos: (g as any).contatos || null,
         envio_status: ok ? "enviado" : "falhou", envio_em: new Date().toISOString(),
         envio_erro: ok ? null : `a Kommo recusou o disparo (${run.st})`,
         envio_data_oferecida: String(b.data || ""),
