@@ -12,7 +12,7 @@ import { SeloMedidaVenda } from "./Medidas";
 import { abrirTermo } from "./ProjetistaChecklist";
 
 export const ETAPA_CK: Record<string, [string, string]> = {
-  a_contatar: ["A contatar", "var(--primary)"], aguardando: ["Mensagem enviada · aguardando resposta", "var(--warn)"], outra_data: ["Aguardando · pediu outra data", "var(--st-respondida)"],
+  a_contatar: ["A contatar", "var(--primary)"], aguardando: ["Mensagem enviada · aguardando resposta", "var(--warn)"], outra_data: ["🔄 Pediu nova data", "var(--st-respondida)"],
   em_obras: ["Aguardando · obra", "var(--st-tratativa)"], sem_resposta: ["Aguardando · sem resposta", "var(--danger)"], espera: ["Aguardando", "var(--st-tratativa)"],
   agendado: ["Agendado", "var(--st-concluida)"], realizado: ["Checklist realizado", "var(--st-concluida)"], desistiu: ["Encerrado sem checklist", "var(--ink-faint)"],
 };
@@ -37,9 +37,8 @@ export function grupoCk(c: any) {
   if (c.status === "concluida") return "encerrado";
   const e = etapaCk(c), k = ck(c);
   if (e === "agendado") return "agendado";
-  // quem pediu outra data tem fila própria: a mensagem dele é outra, e repetir a
-  // primeira depois de ele recusar o horário passa a impressão de descaso
-  if (e === "outra_data") return "nova_data";
+  // quem pediu outra data continua na fila de agendar — ele PRECISA de data nova.
+  // Fica junto, mas com filtro próprio, para ninguém repetir a oferta que ele recusou.
   if (["em_obras", "sem_resposta", "espera"].includes(e) || (k.medidaId && !k.medidaOk)) return "aguardando";
   return "agendar";
 }
@@ -83,19 +82,18 @@ export function mensagemCk(tipo: string, c: any, data: string, remetente: string
 const ABAS: Record<string, [string, string]> = {
   agendar: ["A agendar", "Clientes para chamar no WhatsApp e agendar. Quem não puder agora vai para “Aguardando”, com o motivo."],
   aguardando: ["Aguardando", "Clientes que ainda não podem agendar: obra, sem resposta, medida… Cada um com o motivo e a data de retorno."],
-  nova_data: ["Cliente solicitou nova data", "Recusou o horário oferecido e pediu outro. O horário já foi liberado. Combine a nova data com ele — a mensagem aqui é a de retorno, não a de primeiro contato."],
   agendados: ["Agendados", "Checklists com data marcada, por dia. Altere, desmarque ou marque como realizado."],
   confirmar: ["Confirmação de presença", "Agendados com data próxima: envie a confirmação pronta e marque quando o cliente confirmar."],
   agenda: ["Agenda do checklist", "A agenda do dia separada por projetista, no formato do sistema interno."],
   busca: ["Buscar cliente", "Procura em TODOS os checklists, em qualquer etapa — por nome, CPF, nº da venda, telefone ou projetista. Cada linha mostra em que etapa o cliente está."],
 };
 /** em que etapa o cliente está, para a busca mostrar na linha */
-const ETAPA_BUSCA: Record<string, string> = { agendar: "A agendar", aguardando: "Aguardando", nova_data: "Pediu nova data", agendado: "Agendado" };
+const ETAPA_BUSCA: Record<string, string> = { agendar: "A agendar", aguardando: "Aguardando", agendado: "Agendado" };
 
 export default function Checklist({ aba = "agendar" }: { aba?: string }) {
   const { R, st, toast, recarregar, setModal } = useApp() as any;
   const cfg = cfgAgenda(st), confDias = cfg.confirmarDias ?? 2;
-  const PADRAO: Record<string, string> = { agendar: "hoje", aguardando: "todos", nova_data: "todos", agendados: "proximos", confirmar: "a_confirmar" };
+  const PADRAO: Record<string, string> = { agendar: "hoje", aguardando: "todos", agendados: "proximos", confirmar: "a_confirmar" };
   const [f, setF] = useState(PADRAO[aba] || "todos"); const [q, setQ] = useState("");
   const [importando, setImportando] = useState(false);
   const arq = useRef<HTMLInputElement>(null);
@@ -121,6 +119,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       hoje: ["Para fazer hoje", aFazerHoje],
       a_contatar: ["Ainda não contatados", c => G("agendar")(c) && etapaCk(c) === "a_contatar"],
       msg: ["Mensagem enviada · aguardando resposta", c => G("agendar")(c) && etapaCk(c) === "aguardando"],
+      nova_data: ["🔄 Pediram nova data", c => G("agendar")(c) && etapaCk(c) === "outra_data"],
       vencido: ["⚠️ Prazo vencido", c => G("agendar")(c) && reservaVencida(c, cfgAgenda(st))],
       todos: ["Todos a agendar", G("agendar")],
     },
@@ -131,10 +130,6 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       sem_resposta: ["📵 Sem resposta", c => G("aguardando")(c) && chaveMotivo(c) === "sem_resposta"],
       medida: ["📐 Aguardando medida", c => G("aguardando")(c) && chaveMotivo(c) === "medida"],
       outros: ["Outros motivos", c => G("aguardando")(c) && !["obra", "sem_resposta", "medida"].includes(chaveMotivo(c))],
-    },
-    nova_data: {
-      todos: ["Todos que pediram nova data", G("nova_data")],
-      retornar: ["Retornar hoje / atrasados", c => G("nova_data")(c) && retornoVencido(c)],
     },
     agendados: {
       proximos: ["Próximos", c => G("agendado")(c) && diaAg(c) >= hoje()],
@@ -154,7 +149,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
   const cont: Record<string, number> = {}; Object.entries(FILTROS).forEach(([k, [, fn]]) => (cont[k] = todos.filter(fn).length));
   const busca = q.trim().toLowerCase(), dig = q.replace(/\D/g, "");
   // "solicitam encaixe": todos desta aba com o pedido, do mais antigo para o mais novo (prioridade por demanda)
-  const grupoAba = aba === "agendar" ? "agendar" : aba === "aguardando" ? "aguardando" : aba === "nova_data" ? "nova_data" : "agendado";
+  const grupoAba = aba === "agendar" ? "agendar" : aba === "aguardando" ? "aguardando" : "agendado";
   const encAba = todos.filter((c: any) => querEnc(c) && grupoCk(c) === grupoAba && (grupoAba !== "agendado" || diaAg(c) >= hoje()));
   // aba de busca: varre TODOS os checklists, em qualquer etapa, e só lista depois de digitar algo
   let lista = aba === "busca" ? todos : soEnc ? encAba : FILTROS[f] ? todos.filter(FILTROS[f][1]) : [];
@@ -239,7 +234,6 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
         <Kpi n={todos.filter(aFazerHoje).length} l="Para fazer hoje" cls={todos.some(aFazerHoje) ? "alert" : ""} />
         <Kpi n={nG("agendar")} l="A agendar" />
         <Kpi n={nG("aguardando")} l={"Aguardando" + (todos.some((c: any) => G("aguardando")(c) && retornoVencido(c)) ? " · " + todos.filter((c: any) => G("aguardando")(c) && retornoVencido(c)).length + " para retornar" : "")} />
-        <Kpi n={nG("nova_data")} l={"Pediram nova data" + (todos.some((c: any) => G("nova_data")(c) && retornoVencido(c)) ? " · " + todos.filter((c: any) => G("nova_data")(c) && retornoVencido(c)).length + " para retornar" : "")} cls={todos.some((c: any) => G("nova_data")(c) && retornoVencido(c)) ? "alert" : ""} />
         <Kpi n={todos.filter((c: any) => G("agendado")(c) && diaAg(c) >= hoje()).length} l="Agendados" />
         <Kpi n={todos.filter((c: any) => aConfirmar(c, confDias)).length} l="Presença a confirmar" cls={todos.some((c: any) => aConfirmar(c, confDias)) ? "alert" : ""} />
         <Kpi n={todos.filter((c: any) => etapaCk(c) === "realizado" && String(ck(c).realizadoEm || "").slice(0, 7) === mes).length} l="Realizados no mês" />
@@ -302,7 +296,7 @@ function CartaoCk({ c, aba }: any) {
             {g !== "agendado" && (e === "aguardando" && k.proposta ? (k.propostaProjetista || k.projetista) && <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: corProj(k.propostaProjetista || k.projetista), color: "#fff" }}>👤 {k.propostaProjetista || k.projetista}</span>
               : k.projetista && <span style={{ fontSize: 12, color: "var(--ink-faint)" }} title="Projetista de um agendamento que foi desmarcado — o cliente NÃO está agendado">agendamento anterior{k.agendaAnterior ? " " + fmtDateTime(k.agendaAnterior) : ""} com {k.projetista}</span>)}</div>
           <DadosCk c={c} />
-          {(g === "aguardando" || g === "nova_data") && <div style={{ marginTop: 7, padding: "7px 10px", borderRadius: 8, background: "var(--st-tratativa-bg)", border: "1px solid var(--st-tratativa)", fontSize: 13.5 }}>
+          {(g === "aguardando" || e === "outra_data") && <div style={{ marginTop: 7, padding: "7px 10px", borderRadius: 8, background: "var(--st-tratativa-bg)", border: "1px solid var(--st-tratativa)", fontSize: 13.5 }}>
             <b>⏸ Motivo:</b> {motivoCk(c) || "—"}
             {k.retornarEm ? <span style={{ marginLeft: 10, ...(atrasado ? { color: "var(--danger)", fontWeight: 700 } : {}) }}>· retornar em {fmtDate(String(k.retornarEm).slice(0, 10))}{atrasado ? " (hoje/atrasado)" : ""}</span> : <span style={{ marginLeft: 10, color: "var(--ink-faint)" }}>· sem data de retorno</span>}
           </div>}
@@ -340,7 +334,7 @@ function CartaoCk({ c, aba }: any) {
           {e === "aguardando" && k.proposta && c.status !== "concluida" && <button className="btn sm" style={venc ? { background: "#9a3412", color: "#fff", borderColor: "#9a3412", fontWeight: 700 } : undefined} onClick={liberar} title="Libera o horário oferecido e o cliente volta para A agendar">🔓 Liberar agenda</button>}
           {e === "aguardando" && k.proposta && c.status !== "concluida" && venc && <button className="btn sm" style={{ color: "#9a3412", borderColor: "#9a3412", fontWeight: 700 }} onClick={renovar} title={"Mantém o horário por mais " + segura + " dias"}>🔁 Renovar +{segura} dias</button>}
           {g === "agendar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="espera" />)}>⏸ Aguardando</button>}
-          {c.status !== "concluida" && !querEnc(c) && ["agendar", "aguardando", "nova_data", "agendado"].includes(g) && <button className="btn sm" style={{ color: "var(--danger)", borderColor: "var(--danger)", fontWeight: 700 }} onClick={() => setModal(<ModalQuerEncaixe c={c} />)} title="Cliente quer ser antecipado se abrir vaga">❗ Solicita encaixe</button>}
+          {c.status !== "concluida" && !querEnc(c) && ["agendar", "aguardando", "agendado"].includes(g) && <button className="btn sm" style={{ color: "var(--danger)", borderColor: "var(--danger)", fontWeight: 700 }} onClick={() => setModal(<ModalQuerEncaixe c={c} />)} title="Cliente quer ser antecipado se abrir vaga">❗ Solicita encaixe</button>}
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<Modal titulo={"Alterar agenda · " + c.cliente + " · venda " + c.pedido} onFechar={() => setModal(null)}><EditorAgenda c={c} /></Modal>)}>✏️ Projetista / horário</button>}
           {g === "agendado" && aba !== "confirmar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="desmarcar" />)}>❌ Desmarcar</button>}
           <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>{c.status === "concluida" ? "Reabrir" : g === "agendado" ? "Realizado / outros" : "Registrar resultado"}</button>
