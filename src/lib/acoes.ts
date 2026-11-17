@@ -291,6 +291,18 @@ export const A = {
   vendedorAssumir: (id: string) => rpc("vendedor_assumir", { p_id: id }),
   salvarMeusDados: (nomeCompleto: string, telefone: string) => rpc("salvar_meus_dados", { p_nome_completo: nomeCompleto, p_telefone: telefone }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),
+  /**
+   * Manda a mensagem de agendamento pelo número do checklist, via Kommo.
+   * Acha ou cria o cliente lá, grava os dados do atendimento no lead e dispara o
+   * modelo aprovado. Só devolve ok quando a Kommo aceitou — é isso que autoriza
+   * o 360 a reservar o horário.
+   */
+  kommoEnviar: async (p: { chamado: string; cliente: string; telefone: string; pedido?: string | null; atendente: string; data: string }) => {
+    const { data, error } = await sb.functions.invoke("kommo", { body: { acao: "enviar", ...p } });
+    if (error) throw new Error(error.message || "Não consegui falar com a Kommo");
+    if (!data?.ok) throw new Error(data?.erro || "A Kommo não confirmou o envio");
+    return data as { ok: true; lead_id: number; contato_id: number; origem: string };
+  },
   // área do projetista do checklist (agenda dele + termo de ciência a partir da listagem do Promob — sem valores)
   ckProjetistaEu: () => rpc<{ projetista: string | null; podeTodos: boolean; projetistas: string[] }>("ck_projetista_eu"),
   ckProjetistaAgenda: (proj: string | null, de: string, ate: string) => rpc<any[]>("ck_projetista_agenda", { p_proj: proj, p_de: de, p_ate: ate }),

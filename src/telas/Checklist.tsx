@@ -1425,6 +1425,7 @@ export function ModalWhats({ c, inicial }: any) {
   const rem = primeiroNome(R.me()?.nome || "");
   const [txt, setTxt] = useState(""); const [editado, setEditado] = useState(false);
   const [encaixe, setEncaixe] = useState(false);
+  const [enviando, setEnviando] = useState(false);
   const texto = editado ? txt : mensagemCk(tipo, c, data, rem);
   const comData = tipo === "primeiro" || tipo === "retorno";
   // tempo que trava a agenda (não vai na mensagem): padrão pelo valor do cupom
@@ -1442,6 +1443,22 @@ export function ModalWhats({ c, inicial }: any) {
     if (tipo !== "confirmacao" && !data) { toast("Escolha a data e o horário oferecidos"); return; }
     if (comData && !proj) { toast("Escolha o projetista que vai atender (o cliente não vê)"); return; }
     if (comData && (conflitosProj(st, data, proj, c.id, dur).length || confExtras.length) && !encaixe) { toast("Esse horário já tem cliente com " + proj + " — marque “Confirmo o encaixe” ou escolha outro horário/projetista"); return; }
+    // Primeiro contato sai pelo número do checklist, pela Kommo. O horário só é
+    // reservado depois que a Kommo confirma o envio: se falhar, o cliente continua
+    // na fila com o motivo, em vez de ficar com um horário preso à toa.
+    if (tipo === "primeiro") {
+      setEnviando(true);
+      try {
+        await A.kommoEnviar({ chamado: c.id, cliente: c.cliente, telefone: n, pedido: c.pedido, atendente: rem, data: dataLonga(data) });
+      } catch (x: any) { setEnviando(false); toast("Não enviou: " + x.message); return; }
+      try {
+        await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj, encaixe, texto, duracaoMin: dur, diasExtras: extras });
+      } catch (x: any) { setEnviando(false); toast("Mensagem enviada, mas não registrou: " + x.message); return; }
+      setEnviando(false);
+      await recarregar(); fechar();
+      toast("✅ Mensagem enviada pelo WhatsApp do checklist — horário reservado");
+      return;
+    }
     try {
       if (comData) await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj, encaixe, texto, duracaoMin: dur, diasExtras: extras });
       else if (tipo === "cobranca") await A.checklistRegistrar(c.id, { acao: "cobranca", texto });
@@ -1466,11 +1483,19 @@ export function ModalWhats({ c, inicial }: any) {
         {comData && <AvisoEncaixe slot={data} proj={proj} excluirId={c.id} ok={encaixe} setOk={setEncaixe} durMin={dur} />}
         {comData && confExtras.length > 0 && !conflitosProj(st, data, proj, c.id, dur).length && <label className="full" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, fontWeight: 600, color: "var(--danger)" }}><input type="checkbox" style={{ width: "auto" }} checked={encaixe} onChange={ev => setEncaixe(ev.target.checked)} />Confirmo o encaixe nos dias adicionais</label>}
         {comData && <Sugestoes valor={data} excluirId={c.id} projetista={proj} durMin={dur} onPick={(v, pj) => { setData(v); if (pj) setProj(pj); setEncaixe(false); setEditado(false); }} />}
-        <div className="field full"><label>Texto (pode editar antes de enviar)</label><textarea rows={13} value={texto} onChange={ev => { setTxt(ev.target.value); setEditado(true); }} /></div>
+        <div className="field full">
+          <label>{tipo === "primeiro" ? "Texto que o cliente vai receber (modelo aprovado — não editável)" : "Texto (pode editar antes de enviar)"}</label>
+          <textarea rows={13} value={texto} readOnly={tipo === "primeiro"} onChange={ev => { setTxt(ev.target.value); setEditado(true); }} />
+          {tipo === "primeiro" && <span className="hint">Sai do número do checklist (41 3316-9095), com os botões <b>Confirmo o horário</b> · <b>Outra data</b> · <b>Ainda em obra</b>. O texto é o modelo aprovado pela Meta: alterar aqui faria a mensagem não ser entregue, por isso ele vem travado.</span>}
+        </div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-        <button className="btn primary" onClick={enviar}>Abrir WhatsApp{tipo === "confirmacao" ? "" : " e registrar o contato"}</button>
-        <button className="btn ghost" onClick={fechar}>Cancelar</button>
+        <button className="btn primary" disabled={enviando} onClick={enviar}>
+          {tipo === "primeiro"
+            ? (enviando ? "Enviando…" : "📨 Enviar pelo WhatsApp do checklist")
+            : "Abrir WhatsApp" + (tipo === "confirmacao" ? "" : " e registrar o contato")}
+        </button>
+        <button className="btn ghost" disabled={enviando} onClick={fechar}>Cancelar</button>
       </div>
       {comData && <div className="hint" style={{ marginTop: 10 }}>O horário fica reservado para {proj || "o projetista"} — o cliente tem {cfgAgenda(st).seguraDias} dia(s) para responder; depois disso aparece “Prazo vencido” para liberar ou renovar.</div>}
     </Modal>
