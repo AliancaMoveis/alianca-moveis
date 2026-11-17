@@ -140,6 +140,24 @@ async function confirmarParaCliente(chamado: string, lead_id: number | null): Pr
   }
 }
 
+/**
+ * Avisa o cliente na hora que vamos levantar uma nova data.
+ * Texto livre: ele acabou de escrever, então está dentro das 24h da Meta.
+ * Não oferece data nenhuma — quem escolhe a data é uma pessoa, depois, no 360.
+ */
+async function avisarNovaData(lead_id: number): Promise<string> {
+  try {
+    const bot = Number(await segredo("kommo_bot_aviso_novadata"));
+    if (!bot) return "sem bot de aviso";
+    const run = await kommo(`/api/v4/bots/${bot}/run`, {
+      method: "POST", body: JSON.stringify({ entity_id: lead_id, entity_type: "leads" }),
+    });
+    return run.st >= 200 && run.st < 300 ? "aviso enviado" : `aviso recusado (${run.st})`;
+  } catch (e) {
+    return `aviso falhou (${String((e as Error).message || e)})`;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
@@ -200,6 +218,9 @@ Deno.serve(async (req) => {
         }
         // agendou de verdade → o cliente recebe a confirmação com data, endereço e orientações
         if (saida === "agendado") decisao += " · " + await confirmarParaCliente(chamado, lead_id);
+        // pediu outra data → responde na hora que vamos levantar uma data nova,
+        // para ele não ficar no vácuo até alguém do checklist olhar a fila
+        if (saida === "outra_data" && lead_id) decisao += " · " + await avisarNovaData(lead_id);
       }
     }
 
