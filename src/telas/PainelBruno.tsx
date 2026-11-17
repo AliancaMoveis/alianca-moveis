@@ -105,7 +105,7 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
   const ckNovos = cl.filter((c: any) => dentro(c.criadoEm, de, ate));
   const ckAgendar = clAb.filter((c: any) => grupoCk(c) === "agendar"), ckSemCont = ckAgendar.filter((c: any) => !(ck(c).contatos > 0));
   const ckResp = clAb.filter((c: any) => etapaCk(c) === "aguardando" && ck(c).proposta), ckVenc = clAb.filter((c: any) => reservaVencida(c, cfgCk));
-  const ckEspera = clAb.filter((c: any) => grupoCk(c) === "aguardando"), ckConf = clAb.filter((c: any) => aConfirmar(c, cfgCk.confirmarDias ?? 2));
+  const ckEspera = clAb.filter((c: any) => ["aguardando", "nova_data"].includes(grupoCk(c))), ckConf = clAb.filter((c: any) => aConfirmar(c, cfgCk.confirmarDias ?? 2));
   const ckEnc = clAb.filter((c: any) => querEnc(c)), ckPassou = clAb.filter((c: any) => grupoCk(c) === "agendado" && String(ck(c).agendadoPara || "").slice(0, 10) < hojeS && !!ck(c).agendadoPara);
   // ---------- externos (consultores) ----------
   const ext = mk.filter((c: any) => !R.ehDireto(c));

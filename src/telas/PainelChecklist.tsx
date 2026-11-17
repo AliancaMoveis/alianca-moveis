@@ -41,7 +41,7 @@ export default function PainelChecklist() {
   const unicos = (k: string) => new Set(evs.filter(e => e.k === k).map(e => e.c.id)).size;
   const cont = unicos;
   // pendentes (agora)
-  const aAgendar = todos.filter((c: any) => grupoCk(c) === "agendar"), aguard = todos.filter((c: any) => grupoCk(c) === "aguardando");
+  const aAgendar = todos.filter((c: any) => grupoCk(c) === "agendar"), aguard = todos.filter((c: any) => ["aguardando", "nova_data"].includes(grupoCk(c)));
   const futuros = todos.filter((c: any) => grupoCk(c) === "agendado" && diaAg(c) > hojeISO());
   const pedidosCC = todos.filter((c: any) => /call center/i.test(c.setor || "") && c.status !== "concluida");
   const semContato = aAgendar.filter((c: any) => !(ck(c).contatos > 0));

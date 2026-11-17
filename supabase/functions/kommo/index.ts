@@ -13,7 +13,9 @@
 
 const FUNIL_PRE = 13398119;         // VENDAS E AGENDAMENTO
 const FUNIL_CK = 13550523;          // Pós Venda Proj. / Checklist
-const ETAPA_CK_ENTRADA = 106849795; // primeiro contato
+const ETAPA_CK_FILA = 104552799;      // CHECKLIST — cliente entrou na fila, ainda a agendar
+const ETAPA_CK_AGUARDANDO = 114261095; // Aguardando confirmação — mensagem enviada
+const ETAPA_CK_ENTRADA = ETAPA_CK_FILA;
 const ETAPA_PRE_COMPROU = 105287587;
 
 // campos do lead que alimentam as variáveis do modelo aprovado
@@ -231,6 +233,8 @@ Deno.serve(async (req) => {
         method: "POST", body: JSON.stringify({ entity_id: g.lead_id, entity_type: "leads" }),
       });
       const ok = run.st >= 200 && run.st < 300;
+      // o card da Kommo acompanha o 360: mensagem enviada = aguardando confirmação
+      if (ok) await kommo(`/api/v4/leads/${g.lead_id}`, { method: "PATCH", body: JSON.stringify({ pipeline_id: FUNIL_CK, status_id: ETAPA_CK_AGUARDANDO }) });
       await salvarVinculo(String(it.id), {
         contato_id: g.contato_id, lead_id: g.lead_id, origem: g.origem, contatos: (g as any).contatos || null,
         envio_status: ok ? "enviado" : "falhou", envio_em: new Date().toISOString(),
