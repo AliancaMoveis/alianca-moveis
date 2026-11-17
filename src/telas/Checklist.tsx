@@ -330,7 +330,7 @@ function CartaoCk({ c, aba }: any) {
           {g === "agendado" && !k.confirmacao && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} inicial="confirmacao" />)}>📨 Enviar confirmação</button>}
           {g === "agendado" && k.confirmacao !== "confirmada" && <button className="btn sm" style={{ background: "var(--ok, #0f8a5f)", color: "#fff", borderColor: "var(--ok, #0f8a5f)", fontWeight: 700 }} onClick={() => executar(() => A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }), "Presença confirmada")}>✅ Confirmou presença</button>}
           {g === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Não pode vir</button>}
-          {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>💬 WhatsApp</button>}
+          {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>📨 Enviar mensagem</button>}
           {e === "aguardando" && k.proposta && c.status !== "concluida" && <button className="btn sm" style={venc ? { background: "#9a3412", color: "#fff", borderColor: "#9a3412", fontWeight: 700 } : undefined} onClick={liberar} title="Libera o horário oferecido e o cliente volta para A agendar">🔓 Liberar agenda</button>}
           {e === "aguardando" && k.proposta && c.status !== "concluida" && venc && <button className="btn sm" style={{ color: "#9a3412", borderColor: "#9a3412", fontWeight: 700 }} onClick={renovar} title={"Mantém o horário por mais " + segura + " dias"}>🔁 Renovar +{segura} dias</button>}
           {g === "agendar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="espera" />)}>⏸ Aguardando</button>}
@@ -1462,9 +1462,11 @@ export function ModalWhats({ c, inicial }: any) {
       try {
         await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj, encaixe, texto, duracaoMin: dur, diasExtras: extras });
       } catch (x: any) { setEnviando(false); toast("Mensagem enviada, mas não registrou: " + x.message); return; }
-      setEnviando(false);
-      await recarregar(); fechar();
+      // fecha e avisa ANTES de recarregar: a recarga demora, e deixar a tela aberta
+      // com o botão livre faz a pessoa achar que não foi e mandar de novo para o cliente
+      fechar();
       toast("✅ Mensagem enviada pelo WhatsApp do checklist — horário reservado");
+      recarregar();
       return;
     }
     try {
@@ -1500,7 +1502,7 @@ export function ModalWhats({ c, inicial }: any) {
       <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
         <button className="btn primary" disabled={enviando} onClick={enviar}>
           {tipo === "primeiro"
-            ? (enviando ? "Enviando…" : "📨 Enviar pelo WhatsApp do checklist")
+            ? (enviando ? "Enviando…" : "📨 Enviar mensagem pelo WhatsApp do checklist")
             : "Abrir WhatsApp" + (tipo === "confirmacao" ? "" : " e registrar o contato")}
         </button>
         <button className="btn ghost" disabled={enviando} onClick={fechar}>Cancelar</button>
