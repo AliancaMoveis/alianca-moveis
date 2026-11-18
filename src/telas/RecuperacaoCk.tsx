@@ -11,7 +11,7 @@ import { ciclo, cicloDe, moverCiclo } from "../lib/cicloCk";
 import { fmtDate, hojeISO } from "../lib/regras";
 
 type Linha = {
-  chamado: string; cliente: string; cpf?: string; venda?: string; data?: string; projetista: string;
+  chamado: string; cliente: string; cpf?: string; venda?: string; vendaTatico?: string; data?: string; projetista: string;
   valorInicial: number | null; descontoPct: number | null; valorFinal: number | null;
   diferenca: number | null; recuperado: number | null; faixa: number | null; comissao: number | null;
   status: string; obs?: string; motivo?: string; informadoPor?: string; informadoEm?: string; decididoPor?: string; pagoEm?: string;
@@ -171,6 +171,84 @@ ${sub ? `<div class="sub">${sub}</div>` : ""}
         </div>
         {podeDecidir && <div className="hint" style={{ marginTop: 8 }}>Dá para corrigir o valor do projeto final na própria linha antes de aprovar — a diferença, o recuperado e a comissão se refazem no servidor.</div>}
       </>}
+    </section>
+  );
+}
+
+/** 🧾 Validações do dia — a folha que o projetista leva à Regina, no caixa.
+ *  A venda do checklist NÃO existe até o projetista tirá-la no Tático: ele lança lá, pega o número novo
+ *  e é esse número que o financeiro valida. Por isso a coluna do Tático é a primeira coisa da folha. */
+export function ValidacoesDoDia() {
+  const { toast, R } = useApp() as any;
+  const [dia, setDia] = useState(hojeISO());
+  const [d, setD] = useState<any>(null);
+  const carregar = () => { setD(null); A.ckRecupLista(dia, dia).then(setD).catch((e: any) => { toast(e.message); setD({ linhas: [] }); }); };
+  useEffect(carregar, [dia]);
+  const l: Linha[] = d?.linhas || [];
+  const semTatico = l.filter(x => !x.vendaTatico);
+  const soma = (k: keyof Linha) => l.reduce((t, x) => t + (Number(x[k]) || 0), 0);
+  const imprimir = () => {
+    const w = window.open("", "_blank");
+    if (!w) { toast("Libere as janelas (pop-up) do navegador para imprimir"); return; }
+    w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Validações ${fmtDate(dia)}</title><style>
+@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{margin:0;font:9pt/1.3 Arial,Helvetica,sans-serif;color:#111}
+header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:5px;margin-bottom:6px}header b{font-size:13pt}header span{font-size:9pt;color:#444}
+.sub{font-size:8.6pt;color:#444;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-size:8.6pt}th,td{border:1px solid #888;padding:4px 5px}th{background:#f3f3f3;text-align:left;font-size:7.8pt}
+td.n{text-align:right;white-space:nowrap}td.ok{width:22mm}tfoot td{font-weight:700;background:#f3f3f3}
+.tat{font-weight:700;font-size:10pt}
+.ass{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:16mm;font-size:8.6pt;text-align:center}.ass div{border-top:1px solid #111;padding-top:3px}
+</style></head><body>
+<header><b>ALIANÇA MÓVEIS</b><span>Validações do dia · checklist · ${fmtDate(dia)}</span></header>
+<div class="sub">Duas conferências nesta folha: <b>validar a venda tirada no Tático</b> de cada cliente e <b>aprovar a comissão de recuperação</b> do projetista.</div>
+<table><thead><tr><th>Venda no Tático</th><th>Cliente</th><th>CPF</th><th>Venda de origem</th><th>Projetista</th><th>Cupom</th><th>Projeto final</th><th>Recuperado</th><th>Comissão</th><th class="ok">Venda validada</th><th class="ok">Comissão ok</th></tr></thead>
+<tbody>${l.map(x => `<tr><td class="tat">${x.vendaTatico || "—"}</td><td>${x.cliente}</td><td>${String(x.cpf || "").replace(/\D/g, "") || "—"}</td><td>${x.venda || "—"}</td><td>${x.projetista}</td>
+<td class="n">${brl(x.valorInicial)}</td><td class="n">${brl(x.valorFinal)}</td><td class="n">${brl(x.recuperado)}</td><td class="n">${brl(x.comissao)}</td><td></td><td></td></tr>`).join("")}</tbody>
+<tfoot><tr><td colspan="7">Total · ${l.length} cliente(s)</td><td class="n">${brl(soma("recuperado"))}</td><td class="n">${brl(soma("comissao"))}</td><td></td><td></td></tr></tfoot></table>
+<div class="ass"><div>Checklist — entregue por</div><div>Financeiro — conferido e validado</div></div>
+</body></html>`);
+    w.document.close(); setTimeout(() => w.print(), 400);
+  };
+  return (
+    <section className="view active">
+      <div className="view-head"><div><h2>🧾 Validações do dia</h2>
+        <p>O que você leva ao financeiro no fim do dia: a venda que você tirou no Tático para cada cliente, para a Regina validar, e a comissão da recuperação para ela aprovar.</p></div>
+        <button className="btn ghost sm" onClick={carregar}>↻ Atualizar</button></div>
+
+      <div className="card" style={{ padding: "10px 14px", marginBottom: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <input type="date" value={dia} max={hojeISO()} onChange={e => e.target.value && setDia(e.target.value)} style={{ maxWidth: 160 }} />
+        <button className="btn sm" onClick={() => setDia(hojeISO())}>Hoje</button>
+        <button className="btn primary sm" disabled={!l.length} onClick={imprimir} style={{ marginLeft: "auto" }}>🖨 Imprimir para o financeiro</button>
+      </div>
+
+      {d === null ? <div className="hint">Carregando…</div> : !l.length
+        ? <div className="cp-card hint">Nenhum checklist com recuperação informada neste dia. A recuperação é informada na etapa 5, ao finalizar o atendimento.</div>
+        : <>
+          {semTatico.length > 0 && <div className="cp-card" style={{ borderColor: "var(--warn)", marginBottom: 10 }}>
+            ⚠️ <b>{semTatico.length} cliente(s) sem o nº da venda no Tático:</b> {semTatico.map(x => x.cliente).join(", ")}.
+            Tire a venda no Tático e informe o número na etapa 5 — sem ele o financeiro não tem o que validar.</div>}
+          <div className="kpis" style={{ marginBottom: 12 }}>
+            <div className="kpi"><div className="n">{l.length}</div><div className="l">Cliente(s) do dia</div></div>
+            <div className="kpi"><div className="n">{l.filter(x => x.vendaTatico).length}</div><div className="l">Com venda tirada no Tático</div></div>
+            <div className="kpi"><div className="n din"><small>R$</small>{soma("recuperado").toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div><div className="l">Recuperado no dia</div></div>
+            <div className="kpi"><div className="n din" style={{ color: "var(--st-concluida)" }}><small>R$</small>{soma("comissao").toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div><div className="l">Comissão do dia</div></div>
+          </div>
+          <div className="card" style={{ padding: "8px 14px", overflowX: "auto" }}>
+            <table className="ng-tab">
+              <thead><tr><th>Venda no Tático</th><th>Cliente</th><th>Venda de origem</th>{!d?.soMinhas && <th>Projetista</th>}<th>Cupom</th><th>Projeto final</th><th>Recuperado</th><th>Comissão</th><th>Situação</th></tr></thead>
+              <tbody>{l.map(x => { const sit = SIT[x.status] || [x.status, "var(--line)"];
+                return <tr key={x.chamado}>
+                  <td>{x.vendaTatico ? <b style={{ fontSize: 15 }}>{x.vendaTatico}</b> : <span style={{ color: "var(--warn)", fontWeight: 700 }}>falta tirar</span>}</td>
+                  <td><b>{x.cliente}</b></td><td>{x.venda || "—"}</td>
+                  {!d?.soMinhas && <td>{x.projetista}</td>}
+                  <td>{brl(x.valorInicial)}</td><td>{brl(x.valorFinal)}</td><td><b>{brl(x.recuperado)}</b></td>
+                  <td><b style={{ color: "var(--st-concluida)" }}>{brl(x.comissao)}</b></td>
+                  <td><span style={{ color: sit[1], fontWeight: 700, fontSize: 12 }}>{sit[0]}</span></td>
+                </tr>; })}</tbody>
+            </table>
+          </div>
+          <div className="hint" style={{ marginTop: 8 }}>A folha impressa leva duas colunas em branco para a Regina marcar: venda validada e comissão aprovada.{R.ehGestao && R.ehGestao() ? "" : ""}</div>
+        </>}
     </section>
   );
 }

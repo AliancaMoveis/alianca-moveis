@@ -1080,6 +1080,7 @@ function ConfAmb({ a, i, todos, set, sugCores, mover, c, arqs, ferragens }: { a:
  *  Faixas sobre o valor recuperado, iguais à planilha: até 499,99 não paga · até 2.999,99 paga 2% · 3.000+ paga 5%. */
 function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any; projetista: string; toast: (m: string) => void; venda?: any; ambientes?: string[] }) {
   const [vf, setVf] = useState("");
+  const [vt, setVt] = useState("");   // nº da venda tirada no Tático depois do checklist
   const [obs, setObs] = useState("");
   const [r, setR] = useState<any>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -1089,7 +1090,7 @@ function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any;
   const brl = (x: any) => x == null ? "—" : "R$ " + Number(x).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const carregar = () => A.ckRecupLista(undefined, undefined, undefined).then((d: any) => {
     const m = ((d?.linhas || []) as any[]).find(x => x.chamado === c.id);
-    if (m) { setR(m); setVf(m.valorFinal == null ? "" : String(m.valorFinal).replace(".", ",")); setObs(m.obs || ""); }
+    if (m) { setR(m); setVf(m.valorFinal == null ? "" : String(m.valorFinal).replace(".", ",")); setObs(m.obs || ""); setVt(m.vendaTatico || ""); }
   }).catch(() => null);
   useEffect(() => { carregar(); }, [c.id]);
   const num = (x: string) => { const t = String(x || "").replace(/[R$\s.]/g, "").replace(",", "."); const q = Number(t); return isFinite(q) && t !== "" ? q : null; };
@@ -1102,7 +1103,7 @@ function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any;
   const travado = r && ["aprovado", "pago"].includes(r.status);
   const salvar = async () => {
     setOcupado(true);
-    try { await A.ckRecupSalvar(c.id, { valorFinal: vf, valorInicial: vi == null ? "" : String(vi), descontoPct: dp == null ? "" : String(dp), obs, projetista });
+    try { await A.ckRecupSalvar(c.id, { valorFinal: vf, valorInicial: vi == null ? "" : String(vi), descontoPct: dp == null ? "" : String(dp), obs, projetista, vendaTatico: vt });
       await carregar(); toast("Recuperação informada — vai para o financeiro aprovar"); }
     catch (e: any) { toast(e.message || "não salvou"); } finally { setOcupado(false); }
   };
@@ -1111,8 +1112,14 @@ function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any;
     <h4>💵 Recuperação do projeto <span className="hint" style={{ fontWeight: 400 }}>· comissão do projetista</span></h4>
     {faltaExact ? <div className="hint">O ticket do Exact não trouxe o valor do cupom e o percentual de desconto desta venda — sem eles não dá para calcular a recuperação. Confira a aba “Cliente e venda”.</div> : <>
       <div className="hint" style={{ marginBottom: 8 }}>Cupom <b>{brl(vi)}</b> · desconto da venda <b>{String(ex.descontoPct).replace(".", ",")}%</b>. Informe quanto ficou o projeto final que você fechou.</div>
-      <label style={{ display: "block", fontSize: 12.5, maxWidth: 220 }}><span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>Valor do projeto final</span>
-        <input inputMode="decimal" value={vf} disabled={travado} onChange={e => setVf(e.target.value)} placeholder="0,00" style={{ width: "100%" }} /></label>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <label style={{ display: "block", fontSize: 12.5, maxWidth: 220, flex: "1 1 180px" }}><span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>Valor do projeto final</span>
+          <input inputMode="decimal" value={vf} disabled={travado} onChange={e => setVf(e.target.value)} placeholder="0,00" style={{ width: "100%" }} /></label>
+        {/* a venda do checklist é tirada no Tático depois, pelo projetista: é esse número que a Regina valida no caixa */}
+        <label style={{ display: "block", fontSize: 12.5, maxWidth: 220, flex: "1 1 180px" }}><span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>Nº da venda no Tático</span>
+          <input inputMode="numeric" value={vt} disabled={travado} onChange={e => setVt(e.target.value)} placeholder="a venda que você tirou" style={{ width: "100%" }} />
+          <small style={{ color: "var(--pj-s)" }}>é o que o financeiro valida</small></label>
+      </div>
       {dif != null && <div style={{ marginTop: 10, border: "1px solid var(--pj-l2,#e6e9ee)", borderRadius: 10, padding: "8px 10px", fontSize: 13 }}>
         {([["Diferença (cupom − projeto final)", brl(dif)],
            ["Recuperado · " + (100 - Number(ex.descontoPct)).toFixed(0) + "% da diferença", brl(rec)],
