@@ -2012,26 +2012,52 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 /* negociação: o que entra no desconto, o que não entra (promoção e frete) */
 .ng-bases{display:grid;gap:4px;margin:8px 0 2px}
 .ng-bases>div{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:7px 10px;border-radius:9px;font-size:13.5px}
-.ng-bases .ng-b1{background:#eaf3ea;border:1px solid #bcd9bf;font-weight:700}
-.ng-bases .ng-b2{background:#fff6e5;border:1px solid #f0d9a8;font-weight:700}
+.ng-bases .ng-b1{background:#eaf3ea;border:1px solid #bcd9bf;color:#17331f;font-weight:700}
+.ng-bases .ng-b2{background:#fff6e5;border:1px solid #f0d9a8;color:#4a3708;font-weight:700}
 .ng-bases small{font-weight:500;opacity:.75}
-.ng-tab tr.ng-promo{background:#fff9ee}
+.ng-tab tr.ng-promo{background:#fff9ee;color:#3a2c06}
 .ng-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#f3c969;color:#5a4208;font-size:11px;font-weight:800;white-space:nowrap}
 .ng-frete{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px}
 /* crediário: cada plano com a parcela que o cliente vê e o desconto que ainda cabe */
 .ng-cred{border-top:2px solid var(--line,#ddd);margin-top:12px;padding-top:8px}
+/* resumo da negociação: do cheio até o que fica para o cliente */
+.ng-res{margin:8px 0 2px;font-size:13.5px}
+.ng-res>div{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dotted var(--line-soft,#e6e9ee)}
+.ng-res>div.m{font-size:12.5px;opacity:.8;padding-left:10px}
+.ng-res>div.d{color:#b42318;font-weight:700}
+.ng-clic{cursor:pointer;text-align:left;font:inherit}
+.ng-clic.sel{outline:3px solid var(--primary,#284b8f);outline-offset:1px}
+.ng-clic:disabled{cursor:default}
 .ng-cred-l{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px}
-.ng-cred-i{border:1px solid #bcd9bf;background:#f2f8f2;border-radius:10px;padding:7px 10px;display:flex;flex-direction:column;gap:1px}
+.ng-cred-i{border:1px solid #bcd9bf;background:#f2f8f2;color:#17331f;border-radius:10px;padding:7px 10px;display:flex;flex-direction:column;gap:1px}
 .ng-cred-i b{font-size:15px}
-.ng-cred-i span{font-size:12px;opacity:.8}
+.ng-cred-i span{font-size:12px;opacity:.75}
 .ng-cred-i small{font-size:11.5px;font-weight:700;color:#2f7a3f}
-.ng-cred-i.nao{border-color:#e7b9b4;background:#fdf3f2}
-.ng-cred-i.nao b{opacity:.6;text-decoration:line-through}
+.ng-cred-i.nao{border-color:#e7b9b4;background:#fdf3f2;color:#5a1f19}
 .ng-cred-i.nao small{color:#b42318}
+.ng-cred-fora{margin-top:8px;padding:9px 11px;border-radius:10px;background:#fff6e5;border:1px solid #f0d9a8;color:#4a3708;font-size:13px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ng-cred-i{background:#17241a;border-color:#2f5a38;color:#dbe9df}
+  :root:not([data-theme="light"]) .ng-cred-i small{color:#8fd0a8}
+  :root:not([data-theme="light"]) .ng-cred-i.nao{background:#2a1817;border-color:#7a3b34;color:#f0d6d2}
+  :root:not([data-theme="light"]) .ng-cred-i.nao small{color:#f0938a}
+  :root:not([data-theme="light"]) .ng-cred-fora{background:#2e2410;border-color:#8a6a1a;color:#f5c55a}
+  :root:not([data-theme="light"]) .ng-bases .ng-b1{background:#17241a;border-color:#2f5a38;color:#dbe9df}
+  :root:not([data-theme="light"]) .ng-bases .ng-b2{background:#2e2410;border-color:#8a6a1a;color:#f5c55a}
+  :root:not([data-theme="light"]) .ng-tab tr.ng-promo{background:#2a2412;color:#f0e2bd}
+  :root:not([data-theme="light"]) .pp-promo-v{background:#2e2410;border-color:#8a6a1a;color:#f5c55a}}
+:root[data-theme="dark"] .ng-cred-i{background:#17241a;border-color:#2f5a38;color:#dbe9df}
+:root[data-theme="dark"] .ng-cred-i small{color:#8fd0a8}
+:root[data-theme="dark"] .ng-cred-i.nao{background:#2a1817;border-color:#7a3b34;color:#f0d6d2}
+:root[data-theme="dark"] .ng-cred-i.nao small{color:#f0938a}
+:root[data-theme="dark"] .ng-cred-fora{background:#2e2410;border-color:#8a6a1a;color:#f5c55a}
+:root[data-theme="dark"] .ng-bases .ng-b1{background:#17241a;border-color:#2f5a38;color:#dbe9df}
+:root[data-theme="dark"] .ng-bases .ng-b2{background:#2e2410;border-color:#8a6a1a;color:#f5c55a}
+:root[data-theme="dark"] .ng-tab tr.ng-promo{background:#2a2412;color:#f0e2bd}
+:root[data-theme="dark"] .pp-promo-v{background:#2e2410;border-color:#8a6a1a;color:#f5c55a}
 /* pré-pedido: marcar promoção e frete */
 .pp-promo{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:13.5px;font-weight:700;cursor:pointer}
 .pp-promo input{width:auto}
-.pp-promo-v{background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:7px 9px;margin-top:5px;flex-wrap:wrap}
+.pp-promo-v{background:#fff6e5;border:1px solid #f0d9a8;color:#4a3708;border-radius:9px;padding:7px 9px;margin-top:5px;flex-wrap:wrap}
 .pp-promo-v small{opacity:.8}
 .ng-bruto,.ng-final{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;padding:8px 0;font-weight:700}.ng-bruto b{font-size:20px}
 .ng-final{border-top:2px solid var(--line,#ddd);margin-top:6px}.ng-final b{font-size:24px;color:var(--st-concluida)}.ng-final small{flex-basis:100%;text-align:right;font-weight:600;opacity:.8}

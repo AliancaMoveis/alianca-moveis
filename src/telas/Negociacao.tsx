@@ -6,7 +6,7 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { fmtMoeda } from "../lib/regras";
 import { FRETES, freteDe, numBR, precoItem, somaBase, somaPP, somaPromo, type PP } from "./PrePedido";
-import { PRIMEIRO, VIGENCIA, planos as planosCred } from "../lib/crediario";
+import { PLANOS, PRIMEIRO, VIGENCIA, liquidoMax, planos as planosCred } from "../lib/crediario";
 
 type PN = PP & { vendedor?: string; neg_status?: string; neg_enviado_em?: string; neg_valor?: any; neg_desconto?: any; neg_pagamento?: string; neg_obs?: string; neg_em?: string };
 const numPP = (p: PP) => p.numero ? "PP-" + String(p.numero).padStart(4, "0") : "—";
@@ -66,6 +66,7 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
   const [desc, setDesc] = useState(ini && base ? br2(Math.round((1 - Math.max(0, ini - foraDesc) / base) * 1000) / 10) : "");
   const [pag, setPag] = useState(p.neg_pagamento || p.pagamento || "");
   const [obs, setObs] = useState(p.neg_obs || "");
+  const [modo, setModo] = useState("");   // como o cliente vai pagar: à vista, cartão ou crediário
   const [salvando, setSalvando] = useState(false);
   const porDesc = (d: string) => { setDesc(d); const n = numBR(d); setValor(n > 0 && base ? br2(Math.round((base * (1 - n / 100) + foraDesc) * 100) / 100) : ""); };
   const porValor = (v: string) => { setValor(v); const n = numBR(v); setDesc(n > 0 && base ? br2(Math.round((1 - Math.max(0, n - foraDesc) / base) * 1000) / 10) : ""); };
@@ -117,10 +118,30 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
       <div className="ng-rap">{[3, 5, 8, 10, 12, 15].map(d => <button key={d} type="button" className={"chip" + (numBR(desc) === d ? " on" : "")} onClick={() => porDesc(String(d))}>{d}%</button>)}</div>
       <div className="pp-g2"><label className="pp-f">Desconto % <small style={{ textTransform: "none", fontWeight: 500 }}>(sobre {fmtMoeda(base)})</small><input inputMode="decimal" value={desc} onChange={e => porDesc(e.target.value)} placeholder="0" /></label>
         <label className="pp-f">Valor final R$ <small style={{ textTransform: "none", fontWeight: 500 }}>(tudo incluso)</small><input inputMode="decimal" value={valor} onChange={e => porValor(e.target.value)} placeholder={br2(bruto)} /></label></div>
-      <div className="ng-final"><span>Fica por</span><b>{fmtMoeda(final)}</b>{descRS > 0.004 && <small>desconto de {fmtMoeda(descRS)} sobre {fmtMoeda(base)} ({(Math.round(descRS / base * 1000) / 10).toString().replace(".", ",")}%){foraDesc > 0 ? " · + " + fmtMoeda(foraDesc) + " sem desconto" : ""}</small>}</div>
-      <div className="ng-parc">{[1, 3, 6, 10, 12].map(n => <span key={n}>{n}x {fmtMoeda(final / n)}</span>)}</div>
-      <div className="hint" style={{ marginTop: -2, marginBottom: 6 }}>Acima é a divisão pura do valor, sem custo de parcelamento — serve para o pagamento no cartão do cliente.</div>
-      {R.temAcesso("crediario") && <Crediario liquido={final} bruto={bruto} />}
+      {/* a conta aberta, linha a linha, do cheio até o que fica para o cliente */}
+      <div className="ng-res">
+        <div><span>Valor cheio, sem desconto</span><b>{fmtMoeda(bruto)}</b></div>
+        {promo > 0 && <div className="m"><span>· do qual 🏷 em promoção (sem desconto)</span><b>{fmtMoeda(promo)}</b></div>}
+        {fret > 0 && <div className="m"><span>· do qual 🚚 frete (sem desconto)</span><b>{fmtMoeda(fret)}</b></div>}
+        <div className="m"><span>· do qual entra no desconto</span><b>{fmtMoeda(base)}</b></div>
+        {descRS > 0.004 && <div className="d"><span>Desconto dado ({(Math.round(descRS / base * 1000) / 10).toString().replace(".", ",")}% sobre {fmtMoeda(base)})</span><b>− {fmtMoeda(descRS)}</b></div>}
+      </div>
+      <div className="ng-final"><span>Fica por</span><b>{fmtMoeda(final)}</b></div>
+
+      <div className="pp-tit" style={{ marginTop: 10 }}>Como o cliente vai pagar</div>
+      <div className="ng-rap">{([["vista", "💵 À vista"], ["cartao", "💳 Cartão de crédito"], ...(R.temAcesso("crediario") ? [["crediario", "🧾 Crediário da loja"]] as [string, string][] : [])] as [string, string][])
+        .map(([k, r]) => <button key={k} type="button" className={"chip" + (modo === k ? " on" : "")} onClick={() => { setModo(modo === k ? "" : k); if (k === "vista") setPag("À vista " + fmtMoeda(final)); }}>{r}</button>)}</div>
+
+      {modo === "cartao" && <>
+        <div className="hint" style={{ marginBottom: 6 }}>O cliente parcela no cartão dele e a loja recebe o <b>valor à vista</b> — por isso as parcelas são a divisão limpa de {fmtMoeda(final)}.</div>
+        <div className="ng-cred-l">{Array.from({ length: 12 }, (_, i) => i + 1).map(n => {
+          const r = "Cartão de crédito " + n + "× de " + fmtMoeda(final / n);
+          return <button key={n} type="button" className={"ng-cred-i ng-clic" + (pag === r ? " sel" : "")} onClick={() => setPag(r)}>
+            <b>{n}× {fmtMoeda(final / n)}</b><span>total {fmtMoeda(final)}</span></button>; })}</div>
+      </>}
+
+      {modo === "crediario" && R.temAcesso("crediario") && <Crediario liquido={final} bruto={bruto} escolher={setPag} escolhido={pag} />}
+
       <label className="pp-f">Forma de pagamento<input value={pag} onChange={e => setPag(e.target.value)} placeholder="ex.: entrada no Pix + 10x cartão" /></label>
       <label className="pp-f">Observação da negociação<input value={obs} onChange={e => setObs(e.target.value)} /></label>
       <div className="pp-acoes"><button type="button" className="btn primary pp-salvar" disabled={salvando} onClick={() => salvar("negociando")}>💾 Salvar proposta</button>
@@ -135,7 +156,7 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
  *  da negociação) e a tela mostra, para cada plano, o preço que o cliente enxerga como "sem juros"
  *  — n parcelas iguais, sem nenhuma menção a juros — e quanto de desconto ainda cabe ali dentro.
  *  Plano em que a etiqueta passa do valor cheio aparece em vermelho: não fecha sem cobrar mais. */
-function Crediario({ liquido, bruto }: { liquido: number; bruto: number }) {
+function Crediario({ liquido, bruto, escolher, escolhido }: { liquido: number; bruto: number; escolher?: (t: string) => void; escolhido?: string }) {
   const [dias, setDias] = useState(30);
   const [rec, setRec] = useState("");
   const [tudo, setTudo] = useState(false);
@@ -150,13 +171,20 @@ function Crediario({ liquido, bruto }: { liquido: number; bruto: number }) {
       <div className="ng-rap" style={{ margin: 0 }}>{PRIMEIRO.map(([d, r]) => <button key={d} type="button" className={"chip" + (dias === d ? " on" : "")} onClick={() => setDias(d)}>1ª em {r}</button>)}</div>
     </div>
     <div className="hint" style={{ marginBottom: 6 }}>Sem preencher, usa o valor da negociação acima (<b>{fmtMoeda(liquido)}</b>). O preço de cada plano já está com o parcelamento embutido — o cliente vê <b>parcelas iguais</b>, e o que sobra entre esse preço e o valor cheio ({fmtMoeda(bruto)}) é o desconto que ainda dá para dar.</div>
+    {!l.some(x => x.cabe) && <div className="ng-cred-fora">
+      Com <b>{fmtMoeda(alvo)}</b> no bolso da loja, nenhum plano cabe dentro do valor cheio — o parcelamento custa mais do que a diferença que sobrou.
+      Para o <b>{PLANOS[0]}×</b> fechar sem subir o preço, a loja teria que receber no máximo <b>{fmtMoeda(liquidoMax(PLANOS[0], dias, bruto))}</b>
+      {dias > 30 ? <> (ou manter a 1ª parcela em 30 dias)</> : null}.
+    </div>}
     <div className="ng-cred-l">
-      {vis.map(x => <div key={x.plano} className={"ng-cred-i" + (x.cabe ? "" : " nao")}>
+      {vis.map(x => { const txt = "Crediário " + x.plano + "× de " + fmtMoeda(x.parcela) + " (1ª em " + dias + " dias)";
+        return <button key={x.plano} type="button" className={"ng-cred-i ng-clic" + (x.cabe ? "" : " nao") + (escolhido === txt ? " sel" : "")}
+          onClick={() => escolher?.(txt)} disabled={!escolher}>
         <b>{x.plano}× {fmtMoeda(x.parcela)}</b>
         <span>total {fmtMoeda(x.etiqueta)}</span>
         {x.cabe ? <small>cabe {(x.desconto * 100).toFixed(1).replace(".", ",")}% de desconto · {fmtMoeda(x.descontoRS)}</small>
           : <small>passa {(-x.desconto * 100).toFixed(1).replace(".", ",")}% do valor cheio</small>}
-      </div>)}
+      </button>; })}
     </div>
     <button type="button" className="pp-link" onClick={() => setTudo(t => !t)}>{tudo ? "mostrar só até 12×" : "ver todos os planos (até 36×)"}</button>
   </div>;

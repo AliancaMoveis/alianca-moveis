@@ -69,6 +69,11 @@ export function planos(liquido: number, bruto: number, dias: number): Plano[] {
   });
 }
 
+/** maior líquido que ainda faz o plano caber dentro do valor cheio (etiqueta <= bruto) */
+export const liquidoMax = (plano: number, dias: number, bruto: number) => {
+  const c = coeficiente(plano, dias); return c ? Math.floor(bruto / (plano * c) * 100) / 100 : 0;
+};
+
 /** o caminho normal, para conferência: quanto a loja recebe por uma parcela que já existe */
 export const liquidoDe = (parcela: number, plano: number, dias: number) => {
   const c = coeficiente(plano, dias); return c ? Math.round(parcela / c * 100) / 100 : 0;
