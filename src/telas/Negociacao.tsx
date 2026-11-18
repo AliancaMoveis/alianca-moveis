@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { fmtMoeda } from "../lib/regras";
-import { FRETES, freteDe, numBR, precoItem, somaBase, somaPP, somaPromo, type PP } from "./PrePedido";
+import { FRETES, descontoPromo, freteDe, numBR, precoItem, somaBase, somaPP, somaPromo, somaTabela, type PP } from "./PrePedido";
 import { PLANOS, PRIMEIRO, VIGENCIA, liquidoMax, planos as planosCred } from "../lib/crediario";
 
 type PN = PP & { vendedor?: string; neg_status?: string; neg_enviado_em?: string; neg_valor?: any; neg_desconto?: any; neg_pagamento?: string; neg_obs?: string; neg_em?: string };
@@ -60,6 +60,9 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
   // O desconto cai SÓ sobre a base: produto em promoção já veio com o preço da promoção e frete é custo.
   const base = somaBase(pv) || (somaPP(pv) ? 0 : numBR(p.valor_bruto));
   const promo = somaPromo(pv);
+  const tabela = somaTabela(pv);          // soma pelo preço do sistema, antes da promoção
+  const promoAbat = descontoPromo(pv);    // quanto a promoção já abateu
+  const temPromo = itens.some((i: any) => i.promo);
   const [frete, setFrete] = useState(br2(freteDe(p)));
   const fret = numBR(frete);
   const bruto = base + promo + fret;                       // valor cheio que o cliente vê
@@ -97,12 +100,13 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
     </div>
     <div className="cp-card">
       <div className="ng-cli"><b>{p.cliente_nome || "Cliente sem nome"}</b><small>{numPP(p)} · vendedor {p.vendedor || "—"}{p.telefone ? " · " + p.telefone : ""}</small>{p.endereco && <small>{p.endereco}</small>}</div>
-      <table className="ng-tab"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço un.</th><th>Total</th></tr></thead>
+      <table className="ng-tab"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço de tabela</th>{temPromo && <th>🏷 Promoção</th>}<th>Total</th></tr></thead>
         <tbody>{itens.map((i: any, k) => <tr key={k} className={(i.promob ? "promob" : "") + (i.promo ? " ng-promo" : "")}>
           <td><b>{i.promob ? "📐 " : ""}{i.nome}</b>{i.promo && <span className="ng-tag">🏷 promoção · sem desconto</span>}
             <small>{i.promob ? "Promob (projeto)" : "Cód. " + i.codigo + (i.cor ? " · " + i.cor : "")}{i.obs ? " · " + i.obs : ""}</small></td>
           <td>{i.qtd}</td>
-          <td>{precoItem(i) ? fmtMoeda(precoItem(i)) : "—"}{i.promo && numBR(i.preco) > numBR(i.precoPromo) ? <small style={{ display: "block", textDecoration: "line-through", opacity: .6 }}>{fmtMoeda(numBR(i.preco))}</small> : null}</td>
+          <td>{numBR(i.preco) ? fmtMoeda(numBR(i.preco)) : "—"}{numBR(i.preco) && i.qtd > 1 ? <small style={{ display: "block", opacity: .7 }}>{fmtMoeda(numBR(i.preco) * i.qtd)}</small> : null}</td>
+          {temPromo && <td>{i.promo ? <b style={{ color: "#8a5d00" }}>{fmtMoeda(numBR(i.precoPromo))}</b> : "—"}</td>}
           <td><b>{precoItem(i) ? fmtMoeda(precoItem(i) * i.qtd) : "—"}</b>
             <div className="ng-qtd">
               <button type="button" title="Menos um" onClick={() => mexerItens(itens.map((x, j) => j === k ? { ...x, qtd: Math.max(1, (Number(x.qtd) || 1) - 1) } : x), "Quantidade alterada")}>−</button>
@@ -112,13 +116,18 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
             </div></td></tr>)}</tbody></table>
       <IncluirProduto onIncluir={it => mexerItens([...itens, it], "Produto incluído")} />
       {promob.length > 0 && prontos.length > 0 && <div className="ng-sub"><span>Produtos prontos {fmtMoeda(somaDe(prontos))}</span><span>Promob {fmtMoeda(somaDe(promob))}</span></div>}
-      {/* o gerente bate o olho e sabe onde pode dar desconto */}
+      {/* do preço do sistema até o preço que o cliente vê */}
+      <div className="ng-res">
+        <div><span>Soma pelo preço de tabela</span><b>{fmtMoeda(tabela)}</b></div>
+        {promoAbat > 0.004 && <div className="d"><span>🏷 Promoção já aplicada</span><b>− {fmtMoeda(promoAbat)}</b></div>}
+        {fret > 0 && <div><span>🚚 Frete</span><b>+ {fmtMoeda(fret)}</b></div>}
+      </div>
+      <div className="ng-bruto"><span>Valor cheio</span><b>{fmtMoeda(bruto)}</b></div>
       <div className="ng-bases">
         <div className="ng-b1"><span>Entra no desconto</span><b>{fmtMoeda(base)}</b></div>
         {promo > 0 && <div className="ng-b2"><span>🏷 Em promoção <small>sem desconto</small></span><b>{fmtMoeda(promo)}</b></div>}
         {fret > 0 && <div className="ng-b2"><span>🚚 Frete <small>sem desconto</small></span><b>{fmtMoeda(fret)}</b></div>}
       </div>
-      <div className="ng-bruto"><span>Valor cheio (bruto)</span><b>{fmtMoeda(bruto)}</b></div>
       {(numBR(p.valor_negociado) > 0 || p.pagamento) && <div className="hint">Vendedor anotou: {numBR(p.valor_negociado) ? "negociado " + fmtMoeda(numBR(p.valor_negociado)) : ""}{p.pagamento ? " · " + p.pagamento : ""}</div>}
     </div>
     <div className="cp-card">
@@ -135,10 +144,8 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
         <label className="pp-f">Valor final R$ <small style={{ textTransform: "none", fontWeight: 500 }}>(tudo incluso)</small><input inputMode="decimal" value={valor} onChange={e => porValor(e.target.value)} placeholder={br2(bruto)} /></label></div>
       {/* a conta aberta, linha a linha, do cheio até o que fica para o cliente */}
       <div className="ng-res">
-        <div><span>Valor cheio, sem desconto</span><b>{fmtMoeda(bruto)}</b></div>
-        {promo > 0 && <div className="m"><span>· do qual 🏷 em promoção (sem desconto)</span><b>{fmtMoeda(promo)}</b></div>}
-        {fret > 0 && <div className="m"><span>· do qual 🚚 frete (sem desconto)</span><b>{fmtMoeda(fret)}</b></div>}
-        <div className="m"><span>· do qual entra no desconto</span><b>{fmtMoeda(base)}</b></div>
+        {promoAbat > 0.004 && <div className="m"><span>Tabela {fmtMoeda(tabela)} · promoção já aplicada</span><b>− {fmtMoeda(promoAbat)}</b></div>}
+        <div><span>Valor cheio</span><b>{fmtMoeda(bruto)}</b></div>
         {descRS > 0.004 && <div className="d"><span>Desconto dado ({(Math.round(descRS / base * 1000) / 10).toString().replace(".", ",")}% sobre {fmtMoeda(base)})</span><b>− {fmtMoeda(descRS)}</b></div>}
       </div>
       <div className="ng-final"><span>Fica por</span><b>{fmtMoeda(final)}</b></div>

@@ -48,6 +48,10 @@ export const numBR = (v: any) => { const t = String(v ?? "").replace(/[^\d,.-]/g
 export const precoItem = (i: ItemPP) => numBR(i.promo ? i.precoPromo : i.preco);
 /** soma dos produtos (preço que vale × quantidade) — sem frete */
 export const somaPP = (p: PP) => p.itens.reduce((s, i) => s + precoItem(i) * (Number(i.qtd) || 0), 0);
+/** soma pelo preço DE TABELA (o do sistema), ignorando a promoção — é o "de" que o cliente vê */
+export const somaTabela = (p: PP) => p.itens.reduce((s, i) => s + numBR(i.preco) * (Number(i.qtd) || 0), 0);
+/** quanto a promoção já abateu do preço de tabela */
+export const descontoPromo = (p: PP) => Math.round((somaTabela(p) - somaPP(p)) * 100) / 100;
 /** produtos que ACEITAM desconto na negociação (tudo que não está em promoção) */
 export const somaBase = (p: PP) => p.itens.filter(i => !i.promo).reduce((s, i) => s + precoItem(i) * (Number(i.qtd) || 0), 0);
 /** produtos em promoção: entram pelo valor da promoção e ficam fora do desconto */
