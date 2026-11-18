@@ -99,24 +99,20 @@ export function abrirTermo(c: any, termo: any, projetista: string, toast?: (m: s
   w.document.write(termoHtml(d)); w.document.close(); setTimeout(() => w.print(), 400);
 }
 
-/** 💰 Folha de uma página com os valores, para o projetista levar ao financeiro depois do checklist.
- *  O checklist e o contrato não levam valor nenhum (é documento que o cliente assina sobre o material),
- *  então quem terminava estava imprimindo o documento inteiro ou anotando à mão só para ter os números. */
-export async function abrirFinanceiro(c: any, termo: any, projetista: string, toast?: (m: string) => void) {
-  let f: any = {};
-  try { f = (await A.checklistFinanceiro(c.id)) || {}; }
-  catch (e: any) { toast?.("Não consegui buscar os valores: " + (e.message || "")); return; }
-  const amb: string[] = (termo?.ambientes || []).map((a: any) => String(a.nome || "")).filter(Boolean);
+/** 💵 Folha de uma página com a recuperação do projeto, para o projetista levar ao financeiro.
+ *  Os números vêm do que foi informado e aprovado no 360 (tabela ck_recuperacao) — não se recalcula aqui. */
+export function abrirFinanceiro(c: any, r: any, ambientes: string[], projetista: string, extra: any = {}, toast?: (m: string) => void) {
+  const n = (x: any) => x == null || x === "" ? null : Number(x);
   const d: DadosFinanceiro = {
     venda: String(c.pedido || ""), cliente: String(c.cliente || ""), cpf: c.clienteDoc || "", telefone: c.telefone || "",
     endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: projetista || "—",
-    dataVenda: f.dataVenda || (c.dataVenda ? fmtDate(String(c.dataVenda).slice(0, 10)) : ""),
+    dataVenda: extra.dataVenda || (c.dataVenda ? fmtDate(String(c.dataVenda).slice(0, 10)) : ""),
     dataChecklist: c.agendadoPara ? fmtDate(String(c.agendadoPara).slice(0, 10)) : fmtDate(hojeISO()),
-    situacao: f.situacao || "",
-    total: f.total == null ? null : Number(f.total), recebido: f.recebido == null ? null : Number(f.recebido),
-    desconto: f.desconto == null ? null : Number(f.desconto), bruto: f.bruto == null ? null : Number(f.bruto),
-    saldo: f.saldo == null ? null : Number(f.saldo), fonte: f.fonte || "",
-    ambientes: amb, obs: termo?.obs || "",
+    situacao: extra.situacao || "",
+    cupom: n(r?.valorInicial), descontoPct: n(r?.descontoPct), projetoFinal: n(r?.valorFinal),
+    diferenca: n(r?.diferenca), recuperado: n(r?.recuperado), faixa: n(r?.faixa), comissao: n(r?.comissao),
+    status: r?.status === "pendente" ? "aguardando o financeiro" : r?.status, decididoPor: r?.decididoPor || "",
+    ambientes, obs: r?.obs || "",
   };
   const w = window.open("", "_blank");
   if (!w) { toast?.("Libere as janelas (pop-up) do navegador para abrir a folha"); return; }
@@ -656,7 +652,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
                 <div className="ck" style={{ marginTop: 6 }}>{[["Ambientes escritos e confirmados", e1], ["Conferência por ambiente preenchida", e2], ["Contrato gerado", e3], ["Contrato assinado pelo cliente", e4]].map(([t, ok]: any) => <label key={t}><i className={ok ? "" : "no"}>{ok ? "✓" : ""}</i> {t}</label>)}</div></div>
                 <button className="btn sm" style={podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .5 }} disabled={!podeRealizar || !!ocupado} onClick={marcarRealizado}>✅ Finalizar atendimento</button></div>}
             {/* a folha de valores fica aqui: é o fim do atendimento, quando o projetista leva os números ao financeiro */}
-            <FinanceiroEtapa5 c={c} termo={{ ...t0, ambientes: ambs, obs }} projetista={proj} toast={toast} venda={arqs?.dados?.venda} />
+            <RecuperacaoEtapa5 c={c} projetista={proj} toast={toast} venda={arqs?.dados?.venda} ambientes={ambs.map(a => a.nome).filter(Boolean)} />
           </div>}
           {(etapa === 1 || etapa === 2) && <div className="barra">
             <button className="btn sm" disabled={!!ocupado || !mudou} onClick={() => salvar()}>{ocupado === "salvar" ? "Salvando…" : "💾 Salvar"}</button>
@@ -1026,77 +1022,69 @@ function ConfAmb({ a, i, todos, set, sugCores, mover, c, arqs, ferragens }: { a:
   </div>;
 }
 
-/** 💰 Etapa 5 · os valores para o financeiro.
- *  O contrato que o cliente assina não leva valor nenhum, mas quem termina o checklist leva os números
- *  para o financeiro. Aqui ele completa o que o sistema não tem (tabela e desconto não vêm no relatório
- *  do Exact), confere o resumo e imprime a folha de uma página. */
-function FinanceiroEtapa5({ c, termo, projetista, toast, venda }: { c: any; termo: any; projetista: string; toast: (m: string) => void; venda?: any }) {
-  const [f, setF] = useState<any>(null);
-  const [v, setV] = useState<any>({ bruto: "", desconto: "", total: "", recebido: "", obs: "" });
+/** 💵 Etapa 5 · recuperação: quanto o projeto final ficou abaixo do cupom, e a comissão do projetista.
+ *  O projetista informa UMA coisa — quanto ficou o projeto final. O valor do cupom e o % de desconto da venda
+ *  vêm do ticket do Exact, e a conta é feita no servidor (comissão é dinheiro, não pode depender da tela).
+ *  Faixas sobre o valor recuperado, iguais à planilha: até 499,99 não paga · até 2.999,99 paga 2% · 3.000+ paga 5%. */
+function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any; projetista: string; toast: (m: string) => void; venda?: any; ambientes?: string[] }) {
+  const [vf, setVf] = useState("");
+  const [obs, setObs] = useState("");
+  const [r, setR] = useState<any>(null);
   const [ocupado, setOcupado] = useState(false);
-  const brl = (x: any) => x == null ? "—" : "R$ " + Number(x).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const n2 = (x: any) => x == null ? "" : String(x).replace(".", ",");
-  // O ticket do Exact (aba "Cliente e venda") traz bruto, negociado e o % de desconto — a planilha de vendas não traz.
-  // É daqui que a tabela e o desconto vêm preenchidos; o que for digitado na tela continua valendo acima.
   const ex = venda || {};
-  const exDesc = ex.bruto != null && ex.negociado != null ? Number(ex.bruto) - Number(ex.negociado) : null;
-  const carregar = async () => {
-    try { const r = (await A.checklistFinanceiro(c.id)) || {}; setF(r);
-      setV({ bruto: n2(r.bruto ?? ex.bruto), desconto: n2(r.desconto ?? exDesc), total: n2(r.total ?? ex.negociado),
-        recebido: n2(r.recebido), obs: r.obs || "" }); }
-    catch (e: any) { toast(e.message || "não consegui buscar os valores"); setF({}); }
-  };
-  useEffect(() => { carregar(); }, [c.id, ex.bruto, ex.negociado]);
+  const vi = ex.bruto == null ? null : Number(ex.bruto);
+  const dp = ex.descontoPct == null ? null : Number(ex.descontoPct) / 100;
+  const brl = (x: any) => x == null ? "—" : "R$ " + Number(x).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const carregar = () => A.ckRecupLista(undefined, undefined, undefined).then((d: any) => {
+    const m = ((d?.linhas || []) as any[]).find(x => x.chamado === c.id);
+    if (m) { setR(m); setVf(m.valorFinal == null ? "" : String(m.valorFinal).replace(".", ",")); setObs(m.obs || ""); }
+  }).catch(() => null);
+  useEffect(() => { carregar(); }, [c.id]);
   const num = (x: string) => { const t = String(x || "").replace(/[R$\s.]/g, "").replace(",", "."); const q = Number(t); return isFinite(q) && t !== "" ? q : null; };
-  // tabela − desconto = valor da venda: preenchido dois, o terceiro sai sozinho
-  const compl = (campo: "bruto" | "desconto" | "total", val: string) => setV((p: any) => {
-    const x = { ...p, [campo]: val }; const b = num(x.bruto), d = num(x.desconto), t = num(x.total);
-    if (campo !== "total" && b != null && d != null) x.total = (b - d).toFixed(2).replace(".", ",");
-    else if (campo !== "desconto" && b != null && t != null) x.desconto = (b - t).toFixed(2).replace(".", ",");
-    return x;
-  });
-  const campo = (rot: string, k: "bruto" | "desconto" | "total" | "recebido", dica: string) =>
-    <label style={{ display: "block", fontSize: 12.5 }}><span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>{rot}</span>
-      <input inputMode="decimal" value={v[k]} onChange={e => k === "recebido" ? setV((p: any) => ({ ...p, recebido: e.target.value })) : compl(k, e.target.value)}
-        placeholder="0,00" style={{ width: "100%" }} />
-      <small style={{ color: "var(--pj-s)" }}>{dica}</small></label>;
+  // o mesmo cálculo do servidor, só para a pessoa ver antes de salvar
+  const vfn = num(vf);
+  const dif = vi != null && vfn != null ? Math.max(0, Math.round((vi - vfn) * 100) / 100) : null;
+  const rec = dif != null && dp != null ? Math.round(dif * (1 - dp) * 100) / 100 : null;
+  const faixa = rec == null ? null : rec <= 499.99 ? 0 : rec < 3000 ? 0.02 : 0.05;
+  const com = rec != null && faixa != null ? Math.round(rec * faixa * 100) / 100 : null;
+  const travado = r && ["aprovado", "pago"].includes(r.status);
   const salvar = async () => {
     setOcupado(true);
-    try { await A.checklistFinanceiroSalvar(c.id, v); await carregar(); toast("Valores salvos"); return true; }
-    catch (e: any) { toast(e.message || "não salvou"); return false; } finally { setOcupado(false); }
+    try { await A.ckRecupSalvar(c.id, { valorFinal: vf, valorInicial: vi == null ? "" : String(vi), descontoPct: dp == null ? "" : String(dp), obs, projetista });
+      await carregar(); toast("Recuperação informada — vai para o financeiro aprovar"); }
+    catch (e: any) { toast(e.message || "não salvou"); } finally { setOcupado(false); }
   };
-  const imprimir = () => abrirFinanceiro(c, termo, projetista, toast);
-  const tot = num(v.total), rec = num(v.recebido);
-  const saldo = tot != null && rec != null ? Math.max(0, tot - rec) : null;
-  const pct = num(v.bruto) && num(v.desconto) != null ? Math.round((num(v.desconto)! / num(v.bruto)!) * 1000) / 10 : null;
+  const faltaExact = vi == null || dp == null;
   return <div className="box" style={{ marginTop: 10 }}>
-    <h4>💰 Valores para o financeiro</h4>
-    {!f ? <div className="hint">Buscando os valores…</div> : <>
-      <div className="hint" style={{ marginBottom: 8 }}>
-        {ex.bruto != null ? <>Tabela, desconto e valor da venda vêm do <b>ticket do Exact</b>{ex.descontoPct != null ? " (desconto de " + String(ex.descontoPct).replace(".", ",") + "%)" : ""}; o já recebido vem do relatório de vendas. Confira e corrija se precisar — o que você digitar fica guardado.</>
-          : <>Valor da venda e já recebido vêm do relatório do Exact. <b>A tabela e o desconto só vêm pelo ticket do Exact</b>, que não carregou para esta venda — preencha aqui que fica guardado.</>}
-        {f.fonte ? " · " + f.fonte : ""}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 8 }}>
-        {campo("Valor de tabela (bruto)", "bruto", "antes do desconto")}
-        {campo("Desconto", "desconto", pct != null ? String(pct).replace(".", ",") + "% da tabela" : "tabela − desconto = venda")}
-        {campo("Valor da venda", "total", "é o que o cliente paga")}
-        {campo("Já recebido", "recebido", "entrada e pagamentos")}
-      </div>
-      <label style={{ display: "block", fontSize: 12.5, marginTop: 8 }}><span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>Observação para o financeiro</span>
-        <input value={v.obs} onChange={e => setV((p: any) => ({ ...p, obs: e.target.value }))} placeholder="Ex.: saldo em 3x no cartão" style={{ width: "100%" }} /></label>
-      {/* o resumo: é isso que vai sair na folha */}
-      <div style={{ marginTop: 10, border: "1px solid var(--pj-l2,#e6e9ee)", borderRadius: 10, padding: "8px 10px", fontSize: 13 }}>
-        <div style={{ fontWeight: 800, fontSize: 12, textTransform: "uppercase", letterSpacing: ".4px", color: "var(--pj-s)", marginBottom: 4 }}>Resumo que vai na folha</div>
-        {([["Cliente", c.cliente], ["Venda", c.pedido || "—"], ["Valor de tabela", brl(num(v.bruto))], ["Desconto", brl(num(v.desconto))],
-           ["Valor da venda", brl(tot)], ["Já recebido", brl(rec)], ["Saldo a receber", brl(saldo)]] as [string, string][])
-          .map(([k, val], i) => <div key={k} style={{ display: "flex", gap: 8, padding: "2px 0", borderTop: i ? "1px dotted var(--pj-l2,#e6e9ee)" : 0 }}>
-            <span style={{ color: "var(--pj-s)", minWidth: 120 }}>{k}</span><b style={{ marginLeft: "auto" }}>{val}</b></div>)}
-        {(num(v.bruto) == null || num(v.desconto) == null) && <div style={{ fontSize: 11.5, color: "#8a5d00", marginTop: 4 }}>O que ficar em branco sai como linha para escrever à mão.</div>}
-      </div>
+    <h4>💵 Recuperação do projeto <span className="hint" style={{ fontWeight: 400 }}>· comissão do projetista</span></h4>
+    {faltaExact ? <div className="hint">O ticket do Exact não trouxe o valor do cupom e o percentual de desconto desta venda — sem eles não dá para calcular a recuperação. Confira a aba “Cliente e venda”.</div> : <>
+      <div className="hint" style={{ marginBottom: 8 }}>Cupom <b>{brl(vi)}</b> · desconto da venda <b>{String(ex.descontoPct).replace(".", ",")}%</b>. Informe quanto ficou o projeto final que você fechou.</div>
+      <label style={{ display: "block", fontSize: 12.5, maxWidth: 220 }}><span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>Valor do projeto final</span>
+        <input inputMode="decimal" value={vf} disabled={travado} onChange={e => setVf(e.target.value)} placeholder="0,00" style={{ width: "100%" }} /></label>
+      {dif != null && <div style={{ marginTop: 10, border: "1px solid var(--pj-l2,#e6e9ee)", borderRadius: 10, padding: "8px 10px", fontSize: 13 }}>
+        {([["Diferença (cupom − projeto final)", brl(dif)],
+           ["Recuperado · " + (100 - Number(ex.descontoPct)).toFixed(0) + "% da diferença", brl(rec)],
+           ["Faixa", faixa === 0 ? "não paga (até R$ 499,99)" : (faixa! * 100) + "%"],
+           ["Comissão", brl(com)]] as [string, string][]).map(([k, val], i) =>
+          <div key={k} style={{ display: "flex", gap: 8, padding: "2px 0", borderTop: i ? "1px dotted var(--pj-l2,#e6e9ee)" : 0 }}>
+            <span style={{ color: "var(--pj-s)" }}>{k}</span><b style={{ marginLeft: "auto" }}>{val}</b></div>)}
+        {vfn != null && vi != null && vfn > vi && <div style={{ fontSize: 11.5, color: "#b42318", marginTop: 4 }}>O projeto final passou do cupom — não gera comissão, e a diferença precisa ser cobrada do cliente.</div>}
+      </div>}
+      <label style={{ display: "block", fontSize: 12.5, marginTop: 8 }}><span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>Observação (opcional)</span>
+        <input value={obs} disabled={travado} onChange={e => setObs(e.target.value)} placeholder="Ex.: cliente tirou o painel da TV" style={{ width: "100%" }} /></label>
+      {r && <div className={"note" + (r.status === "recusado" ? " alert" : "")} style={{ marginTop: 8, fontSize: 12.5 }}>
+        {r.status === "pendente" ? "⏳ Informado — aguardando o financeiro aprovar."
+          : r.status === "aprovado" ? "✅ Aprovado pelo financeiro" + (r.decididoPor ? " (" + r.decididoPor + ")" : "") + " · comissão " + brl(r.comissao)
+          : r.status === "pago" ? "💰 Pago" + (r.pagoEm ? " em " + fmtDate(r.pagoEm) : "") + " · " + brl(r.comissao)
+          : "❌ Recusado" + (r.motivo ? ": " + r.motivo : "")}</div>}
       <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-        <button type="button" className="btn primary sm" disabled={ocupado} onClick={async () => { if (await salvar()) setTimeout(imprimir, 50); }}>{ocupado ? "Salvando…" : "💾 Salvar e imprimir a folha"}</button>
-        <button type="button" className="btn sm" disabled={ocupado} onClick={imprimir}>🖨 Só imprimir</button>
+        {!travado && <button type="button" className="btn primary sm" disabled={ocupado || vfn == null} onClick={salvar}>
+          {ocupado ? "Salvando…" : r ? "Atualizar a recuperação" : "Informar a recuperação"}</button>}
+        {/* a folha que o projetista leva ao financeiro (a Regina, do caixa) */}
+        <button type="button" className="btn sm" disabled={!r} title={r ? "Folha de 1 página para o financeiro" : "Informe a recuperação primeiro"}
+          onClick={() => abrirFinanceiro(c, r, ambientes || [], projetista, { situacao: ex.situacaoVenda || ex.situacao || "" }, toast)}>🖨 Folha para o financeiro</button>
       </div>
+      {travado && <div className="hint" style={{ marginTop: 6 }}>Já aprovado pelo financeiro — só o financeiro altera agora.</div>}
     </>}
   </div>;
 }

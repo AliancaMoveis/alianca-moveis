@@ -220,32 +220,36 @@ ${d.online ? `<div class="rub" style="margin-top:8mm">Assinatura eletrônica do 
 ${capa}${amb}${termo}${cg}</body></html>`;
 }
 
-// ---------------- folha do financeiro: uma página, com os valores ----------------
-// O checklist e o contrato NÃO levam valor nenhum — é documento que o cliente assina sobre o material.
-// Mas quem termina o checklist precisa levar os números para o financeiro, e estava imprimindo
-// o documento inteiro (ou anotando à mão) para isso. Esta folha é só isso: cliente, venda e valores.
+// ---------------- folha do financeiro: uma página, com a recuperação do projeto ----------------
+// O contrato que o cliente assina não leva valor nenhum. Esta folha é o que o projetista leva ao financeiro
+// (a Regina, do caixa) quando termina o checklist: o que a venda tinha de cupom, quanto ficou o projeto final,
+// quanto a loja recuperou e a comissão que cabe ao projetista. Antes isso ia num papelzinho escrito à mão.
 export type DadosFinanceiro = {
   venda: string; cliente: string; cpf?: string; telefone?: string; endereco: string;
   vendedor: string; projetista: string; dataVenda?: string; dataChecklist?: string; situacao?: string;
-  total: number | null;      // valor da venda — é o que o cliente paga
-  recebido: number | null;    // o que já entrou (entrada e pagamentos lançados)
-  desconto: number | null;    // só quando a base traz; não vem no Exact
-  bruto: number | null;       // valor de tabela = total + desconto (só quando há desconto)
-  saldo: number | null;       // total − recebido
-  fonte?: string;             // de onde saíram os números (vai no pé da folha)
+  cupom: number | null;        // valor de tabela da venda (o teto do projeto final)
+  descontoPct: number | null;  // % de desconto com que a venda foi fechada
+  projetoFinal: number | null; // quanto ficou o projeto que o projetista fechou
+  diferenca: number | null;    // cupom − projeto final
+  recuperado: number | null;   // diferença × (100% − desconto)
+  faixa: number | null;        // 0, 2% ou 5%
+  comissao: number | null;
+  status?: string; decididoPor?: string;
   ambientes: string[];
   obs?: string;
 };
 const brl = (v: number | null) => v == null ? "" : "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-/** linha de valor: quando o número existe sai preenchido; quando não existe sai uma linha para escrever à mão,
- *  porque uma folha que vai ao financeiro com um número errado é pior do que uma com um campo em branco. */
+/** linha de valor: com número sai preenchida; sem número sai uma linha para escrever à mão,
+ *  porque folha que chega ao financeiro com número errado é pior do que com campo em branco. */
 const linhaVal = (rot: string, v: number | null, forte = false, sub = "") =>
   `<tr><td${forte ? ' class="forte"' : ""}>${esc(rot)}${sub ? `<span class="sub">${esc(sub)}</span>` : ""}</td>
 <td class="v${forte ? " forte" : ""}">${v == null ? '<span class="mao">&nbsp;</span>' : esc(brl(v))}</td></tr>`;
 
 export function financeiroHtml(d: DadosFinanceiro): string {
-  const falta = [d.total == null ? "valor da venda" : "", d.desconto == null ? "desconto" : "", d.recebido == null ? "valor já recebido" : ""].filter(Boolean);
-  const pct = d.bruto && d.desconto != null && d.bruto > 0 ? Math.round(d.desconto / d.bruto * 1000) / 10 : null;
+  const falta = [d.cupom == null ? "valor do cupom" : "", d.descontoPct == null ? "% de desconto" : "", d.projetoFinal == null ? "valor do projeto final" : ""].filter(Boolean);
+  const pctTxt = d.descontoPct == null ? "" : String(Math.round(d.descontoPct * 1000) / 10).replace(".", ",") + "%";
+  const restoTxt = d.descontoPct == null ? "" : String(Math.round((1 - d.descontoPct) * 1000) / 10).replace(".", ",") + "%";
+  const faixaTxt = d.faixa == null ? "" : d.faixa === 0 ? "não paga (recuperado até R$ 499,99)" : String(d.faixa * 100).replace(".", ",") + "% do valor recuperado";
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Financeiro_${esc(d.cliente.split(" ")[0])}_${esc(d.venda)}</title><style>${CSS}
 .fin .dados{grid-template-columns:1fr 1fr;margin-bottom:10px}
 .fin table.val{font-size:11pt;table-layout:auto}.fin table.val td{padding:7px 10px}
@@ -255,7 +259,7 @@ export function financeiroHtml(d: DadosFinanceiro): string {
 .fin .mao{display:inline-block;min-width:38mm;border-bottom:1px solid #111}
 .fin .aviso{border:1px solid #c98a12;background:#fff8e6;padding:5px 8px;font-size:8.6pt;margin:8px 0}
 </style></head><body class="fin"><div class="pg">
-<div class="hd"><div class="l"><b>ALIANÇA MÓVEIS</b><div>Resumo para o financeiro · checklist do projeto final</div></div>
+<div class="hd"><div class="l"><b>ALIANÇA MÓVEIS</b><div>Recuperação do projeto final · checklist</div></div>
 <div class="r"><b>VENDA ${esc(d.venda)}</b><br>${esc(d.dataChecklist || "")}</div></div>
 
 <h3>Cliente</h3>
@@ -266,26 +270,27 @@ export function financeiroHtml(d: DadosFinanceiro): string {
 <div><span>Data da venda</span> ${esc(d.dataVenda || "—")}</div>
 <div style="grid-column:1/-1"><span>Endereço</span> ${esc(d.endereco || "—")}</div>
 <div><span>Vendedor(a)</span> ${esc(d.vendedor || "—")}</div>
-<div><span>Projetista do checklist</span> ${esc(d.projetista || "—")}</div>
+<div><span>Projetista do checklist</span> <b>${esc(d.projetista || "—")}</b></div>
 ${d.situacao ? `<div style="grid-column:1/-1"><span>Situação no Exact</span> ${esc(d.situacao)}</div>` : ""}
 </div>
 
-<h3>Valores</h3>
+<h3>Recuperação</h3>
 <table class="val">
-${linhaVal("Valor de tabela (bruto)", d.bruto)}
-${linhaVal("Desconto concedido", d.desconto, false, pct != null ? String(pct).replace(".", ",") + "% do valor de tabela" : "")}
-${linhaVal("Valor da venda", d.total, true, "é este o valor que o cliente paga")}
-${linhaVal("Já recebido", d.recebido, false, "entrada e pagamentos lançados")}
-${linhaVal("Saldo a receber", d.saldo, true)}
+${linhaVal("Valor do cupom (tabela)", d.cupom, false, "o teto do projeto final")}
+${linhaVal("Valor do projeto final", d.projetoFinal, false, "o que o projetista fechou com o cliente")}
+${linhaVal("Diferença", d.diferenca, false, "cupom − projeto final")}
+${linhaVal("Valor recuperado", d.recuperado, true, d.descontoPct != null ? restoTxt + " da diferença, porque a venda saiu com " + pctTxt + " de desconto" : "")}
+${linhaVal("Comissão do projetista", d.comissao, true, faixaTxt)}
 </table>
-${falta.length ? `<div class="aviso">⚠️ Sem ${falta.join(", ")} no sistema para esta venda — preencher à mão e conferir no Exact.</div>` : ""}
+${falta.length ? `<div class="aviso">⚠️ Sem ${falta.join(", ")} no sistema — preencher à mão e conferir no Exact.</div>` : ""}
+${d.status ? `<div style="font-size:9pt;margin-top:4px">Situação no 360: <b>${esc(d.status)}</b>${d.decididoPor ? " · " + esc(d.decididoPor) : ""}</div>` : ""}
 
 <h3>Ambientes do checklist</h3>
 <div style="font-size:9.4pt;padding:2px 0 4px">${d.ambientes.length ? d.ambientes.map((a, i) => `${i + 1} · ${esc(a)}`).join(" &nbsp;·&nbsp; ") : "—"}</div>
 
 ${d.obs ? `<h3>Observação</h3><div class="obs">${esc(d.obs)}</div>` : ""}
 
-<div class="ass" style="margin-top:22mm"><div>Projetista do checklist<br><span class="rub">${esc(d.projetista || "")}</span></div><div>Recebido pelo financeiro<br><span class="rub">nome e data</span></div></div>
-<div class="foot"><span>Gerado pelo ALIANÇA 360 · venda ${esc(d.venda)}${d.fonte ? " · valores: " + esc(d.fonte) : ""}</span><span>Sem valor fiscal — uso interno</span></div>
+<div class="ass" style="margin-top:20mm"><div>Projetista do checklist<br><span class="rub">${esc(d.projetista || "")}</span></div><div>Conferido e aprovado pelo financeiro<br><span class="rub">nome e data</span></div></div>
+<div class="foot"><span>Gerado pelo ALIANÇA 360 · venda ${esc(d.venda)}</span><span>Sem valor fiscal — uso interno</span></div>
 </div></body></html>`;
 }

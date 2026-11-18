@@ -310,6 +310,10 @@ export const A = {
   // valores da venda para a folha do financeiro (total, recebido, desconto quando existe)
   checklistFinanceiro: (id: string) => rpc<any>("checklist_financeiro", { p_chamado: id }),
   checklistFinanceiroSalvar: (id: string, p: any) => rpc("checklist_financeiro_salvar", { p_chamado: id, p }),
+  // comissão do projetista sobre a recuperação (quanto o projeto final ficou abaixo do cupom)
+  ckRecupSalvar: (id: string, p: any) => rpc<any>("ck_recuperacao_salvar", { p_chamado: id, p }),
+  ckRecupDecidir: (id: string, status: string, p: any = {}) => rpc<any>("ck_recuperacao_decidir", { p_chamado: id, p_status: status, p }),
+  ckRecupLista: (de?: string, ate?: string, projetista?: string) => rpc<any>("ck_recuperacao_lista", { p_de: de || null, p_ate: ate || null, p_projetista: projetista || null }),
   // vendedores do Exact: o vínculo nome-do-Exact → usuário do 360, e a fila de quem ainda não tem ninguém por trás
   vendedorExactMapa: async () => {
     const { data, error } = await sb.from("vendedor_exact").select("nome,usuario_id");
