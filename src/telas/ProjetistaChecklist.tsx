@@ -259,6 +259,7 @@ export default function ProjetistaChecklist() {
   const [aba, setAba] = useState<"dia" | "prox" | "fin" | "real">("dia");
   const [q, setQ] = useState("");
   const [verAgenda, setVerAgenda] = useState(false);
+  const [fechDia, setFechDia] = useState(false);
   const abrir = (id: string) => { sujo.current = false; setSel(id); window.scrollTo({ top: 0 }); };
   const voltar = () => { if (sujo.current && !confirm("Há alterações no checklist que não foram salvas. Voltar para a lista mesmo assim?")) return; sujo.current = false; ultimoAberto.current = null; setSel(null); carregar(); };
 
@@ -310,8 +311,10 @@ export default function ProjetistaChecklist() {
           <option value="*">👥 Todos os projetistas</option>
           {eu.projetistas.map(n => <option key={n} value={n}>{n}{n === eu.projetista ? " (eu)" : ""}</option>)}</select>}
         <button className="btn sm" onClick={() => setVerAgenda(true)} title="Agenda de todos os projetistas (só visualização)">📅 Agenda geral</button>
+        <button className="btn sm" onClick={() => setFechDia(d => !d)} title="O resumo do dia para levar ao financeiro">🧾 Fechamento do dia</button>
         <button className="btn ghost sm" onClick={() => carregar()} title="Atualizar">↻ Atualizar</button>
       </div>
+      {fechDia && <FechamentoDoDia dia={hj} proj={proj === "*" ? "" : proj} toast={toast} fechar={() => setFechDia(false)} />}
       <input className="pjbusca" value={q} onChange={e => setQ(e.target.value)} placeholder="🔎 Buscar cliente por nome, nº da venda ou telefone" />
       {qn ? <div className="sub" style={{ margin: "-4px 0 10px" }}>{achados.length} cliente{achados.length === 1 ? "" : "s"} encontrado{achados.length === 1 ? "" : "s"} · <button className="lk" onClick={() => setQ("")}>limpar busca</button></div> : <>
       <div className="pjkpis">
@@ -335,6 +338,55 @@ export default function ProjetistaChecklist() {
       {erro && <div className="empty">{erro}</div>}
     </section>
   );
+}
+
+/** 🧾 Fechamento do dia: o resumo que o projetista leva ao financeiro no fim do expediente.
+ *  São duas aprovações lá: liberar a venda do cliente e pagar a comissão da recuperação.
+ *  Fica aqui, na agenda dele, porque é aqui que ele termina o dia. */
+function FechamentoDoDia({ dia, proj, toast, fechar }: { dia: string; proj: string; toast: (m: string) => void; fechar: () => void }) {
+  const [d, setD] = useState<any>(null);
+  useEffect(() => { A.ckRecupLista(dia, dia, proj || undefined).then(setD).catch((e: any) => { toast(e.message); setD({ linhas: [] }); }); }, [dia, proj]);
+  const l: any[] = d?.linhas || [];
+  const brl = (v: any) => v == null ? "—" : "R$ " + Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const soma = (k: string) => l.reduce((t, x) => t + (Number(x[k]) || 0), 0);
+  const imprimir = () => {
+    const w = window.open("", "_blank");
+    if (!w) { toast("Libere as janelas (pop-up) do navegador para imprimir"); return; }
+    w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fechamento ${fmtDate(dia)}</title><style>
+@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{margin:0;font:9pt/1.3 Arial,Helvetica,sans-serif;color:#111}
+header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:5px;margin-bottom:6px}header b{font-size:13pt}header span{font-size:9pt;color:#444}
+.sub{font-size:8.6pt;color:#444;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-size:8.4pt}th,td{border:1px solid #888;padding:3px 5px}th{background:#f3f3f3;text-align:left;font-size:7.8pt}
+td.n{text-align:right;white-space:nowrap}tfoot td{font-weight:700;background:#f3f3f3}
+.ass{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:16mm;font-size:8.6pt;text-align:center}.ass div{border-top:1px solid #111;padding-top:3px}
+</style></head><body>
+<header><b>ALIANÇA MÓVEIS</b><span>Fechamento do dia · checklist · ${fmtDate(dia)}${proj ? " · " + proj : ""}</span></header>
+<div class="sub">O financeiro confere duas coisas nesta folha: <b>liberar a venda de cada cliente</b> e <b>aprovar a comissão da recuperação</b> do projetista.</div>
+<table><thead><tr><th>Cliente</th><th>CPF</th><th>Venda</th><th>Projetista</th><th>Cupom</th><th>Projeto final</th><th>Diferença</th><th>Recuperado</th><th>Comissão</th><th>Venda liberada</th></tr></thead>
+<tbody>${l.map(x => `<tr><td>${x.cliente}</td><td>${String(x.cpf || "").replace(/\D/g, "") || "—"}</td><td>${x.venda || "—"}</td><td>${x.projetista}</td>
+<td class="n">${brl(x.valorInicial)}</td><td class="n">${brl(x.valorFinal)}</td><td class="n">${brl(x.diferenca)}</td><td class="n">${brl(x.recuperado)}</td><td class="n">${brl(x.comissao)}</td><td></td></tr>`).join("")}</tbody>
+<tfoot><tr><td colspan="6">Total · ${l.length} cliente(s)</td><td class="n">${brl(soma("diferenca"))}</td><td class="n">${brl(soma("recuperado"))}</td><td class="n">${brl(soma("comissao"))}</td><td></td></tr></tfoot></table>
+<div class="ass"><div>Checklist${proj ? " · " + proj : ""}</div><div>Financeiro — conferido e aprovado</div></div>
+</body></html>`);
+    w.document.close(); setTimeout(() => w.print(), 400);
+  };
+  return <div className="box" style={{ margin: "0 0 12px" }}>
+    <h4 style={{ display: "flex", alignItems: "center", gap: 8 }}>🧾 Fechamento do dia · {fmtDate(dia)}
+      <button type="button" className="lk" style={{ marginLeft: "auto" }} onClick={fechar}>fechar ✕</button></h4>
+    {d === null ? <div className="hint">Carregando…</div> : !l.length
+      ? <div className="hint">Nenhuma recuperação informada hoje. Ela é informada na etapa 5 de cada checklist, ao finalizar o atendimento.</div>
+      : <>
+        <div style={{ overflowX: "auto" }}><table className="pjv-tab">
+          <thead><tr><th>Cliente</th><th>Venda</th><th className="n">Cupom</th><th className="n">Projeto final</th><th className="n">Recuperado</th><th className="n">Comissão</th></tr></thead>
+          <tbody>{l.map((x: any) => <tr key={x.chamado}><td>{x.cliente}</td><td>{x.venda || "—"}</td>
+            <td className="n">{brl(x.valorInicial)}</td><td className="n">{brl(x.valorFinal)}</td><td className="n">{brl(x.recuperado)}</td>
+            <td className="n"><b>{brl(x.comissao)}</b></td></tr>)}</tbody>
+          <tfoot><tr><td colSpan={4}>{l.length} cliente(s)</td><td className="n">{brl(soma("recuperado"))}</td><td className="n">{brl(soma("comissao"))}</td></tr></tfoot>
+        </table></div>
+        <button type="button" className="btn primary sm" style={{ marginTop: 10 }} onClick={imprimir}>🖨 Imprimir para levar ao financeiro</button>
+        <div className="hint" style={{ marginTop: 6 }}>Na folha o financeiro confere as duas coisas: liberar a venda de cada cliente e aprovar a comissão.</div>
+      </>}
+  </div>;
 }
 
 /** linha da tela inicial (cartão largo: data · cliente · selos · botões) */

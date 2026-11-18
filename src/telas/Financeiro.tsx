@@ -8,6 +8,7 @@ import { PromissoriasAbertas } from "../comp/VendaValidar";
 import { FechamentoGestao, FechamentoMeu } from "../comp/Fechamento";
 import { hojeISO } from "../lib/regras";
 import { brCurto, cicloDe, cicloDoMes, diasAte, nomeCiclo, somaMes, ultimoFechado } from "../lib/ciclo";
+import RecuperacaoCk from "./RecuperacaoCk";
 
 // Ciclo de pagamento dos externos: dia 29 de um mês ao dia 28 do seguinte
 const cicloAtual = () => cicloDoMes(cicloDe(hojeISO()));
@@ -163,12 +164,25 @@ function Periodos({ de, ate, setDe, setAte }: any) {
 
 export default function Financeiro() {
   const { R } = useApp();
-  const [aba, setAba] = useState<"consultores" | "vendedores">("consultores");
+  // projetista do checklist: o financeiro dele é aqui, junto das vendas — não num menu separado
+  const projCk = R.temAcesso && R.temAcesso("projetista_checklist");
+  const [aba, setAba] = useState<"consultores" | "vendedores" | "recupck">("consultores");
+  const [minha, setMinha] = useState<"vendas" | "recupck">("vendas");
   if ((R.ehConsultorExterno() || R.ehMedidor()) && !R.ehGestao()) return <FinConsultor />;
-  if (!R.ehGestao()) return <VendasVendedores />;
+  if (!R.ehGestao()) {
+    if (!projCk) return <VendasVendedores />;
+    // projetista do checklist puro (sem o setor de vendedor): o financeiro dele é só a comissão
+    if (!R.mySetores().includes("atendente_cliente")) return <RecuperacaoCk />;
+    return <>
+      <div className="subnav" style={{ marginBottom: 6 }}>
+        <button className={minha === "vendas" ? "on" : ""} onClick={() => setMinha("vendas")}>Minhas vendas</button>
+        <button className={minha === "recupck" ? "on" : ""} onClick={() => setMinha("recupck")}>💵 Comissão do checklist</button></div>
+      {minha === "vendas" ? <VendasVendedores /> : <RecuperacaoCk />}
+    </>;
+  }
   return <>
-    <div className="subnav" style={{ marginBottom: 6 }}><button className={aba === "consultores" ? "on" : ""} onClick={() => setAba("consultores")}>Consultores e medidores</button><button className={aba === "vendedores" ? "on" : ""} onClick={() => setAba("vendedores")}>Vendedores (loja)</button></div>
-    {aba === "consultores" ? <FinConsultor /> : <VendasVendedores />}
+    <div className="subnav" style={{ marginBottom: 6 }}><button className={aba === "consultores" ? "on" : ""} onClick={() => setAba("consultores")}>Consultores e medidores</button><button className={aba === "vendedores" ? "on" : ""} onClick={() => setAba("vendedores")}>Vendedores (loja)</button><button className={aba === "recupck" ? "on" : ""} onClick={() => setAba("recupck")}>💵 Comissão do checklist</button></div>
+    {aba === "consultores" ? <FinConsultor /> : aba === "vendedores" ? <VendasVendedores /> : <RecuperacaoCk />}
   </>;
 }
 
