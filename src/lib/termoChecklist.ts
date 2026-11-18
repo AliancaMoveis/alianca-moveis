@@ -8,9 +8,14 @@ export type AmbTermo = {
   caixa: { mat: Mat; esp: number | null };
   porta: { mat: Mat; esp: number | null; vidro: boolean; naoSeAplica?: boolean };
   cor: string;               // texto livre (ex.: "Caixas Legno Crema · portas Jade") ou códigos da listagem
+  puxador?: string;          // nome / modelo do puxador, escrito na conferência ("Perfil Alumínio 2,30m", "Cava")
+  eletros?: Eletro[];        // os eletros que entram no ambiente, com a dimensão de cada um
   itens: LinhaListagem[];    // módulos / peças deste ambiente (vindos da listagem)
   conferir: string[];        // o que o 360 não conseguiu tirar da listagem
 };
+/** eletrodoméstico que vai embutido no móvel: o nicho é feito pela dimensão dele, por isso ela entra no checklist.
+ *  Errar a dimensão aqui é refazer o módulo depois — é o tipo de coisa que precisa estar escrita e assinada. */
+export type Eletro = { nome: string; dim: string };
 export type DadosTermo = {
   venda: string; cupom?: string; cliente: string; endereco: string; vendedor: string; projetista: string; data: string;
   ambientes: AmbTermo[]; naoInclusos: string[]; obs: string; ferragens: string[]; arquivoListagem?: string;
@@ -28,13 +33,16 @@ export function ambienteDaListagem(nome: string, itens: LinhaListagem[], geral?:
   const portaEsp = um(portas.map(l => l.espessura));
   const vidro = itens.some(l => /vidro|reflecta|espelho/i.test(l.descricao));
   const cores = [...new Set(itens.filter(l => l.cor && l.tipo !== "consumivel").map(l => `cód. ${l.cor}`))];
+  // o puxador costuma vir descrito na listagem do Promob: adianta o que o projetista teria que digitar
+  const pux = [...new Set(itens.filter(l => /puxador|perfil\s*(alum|tipo)/i.test(l.descricao || "")).map(l => String(l.descricao).trim()))];
   const conferir: string[] = [];
   if (!caixaMat) conferir.push("material das caixas");
   if (!caixaEsp) conferir.push("espessura das caixas");
   if (!portaMat) conferir.push("material das portas");
   if (!portaEsp) conferir.push("espessura das portas");
   if (cores.length) conferir.push("nome das cores");
-  return { nome, caixa: { mat: caixaMat, esp: caixaEsp }, porta: { mat: portaMat, esp: portaEsp, vidro, naoSeAplica: !portas.length && !itens.some(l => l.tipo === "modulo") }, cor: cores.join(" · "), itens, conferir };
+  return { nome, caixa: { mat: caixaMat, esp: caixaEsp }, porta: { mat: portaMat, esp: portaEsp, vidro, naoSeAplica: !portas.length && !itens.some(l => l.tipo === "modulo") },
+    cor: cores.join(" · "), puxador: pux.slice(0, 2).join(" · "), eletros: [], itens, conferir };
 }
 
 const esc = (s: string) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
@@ -192,8 +200,13 @@ export function impressaoHtml(d: DadosImpressao): string {
     return `<div class="pg quebra">${cab(`AMBIENTE ${i + 1} · ${esc(a.nome.toUpperCase())}`)}
 ${imgs.length ? `<h3>Imagens do projeto</h3><div class="imgs${imgs.length === 1 ? " um" : ""}">${imgs.map(x => `<figure><img src="${esc(x.src)}" alt=""><figcaption>${esc(x.nome)}</figcaption></figure>`).join("")}</div>` : ""}
 <h3>Material e cor <i>(conferido com o cliente)</i></h3>
-<table><tr><th style="width:55mm">Caixas / corpo</th><th style="width:65mm">Portas / frentes</th><th>Cor / padrão</th></tr>
-<tr><td>${cel(a.caixa.mat, a.caixa.esp, false)}</td><td>${cel(a.porta.mat, a.porta.esp, true, a.porta.vidro, a.porta.naoSeAplica)}</td><td class="fill">${esc(a.cor) || "&nbsp;"}</td></tr></table>
+<table><tr><th style="width:48mm">Caixas / corpo</th><th style="width:55mm">Portas / frentes</th><th>Cor / padrão</th><th style="width:48mm">Puxador</th></tr>
+<tr><td>${cel(a.caixa.mat, a.caixa.esp, false)}</td><td>${cel(a.porta.mat, a.porta.esp, true, a.porta.vidro, a.porta.naoSeAplica)}</td><td class="fill">${esc(a.cor) || "&nbsp;"}</td><td class="fill">${esc(a.puxador || "") || "&nbsp;"}</td></tr></table>
+${(() => { const el = (a.eletros || []).filter(x => (x.nome || "").trim());
+  if (!el.length) return "";
+  // a dimensão do eletro é o que define o nicho: sai impressa para o cliente conferir e assinar
+  return `<h3>Eletros deste ambiente <i>(a dimensão define o nicho)</i></h3><table><tr><th style="width:70mm">Qual</th><th>Dimensão (L × A × P)</th></tr>`
+    + el.map(x => `<tr><td>${esc(x.nome)}</td><td class="fill">${esc(x.dim) || "&nbsp;"}</td></tr>`).join("") + `</table>`; })()}
 <h3>Checklist do ambiente</h3><table class="fic">${fichaKeys.map(k => { const v = (a.ficha || {})[k]; return `<tr><td>${esc(k)}</td><td class="s">${bx(v === true, "Sim")}</td><td class="s">${bx(v === false, "Não")}</td></tr>`; }).join("")}</table>
 ${a.fichaObs || a.obs ? `<div class="obs fill" style="margin-top:3mm">${esc([a.fichaObs, a.obs].filter(Boolean).join(" — "))}</div>` : ""}
 ${vis.length ? `<h3>Resumo do que foi comprado <i>(${vis.length} itens · sem valores)</i></h3><table class="it"><tr><th class="q">Qtd</th><th>Descrição</th><th class="m">Medidas (L × A × P)</th></tr>`
@@ -210,4 +223,74 @@ ${d.online ? `<div class="rub" style="margin-top:8mm">Assinatura eletrônica do 
 <div class="foot"><span>Gerado pelo ALIANÇA 360 · venda ${esc(d.venda)}</span><span>Projeto final validado no checklist</span></div></div>`;
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Checklist_${esc(d.cliente.split(" ")[0])}_${esc(d.venda)}</title><style>${CSS}${CSS_IMP}</style></head><body>
 ${capa}${amb}${termo}${cg}</body></html>`;
+}
+
+// ---------------- folha do financeiro: uma página, com os valores ----------------
+// O checklist e o contrato NÃO levam valor nenhum — é documento que o cliente assina sobre o material.
+// Mas quem termina o checklist precisa levar os números para o financeiro, e estava imprimindo
+// o documento inteiro (ou anotando à mão) para isso. Esta folha é só isso: cliente, venda e valores.
+export type DadosFinanceiro = {
+  venda: string; cliente: string; cpf?: string; telefone?: string; endereco: string;
+  vendedor: string; projetista: string; dataVenda?: string; dataChecklist?: string; situacao?: string;
+  total: number | null;      // valor da venda — é o que o cliente paga
+  recebido: number | null;    // o que já entrou (entrada e pagamentos lançados)
+  desconto: number | null;    // só quando a base traz; não vem no Exact
+  bruto: number | null;       // valor de tabela = total + desconto (só quando há desconto)
+  saldo: number | null;       // total − recebido
+  fonte?: string;             // de onde saíram os números (vai no pé da folha)
+  ambientes: string[];
+  obs?: string;
+};
+const brl = (v: number | null) => v == null ? "" : "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** linha de valor: quando o número existe sai preenchido; quando não existe sai uma linha para escrever à mão,
+ *  porque uma folha que vai ao financeiro com um número errado é pior do que uma com um campo em branco. */
+const linhaVal = (rot: string, v: number | null, forte = false, sub = "") =>
+  `<tr><td${forte ? ' class="forte"' : ""}>${esc(rot)}${sub ? `<span class="sub">${esc(sub)}</span>` : ""}</td>
+<td class="v${forte ? " forte" : ""}">${v == null ? '<span class="mao">&nbsp;</span>' : esc(brl(v))}</td></tr>`;
+
+export function financeiroHtml(d: DadosFinanceiro): string {
+  const falta = [d.total == null ? "valor da venda" : "", d.desconto == null ? "desconto" : "", d.recebido == null ? "valor já recebido" : ""].filter(Boolean);
+  const pct = d.bruto && d.desconto != null && d.bruto > 0 ? Math.round(d.desconto / d.bruto * 1000) / 10 : null;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Financeiro_${esc(d.cliente.split(" ")[0])}_${esc(d.venda)}</title><style>${CSS}
+.fin .dados{grid-template-columns:1fr 1fr;margin-bottom:10px}
+.fin table.val{font-size:11pt;table-layout:auto}.fin table.val td{padding:7px 10px}
+.fin table.val td.v{text-align:right;width:52mm;white-space:nowrap}
+.fin table.val .forte{font-weight:700;font-size:12.5pt;background:#f3f3f3}
+.fin table.val .sub{display:block;font-weight:400;font-size:8pt;color:#666}
+.fin .mao{display:inline-block;min-width:38mm;border-bottom:1px solid #111}
+.fin .aviso{border:1px solid #c98a12;background:#fff8e6;padding:5px 8px;font-size:8.6pt;margin:8px 0}
+</style></head><body class="fin"><div class="pg">
+<div class="hd"><div class="l"><b>ALIANÇA MÓVEIS</b><div>Resumo para o financeiro · checklist do projeto final</div></div>
+<div class="r"><b>VENDA ${esc(d.venda)}</b><br>${esc(d.dataChecklist || "")}</div></div>
+
+<h3>Cliente</h3>
+<div class="dados">
+<div><span>Nome</span> <b>${esc(d.cliente.toUpperCase())}</b></div>
+<div><span>CPF / CNPJ</span> ${esc(d.cpf || "—")}</div>
+<div><span>Telefone</span> ${esc(d.telefone || "—")}</div>
+<div><span>Data da venda</span> ${esc(d.dataVenda || "—")}</div>
+<div style="grid-column:1/-1"><span>Endereço</span> ${esc(d.endereco || "—")}</div>
+<div><span>Vendedor(a)</span> ${esc(d.vendedor || "—")}</div>
+<div><span>Projetista do checklist</span> ${esc(d.projetista || "—")}</div>
+${d.situacao ? `<div style="grid-column:1/-1"><span>Situação no Exact</span> ${esc(d.situacao)}</div>` : ""}
+</div>
+
+<h3>Valores</h3>
+<table class="val">
+${linhaVal("Valor de tabela (bruto)", d.bruto)}
+${linhaVal("Desconto concedido", d.desconto, false, pct != null ? String(pct).replace(".", ",") + "% do valor de tabela" : "")}
+${linhaVal("Valor da venda", d.total, true, "é este o valor que o cliente paga")}
+${linhaVal("Já recebido", d.recebido, false, "entrada e pagamentos lançados")}
+${linhaVal("Saldo a receber", d.saldo, true)}
+</table>
+${falta.length ? `<div class="aviso">⚠️ Sem ${falta.join(", ")} no sistema para esta venda — preencher à mão e conferir no Exact.</div>` : ""}
+
+<h3>Ambientes do checklist</h3>
+<div style="font-size:9.4pt;padding:2px 0 4px">${d.ambientes.length ? d.ambientes.map((a, i) => `${i + 1} · ${esc(a)}`).join(" &nbsp;·&nbsp; ") : "—"}</div>
+
+${d.obs ? `<h3>Observação</h3><div class="obs">${esc(d.obs)}</div>` : ""}
+
+<div class="ass" style="margin-top:22mm"><div>Projetista do checklist<br><span class="rub">${esc(d.projetista || "")}</span></div><div>Recebido pelo financeiro<br><span class="rub">nome e data</span></div></div>
+<div class="foot"><span>Gerado pelo ALIANÇA 360 · venda ${esc(d.venda)}${d.fonte ? " · valores: " + esc(d.fonte) : ""}</span><span>Sem valor fiscal — uso interno</span></div>
+</div></body></html>`;
 }

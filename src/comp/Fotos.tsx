@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { urlAnexo } from "../lib/dados";
 import { baixarFotosZip, blobDe, salvarBlob } from "./Overlays";
+import { imprimirFotos } from "../lib/imprimirFotos";
 
 export type Foto = { url: string; nome?: string; path?: string; storage_path?: string; legenda?: string };
 
@@ -22,7 +23,7 @@ export async function baixarTodasFotos(fotos: Foto[], nome = "fotos"): Promise<s
   } catch (e: any) { return e?.name === "AbortError" ? "" : "Não consegui baixar todas"; }
 }
 
-export function FotoViewer({ fotos, inicio = 0, onFechar, acoes }: { fotos: Foto[]; inicio?: number; onFechar: () => void; acoes?: ReactNode }) {
+export function FotoViewer({ fotos, inicio = 0, onFechar, acoes, tituloImp }: { fotos: Foto[]; inicio?: number; onFechar: () => void; acoes?: ReactNode; tituloImp?: string }) {
   const [i, setI] = useState(Math.min(Math.max(0, inicio), Math.max(0, fotos.length - 1)));
   const [z, setZ] = useState({ s: 1, x: 0, y: 0, r: 0 });
   const [url, setUrl] = useState<Record<number, string>>({});
@@ -80,6 +81,9 @@ export function FotoViewer({ fotos, inicio = 0, onFechar, acoes }: { fotos: Foto
         <button type="button" onClick={reset} title="Tamanho normal (0)">⤢</button>
         <button type="button" onClick={() => setZ(v => ({ ...v, r: (v.r + 90) % 360 }))} title="Girar">↻</button>
         <button type="button" onClick={baixar} title="Baixar esta foto">⬇</button>
+        {/* imprimir sem fechar a foto: esta, ou todas as que estão no visualizador */}
+        <button type="button" onClick={() => imprimirFotos([{ url: src, nome: f.nome }], tituloImp || "Foto", f.nome || "")} title="Imprimir só esta">🖨</button>
+        {fotos.length > 1 && <button type="button" className="fv-todas" onClick={() => imprimirFotos(fotos.map((x, j) => ({ url: url[j] || x.url, nome: x.nome })), tituloImp || "Fotos", fotos.length + " imagens")} title="Imprimir todas as fotos">🖨 Todas</button>}
         {fotos.length > 1 && <button type="button" className="fv-todas" onClick={baixarTodas} disabled={todas} title="Baixar todas as fotos de uma vez">{todas ? "…" : "⬇ Todas (" + fotos.length + ")"}</button>}
         <button type="button" className="fv-x" onClick={onFechar} aria-label="Fechar" title="Fechar (Esc)">✕</button>
       </span>

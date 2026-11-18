@@ -307,6 +307,8 @@ export const A = {
   vendedorAssumir: (id: string) => rpc("vendedor_assumir", { p_id: id }),
   salvarMeusDados: (nomeCompleto: string, telefone: string) => rpc("salvar_meus_dados", { p_nome_completo: nomeCompleto, p_telefone: telefone }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),
+  // valores da venda para a folha do financeiro (total, recebido, desconto quando existe)
+  checklistFinanceiro: (id: string) => rpc<any>("checklist_financeiro", { p_chamado: id }),
   // vendedores do Exact: o vínculo nome-do-Exact → usuário do 360, e a fila de quem ainda não tem ninguém por trás
   vendedorExactMapa: async () => {
     const { data, error } = await sb.from("vendedor_exact").select("nome,usuario_id");

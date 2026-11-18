@@ -9,7 +9,7 @@ import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, san
 import { Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
 import { SeloMedidaVenda } from "./Medidas";
-import { abrirTermo } from "./ProjetistaChecklist";
+import { abrirFinanceiro, abrirTermo } from "./ProjetistaChecklist";
 
 export const ETAPA_CK: Record<string, [string, string]> = {
   a_contatar: ["A contatar", "var(--primary)"], aguardando: ["Mensagem enviada · aguardando resposta", "var(--warn)"], outra_data: ["🔄 Pediu nova data", "var(--st-respondida)"],
@@ -353,6 +353,9 @@ function CartaoCk({ c, aba }: any) {
           {c.status !== "concluida" && g !== "agendar" && <button className="btn sm" onClick={() => setModal(<ModalFinalizarCk c={c} />)}>✓ Finalizar atendimento</button>}
           {k.termo && (k.termo.ambientes || []).length > 0 && <button className="btn sm" title={(k.termo.finalizadoEm ? "Termo finalizado em " + fmtDateTime(k.termo.finalizadoEm) : "Rascunho do projetista") + (k.termo.salvoPor ? " · " + k.termo.salvoPor : "")}
             onClick={() => abrirTermo({ ...c, ...k, vendedor: k.planilha?.vendedor, local: k.local }, k.termo, k.projetista || "", toast)}>📄 Termo{k.termo.finalizadoEm ? "" : " (rascunho)"}</button>}
+          {/* o checklist e o contrato não levam valor; esta folha é só os valores, para levar ao financeiro */}
+          {(g === "agendado" || c.status === "concluida" || etapaCk(c) === "realizado") && <button className="btn sm" title="Folha de 1 página com os valores da venda, para o financeiro"
+            onClick={() => abrirFinanceiro({ ...c, ...k, vendedor: k.planilha?.vendedor, local: k.local }, k.termo, k.projetista || "", toast)}>💰 Financeiro</button>}
           <button className="btn ghost sm" onClick={() => setModal(<ModalNotas c={c} />)} title="Mensagens enviadas e anotações">📝{notas ? " " + notas : ""}</button>
           {(g === "agendado" || c.status === "concluida") && <button className="btn sm primary" onClick={() => irPara("projetista_ck", { abrirCk: c.id })} title="Abrir a tela de trabalho do checklist (ambientes, conferência, contrato)">🧑‍💻 Tela do checklist</button>}
           <button className="btn ghost sm" onClick={() => abrirDetalhe(c.id)}>Ficha</button>

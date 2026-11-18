@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { A } from "../lib/acoes";
 import { fmtDateTime } from "../lib/regras";
 import { FotoViewer } from "./Fotos";
+import { imprimirFotos, type FotoImp } from "../lib/imprimirFotos";
+import { useApp } from "../estado";
 
 const cache = new Map<string, Promise<string>>();
 const urlDe = (c: any, x: any) => {
@@ -35,11 +37,19 @@ function Projeto({ c, x }: { c: any; x: any }) {
   return url ? <a href={url} target="_blank" rel="noopener" style={base}>{miolo}</a> : <div style={{ ...base, opacity: .75 }}>{miolo}</div>;
 }
 const grade: any = { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 8, margin: "6px 0" };
+/** botão de impressão que aparece no título de cada bloco de fotos */
+function BtImprimir({ n, onClick, rot }: { n: number; onClick: () => void; rot?: string }) {
+  if (!n) return null;
+  return <button type="button" onClick={onClick} title={"Imprimir " + n + " imagem(ns)"}
+    style={{ marginLeft: "auto", border: "1px solid rgba(128,140,160,.45)", borderRadius: 8, background: "var(--surface,#fff)", color: "inherit", font: "inherit", fontSize: 12, fontWeight: 700, padding: "3px 9px", cursor: "pointer" }}>
+    🖨 {rot || "Imprimir"}{n > 1 ? " (" + n + ")" : ""}</button>;
+}
 const titulo: any = { fontWeight: 900, fontSize: 14.5, margin: "4px 0" };
 type Item = { key: string; x: any; nome?: string };
 
 /** imagem do projeto da venda (só imagens: sem orçamento, valores ou outros documentos) */
 export function ImagensVenda({ c }: { c: any }) {
+  const { toast } = useApp() as any;
   const [l, setL] = useState<any[] | null>(null); const [erro, setErro] = useState("");
   const [ver, setVer] = useState<number | null>(null); const [urls, setUrls] = useState<Record<string, string>>({});
   useEffect(() => { A.medidaImagens(c.id).then(r => setL(r.imagens || [])).catch(e => { setErro(e.message); setL([]); }); }, [c.id]);
@@ -47,7 +57,11 @@ export function ImagensVenda({ c }: { c: any }) {
   // o desenho em PDF vem primeiro: é o que mostra o ambiente comprado
   const pdfs = todos.filter(f => f.x.pdf), itens = todos.filter(f => !f.x.pdf);
   return <div style={{ border: "1.5px solid rgba(128,140,160,.35)", borderRadius: 12, padding: "10px 12px", margin: "8px 0 12px" }}>
-    <div style={titulo}>🖼 Projeto da venda <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· o ambiente que o cliente comprou</span></div>
+    <div style={{ ...titulo, display: "flex", alignItems: "center", gap: 8 }}>🖼 Projeto da venda <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· o ambiente que o cliente comprou</span>
+      <BtImprimir n={itens.filter(f => urls[f.key] || f.x.url).length} onClick={() => {
+        const fs: FotoImp[] = itens.map(f => ({ url: urls[f.key] || f.x.url || "", nome: f.nome }));
+        if (!imprimirFotos(fs, "Projeto da venda · " + (c.cliente || ""), "venda " + (c.pedido || "—"))) toast("Libere as janelas (pop-up) do navegador para imprimir");
+      }} /></div>
     {l === null ? <div style={{ fontSize: 13, opacity: .7 }}>Buscando no Exact…</div>
       : todos.length ? <>
         {pdfs.map(f => <Projeto key={f.key} c={c} x={f.x} />)}
@@ -55,12 +69,14 @@ export function ImagensVenda({ c }: { c: any }) {
           <Foto key={f.key} c={c} x={f.x} inteira abrir={() => setVer(i)} onSrc={u => setUrls(p => p[f.key] === u ? p : { ...p, [f.key]: u })} />)}</div>}
       </>
       : <div style={{ fontSize: 13, opacity: .75 }}>{erro || "A venda não tem o desenho do ambiente anexado no Exact."}</div>}
-    {ver !== null && <FotoViewer fotos={itens.map(f => ({ url: urls[f.key] || f.x.url || "", nome: f.nome }))} inicio={ver} onFechar={() => setVer(null)} />}
+    {ver !== null && <FotoViewer fotos={itens.map(f => ({ url: urls[f.key] || f.x.url || "", nome: f.nome }))} inicio={ver}
+      onFechar={() => setVer(null)} tituloImp={"Projeto da venda · " + (c.cliente || "") + " · venda " + (c.pedido || "—")} />}
   </div>;
 }
 
 /** confirmação de medida: o que já foi enviado antes (medidas, fotos desta ficha, fotos da medição no Exact e da visita do consultor) */
 export function Anteriores({ c }: { c: any }) {
+  const { toast } = useApp() as any;
   const m = (c.tratativa && c.tratativa.medida) || {};
   const [d, setD] = useState<any>(null);
   const [ver, setVer] = useState<number | null>(null); const [urls, setUrls] = useState<Record<string, string>>({});
@@ -82,8 +98,21 @@ export function Anteriores({ c }: { c: any }) {
   const idx = (f: Item) => todas.findIndex(t => t.key === f.key);
   const abrirFoto = (f: Item) => setVer(Math.max(0, idx(f)));
   const aoResolver = (f: Item) => (u: string) => setUrls(p => p[f.key] === u ? p : { ...p, [f.key]: u });
+  // impressão: tudo de uma vez ou só um grupo. As medidas escritas vão no começo da folha,
+  // porque de nada serve a foto sem a medida que foi anotada junto com ela.
+  const link = (f: Item) => urls[f.key] || f.x.url || "";
+  const cab = (c.cliente || "") + " · venda " + (c.pedido || "—");
+  const textos: [string, string][] = [["Cliente", c.cliente || ""], ["Venda", c.pedido || ""], ["Endereço", c.endereco || ""],
+    ["Medidas", m.medidas || ""], ["Observação", m.obs || ""]];
+  const imp = (l: Item[], rot: string, comTexto = false) => {
+    if (!imprimirFotos(l.map(f => ({ url: link(f), nome: f.nome })), rot + " · " + cab, l.length + " imagem(ns)", comTexto ? textos : []))
+      toast("Libere as janelas (pop-up) do navegador para imprimir");
+  };
 
   return <div>
+    {todas.length > 0 && <button type="button" onClick={() => imp(todas, "Medidas", true)}
+      style={{ width: "100%", border: "1.5px solid rgba(128,140,160,.45)", borderRadius: 10, background: "var(--surface,#fff)", color: "inherit", font: "inherit", fontWeight: 800, fontSize: 14, padding: "10px 12px", margin: "4px 0 8px", cursor: "pointer" }}>
+      🖨 Imprimir tudo <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· {todas.length} imagem(ns) + as medidas escritas</span></button>}
     {ant.length > 0 && <div style={caixa}><div style={titulo}>📝 Medidas enviadas antes</div>
       {ant.slice().reverse().map((x, i) => <div key={i} style={{ fontSize: 13.5, padding: "6px 0", borderTop: i ? "1px solid rgba(128,140,160,.25)" : 0 }}>
         <div style={{ opacity: .75, fontSize: 12 }}>{x.realizadaEm ? "Enviada " + fmtDateTime(x.realizadaEm) : "Enviada"}{x.devolvidaEm ? " · devolvida " + fmtDateTime(x.devolvidaEm) : ""}{x.fotos ? " · " + x.fotos + " foto(s)" : ""}</div>
@@ -91,20 +120,23 @@ export function Anteriores({ c }: { c: any }) {
         {x.faltando && <div style={{ color: "#1d6fd1" }}><b>Faltou:</b> {x.faltando}</div>}</div>)}</div>}
     {(m.medidas || m.obs) && !ant.length && <div style={caixa}><div style={titulo}>📝 Medidas enviadas</div>{m.medidas && <div><b>Medidas:</b> {m.medidas}</div>}{m.obs && <div><b>Obs.:</b> {m.obs}</div>}</div>}
 
-    <div style={caixa}><div style={titulo}>📷 Fotos desta medida <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· {minhas.length}{m.fotosExact ? " · " + m.fotosExact + " da medição no Exact" : ""}</span></div>
+    <div style={caixa}><div style={{ ...titulo, display: "flex", alignItems: "center", gap: 8 }}>📷 Fotos desta medida <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· {minhas.length}{m.fotosExact ? " · " + m.fotosExact + " da medição no Exact" : ""}</span>
+      <BtImprimir n={fotosMinhas.length} onClick={() => imp(fotosMinhas, "Fotos desta medida", true)} /></div>
       {minhas.length ? <div style={grade}>{minhas.map((a: any, i: number) => { const f = fotosMinhas.find(z => z.x.url === a.url && z.nome === a.nome);
         return a.tipo === "img" && f ? <Foto key={i} c={c} x={f.x} abrir={() => abrirFoto(f)} onSrc={aoResolver(f)} />
           : <a key={i} href={a.url} target="_blank" rel="noopener" style={{ fontSize: 12.5 }}>📄 {a.nome || "arquivo"}</a>; })}</div>
         : <div style={{ fontSize: 13, opacity: .75 }}>Nenhuma foto anexada ainda.</div>}</div>
 
-    {(!d || soNoExact.length > 0 || !!d.exact.notas) && <div style={caixa}><div style={titulo}>🗂 Medição no Exact</div>
+    {(!d || soNoExact.length > 0 || !!d.exact.notas) && <div style={caixa}><div style={{ ...titulo, display: "flex", alignItems: "center", gap: 8 }}>🗂 Medição no Exact
+      <BtImprimir n={fotosExact.length} onClick={() => imp(fotosExact, "Medição no Exact")} /></div>
       {!d ? <div style={{ fontSize: 13, opacity: .7 }}>Buscando…</div> : <>
         {soNoExact.length ? <div style={grade}>{soNoExact.map((x, i) => { const f = fotosExact.find(z => z.x.url === x.url);
           return f ? <Foto key={i} c={c} x={f.x} abrir={() => abrirFoto(f)} onSrc={aoResolver(f)} /> : null; })}</div>
           : <div style={{ fontSize: 13, opacity: .75 }}>{m.fotosExact ? "As fotos da medição no Exact já estão acima, nesta ficha." : "Sem fotos da medição no Exact."}</div>}
         {d.exact.notas && <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap", marginTop: 6, opacity: .9 }}>{d.exact.notas}</div>}</>}</div>}
 
-    {d && (d.visita as any[]).map((v: any) => <div key={v.id} style={caixa}><div style={titulo}>🏠 Visita do consultor antes da venda <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· {v.data ? fmtDateTime(v.data) : ""}</span></div>
+    {d && (d.visita as any[]).map((v: any) => <div key={v.id} style={caixa}><div style={{ ...titulo, display: "flex", alignItems: "center", gap: 8 }}>🏠 Visita do consultor antes da venda <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· {v.data ? fmtDateTime(v.data) : ""}</span>
+      <BtImprimir n={(fotosVisita[v.id] || []).length} onClick={() => imp(fotosVisita[v.id] || [], "Visita do consultor")} /></div>
       {v.medidas && <div style={{ fontSize: 13.5 }}><b>Medidas:</b> {v.medidas}</div>}{v.obs && <div style={{ fontSize: 13.5 }}><b>Obs.:</b> {v.obs}</div>}
       {(v.fotos || []).length ? <div style={grade}>{(v.fotos as any[]).map((x, i) => { const f = (fotosVisita[v.id] || []).find(z => z.x.url === x.url);
         return x.img && f ? <Foto key={i} c={c} x={f.x} abrir={() => abrirFoto(f)} onSrc={aoResolver(f)} />
@@ -112,6 +144,6 @@ export function Anteriores({ c }: { c: any }) {
         : <div style={{ fontSize: 13, opacity: .75 }}>Sem fotos da visita.</div>}</div>)}
 
     {d && d.avisos && d.avisos.length > 0 && <div style={{ fontSize: 12, opacity: .7 }}>{d.avisos.join(" · ")}</div>}
-    {ver !== null && <FotoViewer fotos={todas.map(f => ({ url: urls[f.key] || f.x.url || "", nome: f.nome }))} inicio={ver} onFechar={() => setVer(null)} />}
+    {ver !== null && <FotoViewer fotos={todas.map(f => ({ url: urls[f.key] || f.x.url || "", nome: f.nome }))} inicio={ver} onFechar={() => setVer(null)} tituloImp={"Medidas · " + cab} />}
   </div>;
 }

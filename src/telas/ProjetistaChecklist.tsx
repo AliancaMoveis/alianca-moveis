@@ -9,7 +9,7 @@ import { A } from "../lib/acoes";
 import { sb } from "../lib/supabase";
 import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import { lerListagemArquivo, type LinhaListagem, type Listagem } from "../lib/listagemPromob";
-import { ambienteDaListagem, impressaoHtml, termoHtml, FICHA_AMBIENTE, type AmbTermo, type DadosTermo, type Mat } from "../lib/termoChecklist";
+import { ambienteDaListagem, financeiroHtml, impressaoHtml, termoHtml, FICHA_AMBIENTE, type AmbTermo, type DadosFinanceiro, type DadosTermo, type Eletro, type Mat } from "../lib/termoChecklist";
 import { FotoViewer } from "../comp/Fotos";
 import { Modal } from "../comp/Modal";
 import { blobParaJpeg, pdfParaImagens, qrDataUrl } from "../lib/contratoUtil";
@@ -97,6 +97,30 @@ export function abrirTermo(c: any, termo: any, projetista: string, toast?: (m: s
   const w = window.open("", "_blank");
   if (!w) { toast?.("Libere as janelas (pop-up) do navegador para abrir o termo"); return; }
   w.document.write(termoHtml(d)); w.document.close(); setTimeout(() => w.print(), 400);
+}
+
+/** 💰 Folha de uma página com os valores, para o projetista levar ao financeiro depois do checklist.
+ *  O checklist e o contrato não levam valor nenhum (é documento que o cliente assina sobre o material),
+ *  então quem terminava estava imprimindo o documento inteiro ou anotando à mão só para ter os números. */
+export async function abrirFinanceiro(c: any, termo: any, projetista: string, toast?: (m: string) => void) {
+  let f: any = {};
+  try { f = (await A.checklistFinanceiro(c.id)) || {}; }
+  catch (e: any) { toast?.("Não consegui buscar os valores: " + (e.message || "")); return; }
+  const amb: string[] = (termo?.ambientes || []).map((a: any) => String(a.nome || "")).filter(Boolean);
+  const d: DadosFinanceiro = {
+    venda: String(c.pedido || ""), cliente: String(c.cliente || ""), cpf: c.clienteDoc || "", telefone: c.telefone || "",
+    endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: projetista || "—",
+    dataVenda: f.dataVenda || (c.dataVenda ? fmtDate(String(c.dataVenda).slice(0, 10)) : ""),
+    dataChecklist: c.agendadoPara ? fmtDate(String(c.agendadoPara).slice(0, 10)) : fmtDate(hojeISO()),
+    situacao: f.situacao || "",
+    total: f.total == null ? null : Number(f.total), recebido: f.recebido == null ? null : Number(f.recebido),
+    desconto: f.desconto == null ? null : Number(f.desconto), bruto: f.bruto == null ? null : Number(f.bruto),
+    saldo: f.saldo == null ? null : Number(f.saldo), fonte: f.fonte || "",
+    ambientes: amb, obs: termo?.obs || "",
+  };
+  const w = window.open("", "_blank");
+  if (!w) { toast?.("Libere as janelas (pop-up) do navegador para abrir a folha"); return; }
+  w.document.write(financeiroHtml(d)); w.document.close(); setTimeout(() => w.print(), 400);
 }
 
 // ---------------- estilos (mesmo desenho dos mockups, com as cores do 360) ----------------
@@ -924,6 +948,27 @@ function QualAmbiente({ ambs, l, onOk, onCancelar }: { ambs: Amb[]; l: Listagem;
 function Seg<T extends string | number | null>({ v, ops, on }: { v: T; ops: [T, string][]; on: (x: T) => void }) {
   return <span className="seg">{ops.map(([x, t]) => <button key={String(x)} type="button" className={v === x ? "on" : ""} onClick={() => on(v === x ? (null as T) : x)}>{t}</button>)}</span>;
 }
+/** Eletros do ambiente: o nicho é feito pela dimensão do aparelho, então ela precisa estar escrita e assinada.
+ *  Antes isso era só um "Sim/Não" na ficha ("Eletrodomésticos e nichos conferidos") — não dizia qual nem de que tamanho. */
+const ELETROS_SUG = ["Fogão", "Cooktop", "Forno elétrico", "Micro-ondas", "Coifa / depurador", "Geladeira", "Lava-louças", "Lava-roupas", "Secadora", "Adega", "Purificador", "Cuba / tanque", "Torneira", "TV"];
+function Eletros({ a, set }: { a: Amb; set: (fn: (a: Amb) => Amb) => void }) {
+  const l: Eletro[] = Array.isArray(a.eletros) ? a.eletros : [];
+  const troca = (i: number, k: "nome" | "dim", v: string) => set(x => ({ ...x, eletros: (x.eletros || []).map((e, j) => j === i ? { ...e, [k]: v } : e) }));
+  return <div style={{ margin: "4px 0 10px", padding: "8px 10px", border: "1px solid var(--pj-l2,#e6e9ee)", borderRadius: 10 }}>
+    <div className="lbl2" style={{ display: "flex", gap: 8, alignItems: "center" }}>Eletros do ambiente
+      <span className="hint" style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>· o nicho é feito pela medida do aparelho — escreva qual é e a dimensão</span>
+      <button type="button" className="lk" style={{ marginLeft: "auto" }} onClick={() => set(x => ({ ...x, eletros: [...(x.eletros || []), { nome: "", dim: "" }] }))}>＋ eletro</button></div>
+    {!l.length ? <div className="hint">Nenhum eletro neste ambiente.</div>
+      : l.map((e, i) => <div key={i} style={{ display: "flex", gap: 6, marginTop: 5, alignItems: "center" }}>
+        <input list="eletros-sug" value={e.nome} onChange={ev => troca(i, "nome", ev.target.value)} placeholder="Qual (ex.: Fogão)" style={{ flex: "1 1 40%", minWidth: 0 }} />
+        <input value={e.dim} onChange={ev => troca(i, "dim", ev.target.value)} placeholder="Dimensão (L × A × P)" style={{ flex: "1 1 50%", minWidth: 0 }} />
+        <button type="button" className="pjx" title="Tirar este eletro" onClick={() => set(x => ({ ...x, eletros: (x.eletros || []).filter((_, j) => j !== i) }))}>✕</button>
+      </div>)}
+    <datalist id="eletros-sug">{ELETROS_SUG.map(x => <option key={x} value={x} />)}</datalist>
+    {l.some(e => e.nome.trim() && !e.dim.trim()) && <div className="hint" style={{ color: "#8a5d00", marginTop: 4 }}>Falta a dimensão de: {l.filter(e => e.nome.trim() && !e.dim.trim()).map(e => e.nome).join(", ")}.</div>}
+  </div>;
+}
+
 function ConfAmb({ a, i, todos, set, sugCores, mover, c, arqs, ferragens }: { a: Amb; i: number; todos: Amb[]; set: (fn: (a: Amb) => Amb) => void; sugCores: string[]; mover: (item: LinhaListagem, para: string) => void; c: any; arqs: Arqs | null; ferragens?: string[] }) {
   const { setModal } = useApp() as any;
   const [verItens, setVerItens] = useState(false);
@@ -946,7 +991,11 @@ function ConfAmb({ a, i, todos, set, sugCores, mover, c, arqs, ferragens }: { a:
         <input list={"cores-" + a._k} value={a.cor} onChange={e => set(x => ({ ...x, cor: e.target.value }))} onBlur={e => lembrarCor(e.target.value)} placeholder="Ex.: Freijó · Legno Crema · portas Jade" style={{ width: "100%" }} />
         <datalist id={"cores-" + a._k}>{sugCores.map(s => <option key={s} value={s} />)}</datalist>
         {(a.codigos || []).length > 0 && <div className="hint" style={{ marginTop: 3 }}>Na listagem: cód. {(a.codigos || []).join(" · ")} — o código não vai para o cliente; escreva o nome da cor.</div>}</div>
+      <div><div className="lbl2">Puxador — nome / modelo</div>
+        <input value={a.puxador || ""} onChange={e => set(x => ({ ...x, puxador: e.target.value }))} placeholder="Ex.: Perfil alumínio escovado · Cava · Tic-tac" style={{ width: "100%" }} />
+        <div className="hint" style={{ marginTop: 3 }}>Escreva o nome que o cliente vai reconhecer na entrega.</div></div>
     </div>
+    <Eletros a={a} set={set} />
     {falta.length > 0 && <div className="obsw" style={{ marginBottom: 8 }}>⚠️ Conferir: {falta.join(", ")}</div>}
     {(() => { const tm = termoDoAmb(a, ferragens); const ft = faltaNoTermo(tm); return <div style={{ margin: "4px 0 10px", padding: "8px 10px", border: "1px solid var(--pj-l2,#e6e9ee)", borderRadius: 10 }}>
       <div className="lbl2" style={{ display: "flex", gap: 8, alignItems: "center" }}>Termo de ciência do material <span className="hint" style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>· vai preenchido para o cliente conferir (ele pode corrigir na assinatura){a.termo ? "" : " · montado da conferência acima"}</span>
