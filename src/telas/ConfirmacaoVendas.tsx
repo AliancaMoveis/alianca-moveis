@@ -5,14 +5,14 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
-import { fmtDate, fmtMoeda, moedaDigitando, numerosVenda } from "../lib/regras";
+import { fmtDate, fmtMoeda, itensPendentes, moedaDigitando, numerosVenda } from "../lib/regras";
 import { tira } from "./Medidas";
 import { faixa, PER, type Per } from "./VendasConsultores";
 
 type Item = {
   numero: string; fonte: string; tipo: string; chamado_id: string | null; cands: { id: string; cliente: string; como: string }[]; cliente_ref: string;
   consultor_id: string | null; consultor_nome: string; mv: any; ex_cliente: string; ex_tel1: string; ex_tel2: string; ex_end: string; ex_idpessoa?: string; ex_vendedor: string;
-  vendedor_id: string | null; ex_situacao: string; incluido_por?: string; motivo?: string; ex_total?: number | null; ex_recebido?: number | null; forma?: string; entrada?: number | null; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
+  vendedor_id: string | null; ex_situacao: string; incluido_por?: string; _item?: string; motivo?: string; ex_total?: number | null; ex_recebido?: number | null; forma?: string; entrada?: number | null; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
 };
 type Aba = "pendente" | "validada" | "negada" | "checklist" | "todas";
 const ABAS: [Aba, string][] = [["pendente", "⏳ A conferir"], ["validada", "✅ Validadas"], ["negada", "❌ Negadas"], ["checklist", "📋 Checklist"], ["todas", "Todas"]];
@@ -39,6 +39,9 @@ export default function ConfirmacaoVendas() {
   const [per, setPer] = useState<"todas" | Per>(() => { try { return (localStorage.getItem("cv_per") as any) || "todas"; } catch { return "todas"; } });
   const [pde, setPde] = useState(""); const [pate, setPate] = useState("");
   const [ini, fim] = per === "todas" ? ["", ""] : faixa(per, pde, pate);
+  // origem (quem trouxe a venda) e filtros por vendedor / consultor
+  const [orig, setOrig] = useState<"" | "vendedor" | "relatorio">("");
+  const [fVend, setFVend] = useState(""); const [fCons, setFCons] = useState("");
   const [q, setQ] = useState(""); const [ocup, setOcup] = useState<Record<string, boolean>>({});
   const [valEd, setValEd] = useState<Record<string, string>>({});
   const [metodo, setMetodo] = useState(""); const [sel, setSel] = useState<Record<string, boolean>>({});
@@ -85,8 +88,24 @@ export default function ConfirmacaoVendas() {
   // mesmo cliente = mesmo cliente do 360, ou mesmo comprador no Exact (ID da pessoa), ou mesmo nome do comprador
   const gk = (x: Item) => { const c = cli360(x); return c ? c.id : x.ex_idpessoa ? "p:" + x.ex_idpessoa : "n:" + tira(x.ex_cliente); };
 
-  const todos = itens || [];
-  const doTipo = todos.filter(x => (!tipo || x.tipo === tipo) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim)));
+  // vendas que o VENDEDOR lançou no cliente e ainda esperam a Gestão (não estão na fila do relatório): entram aqui para confirmar no mesmo lugar
+  const doVend: Item[] = useMemo(() => {
+    const na = new Set((itens || []).map(x => String(x.numero)));
+    return (st.chamados || []).filter((c: any) => R.domMarketing(c) && c.venda).flatMap((c: any) => {
+      const direto = R.ehDireto(c); const consId = direto ? c.solicitanteId : c.consultorId;
+      return itensPendentes(c.venda).filter((i: any) => i.tipo !== "pagamento" && i.numero && !na.has(String(i.numero))).map((i: any): Item => ({
+        numero: String(i.numero), fonte: "vendedor", tipo: direto ? "marketing" : "consultor", chamado_id: c.id, cands: [], cliente_ref: c.cliente,
+        consultor_id: consId || null, consultor_nome: consId ? R.nomeUser(consId) : "", mv: null, ex_cliente: c.cliente, ex_tel1: c.telefone || "", ex_tel2: "", ex_end: c.endereco || "",
+        ex_vendedor: c.atendenteId ? R.nomeUser(c.atendenteId) : "", vendedor_id: c.atendenteId || null, ex_situacao: "Lançada pelo vendedor", valor: Number(i.valor) || 0, valor_exact: Number(i.valor) || 0,
+        data: String(i.dataVenda || c.venda.dataVenda || "").slice(0, 10) || null, como: "venda", status: "pendente", decidido_em: null, decidido_por: null, criado_em: String(i.registradoEm || ""),
+        motivo: "lançada pelo vendedor — aguardando a Gestão", _item: i.id }));
+    });
+  }, [st.chamados, itens]);
+  const todos = [...(itens || []), ...doVend];
+  const ehVendedor = (x: Item) => x.fonte === "vendedor" || /lançada/i.test(x.motivo || "");
+  const nomeVend = (x: Item) => (x.vendedor_id ? R.nomeUser(x.vendedor_id) : x.ex_vendedor) || "";
+  const nomeCons = (x: Item) => (x.consultor_id ? R.nomeUser(x.consultor_id) : x.consultor_nome) || "";
+  const doTipo = todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === ehVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (!fCons || nomeCons(x) === fCons) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim)));
   const busca = tira(q), dig = q.replace(/\D/g, "");
   const lista = doTipo.filter(x => (aba === "todas" || x.status === aba) && (!metodo || x.como === metodo)
     && (!q || tira([x.ex_cliente, x.cliente_ref, chamado(x.chamado_id)?.cliente || "", x.consultor_nome, x.ex_vendedor].join(" ")).includes(busca) || (dig.length >= 3 && (x.numero.includes(dig) || (x.ex_tel1 + x.ex_tel2).replace(/\D/g, "").includes(dig)))))
@@ -106,6 +125,13 @@ export default function ConfirmacaoVendas() {
   const troca = (numero: string, patch: Partial<Item>) => setItens(l => (l || []).map(x => x.numero === numero ? { ...x, ...patch } : x));
   async function decidir(x: Item, acao: "validar" | "negar" | "checklist" | "reabrir") {
     if (ocup[x.numero]) return;
+    if (x.fonte === "vendedor") { // lançada pelo vendedor: a Gestão efetiva (ou cancela) o item no cliente
+      if (acao === "checklist" || acao === "reabrir") { toast("Para esta venda use a ficha do cliente"); return; }
+      setOcup(o => ({ ...o, [x.numero]: true }));
+      try { await A.decidirItensVenda(x.chamado_id as string, [{ id: x._item, status: acao === "validar" ? "efetivada" : "cancelada" }]); await recarregar(); toast("Venda " + x.numero + (acao === "validar" ? " efetivada" : " cancelada")); }
+      catch (e: any) { toast(x.numero + ": " + (e.message || "não deu certo")); } finally { setOcup(o => ({ ...o, [x.numero]: false })); }
+      return;
+    }
     // valor digitado e ainda não salvo vai junto
     const ed = valEd[x.numero];
     setOcup(o => ({ ...o, [x.numero]: true }));
@@ -175,6 +201,21 @@ export default function ConfirmacaoVendas() {
         <input type="date" value={pate} min={pde || undefined} onChange={e => setPate(e.target.value)} style={{ width: "auto" }} /></div>}
       {per !== "todas" && <div className="hint" style={{ marginTop: 6 }}>Mostrando vendas de <b>{fmtDate(ini)}</b> a <b>{fmtDate(fim)}</b>{todos.length - doTipo.length > 0 ? " · " + (todos.length - doTipo.length) + " fora deste período" : ""}</div>}
     </div>
+    <div className="card" style={{ padding: "12px 14px", margin: "0 0 12px", borderLeft: "4px solid var(--st-concluida)" }}>
+      <div style={{ fontWeight: 800, marginBottom: 8 }}>🧭 Quem trouxe a venda <span className="hint" style={{ fontWeight: 500 }}>— o número é quanto ainda falta conferir</span></div>
+      <div className="chips" style={{ margin: 0 }}>
+        {([["", "Todas"], ["vendedor", "🧑‍💼 Vendedor lançou"], ["relatorio", "🔎 Só pelo relatório do Exact"]] as [string, string][]).map(([k, l]) => {
+          const n = todos.filter(x => (!tipo || x.tipo === tipo) && x.status === "pendente" && (!k || (k === "vendedor") === ehVendedor(x))).length;
+          return <button key={k || "t"} className={"chip" + (orig === k ? " on" : "")} style={{ fontSize: 14, padding: "7px 14px" }} onClick={() => { setOrig(k as any); setSel({}); }}>{l}<span className="n">{n}</span></button>; })}
+        <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <label className="hint">Vendedor <select value={fVend} onChange={e => { setFVend(e.target.value); setSel({}); }} style={{ width: "auto", marginLeft: 4 }}><option value="">todos</option>
+            {Array.from(new Set(todos.filter(x => !tipo || x.tipo === tipo).map(nomeVend).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR")).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+          <label className="hint">Consultor <select value={fCons} onChange={e => { setFCons(e.target.value); setSel({}); }} style={{ width: "auto", marginLeft: 4 }}><option value="">todos</option>
+            {Array.from(new Set(todos.filter(x => !tipo || x.tipo === tipo).map(nomeCons).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR")).map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+          {(orig || fVend || fCons) && <button className="btn ghost sm" onClick={() => { setOrig(""); setFVend(""); setFCons(""); }}>limpar filtros</button>}
+        </span>
+      </div>
+    </div>
     <div className="kpis" style={{ margin: "6px 0 10px" }}>
       <Kpi n={pend.length} l={"A conferir · " + brl(pend.reduce((s, x) => s + Number(x.valor), 0))} cor="var(--warn)" />
       <Kpi n={pend.filter(x => comoDe(x.como)[1] === "ok").length} l="🟢 Achadas por telefone / nº" cor="var(--st-concluida)" />
@@ -228,6 +269,7 @@ export default function ConfirmacaoVendas() {
                 <div className="hint" style={{ color: /aguard|promiss/i.test(x.ex_situacao) ? "var(--warn)" : undefined }}>{x.ex_situacao}</div>
                 {x.incluido_por ? <div className="hint" title="Quem incluiu a venda no Exact" style={{ color: /^checklist/i.test(x.incluido_por) ? "#6b4fbb" : undefined }}>incluído por {x.incluido_por}</div> : null}
                 {x.motivo ? <div className="hint" style={{ whiteSpace: "normal", maxWidth: 120 }}>{x.motivo}</div> : null}
+                {ehVendedor(x) ? <div><span className="pill" style={{ fontSize: 11, background: "#e8f1ff", color: "#284b8f" }}>🧑‍💼 Vendedor lançou</span></div> : <div><span className="pill" style={{ fontSize: 11 }}>🔎 Pelo relatório</span></div>}
                 <span className={"cv-tipo " + x.tipo}>{x.tipo === "marketing" ? "🏬 Marketing" : "🧭 Consultor"}</span> <span className="hint">{x.fonte === "minha_visita" ? "Minha Visita" : "360"}</span></td>
               <td style={{ ...td, maxWidth: 210 }}><b>{x.ex_cliente || "—"}</b><div className="hint">{[x.ex_tel1, x.ex_tel2].filter(Boolean).join(" · ")}</div><div className="hint" style={{ maxWidth: 190 }}>{x.ex_end}</div></td>
               <td style={{ ...td, maxWidth: 190 }}>
@@ -249,7 +291,7 @@ export default function ConfirmacaoVendas() {
                   <option value="">{c?.atendenteId ? "manter " + R.nomeUser(c.atendenteId) : "sem vendedor"}</option>{vendedores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>
                   : <div className="hint">360: {vend || (c?.atendenteId ? R.nomeUser(c.atendenteId) : "—")}</div>}</td>
               <td style={{ ...td, width: 130, minWidth: 130 }}>
-                {pendente ? <input className="cv-valor" inputMode="decimal" value={ed !== undefined ? ed : Number(x.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {pendente && x.fonte !== "vendedor" ? <input className="cv-valor" inputMode="decimal" value={ed !== undefined ? ed : Number(x.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   onChange={e => setValEd(v => ({ ...v, [x.numero]: moedaDigitando(e.target.value) }))} onBlur={() => salvarValor(x)} onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
                   : <b>{brl(x.valor)}</b>}
                 {mudou && <div className="hint">Exact: {brl(x.valor_exact)}</div>}
@@ -259,8 +301,8 @@ export default function ConfirmacaoVendas() {
                 {pendente ? <div className="cv-acoes">
                   <button className="btn primary sm" disabled={!!ocup[x.numero]} onClick={() => decidir(x, "validar")}>✅ Validar</button>
                   <button className="btn sm cv-neg" disabled={!!ocup[x.numero]} onClick={() => decidir(x, "negar")}>❌ Negar</button>
-                  <button className={"btn sm" + (/promiss/i.test(x.ex_situacao) ? " cv-prom-sug" : "")} disabled={!!ocup[x.numero]} title="Entrada + promissória, ou 100% promissória" onClick={() => prom[x.numero] ? setProm(q => { const n = { ...q }; delete n[x.numero]; return n; }) : abrirProm(x)}>💳 Promissória</button>
-                  <button className="btn sm" disabled={!!ocup[x.numero]} title="Pedido da fábrica de um checklist finalizado — não conta como venda" onClick={() => decidir(x, "checklist")}>📋 Checklist</button>
+                  {x.fonte !== "vendedor" && <button className={"btn sm" + (/promiss/i.test(x.ex_situacao) ? " cv-prom-sug" : "")} disabled={!!ocup[x.numero]} title="Entrada + promissória, ou 100% promissória" onClick={() => prom[x.numero] ? setProm(q => { const n = { ...q }; delete n[x.numero]; return n; }) : abrirProm(x)}>💳 Promissória</button>}
+                  {x.fonte !== "vendedor" && <button className="btn sm" disabled={!!ocup[x.numero]} title="Pedido da fábrica de um checklist finalizado — não conta como venda" onClick={() => decidir(x, "checklist")}>📋 Checklist</button>}
                 </div> : <div>
                   <span className={"pill cv-st " + x.status}>{x.status === "validada" ? (x.forma === "entrada" ? "✅ entrada + promissória" : x.forma === "promissoria" ? "✅ 100% promissória" : "✅ validada") : x.status === "negada" ? "❌ negada" : "📋 checklist"}</span>
                   <div className="hint">{x.decidido_em ? new Date(x.decidido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}{x.decidido_por ? " · " + R.nomeUser(x.decidido_por) : ""}</div>
