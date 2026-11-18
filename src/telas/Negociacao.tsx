@@ -54,9 +54,12 @@ export default function Negociacao({ onVoltar }: { onVoltar?: () => void }) {
 /** mesa de negociação: produtos, preços cheios e a simulação do desconto */
 function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () => void }) {
   const { toast, R } = useApp() as any;
+  // o gerente pode tirar e incluir produto durante a negociação; as contas seguem esta lista
+  const [itens, setItens] = useState<any[]>(p.itens || []);
+  const pv = { ...p, itens } as PN;
   // O desconto cai SÓ sobre a base: produto em promoção já veio com o preço da promoção e frete é custo.
-  const base = somaBase(p) || (somaPP(p) ? 0 : numBR(p.valor_bruto));
-  const promo = somaPromo(p);
+  const base = somaBase(pv) || (somaPP(pv) ? 0 : numBR(p.valor_bruto));
+  const promo = somaPromo(pv);
   const [frete, setFrete] = useState(br2(freteDe(p)));
   const fret = numBR(frete);
   const bruto = base + promo + fret;                       // valor cheio que o cliente vê
@@ -75,12 +78,17 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
     if (n > 0 && base) setValor(br2(Math.round((base * (1 - n / 100) + promo + numBR(f)) * 100) / 100)); };
   const final = numBR(valor) || bruto;
   const descRS = Math.max(0, base - (final - foraDesc));
+  async function mexerItens(l: any[], aviso: string) {
+    const antes = itens; setItens(l);
+    try { await A.negociacaoItens(p.id!, l); toast(aviso); }
+    catch (e: any) { setItens(antes); toast(e.message || "Não consegui alterar os produtos"); }
+  }
   async function salvar(status: string) {
     setSalvando(true);
     try { await A.negociacaoSalvar(p.id!, { status, valor: numBR(valor) ? numBR(valor).toFixed(2) : "", desconto: numBR(desc) ? String(numBR(desc)) : "", frete: fret ? fret.toFixed(2) : "", pagamento: pag, obs }); toast(status === "fechado" ? "Negociação fechada" : "Proposta salva — o vendedor já vê"); voltar(); }
     catch (e: any) { toast(e.message || "Não consegui salvar"); } finally { setSalvando(false); }
   }
-  const promob = p.itens.filter((i: any) => i.promob), prontos = p.itens.filter((i: any) => !i.promob);
+  const promob = itens.filter((i: any) => i.promob), prontos = itens.filter((i: any) => !i.promob);
   const somaDe = (l: any[]) => l.reduce((s, i) => s + precoItem(i) * (Number(i.qtd) || 0), 0);
   return <div className="ng">
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -90,12 +98,19 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
     <div className="cp-card">
       <div className="ng-cli"><b>{p.cliente_nome || "Cliente sem nome"}</b><small>{numPP(p)} · vendedor {p.vendedor || "—"}{p.telefone ? " · " + p.telefone : ""}</small>{p.endereco && <small>{p.endereco}</small>}</div>
       <table className="ng-tab"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço un.</th><th>Total</th></tr></thead>
-        <tbody>{p.itens.map((i: any, k) => <tr key={k} className={(i.promob ? "promob" : "") + (i.promo ? " ng-promo" : "")}>
+        <tbody>{itens.map((i: any, k) => <tr key={k} className={(i.promob ? "promob" : "") + (i.promo ? " ng-promo" : "")}>
           <td><b>{i.promob ? "📐 " : ""}{i.nome}</b>{i.promo && <span className="ng-tag">🏷 promoção · sem desconto</span>}
             <small>{i.promob ? "Promob (projeto)" : "Cód. " + i.codigo + (i.cor ? " · " + i.cor : "")}{i.obs ? " · " + i.obs : ""}</small></td>
           <td>{i.qtd}</td>
           <td>{precoItem(i) ? fmtMoeda(precoItem(i)) : "—"}{i.promo && numBR(i.preco) > numBR(i.precoPromo) ? <small style={{ display: "block", textDecoration: "line-through", opacity: .6 }}>{fmtMoeda(numBR(i.preco))}</small> : null}</td>
-          <td><b>{precoItem(i) ? fmtMoeda(precoItem(i) * i.qtd) : "—"}</b></td></tr>)}</tbody></table>
+          <td><b>{precoItem(i) ? fmtMoeda(precoItem(i) * i.qtd) : "—"}</b>
+            <div className="ng-qtd">
+              <button type="button" title="Menos um" onClick={() => mexerItens(itens.map((x, j) => j === k ? { ...x, qtd: Math.max(1, (Number(x.qtd) || 1) - 1) } : x), "Quantidade alterada")}>−</button>
+              <button type="button" title="Mais um" onClick={() => mexerItens(itens.map((x, j) => j === k ? { ...x, qtd: (Number(x.qtd) || 1) + 1 } : x), "Quantidade alterada")}>＋</button>
+              <button type="button" title="Tirar da negociação" onClick={() => { if (itens.length < 2) { toast("A negociação precisa de pelo menos um produto"); return; }
+                if (confirm("Tirar " + i.nome + " desta negociação?")) mexerItens(itens.filter((_, j) => j !== k), "Produto retirado"); }}>🗑</button>
+            </div></td></tr>)}</tbody></table>
+      <IncluirProduto onIncluir={it => mexerItens([...itens, it], "Produto incluído")} />
       {promob.length > 0 && prontos.length > 0 && <div className="ng-sub"><span>Produtos prontos {fmtMoeda(somaDe(prontos))}</span><span>Promob {fmtMoeda(somaDe(promob))}</span></div>}
       {/* o gerente bate o olho e sabe onde pode dar desconto */}
       <div className="ng-bases">
@@ -187,5 +202,56 @@ function Crediario({ liquido, bruto, escolher, escolhido }: { liquido: number; b
       </button>; })}
     </div>
     <button type="button" className="pp-link" onClick={() => setTudo(t => !t)}>{tudo ? "mostrar só até 12×" : "ver todos os planos (até 36×)"}</button>
+  </div>;
+}
+
+/** incluir produto no meio da negociação: busca na mesma base da Consulta de produto,
+ *  e, se o produto não estiver lá (item de projeto, por exemplo), aceita escrever à mão */
+function IncluirProduto({ onIncluir }: { onIncluir: (i: any) => void }) {
+  const { toast } = useApp() as any;
+  const [aberto, setAberto] = useState(false);
+  const [q, setQ] = useState("");
+  const [achados, setAchados] = useState<any[] | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  const [mao, setMao] = useState(false);
+  const [nome, setNome] = useState(""); const [preco, setPreco] = useState(""); const [qtd, setQtd] = useState(1);
+  const buscar = async () => {
+    const t = q.trim(); if (t.length < 2) { toast("Escreva pelo menos 2 letras ou o código"); return; }
+    setBuscando(true);
+    try { setAchados(((await A.produtoLista(t)) || []).slice(0, 20)); }
+    catch (e: any) { toast(e.message || "Não consegui buscar"); setAchados([]); }
+    finally { setBuscando(false); }
+  };
+  const incluirDaBase = (x: any) => {
+    const pr = x.preco != null ? String(Number(x.preco).toFixed(2)).replace(".", ",") : "";
+    onIncluir({ codigo: x.codigo, nome: x.nome, cor: x.cor || "", ref: x.ref || "", tamanho: x.tamanho || "", qtd: 1, preco: pr, precoTab: pr });
+    setAberto(false); setQ(""); setAchados(null);
+  };
+  const incluirMao = () => {
+    if (nome.trim().length < 2) { toast("Escreva o nome do produto"); return; }
+    if (numBR(preco) <= 0) { toast("Informe o preço"); return; }
+    onIncluir({ codigo: "—", nome: nome.trim(), qtd: Math.max(1, qtd), preco });
+    setAberto(false); setMao(false); setNome(""); setPreco(""); setQtd(1);
+  };
+  if (!aberto) return <button type="button" className="pp-link" onClick={() => setAberto(true)}>＋ incluir produto nesta negociação</button>;
+  return <div className="ng-incl">
+    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+      <label className="pp-f" style={{ flex: "1 1 200px", margin: 0 }}>Buscar produto <small style={{ textTransform: "none", fontWeight: 500 }}>por código ou nome</small>
+        <input value={q} autoFocus onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === "Enter") buscar(); }} placeholder="ex.: 1875840 ou cabeceira" /></label>
+      <button type="button" className="btn sm" disabled={buscando} onClick={buscar}>{buscando ? "buscando…" : "🔎 Buscar"}</button>
+      <button type="button" className="btn ghost sm" onClick={() => { setAberto(false); setMao(false); setAchados(null); }}>fechar</button>
+    </div>
+    {achados && (achados.length
+      ? <div className="ng-achados">{achados.map((x: any) => <button key={x.codigo} type="button" onClick={() => incluirDaBase(x)}>
+          <b>{x.nome}</b><span>Cód. {x.codigo}{x.cor ? " · " + x.cor : ""}</span>
+          <small>{x.preco != null ? fmtMoeda(Number(x.preco)) : "sem preço na base"}</small></button>)}</div>
+      : <div className="hint" style={{ marginTop: 6 }}>Nada encontrado com “{q}”.</div>)}
+    {!mao ? <button type="button" className="pp-link" onClick={() => setMao(true)}>não está na base? escrever à mão</button>
+      : <div className="pp-g2" style={{ marginTop: 6 }}>
+          <label className="pp-f">Produto<input value={nome} onChange={e => setNome(e.target.value)} placeholder="nome do produto" /></label>
+          <label className="pp-f">Preço un. R$<input inputMode="decimal" value={preco} onChange={e => setPreco(e.target.value)} placeholder="0,00" /></label>
+          <label className="pp-f">Quantidade<input inputMode="numeric" value={qtd} onChange={e => setQtd(Math.max(1, Number(e.target.value.replace(/\D/g, "")) || 1))} /></label>
+          <div style={{ display: "flex", alignItems: "flex-end" }}><button type="button" className="btn primary sm" onClick={incluirMao}>Incluir</button></div>
+        </div>}
   </div>;
 }

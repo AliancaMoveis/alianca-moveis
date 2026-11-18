@@ -272,6 +272,8 @@ export const A = {
   // o gerente tira da negociação o que não serve (duplicado, teste, cliente que desistiu): sai do quadro dele e limpa a proposta;
   // o pré-pedido continua com o vendedor, que pode enviar de novo
   negociacaoExcluir: (id: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((() => { const x = ((window as any).__ppMock || []).find((y: any) => y.id === id); if (x) { x.neg_status = ""; x.neg_valor = null; x.neg_desconto = null; x.neg_pagamento = ""; x.neg_obs = ""; } })()) : rpc("negociacao_excluir", { p_id: id }),
+  // o gerente tira e inclui produtos durante a negociação (o cliente pede para mudar na hora)
+  negociacaoItens: (id: string, itens: any[]) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((() => { const x = ((window as any).__ppMock || []).find((y: any) => y.id === id); if (x) x.itens = itens; })()) : rpc("negociacao_itens", { p_id: id, p_itens: itens }),
   negociacaoSalvar: (id: string, p: any) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((() => { const x = ((window as any).__ppMock || []).find((y: any) => y.id === id); if (x) Object.assign(x, { neg_status: p.status, neg_valor: p.valor, neg_desconto: p.desconto, neg_pagamento: p.pagamento, neg_obs: p.obs }); })()) : rpc("negociacao_salvar", { p_id: id, p }),
   prePedidoExcluir: (id: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((() => { (window as any).__ppMock = ((window as any).__ppMock || []).filter((y: any) => y.id !== id); })()) : rpc("pre_pedido_excluir", { p_id: id }),
   produtoTotal: () => (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ total: ((window as any).__prodMock || []).length, congelados: 0 }) : rpc<any>("produto_total", {}),
