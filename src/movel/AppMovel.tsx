@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
 import { baixarTodasFotos } from "../comp/Fotos";
-import { numsVenda, EM_ATENDIMENTO, STATUS, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, temCancelamento } from "../lib/regras";
+import { numsVenda, telefonesDe, EM_ATENDIMENTO, STATUS, STATUS_CLIENTE, fmtDate, fmtDateTime, fmtMoeda, hojeISO, isoLocal, parseData, parseMoeda, vendaContaVolume, vendasDoPeriodo, temCancelamento } from "../lib/regras";
 import { entrarComo, sair, simulacao, voltarGestao } from "../lib/teste";
 import Detalhe from "../comp/Detalhe";
 import { AlterarSenha, Configuracoes, MeusDados } from "../comp/Modal";
@@ -529,11 +529,20 @@ function Folha({ id, fechar, perfil }: any) {
 }
 function Contato({ c, rota = true }: any) {
   const { R, toast } = useApp() as any;
-  const tel = String(c.telefone || "").replace(/\D/g, ""), wa = R.waLinkCliente(c), maps = R.mapsLink(c), waze = R.wazeLink(c);
-  const nums: string[] = Array.from(new Set((String(c.telefone || "").match(/(\+?55\s?)?\(?\d{2}\)?\s?9?\s?\d{4}[\s.-]?\d{4}|\d{8,13}/g) || []).map(x => x.trim())));
+  // O cadastro do Exact traz DOIS telefones no mesmo campo ("(41) 99805-6332 / (41) 99147-7993"),
+  // e às vezes o segundo fica na tratativa. Antes o app lia só o primeiro — e o botão Ligar
+  // juntava os dígitos dos dois num número que não existe. Agora cada um vale por si.
+  const t: any = c.tratativa || {};
+  const nums: string[] = telefonesDe([c.telefone, c.telefone2, t.medida?.telefone2, t.checklist?.telefone2].filter(Boolean).join(" / "));
+  const tel = nums[0] ? nums[0].replace(/\D/g, "") : "";
+  const wa = R.waLinkCliente(c, nums[0] || ""), maps = R.mapsLink(c), waze = R.wazeLink(c);
   const copiar = async (t: string) => { const d = t.replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, ""); try { await navigator.clipboard.writeText(d); toast("Telefone copiado: " + fmtTel(d)); } catch { window.prompt("Copie o telefone:", d); } };
   return (<>
-    {nums.length > 0 && <div className="mv-tels" onClick={e => e.stopPropagation()}>{nums.map((n, i) => <div key={i} className="mv-tel"><a href={"tel:" + n.replace(/\D/g, "")}>📞 <b>{fmtTel(n)}</b></a><button type="button" onClick={() => copiar(n)}>📋 Copiar</button>{nums.length > 1 && R.waLinkCliente(c, n) ? <a href={R.waLinkCliente(c, n)} target="_blank" rel="noopener" style={{ background: "#075E54", color: "#fff", borderRadius: 8, padding: "4px 10px", fontWeight: 700, textDecoration: "none" }}>💬 WhatsApp</a> : null}</div>)}</div>}
+    {nums.length > 0 && <div className="mv-tels" onClick={e => e.stopPropagation()}>{nums.map((n, i) => <div key={i} className="mv-tel">
+      <a href={"tel:" + n.replace(/\D/g, "")}>📞 <b>{fmtTel(n)}</b></a>
+      {nums.length > 1 && <span style={{ fontSize: 11, opacity: .7, fontWeight: 700 }}>{i === 0 ? "1º" : i + 1 + "º"}</span>}
+      <button type="button" onClick={() => copiar(n)}>📋 Copiar</button>
+      {R.waLinkCliente(c, n) ? <a href={R.waLinkCliente(c, n)} target="_blank" rel="noopener" style={{ background: "#075E54", color: "#fff", borderRadius: 8, padding: "4px 10px", fontWeight: 700, textDecoration: "none" }}>💬 WhatsApp</a> : null}</div>)}</div>}
     <div className="mv-contato" onClick={e => e.stopPropagation()}>
       {tel ? <a href={"tel:" + tel} className="mv-bt">📞<span>Ligar</span></a> : <span className="mv-bt off">📞<span>Sem tel.</span></span>}
       {wa ? <a href={wa} target="_blank" rel="noopener" className="mv-bt wa">💬<span>WhatsApp</span></a> : null}

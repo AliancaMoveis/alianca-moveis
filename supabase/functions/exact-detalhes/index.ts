@@ -18,6 +18,7 @@ async function exact(token: string, rota: string) {
   return d && typeof d === "object" && !Array.isArray(d) && "data" in d ? d.data : d;
 }
 
+const lista = (d: any): any[] => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.items) ? d.items : Array.isArray(d?.attachments) ? d.attachments : [];
 const ext = (n: string) => (String(n || "").toLowerCase().match(/\.([a-z0-9]{2,6})(?:\?|$)/) || [])[1] || "";
 const ehImagem = (nome: string, mime?: string) => /^image\//.test(String(mime || "").toLowerCase()) || ["jpg", "jpeg", "png", "webp", "gif", "bmp"].includes(ext(nome));
 
@@ -76,6 +77,40 @@ Deno.serve(async (req: Request) => {
   if (!token) return json({ erro: "EXACT_TOKEN não configurado" }, 500);
   const b = await req.json().catch(() => ({}));
   try {
+    // Conferência: quantas medidas que estão para medir têm a imagem do projeto
+    // disponível (anexo da venda ou projeto no ticket do checklist). É o que o medidor
+    // vê na ficha; serve para cobrar o vendedor quando falta.
+    if (b.acao === "projetos") {
+      const lim = Math.min(Number(b.limite) || 40, 200);
+      const { data: ms } = await sb.from("chamados")
+        .select("id,cliente,pedido,tratativa")
+        .eq("tipo", "medidas").neq("status", "concluida").limit(600);
+      const fila = (ms || []).filter((c: any) => c.tratativa?.medida?.etapa === "agendada" && String(c.pedido || "").trim()).slice(0, lim);
+      const vendas = [...new Set(fila.map((c: any) => String(c.pedido).trim()))];
+      const { data: tks } = await sb.from("exact_ticket").select("sale_id,ticket_id").in("sale_id", vendas);
+      const porVenda: Record<string, number> = {};
+      (tks || []).forEach((t: any) => { porVenda[String(t.sale_id)] = t.ticket_id; });
+
+      let comImagem = 0; const sem: any[] = []; const erros: string[] = [];
+      for (const c of fila) {
+        const ped = String(c.pedido).trim();
+        let n = 0;
+        try {
+          const a = lista(await exact(token, `/attachments-legacy/${ped}`));
+          n += a.filter((x: any) => ehImagem(String(x?.originalFileName || x?.originalName || x?.fileName || x?.name || ""), x?.mimeType || x?.contentType)).length;
+        } catch (x: any) { erros.push(ped + " venda: " + String(x?.message || x).slice(0, 80)); }
+        if (!n && porVenda[ped]) {
+          try {
+            const t = await exact(token, `/ticket/checklist/${porVenda[ped]}`);
+            n += lista(t?.attachments).filter((x: any) => ehImagem(String(x?.originalFileName || x?.originalName || x?.fileName || x?.name || ""), x?.mimeType || x?.contentType)
+              && ["FINAL_PROJECT", "INITIAL_PROJECT", "PROJECT"].includes(String(x?.referenceType || "").toUpperCase())).length;
+          } catch (x: any) { erros.push(ped + " checklist: " + String(x?.message || x).slice(0, 80)); }
+        }
+        if (n) comImagem++; else sem.push({ id: c.id, cliente: c.cliente, venda: ped });
+      }
+      return json({ ok: true, conferidas: fila.length, comImagem, semImagem: sem.length, sem: sem.slice(0, 60), erros: erros.slice(0, 20) });
+    }
+
     if (b.acao === "um") {
       const { data: c } = await sb.from("chamados").select("id,tratativa").eq("id", String(b.id || "")).maybeSingle();
       const ex = c?.tratativa?.medida?.exactId;
