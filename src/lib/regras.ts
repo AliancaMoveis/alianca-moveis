@@ -1148,3 +1148,17 @@ export function criarRegras(state: Estado, currentUserId: string) {
   };
 }
 export type Regras = ReturnType<typeof criarRegras>;
+
+/** campo de dinheiro: enquanto digita, separa milhares com ponto e centavos com vírgula ("10000" → "10.000", "10000,5" → "10.000,5") */
+export function moedaDigitando(v: string): string {
+  const t = String(v ?? "").replace(/[^\d,]/g, ""); if (!t) return "";
+  const i = t.indexOf(","); const inteiro = (i < 0 ? t : t.slice(0, i)).replace(/^0+(?=\d)/, "");
+  const dec = i < 0 ? null : t.slice(i + 1).replace(/,/g, "").slice(0, 2);
+  const mil = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return dec === null ? mil : (mil || "0") + "," + dec;
+}
+/** ao sair do campo: completa os centavos ("10.000" → "10.000,00") */
+export function moedaFim(v: string): string {
+  const t = moedaDigitando(v); if (!t) return "";
+  const [a, b = ""] = t.split(","); return a + "," + (b + "00").slice(0, 2);
+}

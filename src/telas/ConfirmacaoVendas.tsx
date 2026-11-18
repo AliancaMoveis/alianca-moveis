@@ -5,7 +5,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
-import { fmtDate, fmtMoeda, numerosVenda } from "../lib/regras";
+import { fmtDate, fmtMoeda, moedaDigitando, numerosVenda } from "../lib/regras";
 import { tira } from "./Medidas";
 import { faixa, PER, type Per } from "./VendasConsultores";
 
@@ -250,7 +250,7 @@ export default function ConfirmacaoVendas() {
                   : <div className="hint">360: {vend || (c?.atendenteId ? R.nomeUser(c.atendenteId) : "—")}</div>}</td>
               <td style={{ ...td, width: 130, minWidth: 130 }}>
                 {pendente ? <input className="cv-valor" inputMode="decimal" value={ed !== undefined ? ed : Number(x.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  onChange={e => setValEd(v => ({ ...v, [x.numero]: e.target.value }))} onBlur={() => salvarValor(x)} onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                  onChange={e => setValEd(v => ({ ...v, [x.numero]: moedaDigitando(e.target.value) }))} onBlur={() => salvarValor(x)} onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
                   : <b>{brl(x.valor)}</b>}
                 {mudou && <div className="hint">Exact: {brl(x.valor_exact)}</div>}
                 {x.forma === "entrada" && <div className="hint">à vista {brl(Number(x.entrada))} · promissória {brl(Number(x.valor) - Number(x.entrada))}</div>}
@@ -271,8 +271,8 @@ export default function ConfirmacaoVendas() {
             {prom[x.numero] && (() => { const p = prom[x.numero]; const tot = lerValor(p.total), ent = lerValor(p.entrada), resto = Math.max(0, tot - ent);
               return <tr className="cv-prom-row"><td colSpan={8}><div className="cv-prom">
                 <b>💳 Promissória · venda {x.numero}</b>
-                <label>Total da venda<input inputMode="decimal" value={p.total} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, total: e.target.value } }))} /></label>
-                <label>Pago à vista (entrada)<input inputMode="decimal" value={p.entrada} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: e.target.value } }))} /></label>
+                <label>Total da venda<input inputMode="decimal" value={p.total} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, total: moedaDigitando(e.target.value) } }))} /></label>
+                <label>Pago à vista (entrada)<input inputMode="decimal" value={p.entrada} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: moedaDigitando(e.target.value) } }))} /></label>
                 <button className="btn ghost sm" type="button" onClick={() => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: "0,00" } }))}>100% promissória</button>
                 <div className="cv-prom-res">Promissória: <b>{brl(resto)}</b>{tot > 0 ? " (" + Math.round(resto / tot * 100) + "%)" : ""}<br /><span className="hint">{ent > 0 ? "Fica: Vendido — entrada + promissória" : "Fica: Vendido — 100% promissória (reserva)"}</span></div>
                 <button className="btn primary sm" type="button" disabled={!!ocup[x.numero]} onClick={() => confirmarProm(x)}>✅ Confirmar promissória</button>

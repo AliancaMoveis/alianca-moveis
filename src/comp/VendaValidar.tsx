@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
-import { fmtDate, fmtMoeda, hojeISO, itensVenda, parseMoeda, promAbertas, valorPago, valorPendente } from "../lib/regras";
+import { fmtDate, fmtMoeda, hojeISO, itensVenda, moedaDigitando, moedaFim, parseMoeda, promAbertas, valorPago, valorPendente } from "../lib/regras";
 import { TIPO_VENDA_INFORMADO, VENDA_STATUS } from "../lib/regras";
 
 export type Linha = { tipo: "pago" | "promissoria"; numero: string; valor: string; vencimento: string };
@@ -41,7 +41,7 @@ export function LinhasVenda({ linhas, setLinhas, pedirTipo }: { linhas: Linha[];
       <div className="lv-tit">{tipo === "pago" ? "💵 Vendas pagas (à vista / entrada)" : "📄 Promissória — valor pendente"}</div>
       {idx.map(([l, i]) => <div className="lv-linha" key={i}>
         <label>Nº da venda<input value={l.numero} onChange={e => set(i, "numero", e.target.value)} placeholder="Ex.: 1308706" /></label>
-        <label>Valor (R$)<input inputMode="decimal" value={l.valor} onChange={e => set(i, "valor", e.target.value)} placeholder="Ex.: 50.000,00" /></label>
+        <label>Valor (R$)<input inputMode="decimal" value={l.valor} onChange={e => set(i, "valor", moedaDigitando(e.target.value))} onBlur={e => set(i, "valor", moedaFim(e.target.value))} placeholder="Ex.: 50.000,00" /></label>
         {tipo === "promissoria" && <label>Vencimento<input type="date" value={l.vencimento} onChange={e => set(i, "vencimento", e.target.value)} /></label>}
         <button type="button" className="lv-x" title="Remover" onClick={() => tira(i)}>✕</button>
       </div>)}
@@ -134,7 +134,7 @@ export function Promissorias({ c }: { c: any }) {
   </span>;
   const formCorr = (i: any) => corr === i.id && <div className="vv-quitar">
     <label className="vv-campo">Nº<input value={cf.numero} onChange={e => setCf({ ...cf, numero: e.target.value })} /></label>
-    <label className="vv-campo">Valor (R$)<input inputMode="decimal" value={cf.valor} onChange={e => setCf({ ...cf, valor: e.target.value })} /></label>
+    <label className="vv-campo">Valor (R$)<input inputMode="decimal" value={cf.valor} onChange={e => setCf({ ...cf, valor: moedaDigitando(e.target.value) })} onBlur={e => setCf({ ...cf, valor: moedaFim(e.target.value) })} /></label>
     <label className="vv-campo">Data<input type="date" value={cf.data} onChange={e => setCf({ ...cf, data: e.target.value })} /></label>
     {i.tipo === "promissoria" && <label className="vv-campo">Vencimento<input type="date" value={cf.venc} onChange={e => setCf({ ...cf, venc: e.target.value })} /></label>}
     <div style={{ display: "flex", gap: 8 }}><button className="btn primary sm" onClick={() => salvarCorr(i)}>Salvar</button><button className="btn ghost sm" onClick={() => setCorr("")}>Cancelar</button></div>
@@ -168,7 +168,7 @@ export function Promissorias({ c }: { c: any }) {
             </div>{formCorr(p)}
           </div>)}
           {pagando === i.id && <div className="vv-quitar">
-            <label className="vv-campo">Valor pago (R$)<input inputMode="decimal" value={pg.valor} onChange={e => setPg({ ...pg, valor: e.target.value })} /></label>
+            <label className="vv-campo">Valor pago (R$)<input inputMode="decimal" value={pg.valor} onChange={e => setPg({ ...pg, valor: moedaDigitando(e.target.value) })} onBlur={e => setPg({ ...pg, valor: moedaFim(e.target.value) })} /></label>
             <label className="vv-campo">Nº da venda do pagamento<input value={pg.numero} onChange={e => setPg({ ...pg, numero: e.target.value })} placeholder="Ex.: 1309059" /></label>
             <label className="vv-campo">Data do pagamento<input type="date" value={pg.data} onChange={e => setPg({ ...pg, data: e.target.value })} /></label>
             {parseMoeda(pg.valor) > 0 && parseMoeda(pg.valor) < saldo - 0.001 && <div className="vv-soma">Pagamento parcial: continua pendente {fmtMoeda(saldo - parseMoeda(pg.valor))} nesta promissória.</div>}
