@@ -106,12 +106,12 @@ export default function ConfirmacaoVendas() {
     });
   }, [st.chamados, itens]);
   const todos = useMemo(() => [...(itens || []), ...doVend], [itens, doVend]);
-  const ehVendedor = (x: Item) => x.fonte === "vendedor" || /lançada/i.test(x.motivo || "");
+  const lancouVendedor = (x: Item) => x.fonte === "vendedor" || /lançada/i.test(x.motivo || "");
   const nomeVend = (x: Item) => (x.vendedor_id ? R.nomeUser(x.vendedor_id) : x.ex_vendedor) || "";
   const nomeCons = (x: Item) => (x.consultor_id ? R.nomeUser(x.consultor_id) : x.consultor_nome) || "";
   const gkMap = useMemo(() => { const m = new Map<string, string>(); todos.forEach(x => m.set(x.numero, gk(x))); return m; }, [todos, idx, byId]);
   const gkDe = (x: Item) => gkMap.get(x.numero) ?? gk(x);
-  const doTipo = useMemo(() => todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === ehVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (!fCons || nomeCons(x) === fCons) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim))), [todos, tipo, orig, fVend, fCons, per, ini, fim]);
+  const doTipo = useMemo(() => todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === lancouVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (!fCons || nomeCons(x) === fCons) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim))), [todos, tipo, orig, fVend, fCons, per, ini, fim]);
   const busca = tira(q), dig = q.replace(/\D/g, "");
   const lista = doTipo.filter(x => (aba === "todas" || x.status === aba) && (!metodo || x.como === metodo)
     && (!q || tira([x.ex_cliente, x.cliente_ref, chamado(x.chamado_id)?.cliente || "", x.consultor_nome, x.ex_vendedor].join(" ")).includes(busca) || (dig.length >= 3 && (x.numero.includes(dig) || (x.ex_tel1 + x.ex_tel2).replace(/\D/g, "").includes(dig)))))
@@ -123,7 +123,7 @@ export default function ConfirmacaoVendas() {
   const gruposVis = (() => { let n = 0; const out: typeof grupos = []; for (const g of grupos) { if (n >= lim) break; out.push(g); n += g.l.length; } return out; })();
   // resumo por consultor (respeita período, origem e vendedor; não o filtro de consultor, para poder trocar de consultor)
   const resCons = (() => { const m: Record<string, { p: number; vp: number; v: number }> = {};
-    todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === ehVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim)))
+    todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === lancouVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim)))
       .forEach(x => { const k = nomeCons(x) || "— sem consultor"; const o = m[k] = m[k] || { p: 0, vp: 0, v: 0 }; if (x.status === "pendente") { o.p++; o.vp += Number(x.valor) || 0; } else if (x.status === "validada") o.v++; });
     return Object.entries(m).sort((a, b) => b[1].p - a[1].p || b[1].v - a[1].v); })();
   // dinheiro do cliente: efetivadas = entrou de fato; reservas com promissória = combinado (inclui o que ainda vai entrar). Falta = reservas − efetivadas (só sugestão)
@@ -218,7 +218,7 @@ export default function ConfirmacaoVendas() {
       <div style={{ fontWeight: 800, marginBottom: 8 }}>🧭 Quem trouxe a venda <span className="hint" style={{ fontWeight: 500 }}>— o número é quanto ainda falta conferir</span></div>
       <div className="chips" style={{ margin: 0 }}>
         {([["", "Todas"], ["vendedor", "🧑‍💼 Vendedor lançou"], ["relatorio", "🔎 Só pelo relatório do Exact"]] as [string, string][]).map(([k, l]) => {
-          const n = todos.filter(x => (!tipo || x.tipo === tipo) && x.status === "pendente" && (!k || (k === "vendedor") === ehVendedor(x))).length;
+          const n = todos.filter(x => (!tipo || x.tipo === tipo) && x.status === "pendente" && (!k || (k === "vendedor") === lancouVendedor(x))).length;
           return <button key={k || "t"} className={"chip" + (orig === k ? " on" : "")} style={{ fontSize: 14, padding: "7px 14px" }} onClick={() => { setOrig(k as any); setSel({}); }}>{l}<span className="n">{n}</span></button>; })}
         <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <label className="hint">Vendedor <select value={fVend} onChange={e => { setFVend(e.target.value); setSel({}); }} style={{ width: "auto", marginLeft: 4 }}><option value="">todos</option>
@@ -284,7 +284,7 @@ export default function ConfirmacaoVendas() {
                 <div className="hint" style={{ color: /aguard|promiss/i.test(x.ex_situacao) ? "var(--warn)" : undefined }}>{x.ex_situacao}</div>
                 {x.incluido_por ? <div className="hint" title="Quem incluiu a venda no Exact" style={{ color: /^checklist/i.test(x.incluido_por) ? "#6b4fbb" : undefined }}>incluído por {x.incluido_por}</div> : null}
                 {x.motivo ? <div className="hint" style={{ whiteSpace: "normal", maxWidth: 120 }}>{x.motivo}</div> : null}
-                {ehVendedor(x) ? <div><span className="pill" style={{ fontSize: 11, background: "#e8f1ff", color: "#284b8f" }}>🧑‍💼 Vendedor lançou</span></div> : <div><span className="pill" style={{ fontSize: 11 }}>🔎 Pelo relatório</span></div>}
+                {lancouVendedor(x) ? <div><span className="pill" style={{ fontSize: 11, background: "#e8f1ff", color: "#284b8f" }}>🧑‍💼 Vendedor lançou</span></div> : <div><span className="pill" style={{ fontSize: 11 }}>🔎 Pelo relatório</span></div>}
                 <span className={"cv-tipo " + x.tipo}>{x.tipo === "marketing" ? "🏬 Marketing" : "🧭 Consultor"}</span> <span className="hint">{x.fonte === "minha_visita" ? "Minha Visita" : "360"}</span></td>
               <td style={{ ...td, maxWidth: 210 }}><b>{x.ex_cliente || "—"}</b><div className="hint">{[x.ex_tel1, x.ex_tel2].filter(Boolean).join(" · ")}</div><div className="hint" style={{ maxWidth: 190 }}>{x.ex_end}</div></td>
               <td style={{ ...td, maxWidth: 190 }}>
