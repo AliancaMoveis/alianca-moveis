@@ -88,6 +88,7 @@ export function CartaoMedida({ c, abrir }: any) {
       <div className="mv-card-h"><b>{hora(c.dataMedida)}</b><small>{c.dataMedida ? diaCurto(c.dataMedida) : aFazer ? "combine a data" : "sem data"}</small></div>
       <div className="mv-card-c"><div className="nm"><SeloTipo tipo={tipoMedida(c, st)} /> {c.cliente}{!(c.anexos || []).length && aFazer ? " ⚠️" : ""}</div>
         <div className="sb">{pz ? (pz.ck ? "Checklist " + fmtDate(pz.ck).slice(0, 5) + " · " : "") + "medir até " + fmtDate(pz.limite).slice(0, 5) : "sem data limite · venda " + (c.dataVenda ? fmtDate(c.dataVenda).slice(0, 5) : "—")}</div>
+        <div className="sb">🧾 venda {c.pedido || "—"}{(() => { const a = [m.qtdAmbientes ? m.qtdAmbientes + (m.qtdAmbientes === 1 ? " ambiente" : " ambientes") : "", m.ambientes].filter(Boolean).join(" · "); return a ? " · " + a : ""; })()}</div>
         <div className="sb">📍 {c.endereco || "sem endereço"}</div>
         {estourou && <div className="sb" style={{ color: "var(--danger)", fontWeight: 700 }}>⚠️ Fora do prazo ({rotPrazo(pz!)})</div>}</div>
       <div className="mv-card-d"><span className={"sc sc-med-" + etapa}>{etapa === "agendada" ? "A medir" : etapa === "realizada" ? "Feita" : etapa === "liberada" ? "Liberada" : "Validar"}</span>
@@ -141,6 +142,25 @@ export function MedLista({ abrir }: any) {
   </>;
 }
 
+/** A venda que gerou a medida: é ela que diz o que medir.
+ *  Vinha só no 360 do computador; quem vai a campo abria a ficha e não via nem o número do pedido. */
+export function VendaMedida({ c }: { c: any }) {
+  const m = (c.tratativa && c.tratativa.medida) || {};
+  const amb = [m.qtdAmbientes ? m.qtdAmbientes + (m.qtdAmbientes === 1 ? " ambiente" : " ambientes") : "", m.ambientes].filter(Boolean).join(" · ");
+  const linhas: [string, any][] = [
+    ["Venda", c.pedido || "—"],
+    ["Ambientes", amb],
+    ["O que o vendedor pediu", m.obsVenda],
+    ["Vendedor", m.vendedor],
+    ["Data da venda", c.dataVenda ? fmtDate(c.dataVenda) : ""],
+  ].filter(([, v]) => v) as [string, any][];
+  return <div style={{ border: "1.5px solid rgba(128,140,160,.35)", borderRadius: 12, padding: "10px 12px", margin: "8px 0" }}>
+    <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 2 }}>🧾 A venda <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· o que o cliente comprou</span></div>
+    <div className="mv-info" style={{ margin: 0 }}>{linhas.map(([l, v]) => <div key={l}><span>{l}</span><b>{v}</b></div>)}</div>
+    {!amb && <div style={{ fontSize: 12.5, opacity: .75, marginTop: 4 }}>A venda não diz quais ambientes medir — confirme com o cliente ou com a Supervisão de Medidas.</div>}
+  </div>;
+}
+
 // ficha da medida no celular
 export function FolhaMedida({ c, Contato, Anexar }: any) {
   const { R, executar: ex, toast, abrirDetalhe } = useApp() as any;
@@ -150,11 +170,12 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
   const souEu = c.medidorId === R.currentUserId;
   const conf = tipoMedida(c, R.state) === "confirmacao";
   const devolvida = !!((m.faltando || []).length || m.refazer || m.motivoNovaExact);
-  const [aba, setAba] = useState<"falta" | "anteriores" | "venda">(devolvida ? "falta" : "anteriores");
+  const [aba, setAba] = useState<"falta" | "anteriores">(devolvida ? "falta" : "anteriores");
   return <>
     <div className="mv-cli">📐 {c.cliente}</div>
     <SeloTipo tipo={tipoMedida(c, R.state)} grande />
     <div className="mv-cli-s">Medida · {c.produto || "—"} · <b>{ETAPA_MEDIDA[etapa] || etapa}</b></div>
+    <VendaMedida c={c} />
     <div className="mv-info">
       {c.dataMedida && <div><span>Medida</span><b>{fmtDateTime(c.dataMedida)}</b></div>}
       {c.endereco && <div><span>Endereço</span><b>{c.endereco}</b></div>}
@@ -169,15 +190,17 @@ export function FolhaMedida({ c, Contato, Anexar }: any) {
       <small>Data limite: {rotPrazo(pz)}{pz.fonte === "360" && m.dataLimitePor ? " (" + m.dataLimitePor + ")" : ""}.</small></div> : null; })()}
     {R.ehSupMedidas() && ["agendada", "pendente"].includes(etapa) && <DataLimite c={c} />}
     {conf ? <>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, margin: "6px 0 8px" }}>{([["falta", "⚠️", "O que falta"], ["anteriores", "📷", "Fotos e medidas anteriores"], ["venda", "🖼", "Imagem da venda"]] as const).map(([k, ic, l]) =>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 6, margin: "6px 0 8px" }}>{([["falta", "⚠️", "O que falta"], ["anteriores", "📷", "Fotos e medidas anteriores"]] as const).map(([k, ic, l]) =>
         <button key={k} type="button" onClick={() => setAba(k)} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "9px 4px", minHeight: 64, borderRadius: 12, font: "inherit", fontSize: 12.5, fontWeight: 800, lineHeight: 1.15, textAlign: "center", cursor: "pointer",
           border: "1.5px solid " + (aba === k ? "#1d6fd1" : "var(--line)"), background: aba === k ? "#1d6fd1" : "var(--surface)", color: aba === k ? "#fff" : "var(--ink)" }}>
           <span style={{ fontSize: 20 }}>{ic}</span>{l}</button>)}</div>
       {aba === "falta" && ((m.faltando || []).length > 0 ? <Faltando c={c} pode={souEu || R.ehSupMedidas()} />
         : <div className="mv-dica" style={{ margin: "6px 0 10px" }}>{m.refazer || m.motivoNovaExact || "Você já visitou este cliente antes da venda. Confira as fotos e medidas anteriores e confirme as medidas."}</div>)}
       {aba === "anteriores" && <Anteriores c={c} />}
-      {aba === "venda" && <ImagensVenda c={c} />}
-    </> : <ImagensVenda c={c} />}
+    </> : null}
+    {/* o projeto que o cliente comprou aparece sempre, em qualquer tipo de medida:
+        é a referência de quem vai medir, não pode depender de achar uma aba */}
+    <ImagensVenda c={c} />
     <Contato c={c} rota />
     {(souEu || R.ehSupMedidas()) && etapa === "agendada" && <ContatoMedida c={c} />}
     <Anexar c={c} />
