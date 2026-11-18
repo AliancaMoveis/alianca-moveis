@@ -8,6 +8,7 @@ import { Kpi } from "./Dashboard";
 import { fmtDate, fmtMoeda, itensPendentes, moedaDigitando, numerosVenda } from "../lib/regras";
 import { tira } from "./Medidas";
 import { faixa, PER, type Per } from "./VendasConsultores";
+import { ehVendedor } from "../lib/vendaExact";
 
 type Item = {
   numero: string; fonte: string; tipo: string; chamado_id: string | null; cands: { id: string; cliente: string; como: string }[]; cliente_ref: string;
@@ -69,7 +70,8 @@ export default function ConfirmacaoVendas() {
 
   const byId = useMemo(() => new Map<string, any>((st.chamados || []).map((c: any) => [c.id, c])), [st.chamados]);
   const chamado = (id: string | null) => id ? byId.get(id) : null;
-  const vendedores = useMemo(() => st.usuarios.filter((u: any) => (u.setores || []).includes("atendente_cliente") && u.ativo).sort((a: any, b: any) => a.nome.localeCompare(b.nome, "pt-BR")), [st.usuarios]);
+  // gerente de loja e proprietário também vendem: sem eles a venda do gerente não tinha a quem ser atribuída
+  const vendedores = useMemo(() => st.usuarios.filter((u: any) => ehVendedor(u) && u.ativo).sort((a: any, b: any) => a.nome.localeCompare(b.nome, "pt-BR")), [st.usuarios]);
   const consultores = useMemo(() => st.usuarios.filter((u: any) => (u.setores || []).includes("consultor_externo") && u.ativo), [st.usuarios]);
 
   // cliente do 360 de cada venda: o escolhido no cruzamento; para o Minha Visita, o que tem o mesmo telefone (ou o mesmo nome)

@@ -7,7 +7,7 @@ import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
 import { col, lerArquivo, mesmoNome, tira } from "./Medidas";
 import { tipoPlanilha, type Linha } from "../lib/cruzarVendas";
-import { camposExact, incluidoPorChecklist } from "../lib/vendaExact";
+import { camposExact, ehVendedor, incluidoPorChecklist } from "../lib/vendaExact";
 import { baixarXlsx } from "../lib/planilha";
 import { STATUS_CLIENTE, fmtDate, fmtMoeda, itensVenda } from "../lib/regras";
 
@@ -72,7 +72,7 @@ export default function EncontrarVendas360() {
   }
 
   // vendedores do 360 (pelo nome do Exact: 1º nome + outro nome igual; ou só o 1º nome, se for único)
-  const vendedores = useMemo(() => st.usuarios.filter((u: any) => (u.setores || []).includes("atendente_cliente")), [st.usuarios]);
+  const vendedores = useMemo(() => st.usuarios.filter(ehVendedor), [st.usuarios]);
   const acharVend = (nomeEx: string) => {
     const t = toks(nomeEx); if (!t.length) return null;
     const cand = vendedores.map((u: any) => ({ u, t: toks((u.nomeCompleto || "") + " " + u.nome), n: toks(u.nome) })).filter((x: any) => x.n.length && (

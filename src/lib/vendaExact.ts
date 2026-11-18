@@ -7,10 +7,22 @@ export const toksNome = (s: string) => (s || "").normalize("NFD").replace(/[̀-�
 export const numBr = (s: string) => { const n = Number(String(s || "").replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
 export const isoBr = (s: string) => { const m = String(s || "").match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + "-" + m[2] + "-" + m[1] : ""; };
 
-/** vendedor do 360 pelo nome do Exact: 1º nome + outro nome igual; ou só o 1º nome, se for único */
-export function acharVendedorExact(usuarios: any[], nomeEx: string) {
-  const vendedores = usuarios.filter((u: any) => (u.setores || []).includes("atendente_cliente"));
+/** Quem pode aparecer como vendedor de uma venda: o vendedor de salão e também o gerente de loja e o
+ *  proprietário, que vendem. Antes a lista era só "atendente_cliente", então uma venda do gerente
+ *  (José Luiz, Tadeu, Giovanni…) não tinha a quem ser atribuída: o nome aparecia no relatório e não
+ *  dava para selecionar a pessoa. */
+export const SETORES_VENDEDOR = ["atendente_cliente", "gerente_loja", "proprietario"];
+export const ehVendedor = (u: any) => (u.setores || []).some((s: string) => SETORES_VENDEDOR.includes(s));
+
+/** vendedor do 360 pelo nome do Exact: o vínculo feito à mão vale acima de tudo;
+ *  sem ele, 1º nome + outro nome igual, ou só o 1º nome se for único.
+ *  `vinculos` é o mapa nome-do-Exact → id do usuário (tabela vendedor_exact), que resolve
+ *  o nome escrito diferente ou com erro de digitação do outro lado — adivinhar não resolve isso. */
+export function acharVendedorExact(usuarios: any[], nomeEx: string, vinculos?: Record<string, string>) {
+  const vendedores = usuarios.filter(ehVendedor);
   const t = toksNome(nomeEx); if (!t.length) return null;
+  const id = vinculos && vinculos[t.join(" ")];
+  if (id) { const u = usuarios.find((x: any) => x.id === id); if (u) return u; }
   const cand = vendedores.map((u: any) => ({ u, t: toksNome((u.nomeCompleto || "") + " " + u.nome), n: toksNome(u.nome) })).filter((x: any) => x.n.length && (
     x.n[0] === t[0] || (x.n[0].length >= 4 && x.n[0].slice(0, 4) === t[0].slice(0, 4)) || (x.n[0].slice(0, 2) === t[0].slice(0, 2) && x.t.slice(1).some((y: string) => t.includes(y))))
     && x.n.slice(1).every((y: string) => t.includes(y))); // "Leandro Barreto" não é "Leandro Lopes"

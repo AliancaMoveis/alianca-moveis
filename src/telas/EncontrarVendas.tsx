@@ -83,7 +83,7 @@ export default function EncontrarVendas() {
     }
   }
   const totMv = mvs.reduce((s, a) => s + a.linhas.length, 0), totEx = exs.reduce((s, a) => s + a.linhas.length, 0);
-  function rodar() {
+  async function rodar() {
     const r = cruzarVendas(mvs.flatMap(a => a.linhas), exs.flatMap(a => a.linhas), col);
     setRes(r); setF("achados"); setAberto("");
     // os que já são checklist no Minha Visita não entram (dá para ver pelo filtro do Status)
@@ -92,8 +92,10 @@ export default function EncontrarVendas() {
     toast(`${r.filter(x => x.melhor).length} de ${r.length} vendas encontradas no Minha Visita`);
     // o que foi achado (menos o que já é checklist no Minha Visita) vai para a fila de Confirmação de vendas
     if (R.ehGestao()) {
+      // o vínculo nome-do-Exact → usuário resolve quem o palpite não acerta (nome diferente, erro de digitação)
+      const vinc = await A.vendedorExactMapa().catch(() => ({} as Record<string, string>));
       const linhas = r.filter(x => x.melhor && !ehChecklist(col(x.melhor.mv, "Status"))).map(x => { const c = x.melhor!.mv, e = camposExact(x.ex);
-        const cons = acharConsultor(st.usuarios, consultorDe(c)), vend = acharVendedorExact(st.usuarios, e.ex_vendedor);
+        const cons = acharConsultor(st.usuarios, consultorDe(c)), vend = acharVendedorExact(st.usuarios, e.ex_vendedor, vinc);
         return { ...e, fonte: "minha_visita", tipo: "consultor", chamado_id: "", cliente_ref: col(c, "Nome"), como: x.melhor!.como,
           consultor_id: cons?.id || "", consultor_nome: consultorDe(c), vendedor_id: vend?.id || "", motivo: "cliente do Minha Visita",
           mv: { nome: col(c, "Nome"), telefone: col(c, "Celular", "Telefone", "Whatsapp"), endereco: col(c, "Endereco", "Endereço"), status: col(c, "Status") } }; }).filter(x => x.numero && x.valor > 0);

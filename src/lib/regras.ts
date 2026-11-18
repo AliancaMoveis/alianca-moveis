@@ -1051,7 +1051,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     if (mk.length) { if (!cc.length && !soMeusClientes && !soSuporte) mk.push(["consulta", "Consulta"]); G.push({ g: temMkt && !temMarketing() && !ehGestao() ? "Minha operação" : "Marketing", ic: "◎", itens: mk }); }
     // Confirmação de presença: quem vem à loja (marketing, externo) e o cliente porta (entrou direto) — Camila e Gestão
     // 👔 Vendedores: gerentes (e Gestão) veem os atendimentos de cada vendedor hoje e nos próximos dias
-    if ((mySetores().includes("gerente_loja") || ehGestao()) && !oculto("vendedores")) G.push({ g: "Vendedores", ic: "👔", itens: [["agenda_vendedores", "Atendimentos dos vendedores"], ...(!ehGestao() ? [["ctl_vendedores", "Controle dos vendedores (horários, almoço, férias)"]] : [])] });
+    if ((mySetores().includes("gerente_loja") || ehGestao()) && !oculto("vendedores")) G.push({ g: "Vendedores", ic: "👔", itens: [["agenda_vendedores", "Atendimentos dos vendedores"], ...(ehGestao() ? [["vend_exact", "🔗 Vendedores do Exact sem usuário"]] as [string, string][] : [["ctl_vendedores", "Controle dos vendedores (horários, almoço, férias)"]] as [string, string][])] });
     // Presença na loja fica dentro do menu "Loja" (para todos)
     if (veQualidade()) G.push({ g: "Qualidade", ic: "⭐", itens: [["qualidade", "Pesquisa de satisfação"]] });
     if (veAnuncios()) G.push({ g: "Anúncios", ic: "📣", itens: [["anuncios", "Meta e Google (Reportei)"]] });

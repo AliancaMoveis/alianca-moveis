@@ -27,6 +27,7 @@ import FretesFechamento from "./FretesFechamento";
 import MontagemMeus from "./MontagemMeus";
 import AgendaVendedores from "./AgendaVendedores";
 import ControleVendedores from "./ControleVendedores";
+import VendedoresExact from "./VendedoresExact";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { inicial } from "../lib/regras";
@@ -196,6 +197,7 @@ export default function Shell() {
             {atual === "agenda" && <Agenda />}
             {atual === "vendedores" && <Pessoas key="v" qual="vendedores" />}
             {atual === "ctl_vendedores" && <ControleVendedores />}
+            {atual === "vend_exact" && <VendedoresExact />}
             {atual === "consultores" && <Pessoas key="c" qual="consultores" />}
             {atual === "carteira" && <Carteira />}
             {atual === "clientes" && <Clientes />}

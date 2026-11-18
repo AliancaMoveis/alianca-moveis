@@ -307,6 +307,14 @@ export const A = {
   vendedorAssumir: (id: string) => rpc("vendedor_assumir", { p_id: id }),
   salvarMeusDados: (nomeCompleto: string, telefone: string) => rpc("salvar_meus_dados", { p_nome_completo: nomeCompleto, p_telefone: telefone }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),
+  // vendedores do Exact: o vínculo nome-do-Exact → usuário do 360, e a fila de quem ainda não tem ninguém por trás
+  vendedorExactMapa: async () => {
+    const { data, error } = await sb.from("vendedor_exact").select("nome,usuario_id");
+    if (error) throw new Error(error.message);
+    return Object.fromEntries(((data || []) as any[]).map(x => [x.nome, x.usuario_id])) as Record<string, string>;
+  },
+  vendedoresExactPendentes: () => rpc<any[]>("vendedores_exact_pendentes", {}),
+  vendedorExactVincular: (nome: string, usuario: string | null) => rpc("vendedor_exact_vincular", { p_nome: nome, p_usuario: usuario }),
   // números das mensagens do checklist: quantas saíram, quantos responderam, o que responderam
   kommoFunil: (de?: string, ate?: string) => rpc<any>("kommo_funil", { p_de: de || null, p_ate: ate || null }),
   /**
