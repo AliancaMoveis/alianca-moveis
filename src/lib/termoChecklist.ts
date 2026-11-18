@@ -190,12 +190,6 @@ export function impressaoHtml(d: DadosImpressao): string {
 <div class="rub" style="margin-top:14mm">Este documento reúne, para cada ambiente, as imagens do projeto e o checklist conferido com o cliente, o termo de ciência do material e as condições gerais. Não contém valores.</div></div>`;
   const amb = d.ambientes.map((a, i) => {
     const imgs = (a.imagens || []).filter(x => x.src);
-    const grupos = new Map<string, { l: LinhaListagem; n: number }>();
-    for (const l of a.itens.filter(l => !["consumivel"].includes(l.tipo))) {
-      const k = `${l.descricao}|${l.medidas}|${/M2/i.test(l.qtd) ? "" : l.qtd}`;
-      const g = grupos.get(k); if (g) g.n++; else grupos.set(k, { l, n: 1 });
-    }
-    const vis = [...grupos.values()];
     const fichaKeys = Object.keys(a.ficha || {}).length ? Object.keys(a.ficha || {}) : FICHA_AMBIENTE;
     return `<div class="pg quebra">${cab(`AMBIENTE ${i + 1} · ${esc(a.nome.toUpperCase())}`)}
 ${imgs.length ? `<h3>Imagens do projeto</h3><div class="imgs${imgs.length === 1 ? " um" : ""}">${imgs.map(x => `<figure><img src="${esc(x.src)}" alt=""><figcaption>${esc(x.nome)}</figcaption></figure>`).join("")}</div>` : ""}
@@ -209,8 +203,9 @@ ${(() => { const el = (a.eletros || []).filter(x => (x.nome || "").trim());
     + el.map(x => `<tr><td>${esc(x.nome)}</td><td class="fill">${esc(x.dim) || "&nbsp;"}</td></tr>`).join("") + `</table>`; })()}
 <h3>Checklist do ambiente</h3><table class="fic">${fichaKeys.map(k => { const v = (a.ficha || {})[k]; return `<tr><td>${esc(k)}</td><td class="s">${bx(v === true, "Sim")}</td><td class="s">${bx(v === false, "Não")}</td></tr>`; }).join("")}</table>
 ${a.fichaObs || a.obs ? `<div class="obs fill" style="margin-top:3mm">${esc([a.fichaObs, a.obs].filter(Boolean).join(" — "))}</div>` : ""}
-${vis.length ? `<h3>Resumo do que foi comprado <i>(${vis.length} itens · sem valores)</i></h3><table class="it"><tr><th class="q">Qtd</th><th>Descrição</th><th class="m">Medidas (L × A × P)</th></tr>`
-  + vis.map(({ l, n }) => `<tr><td>${n > 1 ? n + " peças" : /M2/i.test(l.qtd) ? "1 peça" : esc(l.qtd)}</td><td>${esc(l.descricao)}</td><td>${esc(l.medidas)}</td></tr>`).join("") + `</table>` : ""}
+${/* A listagem módulo por módulo saiu do documento que o cliente assina: ela tomava folhas, ninguém
+      conferia linha por linha e o que importa para ele está acima (material, cor, puxador, eletros e a ficha).
+      A listagem continua inteira na tela do projetista e no arquivo do Promob. */""}
 ${d.online ? `<div class="rub" style="margin-top:6mm">✔ Ciência e aceite deste ambiente registrados na assinatura eletrônica (última página).</div>` : `<div class="ass"><div>Rubrica do cliente · ${esc(a.nome)}</div><div>Projetista do checklist</div></div>`}</div>`;
   }).join("");
   let termo = termoHtml({ ...d, ambientes: d.ambientes.map(a => ({ ...a, conferir: [] })), cupom: undefined }, true).replace('<div class="pg">', '<div class="pg quebra">');

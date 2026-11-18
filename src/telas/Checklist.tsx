@@ -355,7 +355,7 @@ function CartaoCk({ c, aba }: any) {
             onClick={() => abrirTermo({ ...c, ...k, vendedor: k.planilha?.vendedor, local: k.local }, k.termo, k.projetista || "", toast)}>📄 Termo{k.termo.finalizadoEm ? "" : " (rascunho)"}</button>}
           {/* o checklist e o contrato não levam valor; esta folha é só os valores, para levar ao financeiro */}
           {(g === "agendado" || c.status === "concluida" || etapaCk(c) === "realizado") && <button className="btn sm" title="Folha de 1 página com os valores da venda, para o financeiro"
-            onClick={() => abrirFinanceiro({ ...c, ...k, vendedor: k.planilha?.vendedor, local: k.local }, k.termo, k.projetista || "", toast)}>💰 Financeiro</button>}
+            onClick={() => setModal(<ModalFinanceiroCk c={c} />)}>💰 Financeiro</button>}
           <button className="btn ghost sm" onClick={() => setModal(<ModalNotas c={c} />)} title="Mensagens enviadas e anotações">📝{notas ? " " + notas : ""}</button>
           {(g === "agendado" || c.status === "concluida") && <button className="btn sm primary" onClick={() => irPara("projetista_ck", { abrirCk: c.id })} title="Abrir a tela de trabalho do checklist (ambientes, conferência, contrato)">🧑‍💻 Tela do checklist</button>}
           <button className="btn ghost sm" onClick={() => abrirDetalhe(c.id)}>Ficha</button>
@@ -426,6 +426,63 @@ export function ModalFinalizarCk({ c }: any) {
         <button className="btn primary" disabled={tx.trim().length < 3} onClick={async () => { if (await executar(() => A.finalizarAtendimento(c.id, tx.trim()), "Atendimento finalizado")) fechar(); }}>✓ Finalizar atendimento</button>
         <button className="btn ghost" onClick={fechar}>Cancelar</button>
       </div>
+    </Modal>
+  );
+}
+
+/** 💰 Valores para o financeiro: confere na tela, completa o que o sistema não tem e imprime a folha.
+ *  Tabela e desconto não vêm do Exact (o relatório manda só total e recebido), então são preenchidos aqui
+ *  e ficam guardados no checklist — quem preenche uma vez não digita de novo. */
+export function ModalFinanceiroCk({ c }: any) {
+  const { setModal, toast, recarregar } = useApp() as any;
+  const [f, setF] = useState<any>(null);
+  const [v, setV] = useState<any>({ bruto: "", desconto: "", total: "", recebido: "", obs: "" });
+  const [salvando, setSalvando] = useState(false);
+  const fechar = () => setModal(null);
+  const k = ck(c);
+  useEffect(() => { A.checklistFinanceiro(c.id).then(r => { setF(r || {});
+    const n = (x: any) => x == null ? "" : String(x).replace(".", ",");
+    setV({ bruto: n(r?.bruto), desconto: n(r?.desconto), total: n(r?.total), recebido: n(r?.recebido), obs: r?.obs || "" });
+  }).catch(e => { toast(e.message); setF({}); }); }, [c.id]);
+  const num = (x: string) => { const t = String(x || "").replace(/[R$\s.]/g, "").replace(",", "."); const n = Number(t); return isFinite(n) && t !== "" ? n : null; };
+  // tabela − desconto = valor da venda: com dois, o terceiro sai sozinho
+  const compl = (campo: "bruto" | "desconto" | "total", val: string) => setV((p: any) => {
+    const n = { ...p, [campo]: val };
+    const b = num(n.bruto), d = num(n.desconto), t = num(n.total);
+    if (campo !== "total" && b != null && d != null) n.total = String((b - d).toFixed(2)).replace(".", ",");
+    else if (campo !== "desconto" && b != null && t != null) n.desconto = String((b - t).toFixed(2)).replace(".", ",");
+    return n;
+  });
+  const campo = (rot: string, kk: "bruto" | "desconto" | "total" | "recebido", dica = "") =>
+    <div className="field"><label>{rot}</label>
+      <input inputMode="decimal" value={v[kk]} onChange={e => (kk === "recebido" ? setV((p: any) => ({ ...p, recebido: e.target.value })) : compl(kk as any, e.target.value))} placeholder="0,00" />
+      {dica && <span className="hint">{dica}</span>}</div>;
+  const imprimir = () => abrirFinanceiro({ ...c, ...k, vendedor: k.planilha?.vendedor, local: k.local }, k.termo, k.projetista || "", toast);
+  return (
+    <Modal titulo={"💰 Valores para o financeiro · " + c.cliente + " · venda " + (c.pedido || "—")} onFechar={fechar}>
+      {!f ? <p className="hint">Buscando os valores…</p> : <>
+        <p style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 0 }}>
+          Valor da venda e já recebido vêm do Exact. <b>Tabela e desconto não existem no relatório do Exact</b> — preencha aqui que fica guardado.
+          {f.fonte ? " Fonte dos números: " + f.fonte + "." : ""}{f.preenchido ? " Já foi preenchido antes." : ""}</p>
+        <div className="grid">
+          {campo("Valor de tabela (bruto)", "bruto", "o valor antes do desconto")}
+          {campo("Desconto concedido", "desconto", "tabela − desconto = valor da venda")}
+          {campo("Valor da venda", "total", "é este que o cliente paga")}
+          {campo("Já recebido", "recebido", "entrada e pagamentos")}
+        </div>
+        <div className="field"><label>Observação para o financeiro (opcional)</label>
+          <input value={v.obs} onChange={e => setV((p: any) => ({ ...p, obs: e.target.value }))} placeholder="Ex.: saldo em 3x no cartão" /></div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          <button className="btn primary" disabled={salvando} onClick={async () => {
+            setSalvando(true);
+            try { await A.checklistFinanceiroSalvar(c.id, { bruto: v.bruto, desconto: v.desconto, total: v.total, recebido: v.recebido, obs: v.obs });
+              await recarregar(); fechar(); setTimeout(imprimir, 50); }
+            catch (e: any) { toast(e.message || "Não salvou"); } finally { setSalvando(false); }
+          }}>{salvando ? "Salvando…" : "💾 Salvar e imprimir"}</button>
+          <button className="btn" disabled={salvando} onClick={() => { fechar(); setTimeout(imprimir, 50); }}>🖨 Só imprimir</button>
+          <button className="btn ghost" onClick={fechar}>Cancelar</button>
+        </div>
+      </>}
     </Modal>
   );
 }
