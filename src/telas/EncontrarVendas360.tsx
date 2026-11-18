@@ -36,13 +36,15 @@ export default function EncontrarVendas360() {
   const hojeIso = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
   const [de, setDe] = useState(hojeIso.slice(0, 8) + "01"); const [ate, setAte] = useState(hojeIso);
   const [puxando, setPuxando] = useState(false); const [ultima, setUltima] = useState<string | null>(null);
-  const NOME_AUTO = "Exact · automático";
+  const NOME_AUTO = "Exact · automático"; const jaPuxou = useRef(false);
   async function lerAuto() {
     if (!gestao || !de || !ate || ate < de) return;
     try {
       const l = ((await A.exactVendasLista(de, ate)) || []) as Linha[];
       setArqs(x => [...x.filter(a => a.nome !== NOME_AUTO), ...(l.length ? [{ nome: NOME_AUTO, linhas: l }] : [])]);
-      setUltima(await A.exactVendasUltima());
+      const u = await A.exactVendasUltima(); setUltima(u);
+      // ao abrir a tela: se o último relatório tem mais de 15 min, já puxa do Exact (1 vez por abertura)
+      if (!jaPuxou.current && (!u || Date.now() - new Date(u).getTime() > 15 * 60e3)) { jaPuxou.current = true; puxarAgora(); }
     } catch (e: any) { toast(e.message || "Não consegui ler o relatório do Exact"); }
   }
   useEffect(() => { lerAuto(); }, [gestao, de, ate]);
@@ -216,7 +218,7 @@ export default function EncontrarVendas360() {
           <input type="date" value={de} max={ate} onChange={e => setDe(e.target.value)} style={{ width: "auto" }} /> <span>até</span>
           <input type="date" value={ate} min={de} onChange={e => setAte(e.target.value)} style={{ width: "auto" }} />
           <button className="btn primary sm" disabled={puxando} onClick={puxarAgora}>{puxando ? "Puxando do Exact…" : "🔄 Atualizar do Exact agora"}</button>
-          <span className="hint">{ultima ? "Última atualização: " + new Date(ultima).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + " · " : ""}puxa sozinho a cada 2 h, das 7h às 21h</span>
+          <span className="hint">{ultima ? "Última atualização: " + new Date(ultima).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + " · " : ""}puxa ao abrir esta tela (se passou de 15 min) e sozinho a cada 2 h, das 7h41 às 19h41</span>
         </div>}
         {arqs.map((a, i) => <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>📄 <span style={{ flex: 1 }}>{a.nome}</span><span className="pill">{a.linhas.length}</span><button className="btn ghost sm" style={{ color: "var(--danger)" }} onClick={() => setArqs(x => x.filter((_, j) => j !== i))}>✕</button></div>)}
         <div><button className="btn sm" onClick={() => inp.current?.click()}>＋ Anexar um relatório à mão (opcional)</button></div>

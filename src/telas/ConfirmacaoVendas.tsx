@@ -7,6 +7,7 @@ import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
 import { fmtDate, fmtMoeda, numerosVenda } from "../lib/regras";
 import { tira } from "./Medidas";
+import { faixa, PER, type Per } from "./VendasConsultores";
 
 type Item = {
   numero: string; fonte: string; tipo: string; chamado_id: string | null; cands: { id: string; cliente: string; como: string }[]; cliente_ref: string;
@@ -34,6 +35,10 @@ export default function ConfirmacaoVendas() {
   const [itens, setItens] = useState<Item[] | null>(null);
   const [aba, setAba] = useState<Aba>("pendente");
   const [tipo, setTipo] = useState<"" | "consultor" | "marketing">(() => { try { const v = localStorage.getItem("cv_tipo"); return v === "consultor" || v === "marketing" ? v : ""; } catch { return ""; } });
+  // período da venda (data da situação no Exact) para priorizar: este mês, mês passado, datas à escolha
+  const [per, setPer] = useState<"todas" | Per>(() => { try { return (localStorage.getItem("cv_per") as any) || "todas"; } catch { return "todas"; } });
+  const [pde, setPde] = useState(""); const [pate, setPate] = useState("");
+  const [ini, fim] = per === "todas" ? ["", ""] : faixa(per, pde, pate);
   const [q, setQ] = useState(""); const [ocup, setOcup] = useState<Record<string, boolean>>({});
   const [valEd, setValEd] = useState<Record<string, string>>({});
   const [metodo, setMetodo] = useState(""); const [sel, setSel] = useState<Record<string, boolean>>({});
@@ -81,7 +86,7 @@ export default function ConfirmacaoVendas() {
   const gk = (x: Item) => { const c = cli360(x); return c ? c.id : x.ex_idpessoa ? "p:" + x.ex_idpessoa : "n:" + tira(x.ex_cliente); };
 
   const todos = itens || [];
-  const doTipo = todos.filter(x => !tipo || x.tipo === tipo);
+  const doTipo = todos.filter(x => (!tipo || x.tipo === tipo) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim)));
   const busca = tira(q), dig = q.replace(/\D/g, "");
   const lista = doTipo.filter(x => (aba === "todas" || x.status === aba) && (!metodo || x.como === metodo)
     && (!q || tira([x.ex_cliente, x.cliente_ref, chamado(x.chamado_id)?.cliente || "", x.consultor_nome, x.ex_vendedor].join(" ")).includes(busca) || (dig.length >= 3 && (x.numero.includes(dig) || (x.ex_tel1 + x.ex_tel2).replace(/\D/g, "").includes(dig)))))
@@ -155,6 +160,17 @@ export default function ConfirmacaoVendas() {
       {([["consultor", "🧭 Só consultores"], ["marketing", "🏬 Só marketing"], ["", "Todos"]] as const).map(([k, l]) => { const n = todos.filter(x => (!k || x.tipo === k) && x.status === "pendente").length;
         return <button key={k || "todos"} type="button" className={"cv-sep-b" + (tipo === k ? " on" : "")} onClick={() => { setTipo(k); setSel({}); try { localStorage.setItem("cv_tipo", k); } catch { /* sem armazenamento */ } }}>
           {l}<small>{n} a conferir</small></button>; })}
+    </div>
+    <div className="cv-barra">
+      <span className="hint">Período da venda:</span>
+      <div className="chips" style={{ margin: 0 }}>
+        {([["todas", "Todas as datas"], ...PER] as [string, string][]).map(([k, l]) => <button key={k} className={"chip" + (per === k ? " on" : "")}
+          onClick={() => { setPer(k as any); setSel({}); try { localStorage.setItem("cv_per", k); } catch { /* sem armazenamento */ } }}>{l}</button>)}
+      </div>
+      {per === "outro" && <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <input type="date" value={pde} max={pate || undefined} onChange={e => setPde(e.target.value)} style={{ width: "auto" }} /> até
+        <input type="date" value={pate} min={pde || undefined} onChange={e => setPate(e.target.value)} style={{ width: "auto" }} /></span>}
+      {per !== "todas" && <span className="hint">{todos.length - doTipo.length > 0 ? (todos.length - doTipo.length) + " fora deste período" : ""}</span>}
     </div>
     <div className="kpis" style={{ margin: "6px 0 10px" }}>
       <Kpi n={pend.length} l={"A conferir · " + brl(pend.reduce((s, x) => s + Number(x.valor), 0))} cor="var(--warn)" />

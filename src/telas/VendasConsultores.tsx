@@ -7,10 +7,10 @@ import { baixarXlsx } from "../lib/planilha";
 import { competenciaItem, fmtDate, fmtMoeda, hojeISO, isoLocal, numerosVenda, parseData } from "../lib/regras";
 import RelConferenciaExternos from "./RelConferenciaExternos";
 
-type Per = "hoje" | "7d" | "mes" | "mesp" | "ano" | "outro";
-const PER: [Per, string][] = [["hoje", "Hoje"], ["7d", "Últimos 7 dias"], ["mes", "Este mês"], ["mesp", "Mês passado"], ["ano", "Este ano"], ["outro", "Escolher datas"]];
+export type Per = "hoje" | "7d" | "mes" | "mesp" | "ano" | "outro";
+export const PER: [Per, string][] = [["hoje", "Hoje"], ["7d", "Últimos 7 dias"], ["mes", "Este mês"], ["mesp", "Mês passado"], ["ano", "Este ano"], ["outro", "Escolher datas"]];
 const somaDias = (iso: string, n: number) => { const d = parseData(iso + "T12:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
-function faixa(p: Per, de: string, ate: string): [string, string] {
+export function faixa(p: Per, de: string, ate: string): [string, string] {
   const h = hojeISO(), [y, m] = h.split("-").map(Number);
   const pad = (n: number) => String(n).padStart(2, "0");
   if (p === "hoje") return [h, h];
