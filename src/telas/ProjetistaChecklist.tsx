@@ -1084,16 +1084,28 @@ function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any;
   const [obs, setObs] = useState("");
   const [r, setR] = useState<any>(null);
   const [ocupado, setOcupado] = useState(false);
+  // valores digitados à mão: usados quando o ticket do Exact não trouxe (venda 100% promissória,
+  // venda lançada com erro…) ou quando o que veio do Exact está errado. O projetista lê no Tático.
+  const [mao, setMao] = useState(false);
+  const [mVi, setMVi] = useState(""); const [mDp, setMDp] = useState("");
+  const num = (x: string) => { const t = String(x || "").replace(/[R$\s.]/g, "").replace(",", "."); const q = Number(t); return isFinite(q) && t !== "" ? q : null; };
   const ex = venda || {};
-  const vi = ex.bruto == null ? null : Number(ex.bruto);
-  const dp = ex.descontoPct == null ? null : Number(ex.descontoPct) / 100;
+  const exVi = ex.bruto == null ? null : Number(ex.bruto);
+  const exDp = ex.descontoPct == null ? null : Number(ex.descontoPct) / 100;
+  const semExact = exVi == null || exDp == null;
+  // percentual digitado ("79,3611") vira fração; se a pessoa já digitar fração ("0,79"), também vale
+  const mDpn = (() => { const n = num(mDp); return n == null ? null : n > 1 ? n / 100 : n; })();
+  const vi = mao ? num(mVi) : exVi;
+  const dp = mao ? mDpn : exDp;
+  const dpPct = dp == null ? null : Math.round(dp * 1e6) / 1e4;   // de volta para % só para mostrar
   const brl = (x: any) => x == null ? "—" : "R$ " + Number(x).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const carregar = () => A.ckRecupLista(undefined, undefined, undefined).then((d: any) => {
     const m = ((d?.linhas || []) as any[]).find(x => x.chamado === c.id);
-    if (m) { setR(m); setVf(m.valorFinal == null ? "" : String(m.valorFinal).replace(".", ",")); setObs(m.obs || ""); setVt(m.vendaTatico || ""); }
+    if (m) { setR(m); setVf(m.valorFinal == null ? "" : String(m.valorFinal).replace(".", ",")); setObs(m.obs || ""); setVt(m.vendaTatico || "");
+      if (m.manual) { setMao(true); setMVi(String(m.valorInicial ?? "").replace(".", ",")); setMDp(String(Math.round(Number(m.descontoPct) * 1e6) / 1e4).replace(".", ",")); } }
   }).catch(() => null);
   useEffect(() => { carregar(); }, [c.id]);
-  const num = (x: string) => { const t = String(x || "").replace(/[R$\s.]/g, "").replace(",", "."); const q = Number(t); return isFinite(q) && t !== "" ? q : null; };
+  useEffect(() => { if (semExact) setMao(true); }, [semExact]);
   // o mesmo cálculo do servidor, só para a pessoa ver antes de salvar
   const vfn = num(vf);
   const dif = vi != null && vfn != null ? Math.max(0, Math.round((vi - vfn) * 100) / 100) : null;
@@ -1102,16 +1114,36 @@ function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any;
   const com = rec != null && faixa != null ? Math.round(rec * faixa * 100) / 100 : null;
   const travado = r && ["aprovado", "pago"].includes(r.status);
   const salvar = async () => {
+    if (vi == null || vi <= 0) { toast("Informe o valor do cupom"); return; }
+    if (dp == null || dp < 0 || dp >= 1) { toast("Informe o percentual de desconto da venda"); return; }
     setOcupado(true);
-    try { await A.ckRecupSalvar(c.id, { valorFinal: vf, valorInicial: vi == null ? "" : String(vi), descontoPct: dp == null ? "" : String(dp), obs, projetista, vendaTatico: vt });
+    try { await A.ckRecupSalvar(c.id, { valorFinal: vf, valorInicial: String(vi), descontoPct: String(dp), obs, projetista, vendaTatico: vt, manual: mao });
       await carregar(); toast("Recuperação informada — vai para o financeiro aprovar"); }
     catch (e: any) { toast(e.message || "não salvou"); } finally { setOcupado(false); }
   };
   const faltaExact = vi == null || dp == null;
+  const campoMao = (rot: string, v: string, set: (x: string) => void, ph: string, dica: string) =>
+    <label style={{ display: "block", fontSize: 12.5, maxWidth: 220, flex: "1 1 180px" }}>
+      <span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>{rot}</span>
+      <input inputMode="decimal" value={v} disabled={travado} onChange={e => set(e.target.value)} placeholder={ph} style={{ width: "100%" }} />
+      <small style={{ color: "var(--pj-s)" }}>{dica}</small></label>;
   return <div className="box" style={{ marginTop: 10 }}>
     <h4>💵 Recuperação do projeto <span className="hint" style={{ fontWeight: 400 }}>· comissão do projetista</span></h4>
-    {faltaExact ? <div className="hint">O ticket do Exact não trouxe o valor do cupom e o percentual de desconto desta venda — sem eles não dá para calcular a recuperação. Confira a aba “Cliente e venda”.</div> : <>
-      <div className="hint" style={{ marginBottom: 8 }}>Cupom <b>{brl(vi)}</b> · desconto da venda <b>{String(ex.descontoPct).replace(".", ",")}%</b>. Informe quanto ficou o projeto final que você fechou.</div>
+    {mao
+      ? <div className="hint" style={{ marginBottom: 8 }}>
+          {semExact
+            ? <>O ticket do Exact não trouxe o cupom e o desconto desta venda (acontece com venda 100% promissória ou lançada com erro). <b>Informe os três valores como estão no Tático</b> — vai para o financeiro conferir do mesmo jeito.</>
+            : <>Valores informados à mão — vão para o financeiro conferir. {!travado && <button type="button" className="lk" style={{ textTransform: "none", letterSpacing: 0 }} onClick={() => setMao(false)}>usar o que veio do Exact</button>}</>}
+        </div>
+      : <div className="hint" style={{ marginBottom: 8 }}>Cupom <b>{brl(vi)}</b> · desconto da venda <b>{String(ex.descontoPct).replace(".", ",")}%</b>. Informe quanto ficou o projeto final que você fechou.
+          {!travado && <> · <button type="button" className="lk" style={{ textTransform: "none", letterSpacing: 0 }}
+            onClick={() => { setMao(true); setMVi(String(exVi).replace(".", ",")); setMDp(String(ex.descontoPct).replace(".", ",")); }}>veio errado? informar à mão</button></>}
+        </div>}
+    {<>
+      {mao && <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        {campoMao("Valor do cupom", mVi, setMVi, "0,00", "o valor cheio, antes do desconto")}
+        {campoMao("% de desconto da venda", mDp, setMDp, "0,00", "o mesmo percentual do Tático")}
+      </div>}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <label style={{ display: "block", fontSize: 12.5, maxWidth: 220, flex: "1 1 180px" }}><span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>Valor do projeto final</span>
           <input inputMode="decimal" value={vf} disabled={travado} onChange={e => setVf(e.target.value)} placeholder="0,00" style={{ width: "100%" }} /></label>
@@ -1122,7 +1154,7 @@ function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any;
       </div>
       {dif != null && <div style={{ marginTop: 10, border: "1px solid var(--pj-l2,#e6e9ee)", borderRadius: 10, padding: "8px 10px", fontSize: 13 }}>
         {([["Diferença (cupom − projeto final)", brl(dif)],
-           ["Recuperado · " + (100 - Number(ex.descontoPct)).toFixed(0) + "% da diferença", brl(rec)],
+           ["Recuperado · " + (100 - Number(dpPct || 0)).toFixed(0) + "% da diferença", brl(rec)],
            ["Faixa", faixa === 0 ? "não paga (até R$ 499,99)" : (faixa! * 100) + "%"],
            ["Comissão", brl(com)]] as [string, string][]).map(([k, val], i) =>
           <div key={k} style={{ display: "flex", gap: 8, padding: "2px 0", borderTop: i ? "1px dotted var(--pj-l2,#e6e9ee)" : 0 }}>

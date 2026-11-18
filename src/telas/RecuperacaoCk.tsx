@@ -15,7 +15,7 @@ type Linha = {
   chamado: string; cliente: string; cpf?: string; venda?: string; vendaTatico?: string; data?: string; projetista: string;
   valorInicial: number | null; descontoPct: number | null; valorFinal: number | null;
   diferenca: number | null; recuperado: number | null; faixa: number | null; comissao: number | null;
-  status: string; obs?: string; motivo?: string; informadoPor?: string; informadoEm?: string; decididoPor?: string; pagoEm?: string;
+  manual?: boolean; status: string; obs?: string; motivo?: string; informadoPor?: string; informadoEm?: string; decididoPor?: string; pagoEm?: string;
 };
 
 const brl = (v: any) => v == null ? "—" : "R$ " + Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -154,6 +154,8 @@ ${sub ? `<div class="sub">${sub}</div>` : ""}
               return <tr key={l.chamado}>
                 <td>{l.data ? fmtDate(l.data) : "—"}</td>
                 <td><b>{l.cliente}</b>{!d?.soMinhas && <small style={{ display: "block", opacity: .7 }}>{l.projetista}</small>}
+                  {/* o ticket do Exact não trouxe os valores: o projetista leu no Tático e digitou — confira antes de aprovar */}
+                  {l.manual && <small style={{ display: "block", color: "var(--warn)", fontWeight: 700 }}>✍️ cupom e desconto informados à mão</small>}
                   {l.obs && <small style={{ display: "block", opacity: .7 }}>{l.obs}</small>}</td>
                 <td>{l.venda || "—"}</td>
                 <td>{podeDecidir && l.status !== "pago"
@@ -214,7 +216,7 @@ td.n{text-align:right;white-space:nowrap}td.ok{width:22mm}tfoot td{font-weight:7
 <header><b>ALIANÇA MÓVEIS</b><span>Validações do dia · checklist · ${fmtDate(dia)}</span></header>
 <div class="sub">Duas conferências nesta folha: <b>validar a venda tirada no Tático</b> de cada cliente e <b>aprovar a comissão de recuperação</b> do projetista.</div>
 <table><thead><tr><th>Venda no Tático</th><th>Cliente</th><th>CPF</th><th>Venda de origem</th><th>Projetista</th><th>Cupom</th><th>Projeto final</th><th>Recuperado</th><th>Comissão</th><th class="ok">Venda validada</th><th class="ok">Comissão ok</th></tr></thead>
-<tbody>${l.map(x => `<tr><td class="tat">${x.vendaTatico || "—"}</td><td>${x.cliente}</td><td>${String(x.cpf || "").replace(/\D/g, "") || "—"}</td><td>${x.venda || "—"}</td><td>${x.projetista}</td>
+<tbody>${l.map(x => `<tr><td class="tat">${x.vendaTatico || "—"}</td><td>${x.cliente}${x.manual ? " <b>(valores à mão)</b>" : ""}</td><td>${String(x.cpf || "").replace(/\D/g, "") || "—"}</td><td>${x.venda || "—"}</td><td>${x.projetista}</td>
 <td class="n">${brl(x.valorInicial)}</td><td class="n">${brl(x.valorFinal)}</td><td class="n">${brl(x.recuperado)}</td><td class="n">${brl(x.comissao)}</td><td></td><td></td></tr>`).join("")}</tbody>
 <tfoot><tr><td colspan="7">Total · ${l.length} cliente(s)</td><td class="n">${brl(soma("recuperado"))}</td><td class="n">${brl(soma("comissao"))}</td><td></td><td></td></tr></tfoot></table>
 <div class="ass"><div>Checklist — entregue por</div><div>Financeiro — conferido e validado</div></div>
