@@ -238,7 +238,7 @@ export default function EncontrarVendas360() {
           <button className={aba === "mkt" ? "on" : ""} onClick={() => { setAba("mkt"); setSel({}); }}>🏬 Marketing <i>{cnt("mkt")}</i></button>
           <button className={aba === "nada" ? "on" : ""} onClick={() => { setAba("nada"); setSel({}); }}>Não encontradas no 360 <i>{cnt("nada")}</i></button>
         </div>
-        {aba !== "nada" && resumo.length > 0 && <div className="ev-resumo">{resumo.map(([k, x]) => <button key={k} className={"ev-res" + (q === k ? " on" : "")} onClick={() => setQ(q === k ? "" : k)}><b>{k}</b><span>{x.n} venda(s) · {fmtMoeda(x.v)}</span><small>{x.conf} confirmada(s)</small></button>)}</div>}
+        {aba !== "nada" && resumo.length > 0 && <div className="ev-resumo">{resumo.map(([k, x]) => <button key={k} className={"ev-res" + (q === k ? " on" : "")} onClick={() => setQ(q === k ? "" : k)}><b>{k}</b><span>{x.n} venda(s) · {fmtMoeda(x.v)}</span><small>{x.conf} já confirmada(s) · {x.n - x.conf} a confirmar</small></button>)}</div>}
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "6px 0 10px" }}>
           {aba !== "nada" && <div className="chips" style={{ margin: 0 }}>{([["confirmar", "A confirmar"], ["vend", "⚠️ Vendedor diferente"], ["ok", "✔ Já confirmadas"], ["ck", "📋 Checklist"], ["todas", "Todas"]] as any[]).map(([k, l]) => <button key={k} className={"chip" + (f === k ? " on" : "")} onClick={() => setF(k)}>{l}<span className="n">{daAba.filter(r => passa(r, k)).length}</span></button>)}</div>}
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cliente, vendedor, consultor, nº ou telefone" style={{ marginLeft: "auto", maxWidth: 320 }} />

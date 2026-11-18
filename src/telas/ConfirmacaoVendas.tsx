@@ -42,6 +42,7 @@ export default function ConfirmacaoVendas() {
   // origem (quem trouxe a venda) e filtros por vendedor / consultor
   const [orig, setOrig] = useState<"" | "vendedor" | "relatorio">("");
   const [fVend, setFVend] = useState(""); const [fCons, setFCons] = useState("");
+  const [lim, setLim] = useState(120); // só desenha os primeiros clientes (a tela fica leve); "Mostrar mais" abre o resto
   const [q, setQ] = useState(""); const [ocup, setOcup] = useState<Record<string, boolean>>({});
   const [valEd, setValEd] = useState<Record<string, string>>({});
   const [metodo, setMetodo] = useState(""); const [sel, setSel] = useState<Record<string, boolean>>({});
@@ -66,7 +67,8 @@ export default function ConfirmacaoVendas() {
   const recarregarDepois = () => { clearTimeout(tRecarga.current); tRecarga.current = setTimeout(() => recarregar(), 6000); };
   useEffect(() => () => clearTimeout(tRecarga.current), []);
 
-  const chamado = (id: string | null) => id ? st.chamados.find((c: any) => c.id === id) : null;
+  const byId = useMemo(() => new Map<string, any>((st.chamados || []).map((c: any) => [c.id, c])), [st.chamados]);
+  const chamado = (id: string | null) => id ? byId.get(id) : null;
   const vendedores = useMemo(() => st.usuarios.filter((u: any) => (u.setores || []).includes("atendente_cliente") && u.ativo).sort((a: any, b: any) => a.nome.localeCompare(b.nome, "pt-BR")), [st.usuarios]);
   const consultores = useMemo(() => st.usuarios.filter((u: any) => (u.setores || []).includes("consultor_externo") && u.ativo), [st.usuarios]);
 
@@ -101,21 +103,30 @@ export default function ConfirmacaoVendas() {
         motivo: "lançada pelo vendedor — aguardando a Gestão", _item: i.id }));
     });
   }, [st.chamados, itens]);
-  const todos = [...(itens || []), ...doVend];
+  const todos = useMemo(() => [...(itens || []), ...doVend], [itens, doVend]);
   const ehVendedor = (x: Item) => x.fonte === "vendedor" || /lançada/i.test(x.motivo || "");
   const nomeVend = (x: Item) => (x.vendedor_id ? R.nomeUser(x.vendedor_id) : x.ex_vendedor) || "";
   const nomeCons = (x: Item) => (x.consultor_id ? R.nomeUser(x.consultor_id) : x.consultor_nome) || "";
-  const doTipo = todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === ehVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (!fCons || nomeCons(x) === fCons) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim)));
+  const gkMap = useMemo(() => { const m = new Map<string, string>(); todos.forEach(x => m.set(x.numero, gk(x))); return m; }, [todos, idx, byId]);
+  const gkDe = (x: Item) => gkMap.get(x.numero) ?? gk(x);
+  const doTipo = useMemo(() => todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === ehVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (!fCons || nomeCons(x) === fCons) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim))), [todos, tipo, orig, fVend, fCons, per, ini, fim]);
   const busca = tira(q), dig = q.replace(/\D/g, "");
   const lista = doTipo.filter(x => (aba === "todas" || x.status === aba) && (!metodo || x.como === metodo)
     && (!q || tira([x.ex_cliente, x.cliente_ref, chamado(x.chamado_id)?.cliente || "", x.consultor_nome, x.ex_vendedor].join(" ")).includes(busca) || (dig.length >= 3 && (x.numero.includes(dig) || (x.ex_tel1 + x.ex_tel2).replace(/\D/g, "").includes(dig)))))
     .sort((a, b) => tira(a.ex_cliente).localeCompare(tira(b.ex_cliente)) || a.numero.localeCompare(b.numero));
   // agrupa as vendas do mesmo cliente (ordem alfabética do comprador)
-  const grupos = (() => { const m = new Map<string, Item[]>(); lista.forEach(x => { const k = gk(x); m.set(k, [...(m.get(k) || []), x]); });
+  const grupos = (() => { const m = new Map<string, Item[]>(); lista.forEach(x => { const k = gkDe(x); const a = m.get(k); if (a) a.push(x); else m.set(k, [x]); });
     return Array.from(m.entries()).map(([k, l]) => ({ k, l, nome: tira(l[0].ex_cliente) })).sort((a, b) => a.nome.localeCompare(b.nome)); })();
   const pend = doTipo.filter(x => x.status === "pendente");
+  const gruposVis = (() => { let n = 0; const out: typeof grupos = []; for (const g of grupos) { if (n >= lim) break; out.push(g); n += g.l.length; } return out; })();
+  // resumo por consultor (respeita período, origem e vendedor; não o filtro de consultor, para poder trocar de consultor)
+  const resCons = (() => { const m: Record<string, { p: number; vp: number; v: number }> = {};
+    todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === ehVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim)))
+      .forEach(x => { const k = nomeCons(x) || "— sem consultor"; const o = m[k] = m[k] || { p: 0, vp: 0, v: 0 }; if (x.status === "pendente") { o.p++; o.vp += Number(x.valor) || 0; } else if (x.status === "validada") o.v++; });
+    return Object.entries(m).sort((a, b) => b[1].p - a[1].p || b[1].v - a[1].v); })();
   // dinheiro do cliente: efetivadas = entrou de fato; reservas com promissória = combinado (inclui o que ainda vai entrar). Falta = reservas − efetivadas (só sugestão)
-  const resumoCli = (k: string) => { const l = doTipo.filter(i => gk(i) === k); const rec = (i: Item) => Number(i.ex_recebido) || 0;
+  const porCli = useMemo(() => { const m = new Map<string, Item[]>(); doTipo.forEach(i => { const k = gkMap.get(i.numero) ?? gk(i); const a = m.get(k); if (a) a.push(i); else m.set(k, [i]); }); return m; }, [doTipo, gkMap]);
+  const resumoCli = (k: string) => { const l = porCli.get(k) || []; const rec = (i: Item) => Number(i.ex_recebido) || 0;
     const ef = l.filter(i => /^efetiv/i.test(i.ex_situacao)).reduce((s, i) => s + rec(i), 0);
     const rs = l.filter(i => /reserva|promiss/i.test(i.ex_situacao)).reduce((s, i) => s + rec(i), 0);
     return { ef, rs, falta: ef > 0 && rs > ef ? rs - ef : rs > 0 && ef === 0 ? rs : 0, tem: rs > 0 && l.length > 0, n: l.length }; };
@@ -215,6 +226,8 @@ export default function ConfirmacaoVendas() {
           {(orig || fVend || fCons) && <button className="btn ghost sm" onClick={() => { setOrig(""); setFVend(""); setFCons(""); }}>limpar filtros</button>}
         </span>
       </div>
+      {resCons.length > 0 && <div className="ev-resumo" style={{ marginTop: 10 }}>{resCons.map(([k, x]) => <button key={k} className={"ev-res" + (fCons === k ? " on" : "")} onClick={() => { setFCons(fCons === k ? "" : k); setSel({}); }}>
+        <b>{k}</b><span>{x.p} a conferir · {brl(x.vp)}</span><small>{x.v} já validada(s)</small></button>)}</div>}
     </div>
     <div className="kpis" style={{ margin: "6px 0 10px" }}>
       <Kpi n={pend.length} l={"A conferir · " + brl(pend.reduce((s, x) => s + Number(x.valor), 0))} cor="var(--warn)" />
@@ -246,7 +259,7 @@ export default function ConfirmacaoVendas() {
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: 980 }}>
           <colgroup><col style={{ width: 28 }} /><col style={{ width: "12%" }} /><col style={{ width: "17%" }} /><col style={{ width: "17%" }} /><col style={{ width: "11%" }} /><col style={{ width: "14%" }} /><col style={{ width: 130 }} /><col style={{ width: 130 }} /></colgroup>
           <thead><tr><th style={th}><input type="checkbox" style={{ width: "auto" }} checked={lista.length > 0 && lista.every(x => sel[x.numero])} onChange={e => { const n: Record<string, boolean> = {}; if (e.target.checked) lista.forEach(x => (n[x.numero] = true)); setSel(n); }} /></th><th style={th}>Venda (Exact)</th><th style={th}>Cliente comprador (Exact)</th><th style={th}>Cliente no 360 / Minha Visita</th><th style={th}>Consultor / Responsável</th><th style={th}>Vendedor</th><th style={th}>Valor</th><th style={th}>Decisão</th></tr></thead>
-          <tbody>{grupos.map(g => { const c0 = cli360(g.l[0]); const ja = vendas360(c0); const pg = g.l.filter(x => x.status === "pendente");
+          <tbody>{gruposVis.map(g => { const c0 = cli360(g.l[0]); const ja = vendas360(c0); const pg = g.l.filter(x => x.status === "pendente");
             const rcli = resumoCli(g.k); const cab = g.l.length > 1 || ja.length > 0 || rcli.tem;
             return <Fragment key={g.k}>
             {cab && <tr className="cv-grupo"><td colSpan={8}>
@@ -323,6 +336,7 @@ export default function ConfirmacaoVendas() {
             </Fragment>; })}
             </Fragment>; })}</tbody>
         </table>
+        {gruposVis.length < grupos.length && <div style={{ padding: 12, textAlign: "center" }}><button className="btn sm" onClick={() => setLim(l => l + 120)}>Mostrar mais ({grupos.length - gruposVis.length} clientes)</button></div>}
         {!lista.length && <div className="empty" style={{ padding: 24 }}>{aba === "pendente" ? "Nada para conferir. O relatório do Exact é puxado sozinho em Encontrar vendas — o que for achado aparece aqui." : "Nenhuma venda aqui."}</div>}
       </div>}
   </section>;
