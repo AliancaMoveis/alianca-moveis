@@ -6,9 +6,27 @@ import { blobParaJpeg, contratoApi, contratoCopia } from "../lib/contratoUtil";
 import { CONDICOES_CONTRATO, INFO_TECNICAS, LOGO_URL, contratoHtml, cpfValido, diferencasTermo, faltaNoTermo, fmtCpf, type ContratoDados, type TermoAmb, INICIO_MONTAGEM } from "../lib/contratoDoc";
 import TermoMaterial from "../comp/TermoMaterial";
 
+/** O documento na PRÓPRIA tela, não em janela nova.
+ *  No celular o navegador bloqueia janela nova (window.open) quase sempre: o cliente clicava em
+ *  "Ver o documento completo" e não acontecia nada. Aqui o contrato abre por cima da página, dentro
+ *  de um quadro, com botão de imprimir — sem depender de pop-up, no Android e no iPhone. */
+function VerDocumento({ html, onFechar }: { html: string; onFechar: () => void }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const imprimir = () => { const w = ref.current?.contentWindow; if (!w) return; try { w.focus(); w.print(); } catch { /* o navegador recusou */ } };
+  useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onFechar(); }; window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc); }, [onFechar]);
+  return <div style={{ position: "fixed", inset: 0, background: "rgba(16,20,26,.75)", zIndex: 9999, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 12px", background: "#fff", borderBottom: "1px solid #e0e3e8" }}>
+      <b style={{ fontSize: 15, marginRight: "auto" }}>Documento completo</b>
+      <button type="button" onClick={imprimir} style={{ padding: "9px 14px", fontWeight: 800, fontSize: 14, color: "#fff", background: "#284b8f", border: 0, borderRadius: 10 }}>🖨 Imprimir / salvar PDF</button>
+      <button type="button" onClick={onFechar} style={{ padding: "9px 14px", fontWeight: 800, fontSize: 14, color: "#284b8f", background: "#fff", border: "2px solid #284b8f", borderRadius: 10 }}>Fechar</button>
+    </div>
+    <iframe ref={ref} srcDoc={html} title="Documento" style={{ flex: 1, width: "100%", border: 0, background: "#fff" }} />
+  </div>;
+}
+
 /** via do cliente: baixa/abre o contrato que ele acabou de assinar (e continua valendo se reabrir o link) */
 function BaixarContrato({ token }: { token: string }) {
-  const [indo, setIndo] = useState(""); const [erro, setErro] = useState("");
+  const [indo, setIndo] = useState(""); const [erro, setErro] = useState(""); const [doc, setDoc] = useState("");
 
   // Baixar de verdade: quem manda é o SERVIDOR, que entrega o arquivo marcado como anexo
   // (Content-Disposition). Aí o celular salva nos Downloads / Arquivos em vez de só mostrar
@@ -24,15 +42,13 @@ function BaixarContrato({ token }: { token: string }) {
     finally { setIndo(""); }
   };
 
+  // na própria tela, pelo mesmo motivo do documento completo: no celular a janela nova é bloqueada
   const abrir = async () => {
     setIndo("a"); setErro("");
-    const w = window.open("", "_blank");
     try {
       const r = await contratoCopia({ token });
-      const h = await (await fetch(r.url)).text();
-      if (w) { w.document.open(); w.document.write(h); w.document.close(); }
-      else { const b = new Blob([h], { type: "text/html" }); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = "Contrato_assinado.html"; a.click(); setTimeout(() => URL.revokeObjectURL(u), 5000); }
-    } catch (e: any) { if (w) w.close(); setErro(e.message || "Não consegui abrir agora"); }
+      setDoc(await (await fetch(r.url)).text());
+    } catch (e: any) { setErro(e.message || "Não consegui abrir agora"); }
     finally { setIndo(""); }
   };
 
@@ -45,10 +61,11 @@ function BaixarContrato({ token }: { token: string }) {
       <button type="button" onClick={abrir} disabled={!!indo} style={bt(false)}>
         {indo === "a" ? "Abrindo…" : "📄 Ver na tela"}</button>
     </div>
+    {doc && <VerDocumento html={doc} onFechar={() => setDoc("")} />}
     {erro && <div style={{ color: "#9b1c1c", fontSize: 13, marginTop: 8 }}>{erro}</div>}
     <div style={{ fontSize: 12.5, color: "#5a6270", marginTop: 8 }}>
       <b>Baixar</b> salva o contrato no seu celular (Downloads, ou Arquivos no iPhone) — depois é só abrir ou enviar por WhatsApp.
-      <b> Ver na tela</b> abre o contrato completo, com a sua assinatura; para guardar em PDF, use <i>Compartilhar → Imprimir → Salvar em PDF</i>.
+      <b> Ver na tela</b> abre o contrato completo, com a sua assinatura; e tem botão de imprimir / salvar em PDF ali dentro.
     </div>
   </div>;
 }
@@ -62,6 +79,7 @@ export default function Contrato() {
   const [d, setD] = useState<ContratoDados | null>(null);
   const [erro, setErro] = useState("");
   const [passo, setPasso] = useState(0);
+  const [doc, setDoc] = useState("");   // documento completo aberto por cima da tela
   const [termos, setTermos] = useState<TermoAmb[]>([]);
   const [matOk, setMatOk] = useState<boolean[]>([]);
   const [geral, setGeral] = useState<boolean[]>(CONDICOES_CONTRATO.map(() => false));
@@ -110,12 +128,10 @@ export default function Contrato() {
   const libera = [true, ok1, ok1 && ok2, ok1 && ok2 && ok3];
   useEffect(() => { if (tit) setPasso(3); }, [tit]);   // o titular só autoriza e assina — a conferência já foi feita
 
+  // mostra o documento NA PRÓPRIA TELA: no celular a janela nova é bloqueada e o botão não fazia nada
   function imprimir() {
     if (!d) return;
-    const w = window.open("", "_blank"); if (!w) return;
-    const html = contratoHtml(d, { nome, cpf, termos, materiaisOk: matOk, geral, imagensOk: imgOk }, null, location.origin + "/logo.png");
-    w.document.open(); w.document.write(html); w.document.close();
-    setTimeout(() => { try { w.focus(); w.print(); } catch { /* */ } }, 900);
+    setDoc(contratoHtml(d, { nome, cpf, termos, materiaisOk: matOk, geral, imagensOk: imgOk }, null, location.origin + "/logo.png"));
   }
   async function enviar() {
     if (!ok1 || !ok2 || !ok3) { setMsg("Volte e conclua os passos anteriores"); return; }
@@ -136,7 +152,8 @@ export default function Contrato() {
     <div style={{ background: COR.verde, color: "#fff", padding: "10px 16px", display: "flex", alignItems: "center", gap: 12, justifyContent: "center" }}>
       <img src={LOGO_URL.replace(/^https:\/\/[^/]+/, "")} alt="Aliança" style={{ height: 42 }} />
       <div><b style={{ letterSpacing: .5 }}>ALIANÇA MÓVEIS</b><div style={{ fontSize: 12.5, opacity: .85 }}>Checklist do projeto final · assinatura do cliente</div></div></div>
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "14px 12px 60px" }}>{filhos}</div></div>;
+    <div style={{ maxWidth: 860, margin: "0 auto", padding: "14px 12px 60px" }}>{filhos}</div>
+    {doc && <VerDocumento html={doc} onFechar={() => setDoc("")} />}</div>;
   const card: any = { background: "#fff", border: "1px solid " + COR.l, borderRadius: 14, padding: "14px 16px", marginBottom: 14, boxShadow: "0 1px 3px rgba(20,28,45,.06)" };
   const ciente = (on: boolean, set: (v: boolean) => void, txt: string, desab = false) => <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "11px 12px", marginTop: 10, borderRadius: 10, cursor: desab ? "default" : "pointer", opacity: desab ? .55 : 1, background: on ? COR.okbg : "#f6f7f9", border: "1.5px solid " + (on ? "#9fc5a8" : COR.l) }}>
     <input type="checkbox" checked={on} disabled={desab} onChange={e => set(e.target.checked)} style={{ width: 24, height: 24, flex: "none", accentColor: COR.ok }} /><b style={{ fontSize: 14.5 }}>{txt}</b></label>;
