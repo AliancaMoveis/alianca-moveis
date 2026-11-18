@@ -2009,6 +2009,20 @@ tr.cv-l.nog > td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
 .ng-tab{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}.ng-tab th{text-align:left;font-size:11.5px;opacity:.7;border-bottom:1px solid var(--line,#ddd);padding:5px 4px}
 .ng-tab td{padding:7px 4px;border-bottom:1px solid var(--line-soft,#eee);vertical-align:top}.ng-tab td small{display:block;opacity:.7;font-size:11.5px}.ng-tab tr.promob td{background:rgba(242,183,5,.08)}
 .ng-sub{display:flex;justify-content:space-between;font-size:12.5px;opacity:.85;margin:2px 0}
+/* negociação: o que entra no desconto, o que não entra (promoção e frete) */
+.ng-bases{display:grid;gap:4px;margin:8px 0 2px}
+.ng-bases>div{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:7px 10px;border-radius:9px;font-size:13.5px}
+.ng-bases .ng-b1{background:#eaf3ea;border:1px solid #bcd9bf;font-weight:700}
+.ng-bases .ng-b2{background:#fff6e5;border:1px solid #f0d9a8;font-weight:700}
+.ng-bases small{font-weight:500;opacity:.75}
+.ng-tab tr.ng-promo{background:#fff9ee}
+.ng-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#f3c969;color:#5a4208;font-size:11px;font-weight:800;white-space:nowrap}
+.ng-frete{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px}
+/* pré-pedido: marcar promoção e frete */
+.pp-promo{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:13.5px;font-weight:700;cursor:pointer}
+.pp-promo input{width:auto}
+.pp-promo-v{background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:7px 9px;margin-top:5px;flex-wrap:wrap}
+.pp-promo-v small{opacity:.8}
 .ng-bruto,.ng-final{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;padding:8px 0;font-weight:700}.ng-bruto b{font-size:20px}
 .ng-final{border-top:2px solid var(--line,#ddd);margin-top:6px}.ng-final b{font-size:24px;color:var(--st-concluida)}.ng-final small{flex-basis:100%;text-align:right;font-weight:600;opacity:.8}
 .ng-rap{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 6px}

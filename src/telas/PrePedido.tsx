@@ -6,8 +6,10 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { abrirWhats, fmtMoeda, linkWhats } from "../lib/regras";
 
-export type ItemPP = { codigo: string; nome: string; cor?: string; ref?: string; tamanho?: string; qtd: number; obs?: string; preco?: string; promob?: boolean };
-export type PP = { id?: string; numero?: number; cliente_nome: string; telefone: string; endereco: string; itens: ItemPP[]; valor_bruto?: any; valor_negociado?: any; pagamento?: string; obs?: string; status?: string; numero_venda?: string; criado_em?: string; atualizado_em?: string; neg_status?: string; neg_enviado_em?: string; neg_valor?: any; neg_desconto?: any; neg_pagamento?: string; neg_obs?: string };
+// precoTab = preço que veio da tabela do sistema: o vendedor NÃO edita, é o preço cheio da negociação.
+// promo/precoPromo = produto em promoção: entra pelo valor da promoção e NÃO recebe desconto na negociação.
+export type ItemPP = { codigo: string; nome: string; cor?: string; ref?: string; tamanho?: string; qtd: number; obs?: string; preco?: string; precoTab?: string; promo?: boolean; precoPromo?: string; promob?: boolean };
+export type PP = { id?: string; numero?: number; cliente_nome: string; telefone: string; endereco: string; itens: ItemPP[]; frete?: any; neg_frete?: any; valor_bruto?: any; valor_negociado?: any; pagamento?: string; obs?: string; status?: string; numero_venda?: string; criado_em?: string; atualizado_em?: string; neg_status?: string; neg_enviado_em?: string; neg_valor?: any; neg_desconto?: any; neg_pagamento?: string; neg_obs?: string };
 
 // ---------- vários clientes ao mesmo tempo ----------
 // Cada pré-pedido fica salvo no 360 desde o primeiro produto (status "aberto"). O vendedor pode atender vários clientes:
@@ -42,8 +44,19 @@ const unid = (n: number) => n + (n === 1 ? " un." : " un.");
 const totalUn = (p: PP) => p.itens.reduce((s, i) => s + (Number(i.qtd) || 0), 0);
 /** "1.496,82" / "1496.82" / "1496,82" → número */
 export const numBR = (v: any) => { const t = String(v ?? "").replace(/[^\d,.-]/g, ""); if (!t) return 0; const n = /,\d{1,2}$/.test(t) ? Number(t.replace(/\./g, "").replace(",", ".")) : Number(t.replace(/,/g, "")); return isFinite(n) ? n : 0; };
-/** soma dos preços anotados (preço unitário × quantidade) */
-export const somaPP = (p: PP) => p.itens.reduce((s, i) => s + numBR(i.preco) * (Number(i.qtd) || 0), 0);
+/** preço que vale para o item: o da promoção, quando o vendedor marcou */
+export const precoItem = (i: ItemPP) => numBR(i.promo ? i.precoPromo : i.preco);
+/** soma dos produtos (preço que vale × quantidade) — sem frete */
+export const somaPP = (p: PP) => p.itens.reduce((s, i) => s + precoItem(i) * (Number(i.qtd) || 0), 0);
+/** produtos que ACEITAM desconto na negociação (tudo que não está em promoção) */
+export const somaBase = (p: PP) => p.itens.filter(i => !i.promo).reduce((s, i) => s + precoItem(i) * (Number(i.qtd) || 0), 0);
+/** produtos em promoção: entram pelo valor da promoção e ficam fora do desconto */
+export const somaPromo = (p: PP) => p.itens.filter(i => i.promo).reduce((s, i) => s + precoItem(i) * (Number(i.qtd) || 0), 0);
+/** frete: o que o gerente ajustou na negociação vale acima do que o vendedor marcou */
+export const freteDe = (p: PP) => numBR(p.neg_frete ?? "") || numBR(p.frete);
+/** FRETE_PADRAO: Curitiba e região. Litoral e fora são mais caros — o gerente ajusta na mesa. */
+export const FRETE_PADRAO = "100,00";
+export const FRETES: [string, string][] = [["100,00", "Curitiba e região"], ["250,00", "Litoral"], ["300,00", "Fora"]];
 const temPreco = (p: PP) => p.itens.some(i => numBR(i.preco) > 0);
 const numPP = (p: PP) => p.numero ? "PP-" + String(p.numero).padStart(4, "0") : "novo";
 
@@ -61,7 +74,7 @@ export function EncaminharPP({ prod, preco }: { prod: any; preco?: number | null
     try {
       const base: PP = atual || { ...VAZIO };
       const itens = ja ? base.itens.map(i => i.codigo === prod.codigo ? { ...i, qtd: i.qtd + q } : i)
-        : [...base.itens, { codigo: prod.codigo, nome: prod.nome, cor: prod.cor || "", ref: prod.ref || "", tamanho: prod.tamanho || "", qtd: q, preco: preco ? String(preco.toFixed(2)).replace(".", ",") : "" }];
+        : [...base.itens, { codigo: prod.codigo, nome: prod.nome, cor: prod.cor || "", ref: prod.ref || "", tamanho: prod.tamanho || "", qtd: q, preco: preco ? String(preco.toFixed(2)).replace(".", ",") : "", precoTab: preco ? String(preco.toFixed(2)).replace(".", ",") : "" }];
       const r = await salvarPP({ ...base, itens }); gravarAlvo(r.id || "");
       toast((ja ? "Quantidade somada" : "Encaminhado") + " · " + (r.cliente_nome || numPP(r)) + " · " + prod.nome.slice(0, 32)); setQ(1);
     } catch (e: any) { toast(e.message || "Não consegui encaminhar"); } finally { setOcupado(false); }
@@ -152,13 +165,25 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
         {!pp.itens.length && <div className="hint" style={{ padding: "8px 0" }}>Nenhum produto. Volte para a consulta e encaminhe.</div>}
         {pp.itens.map((i, k) => <div key={i.codigo + k} className="pp-it">
           <div><b>{i.nome}</b><small>{i.promob ? "📐 Promob (projeto, escrito à mão)" : "Cód. " + i.codigo + (i.ref ? " · REF " + i.ref : "") + (i.cor ? " · " + i.cor : "")}</small>
-            <div className="pp-preco"><label>R$<input inputMode="decimal" placeholder="preço un." value={i.preco || ""} onChange={e => setItem(k, { preco: e.target.value })} /></label>
-              {numBR(i.preco) > 0 && <span>= <b>{fmtMoeda(numBR(i.preco) * i.qtd)}</b>{i.qtd > 1 ? <small> ({i.qtd} × {fmtMoeda(numBR(i.preco))})</small> : null}</span>}</div>
+            {/* preço da tabela não se mexe: é o preço cheio que o gerente usa para dar desconto */}
+            <div className="pp-preco">{numBR(i.precoTab) > 0
+              ? <span>R$ <b>{fmtMoeda(numBR(i.preco))}</b> <small>preço de tabela</small></span>
+              : <label>R$<input inputMode="decimal" placeholder="preço un." value={i.preco || ""} onChange={e => setItem(k, { preco: e.target.value })} /></label>}
+              {numBR(i.preco) > 0 && !i.promo && <span>= <b>{fmtMoeda(numBR(i.preco) * i.qtd)}</b>{i.qtd > 1 ? <small> ({i.qtd} × {fmtMoeda(numBR(i.preco))})</small> : null}</span>}</div>
+            {/* promoção: entra pelo valor da promoção e o gerente não dá desconto em cima */}
+            <label className="pp-promo"><input type="checkbox" checked={!!i.promo} onChange={e => setItem(k, { promo: e.target.checked, precoPromo: e.target.checked ? (i.precoPromo || "") : "" })} /> 🏷 produto em promoção</label>
+            {i.promo && <div className="pp-preco pp-promo-v"><label>Valor da promoção R$<input inputMode="decimal" autoFocus placeholder="0,00" value={i.precoPromo || ""} onChange={e => setItem(k, { precoPromo: e.target.value })} /></label>
+              {numBR(i.precoPromo) > 0 && <span>= <b>{fmtMoeda(numBR(i.precoPromo) * i.qtd)}</b>{numBR(i.preco) > numBR(i.precoPromo) ? <small> (de {fmtMoeda(numBR(i.preco) * i.qtd)})</small> : null}</span>}
+              <small style={{ display: "block", width: "100%" }}>Não recebe desconto na negociação.</small></div>}
             <input className="pp-obs" placeholder="observação do item (opcional)" value={i.obs || ""} onChange={e => setItem(k, { obs: e.target.value })} /></div>
           <div className="pp-q"><button type="button" onClick={() => setItem(k, { qtd: Math.max(1, i.qtd - 1) })}>−</button><b>{i.qtd}</b><button type="button" onClick={() => setItem(k, { qtd: i.qtd + 1 })}>+</button>
             <button type="button" className="pp-x" title="Tirar do pré-pedido" onClick={() => tirar(k)}>🗑</button></div>
         </div>)}
-        {temPreco(pp) && <div className="pp-total"><span>Total dos produtos</span><b>{fmtMoeda(somaPP(pp))}</b></div>}
+        {temPreco(pp) && <>
+          {somaPromo(pp) > 0 && <div className="pp-total" style={{ fontWeight: 600 }}><span>Preço cheio (entra no desconto)</span><b>{fmtMoeda(somaBase(pp))}</b></div>}
+          {somaPromo(pp) > 0 && <div className="pp-total" style={{ fontWeight: 600 }}><span>🏷 Em promoção (sem desconto)</span><b>{fmtMoeda(somaPromo(pp))}</b></div>}
+          {freteDe(pp) > 0 && <div className="pp-total" style={{ fontWeight: 600 }}><span>🚚 Frete</span><b>{fmtMoeda(freteDe(pp))}</b></div>}
+          <div className="pp-total"><span>Total dos produtos{freteDe(pp) > 0 ? " + frete" : ""}</span><b>{fmtMoeda(somaPP(pp) + freteDe(pp))}</b></div></>}
         <button type="button" className="pp-link" onClick={() => { if (pp.id) gravarAlvo(pp.id); onVoltar(); }}>＋ adicionar produto a este cliente</button>
         <ItemPromob add={(nome, preco) => mudar({ itens: [...pp.itens, { codigo: "PROMOB", nome: "PROMOB — " + nome, qtd: 1, preco, promob: true }] })} />
       </div>
@@ -167,6 +192,12 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
         <label className="pp-f">Nome<input value={pp.cliente_nome} onChange={e => set("cliente_nome", e.target.value)} placeholder="nome do cliente" /></label>
         <label className="pp-f">Telefone<input value={pp.telefone} inputMode="tel" onChange={e => set("telefone", e.target.value)} placeholder="(41) 9…" /></label>
         <label className="pp-f">Endereço<input value={pp.endereco} onChange={e => set("endereco", e.target.value)} placeholder="rua, número, bairro, cidade" /></label>
+      </div>
+      <div className="cp-card">
+        <div className="pp-tit">Frete</div>
+        {/* o vendedor só marca que tem frete; quem ajusta o valor (litoral, fora) é o gerente na negociação */}
+        <label className="pp-promo"><input type="checkbox" checked={numBR(pp.frete) > 0} onChange={e => set("frete", e.target.checked ? FRETE_PADRAO : "")} /> 🚚 incluir frete</label>
+        {numBR(pp.frete) > 0 && <div className="hint">Entra por <b>{fmtMoeda(numBR(pp.frete))}</b> (Curitiba e região). O gerente ajusta na negociação — litoral e fora são mais caros. Não recebe desconto.</div>}
       </div>
       <div className="cp-card">
         <div className="pp-tit">Valores e pagamento <small>(opcional)</small></div>

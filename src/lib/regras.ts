@@ -1122,7 +1122,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // 📣 perfil "só anúncios" (ex.: Lucas Santana): o menu dele é só o dos anúncios — sem pendências, vendedores, consultores, produtividade nem gestão
     if (oculto("so_anuncios")) return G.filter(g => g.g === "Anúncios");
     if (ehGerenteLoja()) {
-      const fora = new Set(["acompmkt", "operadoras", "clientes", "consulta", "produtividade", "relatorios"]);
+      // "Clientes" fica: é a mesma lista que ele já alcança pelo Agendamento loja, e o gerente precisa consultar
+      const fora = new Set(["acompmkt", "operadoras", "consulta", "produtividade", "relatorios"]);
       G.forEach(g => (g.itens = g.itens.filter(([v]: string[]) => !fora.has(v))));
       G.forEach(g => { if (g.g === "Marketing") g.g = "Loja e vendedores"; });
       return G.filter(g => g.itens.length);
