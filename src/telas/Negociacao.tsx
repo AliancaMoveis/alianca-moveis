@@ -22,7 +22,13 @@ export default function Negociacao({ onVoltar }: { onVoltar?: () => void }) {
   useEffect(() => { carregar(); const t = setInterval(carregar, 30000); return () => clearInterval(t); }, []);
   const vis = (lista || []).filter(p => filtro === "fechadas" ? p.neg_status === "fechado" : p.neg_status !== "fechado");
   const atual = (lista || []).find(p => p.id === abrir);
-  if (atual) return <Mesa p={atual} voltar={() => { setAbrir(""); carregar(); }} />;
+  // o gerente tira do quadro dele o que não serve (duplicado, teste, cliente que desistiu)
+  const excluir = async (p: PN) => {
+    if (!confirm("Tirar " + numPP(p) + " de " + (p.cliente_nome || "cliente sem nome") + " da negociação?\n\nSai da sua tela e a proposta é apagada. O pré-pedido continua com o vendedor, que pode enviar de novo.")) return;
+    try { await A.negociacaoExcluir(p.id!); if (abrir === p.id) setAbrir(""); toast("Tirado da negociação"); carregar(); }
+    catch (e: any) { toast(e.message || "Não consegui tirar da negociação"); }
+  };
+  if (atual) return <Mesa p={atual} voltar={() => { setAbrir(""); carregar(); }} excluir={() => excluir(atual)} />;
   return <div className="ng">
     {onVoltar && <button type="button" className="btn ghost sm" onClick={onVoltar}>‹ Voltar</button>}
     <div className="pp-tit" style={{ fontSize: 17, margin: "6px 0" }}>🤝 Negociação</div>
@@ -32,17 +38,20 @@ export default function Negociacao({ onVoltar }: { onVoltar?: () => void }) {
       <button type="button" className={"chip" + (filtro === "fechadas" ? " on" : "")} onClick={() => setFiltro("fechadas")}>Fechadas ({(lista || []).filter(p => p.neg_status === "fechado").length})</button>
       <button type="button" className="chip" onClick={carregar}>↻ Atualizar</button></div>
     {lista === null ? <div className="hint">Carregando…</div> : !vis.length ? <div className="cp-card hint">Nenhum pré-pedido {filtro === "fechadas" ? "fechado" : "para negociar"} agora.</div> :
-      vis.map(p => <button key={p.id} type="button" className={"ng-card " + (p.neg_status || "")} onClick={() => setAbrir(p.id!)}>
-        <div><b>{p.cliente_nome || "Cliente sem nome"}</b><small>{numPP(p)} · vendedor {p.vendedor || "—"} · enviado {hora(p.neg_enviado_em)}</small>
-          <small>{p.itens.length} produto{p.itens.length > 1 ? "s" : ""}{p.itens.some((i: any) => i.promob) ? " · inclui Promob" : ""}</small></div>
-        <div className="ng-dir"><b>{fmtMoeda(somaPP(p) || numBR(p.valor_bruto))}</b><span className="pill">{ROT[p.neg_status || ""] || p.neg_status}</span>
-          {numBR(p.neg_valor) > 0 && <small>proposta {fmtMoeda(numBR(p.neg_valor))}</small>}</div>
-      </button>)}
+      vis.map(p => <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "stretch", marginBottom: 8 }}>
+        <button type="button" className={"ng-card " + (p.neg_status || "")} style={{ marginBottom: 0 }} onClick={() => setAbrir(p.id!)}>
+          <div><b>{p.cliente_nome || "Cliente sem nome"}</b><small>{numPP(p)} · vendedor {p.vendedor || "—"} · enviado {hora(p.neg_enviado_em)}</small>
+            <small>{p.itens.length} produto{p.itens.length > 1 ? "s" : ""}{p.itens.some((i: any) => i.promob) ? " · inclui Promob" : ""}</small></div>
+          <div className="ng-dir"><b>{fmtMoeda(somaPP(p) || numBR(p.valor_bruto))}</b><span className="pill">{ROT[p.neg_status || ""] || p.neg_status}</span>
+            {numBR(p.neg_valor) > 0 && <small>proposta {fmtMoeda(numBR(p.neg_valor))}</small>}</div>
+        </button>
+        <button type="button" className="btn ghost" title="Tirar da negociação" aria-label="Tirar da negociação" style={{ flex: "none", padding: "0 12px", fontSize: 17 }} onClick={() => excluir(p)}>🗑</button>
+      </div>)}
   </div>;
 }
 
 /** mesa de negociação: produtos, preços cheios e a simulação do desconto */
-function Mesa({ p, voltar }: { p: PN; voltar: () => void }) {
+function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () => void }) {
   const { toast } = useApp() as any;
   const bruto = somaPP(p) || numBR(p.valor_bruto);
   const ini = numBR(p.neg_valor) || numBR(p.valor_negociado) || 0;
@@ -62,7 +71,10 @@ function Mesa({ p, voltar }: { p: PN; voltar: () => void }) {
   const promob = p.itens.filter((i: any) => i.promob), prontos = p.itens.filter((i: any) => !i.promob);
   const somaDe = (l: any[]) => l.reduce((s, i) => s + numBR(i.preco) * (Number(i.qtd) || 0), 0);
   return <div className="ng">
-    <button type="button" className="btn ghost sm" onClick={voltar}>‹ Negociação</button>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <button type="button" className="btn ghost sm" onClick={voltar}>‹ Negociação</button>
+      {excluir && <button type="button" className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={excluir}>🗑 Tirar da negociação</button>}
+    </div>
     <div className="cp-card">
       <div className="ng-cli"><b>{p.cliente_nome || "Cliente sem nome"}</b><small>{numPP(p)} · vendedor {p.vendedor || "—"}{p.telefone ? " · " + p.telefone : ""}</small>{p.endereco && <small>{p.endereco}</small>}</div>
       <table className="ng-tab"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço cheio</th><th>Total</th></tr></thead>

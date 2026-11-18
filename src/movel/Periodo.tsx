@@ -21,6 +21,22 @@ export function usePeriodo() {
 export const dataRef = dataRefCliente;
 export const noPeriodo = (p: Periodo, c: any) => p.tipo === "tudo" || clienteNoPeriodo(c, p.de, p.ate);
 
+/** Filtro por data de uma lista (de–até, sem período fechado).
+ *  Antes o rótulo, os dois campos e a palavra "até" ficavam todos na mesma linha: no celular isso quebrava
+ *  no meio e metade do filtro caía embaixo. Agora cada campo leva o rótulo em cima e os dois dividem a largura. */
+export function FiltroData({ titulo, de, ate, setDe, setAte }: { titulo: string; de: string; ate: string; setDe: (v: string) => void; setAte: (v: string) => void }) {
+  return <div className="mv-periodo">
+    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 5px" }}>
+      <b style={{ fontSize: 12.5 }}>📅 {titulo}</b>
+      {(de || ate) && <button type="button" className="mv-mini" style={{ marginLeft: "auto" }} onClick={() => { setDe(""); setAte(""); }}>limpar</button>}
+    </div>
+    <div className="mv-datas">
+      <label>De<input type="date" value={de} max={ate || undefined} onChange={e => setDe(e.target.value)} /></label>
+      <label>Até<input type="date" value={ate} min={de || undefined} onChange={e => setAte(e.target.value)} /></label>
+    </div>
+  </div>;
+}
+
 export function FiltroPeriodo({ p, setP }: { p: Periodo; setP: (p: Periodo) => void }) {
   const m0 = mes(0), m1 = mes(1);
   return <div className="mv-periodo">

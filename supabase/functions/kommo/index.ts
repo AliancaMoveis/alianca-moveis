@@ -161,6 +161,18 @@ async function criarCliente(it: any, contatoExistente?: number | null) {
   return { ok: true, contato_id, lead_id };
 }
 
+/** Registro de cada mensagem que sai: é daqui que saem os números do checklist (quantas foram, de quem, e o que voltou).
+ *  O vínculo guarda só o último envio; aqui fica a linha do tempo inteira, uma linha por mensagem. */
+async function registrarEvento(e: Record<string, unknown>) {
+  try {
+    await fetch(`${SB()}/rest/v1/kommo_eventos`, {
+      method: "POST",
+      headers: { apikey: SR(), Authorization: `Bearer ${SR()}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify([{ canal: "kommo", em: new Date().toISOString(), ...e }]),
+    });
+  } catch { /* medir não pode derrubar o envio */ }
+}
+
 async function salvarVinculo(chamado_id: string, v: Record<string, unknown>) {
   await fetch(`${SB()}/rest/v1/kommo_vinculo?on_conflict=chamado_id`, {
     method: "POST",
@@ -213,6 +225,7 @@ Deno.serve(async (req) => {
       const g = await garantirLead(it);
       if (!g.ok) {
         await salvarVinculo(String(it.id), { envio_status: "falhou", envio_em: new Date().toISOString(), envio_erro: g.motivo });
+        await registrarEvento({ chamado_id: it.id, tipo: "falhou", modelo: b.modelo === "nova_data" ? "retorno" : "primeiro", por: String(b.atendente || ""), erro: g.motivo });
         return json({ ok: false, erro: g.motivo }, 200);
       }
 
@@ -225,6 +238,7 @@ Deno.serve(async (req) => {
       const up = await kommo(`/api/v4/leads/${g.lead_id}`, { method: "PATCH", body: JSON.stringify({ custom_fields_values: campos }) });
       if (up.st !== 200) {
         await salvarVinculo(String(it.id), { contato_id: g.contato_id, lead_id: g.lead_id, origem: g.origem, envio_status: "falhou", envio_em: new Date().toISOString(), envio_erro: `não consegui gravar os dados no lead (${up.st})` });
+        await registrarEvento({ chamado_id: it.id, tipo: "falhou", modelo: b.modelo === "nova_data" ? "retorno" : "primeiro", por: String(b.atendente || ""), erro: `não consegui gravar os dados no lead (${up.st})` });
         return json({ ok: false, erro: `não consegui gravar os dados no lead (${up.st})` }, 200);
       }
 
@@ -238,6 +252,7 @@ Deno.serve(async (req) => {
           ? "o modelo de nova data ainda está em análise na Meta — assim que ela aprovar, o envio passa a funcionar sozinho"
           : "o modelo do primeiro contato não está configurado na Kommo";
         await salvarVinculo(String(it.id), { contato_id: g.contato_id, lead_id: g.lead_id, origem: g.origem, contatos: (g as any).contatos || null, envio_status: "falhou", envio_em: new Date().toISOString(), envio_erro: motivo });
+        await registrarEvento({ chamado_id: it.id, tipo: "falhou", modelo: novaData ? "retorno" : "primeiro", por: String(b.atendente || ""), erro: motivo });
         return json({ ok: false, erro: motivo }, 200);
       }
       const run = await kommo(`/api/v4/bots/${bot}/run`, {
@@ -252,6 +267,8 @@ Deno.serve(async (req) => {
         envio_erro: ok ? null : `a Kommo recusou o disparo (${run.st})`,
         envio_data_oferecida: String(b.data || ""),
       });
+      await registrarEvento({ chamado_id: it.id, tipo: ok ? "enviado" : "falhou", modelo: novaData ? "retorno" : "primeiro",
+        por: String(b.atendente || ""), data_oferecida: String(b.data || ""), erro: ok ? null : `a Kommo recusou o disparo (${run.st})` });
       return json(ok
         ? { ok: true, lead_id: g.lead_id, contato_id: g.contato_id, origem: g.origem }
         : { ok: false, erro: `a Kommo recusou o disparo (${run.st})` });

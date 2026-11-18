@@ -9,6 +9,7 @@ import { BarRow, Kpi } from "./Dashboard";
 import PainelGestao from "./PainelGestao";
 import { fmtTempo, mediaHoras } from "../lib/atendimento";
 import { ck, etapaCk, grupoCk, reservaVencida, querEnc, aConfirmar, cfgAgenda } from "./Checklist";
+import { FunilKommoPeriodo } from "../comp/FunilKommo";
 import { pagamentosVenda, parseMoeda } from "../lib/regras";
 import { calcGeral } from "../lib/geral";
 
@@ -228,7 +229,11 @@ export default function PainelBruno({ de, ate }: { de: string; ate: string }) {
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "4px 0 16px" }}>
           <button className="btn sm primary" onClick={() => irPara("ck_agendar")}>A agendar</button><button className="btn sm" onClick={() => irPara("ck_agenda")}>Agenda</button>
-          <button className="btn sm" onClick={() => irPara("ck_confirmar")}>Confirmação de presença</button><button className="btn sm" onClick={() => irPara("ck_produtividade")}>📈 Produtividade</button></div>
+          <button className="btn sm" onClick={() => irPara("ck_confirmar")}>Confirmação de presença</button><button className="btn sm" onClick={() => irPara("ck_produtividade")}>📈 Produtividade</button>
+          <button className="btn sm" onClick={() => irPara("ck_mensagens")}>📨 Mensagens e respostas</button></div>
+        {/* a mensagem saiu, e aí? sem isso o WhatsApp do checklist era um buraco: dava para ver o envio, não o resultado */}
+        <div className="sec-label" style={{ margin: "0 0 8px" }}>📨 Mensagens do WhatsApp do checklist · {de.slice(0, 10) === ate.slice(0, 10) ? "no dia" : "no período"}</div>
+        <FunilKommoPeriodo de={de.slice(0, 10)} ate={ate.slice(0, 10)} />
       </>}
 
       {aba === "vendas" && <PainelGestao de={de} ate={ate} />}

@@ -37,12 +37,12 @@ import Nova from "../telas/Nova";
 import PosVenda from "../telas/PosVenda";
 import AgendaConsultores from "../telas/AgendaConsultores";
 import { RESGATAR, corCliente } from "../lib/corCliente";
-import { FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
+import { FiltroData, FiltroPeriodo, noPeriodo, usePeriodo } from "./Periodo";
 import { ConviteNotif, Notificacoes } from "./Notif";
 import { MktClientes, MktGanhos, MktHoje, MktNovo } from "./Marketing";
 import ConsultaProduto from "../telas/ConsultaProduto";
 import AgendaVendedores from "../telas/AgendaVendedores";
-import { CartaoMedida, FolhaMedida, MedHoje, MedLista, Reembolsos, medDados, tipoMedida, SeloTipo, TIPO_CLIENTE } from "./Medidas";
+import { CartaoMedida, FolhaMedida, MedHoje, MedLista, QuadroTipos, Reembolsos, medDados, porTipo, tipoMedida, SeloTipo, TIPO_CLIENTE } from "./Medidas";
 
 export type Perfil = "consultor" | "vendedor" | "gestor" | "gerente" | "marketing" | "medidor" | "dono" | "juridico" | "posvenda" | "produtos";
 export function perfilMovel(R: any): Perfil | null {
@@ -114,6 +114,7 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
   // 📣 perfil "só anúncios" (ex.: Lucas Santana): só a aba dos anúncios e o "Eu"
   if (R.oculto("so_anuncios")) { abas.length = 0; abas.push(["anuncios", "Anúncios", "📣"], ["eu", "Eu", "👤"]); }
   const [aba, setAba] = useState(abas[0][0]);
+  const [fCli, setFCli] = useState(""); // filtro com que a aba Clientes abre (vindo dos quadros do "Hoje")
   const [nPorta, setNPorta] = useState(0); // tocar de novo em "＋ Porta" reabre o formulário
   const [aberto, setAberto] = useState<string | null>(null);
   const u = R.me();
@@ -135,8 +136,8 @@ export default function AppMovel({ perfil, completa }: { perfil: Perfil; complet
       <Simulando />
       <main className="mv-corpo" key={aba}>
         {aba === abas[0][0] && <ConviteNotif irEu={() => setAba("eu")} />}
-        {perfil === "consultor" && aba === "hoje" && <ConsHoje abrir={setAberto} ir={setAba} />}
-        {perfil === "consultor" && aba === "clientes" && <ConsClientes abrir={setAberto} />}
+        {perfil === "consultor" && aba === "hoje" && <ConsHoje abrir={setAberto} ir={setAba} irFiltro={(k: string) => { setFCli(k); setAba("clientes"); }} />}
+        {perfil === "consultor" && aba === "clientes" && <ConsClientes abrir={setAberto} inicio={fCli} />}
         {perfil === "dono" && aba === "painel" && <PainelDono />}
         {aba === "atend_vend" && <AgendaVendedores movel />}
         {aba === "produto" && <ConsultaProduto movel />}
@@ -227,7 +228,7 @@ function consDados(R: any, st: any) {
     .sort((a: any, b: any) => String((b.tratativa || {}).cancelouEm || "").localeCompare(String((a.tratativa || {}).cancelouEm || "")));
   return { meus, aFazer, faltaLoja, deHoje, atrasadas, semAnexo, naLoja, cancelados };
 }
-function ConsHoje({ abrir, ir }: any) {
+function ConsHoje({ abrir, ir, irFiltro }: any) {
   const { R, st } = useApp() as any;
   const d = consDados(R, st);
   const md = medDados(R);
@@ -235,13 +236,12 @@ function ConsHoje({ abrir, ir }: any) {
   return <>
     <div className="mv-nums">
       <Num n={d.deHoje.length} l="Visitas hoje" on={() => ir("clientes")} />
-      <Num n={d.faltaLoja.length} l="Agendar loja" cor={d.faltaLoja.length ? "var(--warn)" : undefined} on={() => ir("clientes")} />
-      <Num n={d.semAnexo.length} l="Sem anexo" cor={d.semAnexo.length ? "#b07a00" : undefined} on={() => ir("clientes")} />
-      <Num n={md.aFazer.length} l="📐 Medidas" cor={md.atrasadas.length ? "var(--danger)" : "#7c3aed"} on={() => ir("clientes")} />
+      <Num n={d.faltaLoja.length} l="Agendar loja" cor={d.faltaLoja.length ? "var(--warn)" : undefined} on={() => irFiltro("loja")} />
+      <Num n={d.semAnexo.length} l="Sem anexo" cor={d.semAnexo.length ? "#b07a00" : undefined} on={() => irFiltro("anexo")} />
+      <Num n={md.aFazer.length} l="📐 Medidas" cor={md.atrasadas.length ? "var(--danger)" : "#7c3aed"} on={() => irFiltro("medidas")} />
     </div>
-    <div style={{ display: "flex", gap: 6, margin: "2px 0 10px" }}>{(["pre", "confirmacao", "pos"] as const).map(k => { const x = TIPO_CLIENTE[k]; const n = k === "pre" ? d.aFazer.length : md.aFazer.filter((c: any) => tipoMedida(c, st) === k).length;
-      return <div key={k} style={{ flex: 1, minWidth: 0, background: x.bg, border: "1.5px solid " + x.cor, borderRadius: 10, padding: "6px 8px", textAlign: "center" }}>
-        <b style={{ color: x.cor, fontSize: 20, display: "block" }}>{n}</b><span style={{ fontSize: 11, fontWeight: 800, color: x.cor }}>{x.ic} {k === "pre" ? "Venda" : k === "pos" ? "Pós-venda" : "Confirmação"}</span></div>; })}</div>
+    <QuadroTipos t={porTipo(st, d.aFazer, md.aFazer)} titulo="🧭 Visitas a fazer" nota="🟢 você vai vender · 🟣 e 🔵 o cliente já comprou, é só medir"
+      on={k => irFiltro(k === "pre" ? "pre" : k === "pos" ? "pos" : "conf")} />
     {prox ? <div className="mv-hero" onClick={() => abrir(prox.id)}>
       <div className="mv-hero-l">{d.atrasadas.includes(prox) ? "Visita atrasada" : "Próxima visita"} · 🟢 visita de venda</div>
       <div className="mv-hero-q">{diaCurto(prox.dataVisita)} {hora(prox.dataVisita)}</div>
@@ -264,10 +264,13 @@ function ConsHoje({ abrir, ir }: any) {
 const busca = (l: any[], q: string) => { const t = q.trim().toLowerCase(); if (!t) return l; const dg = t.replace(/\D/g, "");
   return l.filter((c: any) => (c.cliente + " " + (c.produto || "") + " " + (c.endereco || "") + " " + c.id + " " + numsVenda(c)).toLowerCase().includes(t) || (dg.length >= 3 && String(c.telefone || "").replace(/\D/g, "").includes(dg))); };
 const Busca = ({ q, setQ }: any) => <input className="mv-busca" type="search" placeholder="🔎 Buscar cliente, telefone, produto…" value={q} onChange={e => setQ(e.target.value)} />;
-function ConsClientes({ abrir }: any) {
+/** a data que importa em cada cliente de campo: visita (pré-venda) ou medida (pós-venda) */
+const dataCampo = (c: any) => c.tipo === "medidas" ? c.dataMedida : c.dataVisita;
+const porDataCampo = (a: any, b: any) => String(dataCampo(a) || "9").localeCompare(String(dataCampo(b) || "9"));
+function ConsClientes({ abrir, inicio }: any) {
   const { R, st } = useApp() as any;
   const d = consDados(R, st);
-  const [f, setF] = useState<"fazer" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas" | "resgatar" | "lojaag" | "rota" | "atrasados">("fazer");
+  const [f, setF] = useState<"fazer" | "pre" | "pos" | "conf" | "loja" | "anexo" | "resultado" | "vendidos" | "cancel" | "todas" | "medidas" | "resgatar" | "lojaag" | "rota" | "atrasados">(inicio || "fazer");
   const [dDe, setDDe] = useState(""); const [dAte, setDAte] = useState("");
   const md = medDados(R);
   const [q, setQ] = useState("");
@@ -283,27 +286,38 @@ function ConsClientes({ abrir }: any) {
   const eu = R.currentUserId;
   const nCom = d.aFazer.filter((c: any) => contatoFeito(c, eu)).length;
   const aFazerF = ctF === "com" ? d.aFazer.filter((c: any) => contatoFeito(c, eu)) : ctF === "sem" ? d.aFazer.filter((c: any) => !contatoFeito(c, eu)) : d.aFazer;
-  // filtro por data: visita (a fazer/atrasados), loja (abas da loja) ou a data mais relevante do cliente
-  const dataRef = (c: any) => String((["lojaag", "loja"].includes(f) ? c.dataLoja : ["fazer", "atrasados"].includes(f) ? c.dataVisita : (c.dataVisita || c.dataLoja || c.criadoEm)) || "").slice(0, 10);
+  // visitas a fazer = pré-venda (visita de venda) + pós-venda (medidas), na mesma conta e na mesma lista
+  const T = porTipo(st, d.aFazer, md.aFazer);
+  const campo = [...d.aFazer, ...md.aFazer].sort(porDataCampo);
+  const atrasados = [...d.atrasadas, ...md.atrasadas].sort(porDataCampo);
+  const deCampo = ["fazer", "pre", "pos", "conf", "atrasados", "rota"].includes(f);
+  // filtro por data: visita/medida (campo), loja (abas da loja) ou a data mais relevante do cliente
+  const dataRef = (c: any) => String((["lojaag", "loja"].includes(f) ? c.dataLoja : deCampo ? dataCampo(c) : (c.dataVisita || c.dataLoja || c.criadoEm)) || "").slice(0, 10);
   const porData = (l: any[]) => (!dDe && !dAte) || comPeriodo ? l : l.filter((c: any) => { const x = dataRef(c); return !!x && (!dDe || x >= dDe) && (!dAte || x <= dAte); });
-  const lista = porData(busca(q ? tudo : f === "atrasados" ? d.atrasadas : f === "fazer" ? aFazerF : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : f === "resgatar" ? resgatar : f === "lojaag" ? d.naLoja : tudo, q));
+  const lista = porData(busca(q ? tudo : f === "fazer" ? campo : f === "atrasados" ? atrasados : f === "pre" ? aFazerF : f === "pos" ? T.pos : f === "conf" ? T.confirmacao : f === "loja" ? d.faltaLoja : f === "anexo" ? d.semAnexo : f === "resultado" ? res : f === "vendidos" ? vendidos : f === "cancel" ? cancel : f === "resgatar" ? resgatar : f === "lojaag" ? d.naLoja : tudo, q));
   const sub = (c: any) => f === "resultado" && !q ? ((c.tratativa && c.tratativa.parecer) || (c.venda ? "venda " + c.venda.numero : "—"))
     : c.dataLoja ? "loja " + diaCurto(c.dataLoja) + " " + hora(c.dataLoja) + (c.atendenteId ? " · vendedor " + primeiro(R.nomeUser(c.atendenteId)) : " · sem vendedor") : (c.endereco || c.produto);
+  // os clientes de campo (venda e pós-venda) vêm primeiro; o resto do cadastro fica depois
+  const chips: [string, string, number][] = [["fazer", "🧭 A fazer · tudo", T.total], ["atrasados", "⏰ Atrasados", atrasados.length],
+    ["rota", "🗺 Rota do dia", campo.filter((c: any) => String(dataCampo(c) || "").slice(0, 10) === hojeISO()).length], ["medidas", "📐 Todas as medidas", md.todas.length],
+    ["loja", "Agendar loja", d.faltaLoja.length], ["lojaag", "🏬 Na loja", d.naLoja.length], ["resgatar", "🔄 Resgatar", resgatar.length],
+    ["todas", "📋 Todos os meus", d.meus.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length],
+    ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Venda cancelada", cancel.length]];
   return <>
     <Busca q={q} setQ={setQ} />
-    {!q && <div className="mv-seg">{([["fazer", "🧭 Visitas a fazer", d.aFazer.length], ["atrasados", "⏰ Atrasados", d.atrasadas.length], ["rota", "🗺 Rota do dia", d.aFazer.filter((c: any) => String(c.dataVisita || "").slice(0, 10) === hojeISO()).length], ["loja", "Agendar loja", d.faltaLoja.length], ["lojaag", "🏬 Na loja", d.naLoja.length], ["resgatar", "🔄 Resgatar", resgatar.length], ["todas", "📋 Todos os meus", d.meus.length], ["anexo", "Sem anexo", d.semAnexo.length], ["resultado", "Resultado", res.length], ["vendidos", "Vendidos", vendidos.length], ["cancel", "❌ Venda cancelada", cancel.length], ["medidas", "📐 Medidas", md.aFazer.length]] as any[]).map(([k, l, n]) =>
-      <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
+    {!q && <QuadroTipos t={T} titulo="🧭 Visitas a fazer" nota="toque para ver só um tipo · 🟢 você vende · 🟣 e 🔵 o cliente já comprou"
+      sel={f === "pre" ? "pre" : f === "pos" ? "pos" : f === "conf" ? "confirmacao" : ""}
+      on={k => { const alvo = k === "pre" ? "pre" : k === "pos" ? "pos" : "conf"; setF(f === alvo ? "fazer" : alvo as any); }} />}
+    {!q && <div className="mv-seg">{chips.map(([k, l, n]) =>
+      <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k as any)}>{l}<i>{n}</i></button>)}</div>}
     {!q && comPeriodo && <FiltroPeriodo p={per} setP={setPer} />}
-    {!q && !comPeriodo && f !== "rota" && f !== "medidas" && <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", margin: "4px 0 8px" }}>
-      <span style={{ fontSize: 13, fontWeight: 700 }}>📅 {["lojaag", "loja"].includes(f) ? "Data da loja" : ["fazer", "atrasados"].includes(f) ? "Data da visita" : "Data"}:</span>
-      <input type="date" value={dDe} onChange={e => setDDe(e.target.value)} style={{ maxWidth: 140 }} /><span>até</span><input type="date" value={dAte} onChange={e => setDAte(e.target.value)} style={{ maxWidth: 140 }} />
-      {(dDe || dAte) && <button className="mv-mini" onClick={() => { setDDe(""); setDAte(""); }}>limpar</button>}</div>}
-    {!q && f === "atrasados" && <div className="mv-resg-dica">Visitas que já passaram da data e ainda não foram marcadas como realizadas. Marque a visita ou combine uma nova data com o cliente.</div>}
-    {!q && f === "fazer" && d.aFazer.length > 0 && <div className="mv-seg mv-seg-ctt">{([["", "Todos", d.aFazer.length], ["com", "✅ Contato feito", nCom], ["sem", "⏳ Sem contato", d.aFazer.length - nCom]] as [any, string, number][]).map(([k, l, n]) =>
+    {!q && !comPeriodo && f !== "rota" && f !== "medidas" && <FiltroData titulo={["lojaag", "loja"].includes(f) ? "Data da loja" : deCampo ? "Data da visita / medida" : "Data"} de={dDe} ate={dAte} setDe={setDDe} setAte={setDAte} />}
+    {!q && f === "atrasados" && <div className="mv-resg-dica">Visitas e medidas que já passaram da data e ainda não foram marcadas como feitas. Marque a visita ou combine uma nova data com o cliente.</div>}
+    {!q && f === "pre" && d.aFazer.length > 0 && <div className="mv-seg mv-seg-ctt">{([["", "Todos", d.aFazer.length], ["com", "✅ Contato feito", nCom], ["sem", "⏳ Sem contato", d.aFazer.length - nCom]] as [any, string, number][]).map(([k, l, n]) =>
       <button key={k} className={ctF === k ? "on" : ""} onClick={() => setCtF(k)}>{l}<i>{n}</i></button>)}</div>}
     {!q && f === "resgatar" && <div className="mv-resg-dica">Clientes que cancelaram, não vieram ou não responderam. Eles continuam com você até a supervisão passar para outro consultor — tente resgatar e atualize o status.</div>}
     {!q && f === "todas" && <div className="mv-resg-dica" style={{ background: "var(--surface-2)", borderColor: "var(--line)" }}>Todos os clientes que já foram direcionados para você, com o status atual.</div>}
-    {f === "rota" && !q ? <RotaVisitas clientes={d.meus.filter((c: any) => !c.venda && !["visita_cancelada", "loja_cancelada", "nao_vai_comprar"].includes(R.statusClienteDe(c)))} abrir={abrir} /> : f === "medidas" && !q ? <MedLista abrir={abrir} /> : lista.length ? lista.map((c: any) => <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: sub(c) }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
+    {f === "rota" && !q ? <RotaVisitas clientes={d.meus.filter((c: any) => !c.venda && !["visita_cancelada", "loja_cancelada", "nao_vai_comprar"].includes(R.statusClienteDe(c)))} abrir={abrir} /> : f === "medidas" && !q ? <MedLista abrir={abrir} /> : lista.length ? lista.map((c: any) => c.tipo === "medidas" ? <CartaoMedida key={c.id} c={c} abrir={abrir} /> : <Cartao key={c.id} c={c} abrir={abrir} linha={{ hora: hora(c.dataVisita), dia: diaCurto(c.dataVisita), sub: sub(c) }} />) : <Vazio t={q ? "Nenhum cliente encontrado." : "Nada aqui."} />}
   </>;
 }
 
@@ -388,13 +402,30 @@ function Painel({ perfil, abrir }: any) {
   if (perfil === "medidor") {
     const cfg = R.cfg();
     const ex = R.extratoConsultor(eu, P.de, P.ate);
+    // o medidor só faz visita de pós-venda: o quadro diz qual é pós-venda e qual é confirmação de medida
+    const mdM = medDados(R);
+    const feitasM = mdM.feitas.filter((c: any) => R.dentroPeriodo((c.tratativa.medida || {}).realizadaEm, P.de, P.ate));
+    const TfeitasM = porTipo(st, [], feitasM), TfazerM = porTipo(st, [], mdM.aFazer);
     if (lista === "medidas") { itens = ex.medidas; tituloLista = "Medidas feitas (pagas)"; }
+    if (lista === "fazerpos") { itens = TfazerM.pos; tituloLista = "🟣 Medidas pós-venda a fazer"; }
+    if (lista === "fazerconf") { itens = TfazerM.confirmacao; tituloLista = "🔵 Confirmações de medida a fazer"; }
+    if (lista === "feitaspos") { itens = TfeitasM.pos; tituloLista = "🟣 Medidas pós-venda feitas"; }
+    if (lista === "feitasconf") { itens = TfeitasM.confirmacao; tituloLista = "🔵 Confirmações de medida feitas"; }
     conteudo = <>
       <div className="mv-receber"><span>Previsão a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + reembolsos aprovados {fmtMoeda(ex.totalReembolsos)}{ex.auxilio ? " + auxílio fixo " + fmtMoeda(ex.auxilio) + " (dia " + (cfg.diaAuxilio || 15) + ")" : ""}</small></div>
+      <div className="mv-sec">📋 Suas visitas · {off === 0 ? P.nome + " (até hoje)" : P.nome}</div>
+      <QuadroTipos t={TfazerM} semPre titulo="🧭 Medidas a fazer" nota="toda medida é visita de pós-venda · toque para ver os clientes"
+        sel={lista === "fazerpos" ? "pos" : lista === "fazerconf" ? "confirmacao" : ""} on={k => alternar(k === "pos" ? "fazerpos" : "fazerconf")} />
+      {listaUI(["fazerpos", "fazerconf"])}
+      <QuadroTipos t={TfeitasM} semPre titulo="✅ Medidas feitas" nota="🟣 o cliente comprou e você foi medir · 🔵 medida que voltou para completar"
+        sel={lista === "feitaspos" ? "pos" : lista === "feitasconf" ? "confirmacao" : ""} on={k => alternar(k === "pos" ? "feitaspos" : "feitasconf")} />
+      {listaUI(["feitaspos", "feitasconf"])}
+      <div className="mv-sec">💰 Previsão de pagamento</div>
       <div className="mv-tiles">
-        <Tile k="medidas" n={ex.medidas.length} l="Medidas feitas" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
-        <Tile n={fmtMoeda(ex.totalReembolsos)} l="Reembolsos aprovados" /><Tile n={medDados(R).aFazer.length} l="Medidas a fazer" cor="var(--warn)" />
+        <Tile k="medidas" n={ex.medidas.length} l="Medidas que contam para pagamento" on={() => alternar("medidas")} /><Tile n={fmtMoeda(ex.pagamentoMedidas)} l="Pagamento por medidas" />
+        <Tile n={fmtMoeda(ex.totalReembolsos)} l="Reembolsos aprovados" /><Tile n={mdM.atrasadas.length} l="Medidas atrasadas" cor={mdM.atrasadas.length ? "var(--danger)" : undefined} />
       </div>
+      {listaUI(["medidas"])}
       <FechamentoMeu uid={eu} movel />
       <Reembolsos de={P.de} ate={P.ate} />
     </>;
@@ -405,8 +436,17 @@ function Painel({ perfil, abrir }: any) {
     const aConfirmar = st.chamados.filter((c: any) => c.consultorId === eu && c.venda && ["registrada"].includes(c.venda.status) && R.dentroPeriodo(c.venda.dataVenda || c.venda.quando, P.de, P.ate));
     const doPer = R.clientesConsultor(eu, P.de, P.ate);
     const AT = R.atividadeConsultor(eu, P.de, P.ate);
-    if (lista === "visitas") { itens = AT.visitadas; tituloLista = "Visitas realizadas"; }
-    if (lista === "avisitar") { itens = AT.aVisitar; tituloLista = "Clientes para visitar"; }
+    // o painel separa o que é venda do que é pós-venda: antes "visitas realizadas" era um número só
+    const mdP = medDados(R);
+    const feitasPer = mdP.feitas.filter((c: any) => R.dentroPeriodo((c.tratativa.medida || {}).realizadaEm, P.de, P.ate));
+    const Tfeitas = porTipo(st, AT.visitadas, feitasPer);
+    const Tfazer = porTipo(st, AT.aVisitar, mdP.aFazer);
+    if (lista === "visitas") { itens = AT.visitadas; tituloLista = "🟢 Visitas de venda realizadas (pré-venda)"; }
+    if (lista === "feitaspos") { itens = feitasPer.filter((c: any) => tipoMedida(c, st) === "pos"); tituloLista = "🟣 Medidas pós-venda feitas"; }
+    if (lista === "feitasconf") { itens = feitasPer.filter((c: any) => tipoMedida(c, st) === "confirmacao"); tituloLista = "🔵 Confirmações de medida feitas"; }
+    if (lista === "fazerpos") { itens = Tfazer.pos; tituloLista = "🟣 Medidas pós-venda a fazer"; }
+    if (lista === "fazerconf") { itens = Tfazer.confirmacao; tituloLista = "🔵 Confirmações de medida a fazer"; }
+    if (lista === "avisitar") { itens = AT.aVisitar; tituloLista = "🟢 Clientes para visitar (pré-venda)"; }
     if (lista === "atrasadas") { itens = AT.atrasadas; tituloLista = "Visitas atrasadas"; }
     if (lista === "vieram") { itens = AT.vieram; tituloLista = "Clientes que vieram na loja"; }
     if (lista === "naloja") { itens = AT.naLoja; tituloLista = "Agendados na loja"; }
@@ -419,12 +459,19 @@ function Painel({ perfil, abrir }: any) {
     conteudo = <>
       <div className="mv-receber"><span>Previsão a receber · {off === 0 ? P.nome + " (até hoje)" : P.nome}</span><b>{fmtMoeda(ex.total)}</b><small>{ex.visitas.length} visita(s) + {ex.medidas.length} medida(s) × {fmtMoeda(cfg.pagamentoVisita)} + comissão {String(cfg.comissaoPct).replace(".", ",")}% das vendas efetivadas{ex.totalReembolsos ? " + reembolsos " + fmtMoeda(ex.totalReembolsos) : ""}{ex.auxilio ? " + auxílio fixo " + fmtMoeda(ex.auxilio) + " (dia " + (cfg.diaAuxilio || 15) + ")" : ""}</small></div>
       <div className="mv-sec">📋 Suas atividades · {off === 0 ? P.nome + " (até hoje)" : P.nome}</div>
+      <QuadroTipos t={Tfazer} titulo="🧭 Visitas a fazer" nota="toque em um tipo para ver os clientes"
+        sel={lista === "avisitar" ? "pre" : lista === "fazerpos" ? "pos" : lista === "fazerconf" ? "confirmacao" : ""}
+        on={k => alternar(k === "pre" ? "avisitar" : k === "pos" ? "fazerpos" : "fazerconf")} />
+      {listaUI(["avisitar", "fazerpos", "fazerconf"])}
+      <QuadroTipos t={Tfeitas} titulo="✅ Visitas realizadas" nota="🟢 visita de venda (gera comissão) · 🟣 e 🔵 medida de quem já comprou (sem comissão)"
+        sel={lista === "visitas" ? "pre" : lista === "feitaspos" ? "pos" : lista === "feitasconf" ? "confirmacao" : ""}
+        on={k => alternar(k === "pre" ? "visitas" : k === "pos" ? "feitaspos" : "feitasconf")} />
+      {listaUI(["visitas", "feitaspos", "feitasconf"])}
       <div className="mv-tiles">
-        <Tile k="avisitar" n={AT.aVisitar.length} l="Para visitar" cor="var(--primary)" on={() => alternar("avisitar")} /><Tile k="atrasadas" n={AT.atrasadas.length} l="Visitas atrasadas" cor={AT.atrasadas.length ? "var(--danger)" : undefined} on={() => alternar("atrasadas")} />
-        <Tile k="visitas" n={AT.visitadas.length} l="Visitas realizadas" cor="var(--st-respondida)" on={() => alternar("visitas")} /><Tile k="faltaloja" n={AT.faltaLoja.length} l="Visitados sem loja agendada" cor={AT.faltaLoja.length ? "var(--warn)" : undefined} on={() => alternar("faltaloja")} />
+        <Tile k="atrasadas" n={AT.atrasadas.length} l="Visitas atrasadas" cor={AT.atrasadas.length ? "var(--danger)" : undefined} on={() => alternar("atrasadas")} /><Tile k="faltaloja" n={AT.faltaLoja.length} l="Visitados sem loja agendada" cor={AT.faltaLoja.length ? "var(--warn)" : undefined} on={() => alternar("faltaloja")} />
         <Tile k="naloja" n={AT.naLoja.length} l="Agendados na loja" on={() => alternar("naloja")} /><Tile k="vieram" n={AT.vieram.length} l="Vieram na loja" cor="var(--st-concluida)" on={() => alternar("vieram")} />
       </div>
-      {listaUI(["avisitar", "atrasadas", "visitas", "faltaloja", "naloja", "vieram"])}
+      {listaUI(["atrasadas", "faltaloja", "naloja", "vieram"])}
       <div className="mv-sec">💰 Previsão de pagamento (até a autorização da Gestão)</div>
       <div className="mv-tiles">
         <Tile n={ex.qtdVisitas} l="Visitas que contam para pagamento" /><Tile n={fmtMoeda(ex.pagamentoVisitas)} l="Pagamento por visitas" />

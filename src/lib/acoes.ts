@@ -269,6 +269,9 @@ export const A = {
   prePedidoStatus: (id: string, status: string, venda = "") => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((() => { const x = ((window as any).__ppMock || []).find((y: any) => y.id === id); if (x) { x.status = status; x.numero_venda = venda; } })()) : rpc("pre_pedido_status", { p_id: id, p_status: status, p_venda: venda }),
   prePedidoNegociar: (id: string, enviar: boolean) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((() => { const x = ((window as any).__ppMock || []).find((y: any) => y.id === id); if (x) { x.neg_status = enviar ? "enviado" : ""; x.neg_enviado_em = new Date().toISOString(); } })()) : rpc("pre_pedido_negociar", { p_id: id, p_enviar: enviar }),
   negociacaoLista: () => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(((window as any).__ppMock || []).filter((x: any) => x.neg_status).map((x: any) => ({ ...x, vendedor: "Vendedor" }))) : rpc<any[]>("negociacao_lista", {}),
+  // o gerente tira da negociação o que não serve (duplicado, teste, cliente que desistiu): sai do quadro dele e limpa a proposta;
+  // o pré-pedido continua com o vendedor, que pode enviar de novo
+  negociacaoExcluir: (id: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((() => { const x = ((window as any).__ppMock || []).find((y: any) => y.id === id); if (x) { x.neg_status = ""; x.neg_valor = null; x.neg_desconto = null; x.neg_pagamento = ""; x.neg_obs = ""; } })()) : rpc("negociacao_excluir", { p_id: id }),
   negociacaoSalvar: (id: string, p: any) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((() => { const x = ((window as any).__ppMock || []).find((y: any) => y.id === id); if (x) Object.assign(x, { neg_status: p.status, neg_valor: p.valor, neg_desconto: p.desconto, neg_pagamento: p.pagamento, neg_obs: p.obs }); })()) : rpc("negociacao_salvar", { p_id: id, p }),
   prePedidoExcluir: (id: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve((() => { (window as any).__ppMock = ((window as any).__ppMock || []).filter((y: any) => y.id !== id); })()) : rpc("pre_pedido_excluir", { p_id: id }),
   produtoTotal: () => (import.meta as any).env?.VITE_MOCK ? Promise.resolve({ total: ((window as any).__prodMock || []).length, congelados: 0 }) : rpc<any>("produto_total", {}),
@@ -291,6 +294,8 @@ export const A = {
   vendedorAssumir: (id: string) => rpc("vendedor_assumir", { p_id: id }),
   salvarMeusDados: (nomeCompleto: string, telefone: string) => rpc("salvar_meus_dados", { p_nome_completo: nomeCompleto, p_telefone: telefone }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),
+  // números das mensagens do checklist: quantas saíram, quantos responderam, o que responderam
+  kommoFunil: (de?: string, ate?: string) => rpc<any>("kommo_funil", { p_de: de || null, p_ate: ate || null }),
   /**
    * Manda a mensagem de agendamento pelo número do checklist, via Kommo.
    * Acha ou cria o cliente lá, grava os dados do atendimento no lead e dispara o

@@ -48,6 +48,43 @@ export function tipoMedida(c: any, _st?: any): "pos" | "confirmacao" {
   if (t.length < 8 || !c.medidorId || !_st) return "pos";
   return (_st.chamados || []).some((v: any) => v.tipo === "visita_consultor" && v.consultorId === c.medidorId && tel8(v.telefone) === t && String(v.criadoEm || "") < String(c.criadoEm || "9")) ? "confirmacao" : "pos";
 }
+/** Separa uma lista de clientes de campo nos 3 tipos. É a MESMA conta no painel, na aba Clientes e no Hoje:
+ *  o número de "visita de venda" e de "pós-venda" nunca pode divergir de tela para tela.
+ *  pre = visitas de venda (chamados do consultor) · pos/confirmacao = medidas (o cliente já comprou). */
+export function porTipo(st: any, pre: any[], medidas: any[]) {
+  const pos = medidas.filter((c: any) => tipoMedida(c, st) === "pos");
+  const confirmacao = medidas.filter((c: any) => tipoMedida(c, st) === "confirmacao");
+  return { pre, pos, confirmacao, medidas, total: pre.length + medidas.length };
+}
+export type PorTipo = ReturnType<typeof porTipo>;
+
+/** O quadro que separa pré-venda de pós-venda.
+ *  Antes "visitas" era um número só, e quem está em campo não sabia o que era venda e o que era medida. */
+export function QuadroTipos({ t, titulo, nota, sel, on, semPre }: {
+  t: PorTipo; titulo: string; nota?: string; sel?: string; on?: (k: TipoCliente) => void; semPre?: boolean;
+}) {
+  const quais: TipoCliente[] = semPre ? ["pos", "confirmacao"] : ["pre", "pos", "confirmacao"];
+  const n = (k: TipoCliente) => (k === "pre" ? t.pre : k === "pos" ? t.pos : t.confirmacao).length;
+  const total = semPre ? t.medidas.length : t.total;
+  return <div style={{ border: "1.5px solid var(--line)", borderRadius: 12, padding: "8px 10px 10px", margin: "6px 0 10px", background: "var(--surface)" }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <b style={{ fontSize: 13.5 }}>{titulo}</b>
+      <b style={{ marginLeft: "auto", fontSize: 22, lineHeight: 1 }}>{total}</b>
+    </div>
+    {nota && <div style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 1 }}>{nota}</div>}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(" + quais.length + ",1fr)", gap: 6, marginTop: 7 }}>
+      {quais.map(k => { const x = TIPO_CLIENTE[k], v = n(k), ativo = sel === k;
+        return <button key={k} type="button" disabled={!on} onClick={on ? () => on(k) : undefined}
+          style={{ minWidth: 0, border: (ativo ? "2.5px solid " : "1.5px solid ") + x.cor, background: ativo ? x.cor : x.bg, color: ativo ? "#fff" : x.cor,
+            borderRadius: 10, padding: "7px 4px", font: "inherit", textAlign: "center", cursor: on ? "pointer" : "default" }}>
+          <b style={{ fontSize: 21, display: "block", lineHeight: 1.1 }}>{v}</b>
+          <span style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: ".02em", display: "block" }}>{x.ic} {k === "pre" ? "VENDA" : k === "pos" ? "PÓS-VENDA" : "CONFIRMAÇÃO"}</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, display: "block", opacity: .8 }}>{k === "pre" ? "pré-venda" : k === "pos" ? "já comprou" : "voltou p/ você"}</span>
+        </button>; })}
+    </div>
+  </div>;
+}
+
 export function SeloTipo({ tipo, grande }: { tipo: TipoCliente; grande?: boolean }) {
   const x = TIPO_CLIENTE[tipo];
   return grande ? <div style={{ background: x.bg, border: "2px solid " + x.cor, borderRadius: 12, padding: "10px 12px", margin: "6px 0 10px" }}>
@@ -99,7 +136,7 @@ export function CartaoMedida({ c, abrir }: any) {
 
 // Hoje do medidor
 export function MedHoje({ abrir, ir }: any) {
-  const { R } = useApp() as any;
+  const { R, st } = useApp() as any;
   const d = medDados(R);
   const prox = d.atrasadas[0] || d.hoje[0] || d.aFazer[0];
   return <>
@@ -108,8 +145,10 @@ export function MedHoje({ abrir, ir }: any) {
       <button className="mv-num" onClick={() => ir("medidas")} style={d.atrasadas.length ? { color: "var(--danger)" } : undefined}><b>{d.atrasadas.length}</b><span>Atrasadas</span></button>
       <button className="mv-num" onClick={() => ir("medidas")}><b>{d.aFazer.length}</b><span>A fazer</span></button>
     </div>
+    <QuadroTipos t={porTipo(st, [], d.aFazer)} semPre titulo="🧭 Medidas a fazer" nota="toda medida é visita de pós-venda · 🔵 é medida que voltou para completar"
+      on={() => ir("medidas")} />
     {prox ? <div className="mv-hero" onClick={() => abrir(prox.id)}>
-      <div className="mv-hero-l">{d.atrasadas.includes(prox) ? "Medida atrasada" : "Próxima medida"}</div>
+      <div className="mv-hero-l">{d.atrasadas.includes(prox) ? "Medida atrasada" : "Próxima medida"} · {TIPO_CLIENTE[tipoMedida(prox, st)].ic} {TIPO_CLIENTE[tipoMedida(prox, st)].t.toLowerCase()}</div>
       <div className="mv-hero-q">{diaCurto(prox.dataMedida)} {hora(prox.dataMedida)}</div>
       <div className="mv-hero-n">{prox.cliente}</div>
       <div className="mv-hero-s">{prox.endereco || "sem endereço"}</div>
@@ -122,22 +161,29 @@ export function MedHoje({ abrir, ir }: any) {
 const semAcento = (x: any) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 const soDig = (x: any) => String(x || "").replace(/\D/g, "");
 export function MedLista({ abrir }: any) {
-  const { R } = useApp() as any;
+  const { R, st } = useApp() as any;
   const d = medDados(R);
   const [f, setF] = useState<"fazer" | "feitas" | "todas">("fazer");
+  const [tp, setTp] = useState<"" | "pos" | "confirmacao">("");
   const [q, setQ] = useState("");
   // busca em TODAS as medidas, em qualquer etapa: nome, CPF, nº da venda, telefone ou nº do chamado
   const txt = semAcento(q.trim()), dig = soDig(q);
   const achados = !q.trim() ? null : d.todas.filter((c: any) =>
     (txt.length >= 2 && semAcento(c.cliente + " " + (c.id || "")).includes(txt))
     || (dig.length >= 3 && (String(c.pedido || "").includes(dig) || soDig(c.telefone).includes(dig) || soDig(c.clienteDoc).includes(dig))));
-  const lista = achados || (f === "fazer" ? d.aFazer : f === "feitas" ? d.feitas : d.todas);
+  const base = f === "fazer" ? d.aFazer : f === "feitas" ? d.feitas : d.todas;
+  const T = porTipo(st, [], base);
+  const lista = achados || (tp ? (tp === "pos" ? T.pos : T.confirmacao) : base);
   return <>
     <input className="mv-busca" type="search" value={q} onChange={e => setQ(e.target.value)}
       placeholder="🔎 Buscar cliente: nome, CPF, venda ou telefone" />
     {achados ? <div className="mv-dica" style={{ margin: "2px 0 8px" }}>{achados.length} cliente(s) · busca em todas as etapas</div>
-      : <div className="mv-seg">{([["fazer", "A fazer", d.aFazer.length], ["feitas", "Feitas", d.feitas.length], ["todas", "Todas", d.todas.length]] as any[]).map(([k, l, n]) =>
-        <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>}
+      : <>
+        <div className="mv-seg">{([["fazer", "A fazer", d.aFazer.length], ["feitas", "Feitas", d.feitas.length], ["todas", "Todas", d.todas.length]] as any[]).map(([k, l, n]) =>
+          <button key={k} className={f === k ? "on" : ""} onClick={() => setF(k)}>{l}<i>{n}</i></button>)}</div>
+        <QuadroTipos t={T} semPre titulo={"🧭 " + (f === "fazer" ? "A fazer" : f === "feitas" ? "Feitas" : "Todas") + " · por tipo"} nota="toque para ver só um tipo"
+          sel={tp} on={k => setTp(x => x === k ? "" : k as any)} />
+      </>}
     {lista.length ? lista.map((c: any) => <CartaoMedida key={c.id} c={c} abrir={abrir} />) : <div className="mv-vazio">{q.trim() ? "Nenhum cliente encontrado." : "Nada aqui."}</div>}
   </>;
 }

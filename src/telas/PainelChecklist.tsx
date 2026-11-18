@@ -4,6 +4,7 @@ import { useApp } from "../estado";
 import { fmtDate, hojeISO, isoLocal } from "../lib/regras";
 import { BarRow, Kpi } from "./Dashboard";
 import { CONF_CK, ck, grupoCk } from "./Checklist";
+import FunilKommo from "../comp/FunilKommo";
 
 // classifica o que foi feito no histórico do checklist (texto gravado pelo banco)
 const ATV: [string, string, RegExp][] = [
@@ -66,7 +67,9 @@ export default function PainelChecklist() {
       </div>
       <div className="sec-label">Atividades feitas no dia</div>
       <div className="kpis">{ATV.map(([k, l]) => <Kpi key={k} n={cont(k)} l={l} />)}</div>
-      <div className="sec-label">Clientes pendentes (agora)</div>
+      <div className="sec-label">📨 Mensagens do WhatsApp do checklist · últimos 30 dias</div>
+      <FunilKommo compacto />
+      <div className="sec-label" style={{ marginTop: 14 }}>Clientes pendentes (agora)</div>
       <div className="kpis">
         <Kpi n={aAgendar.length} l="A agendar" cls={aAgendar.length ? "urg" : ""} />
         <Kpi n={semContato.length} l="A agendar sem nenhum contato" cls={semContato.length ? "alert" : ""} />
@@ -118,6 +121,19 @@ export function ProdutividadeChecklist() {
             <tr key={p}><td><b>{p}</b></td>{ATV.map(([k]) => <td key={k}>{v[k] || 0}</td>)}<td><b>{tot(v)}</b></td></tr>)}
         </tbody></table></div> : <div className="hint">Nenhuma atividade registrada no período.</div>}
       </div>
+    </section>
+  );
+}
+
+/** 📨 Mensagens e respostas: a efetividade do WhatsApp do checklist, com os clientes de cada desfecho.
+ *  A pergunta que isso responde é a que ficava sem resposta: a mensagem saiu, e aí? */
+export function MensagensChecklist() {
+  return (
+    <section className="view active">
+      <div className="view-head"><div><h2>📨 Mensagens e respostas do checklist</h2>
+        <p>O que acontece depois que a mensagem sai pelo WhatsApp do checklist: quem respondeu, quem confirmou o horário, quem pediu outra data, quem está em obra, quem escreveu outra coisa e quem não respondeu. Toque em qualquer linha para ver os clientes.</p></div>
+        <span className="live"><i></i>ao vivo</span></div>
+      <FunilKommo />
     </section>
   );
 }
