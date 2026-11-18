@@ -23,6 +23,17 @@ function Foto({ c, x, abrir, inteira, onSrc }: { c: any; x: any; abrir: () => vo
     {src && inteira && <span style={{ position: "absolute", right: 6, bottom: 6, background: "rgba(20,24,32,.72)", color: "#fff", fontSize: 11.5, fontWeight: 700, borderRadius: 6, padding: "3px 7px" }}>🔍 toque para ampliar</span>}
   </button>;
 }
+/** O desenho do ambiente costuma vir em PDF (paisagem). Abre em aba nova, por link de verdade:
+ *  carregar o arquivo antes e só então usar window.open faria o celular bloquear como pop-up. */
+function Projeto({ c, x }: { c: any; x: any }) {
+  const [url, setUrl] = useState(""); const [erro, setErro] = useState(false);
+  useEffect(() => { let vivo = true; urlDe(c, x).then(u => vivo && setUrl(u)).catch(() => vivo && setErro(true)); return () => { vivo = false; }; }, [x.id, x.url]);
+  const base: any = { display: "flex", alignItems: "center", gap: 10, border: "1.5px solid rgba(128,140,160,.4)", borderRadius: 10, padding: "12px 14px", margin: "6px 0", background: "var(--surface,#fff)", color: "inherit", textDecoration: "none", font: "inherit", textAlign: "left", width: "100%" };
+  const miolo = <><span style={{ fontSize: 26 }}>📐</span>
+    <span style={{ flex: 1, minWidth: 0 }}><b style={{ display: "block", fontSize: 14 }}>{x.nome}</b>
+      <small style={{ opacity: .75 }}>{erro ? "não consegui abrir" : url ? "toque para abrir o desenho" : "carregando…"}</small></span></>;
+  return url ? <a href={url} target="_blank" rel="noopener" style={base}>{miolo}</a> : <div style={{ ...base, opacity: .75 }}>{miolo}</div>;
+}
 const grade: any = { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 8, margin: "6px 0" };
 const titulo: any = { fontWeight: 900, fontSize: 14.5, margin: "4px 0" };
 type Item = { key: string; x: any; nome?: string };
@@ -32,13 +43,18 @@ export function ImagensVenda({ c }: { c: any }) {
   const [l, setL] = useState<any[] | null>(null); const [erro, setErro] = useState("");
   const [ver, setVer] = useState<number | null>(null); const [urls, setUrls] = useState<Record<string, string>>({});
   useEffect(() => { A.medidaImagens(c.id).then(r => setL(r.imagens || [])).catch(e => { setErro(e.message); setL([]); }); }, [c.id]);
-  const itens: Item[] = (l || []).map((x: any, i: number) => ({ key: x.fonte + x.id + i, x, nome: x.nome }));
+  const todos: Item[] = (l || []).map((x: any, i: number) => ({ key: x.fonte + x.id + i, x, nome: x.nome }));
+  // o desenho em PDF vem primeiro: é o que mostra o ambiente comprado
+  const pdfs = todos.filter(f => f.x.pdf), itens = todos.filter(f => !f.x.pdf);
   return <div style={{ border: "1.5px solid rgba(128,140,160,.35)", borderRadius: 12, padding: "10px 12px", margin: "8px 0 12px" }}>
-    <div style={titulo}>🖼 Imagem da venda <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· projeto que o cliente comprou</span></div>
+    <div style={titulo}>🖼 Projeto da venda <span style={{ fontWeight: 600, fontSize: 12, opacity: .75 }}>· o ambiente que o cliente comprou</span></div>
     {l === null ? <div style={{ fontSize: 13, opacity: .7 }}>Buscando no Exact…</div>
-      : itens.length ? <div style={itens.length === 1 ? { margin: "6px 0" } : grade}>{itens.map((f, i) =>
-        <Foto key={f.key} c={c} x={f.x} inteira abrir={() => setVer(i)} onSrc={u => setUrls(p => p[f.key] === u ? p : { ...p, [f.key]: u })} />)}</div>
-      : <div style={{ fontSize: 13, opacity: .75 }}>{erro || "Nenhuma imagem anexada na venda."}</div>}
+      : todos.length ? <>
+        {pdfs.map(f => <Projeto key={f.key} c={c} x={f.x} />)}
+        {itens.length > 0 && <div style={itens.length === 1 ? { margin: "6px 0" } : grade}>{itens.map((f, i) =>
+          <Foto key={f.key} c={c} x={f.x} inteira abrir={() => setVer(i)} onSrc={u => setUrls(p => p[f.key] === u ? p : { ...p, [f.key]: u })} />)}</div>}
+      </>
+      : <div style={{ fontSize: 13, opacity: .75 }}>{erro || "A venda não tem o desenho do ambiente anexado no Exact."}</div>}
     {ver !== null && <FotoViewer fotos={itens.map(f => ({ url: urls[f.key] || f.x.url || "", nome: f.nome }))} inicio={ver} onFechar={() => setVer(null)} />}
   </div>;
 }

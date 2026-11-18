@@ -121,6 +121,7 @@ Deno.serve(async (req: Request) => {
         tipo: String(x?.referenceType || ""), mime: String(x?.mimeType || x?.contentType || ""),
         temUrl: /^https?:\/\//.test(String(x?.url || x?.location || x?.publicUrl || x?.link || "")),
         chaves: Object.keys(x || {}).slice(0, 14),
+        cru: x,
       });
       const out: any = { venda: ped, ticket: tk?.ticket_id ?? null };
       try { out.daVenda = lista(await exact(token, `/attachments-legacy/${ped}`)).map(resumo); }

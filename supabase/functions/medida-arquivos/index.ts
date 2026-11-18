@@ -1,4 +1,9 @@
-// Medidas · imagens do projeto da venda para quem vai medir (só imagens — sem orçamento, valores ou outros documentos)
+// Medidas · o projeto da venda para quem vai medir.
+// REGRA DO ORÇAMENTO: o Exact manda o desenho do ambiente e o orçamento como PDF na mesma venda.
+// O desenho vem em paisagem (landscape) e o orçamento em retrato (portrait) — é assim que o próprio
+// Exact marca, no campo pdfOrientation. Só sai daqui imagem ou PDF em paisagem. PDF em retrato NUNCA,
+// porque é o orçamento, com os valores que quem mede não deve ver. A trava vale tanto na listagem
+// quanto no download: pedir o id de um portrait direto na rota "baixar" também é recusado.
 // · imagens {id}          → lista as imagens da venda (Exact /attachments-legacy/:venda + anexos de projeto do ticket do checklist)
 // · baixar {id, anexo}    → conteúdo de uma imagem da venda (Exact /attachment/download-legacy/:id), só se for imagem daquela venda
 // · anteriores {id}       → fotos da medição no Exact (cartão de medição) e fotos da visita do consultor antes da venda (360)
@@ -11,11 +16,14 @@ const json = (d: unknown, s = 200) => new Response(JSON.stringify(d), { status: 
 const lista = (d: any): any[] => Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : Array.isArray(d?.items) ? d.items : Array.isArray(d?.attachments) ? d.attachments : [];
 const ext = (n: string) => (String(n || "").toLowerCase().match(/\.([a-z0-9]{2,6})(?:\?|$)/) || [])[1] || "";
 const ehImagem = (nome: string, mime?: string) => /^image\//.test(String(mime || "").toLowerCase()) || ["jpg", "jpeg", "png", "webp", "gif", "bmp"].includes(ext(nome));
-const mimeDe = (nome: string) => { const e = ext(nome); return e === "png" ? "image/png" : e === "webp" ? "image/webp" : e === "gif" ? "image/gif" : "image/jpeg"; };
+const mimeDe = (nome: string) => { const e = ext(nome); return e === "pdf" ? "application/pdf" : e === "png" ? "image/png" : e === "webp" ? "image/webp" : e === "gif" ? "image/gif" : "image/jpeg"; };
+/** o que quem mede pode ver: imagem, ou PDF em paisagem (o desenho). Retrato é orçamento. */
+const ehProjeto = (a: any) => a.img || (a.pdf && a.orient === "landscape");
 function norm(a: any, fonte: string) {
   const nome = String(a.originalFileName || a.originalName || a.fileName || a.filename || a.name || ("arquivo " + (a.id ?? ""))).split("/").pop() || "arquivo";
   const url = a.url || a.location || a.publicUrl || a.link || "";
   return { fonte, id: String(a.id ?? ""), nome, img: ehImagem(nome, a.mimeType || a.contentType), categoria: String(a.referenceType || "").toUpperCase(),
+    pdf: ext(nome) === "pdf", orient: String(a.pdfOrientation || "").toLowerCase(),
     em: a.createdAt || null, url: /^https?:\/\//.test(url) ? url : "" };
 }
 async function exact(token: string, rota: string) {
@@ -68,14 +76,14 @@ Deno.serve(async (req: Request) => {
 
     if (b.acao === "imagens") {
       const imgs: any[] = []; const avisos: string[] = [];
-      try { (await legacy()).filter(a => a.img).forEach(a => imgs.push({ fonte: "legacy", id: a.id, nome: a.nome, em: a.em, url: "" })); }
+      try { (await legacy()).filter(ehProjeto).forEach(a => imgs.push({ fonte: "legacy", id: a.id, nome: a.nome, em: a.em, url: "", pdf: a.pdf })); }
       catch (x: any) { avisos.push("Arquivos da venda (Exact): " + String(x.message || x).slice(0, 120)); }
       if (ctx.ticketId) {
         try {
           const t = await exact(token, `/ticket/checklist/${ctx.ticketId}`);
           lista(t?.attachments).map((a: any) => norm(a, "ticket"))
-            .filter((a: any) => a.img && a.url && ["FINAL_PROJECT", "INITIAL_PROJECT", "PROJECT"].includes(a.categoria))
-            .forEach((a: any) => imgs.push({ fonte: "ticket", id: a.id, nome: a.nome, em: a.em, url: a.url }));
+            .filter((a: any) => ehProjeto(a) && a.url && ["FINAL_PROJECT", "INITIAL_PROJECT", "PROJECT"].includes(a.categoria))
+            .forEach((a: any) => imgs.push({ fonte: "ticket", id: a.id, nome: a.nome, em: a.em, url: a.url, pdf: a.pdf }));
         } catch { /* segue só com os arquivos da venda */ }
       }
       return json({ ok: true, imagens: imgs, avisos });
@@ -84,7 +92,8 @@ Deno.serve(async (req: Request) => {
     if (b.acao === "baixar") {
       const id = String(b.anexo || "");
       const a = (await legacy()).find(x => x.id === id);
-      if (!a || !a.img) return json({ erro: "Imagem não é desta venda" }, 403);
+      // trava do orçamento também aqui: nem a tela nem ninguém baixa um PDF em retrato
+      if (!a || !ehProjeto(a)) return json({ erro: "Este arquivo não está liberado para a medida" }, 403);
       const r = await fetch(API + `/attachment/download-legacy/${id}`, { headers: { Authorization: "Bearer " + token } });
       if (!r.ok) return json({ erro: "Exact: " + r.status }, 502);
       const ct = r.headers.get("content-type") || "";
