@@ -1365,6 +1365,18 @@ function AbrirAssinado({ id, path, toast }: { id: string; path: string; toast: (
   }}>{indo ? "abrindo…" : "📄 abrir"}</button>;
 }
 
+/** baixa o contrato assinado como arquivo (o servidor manda como anexo) — para guardar ou mandar para o cliente */
+function BaixarAssinado({ id, path, toast }: { id: string; path: string; toast: (m: string) => void }) {
+  const [indo, setIndo] = useState(false);
+  return <button className="btn ghost sm" disabled={indo} title="Baixar o contrato assinado" onClick={async e => {
+    e.stopPropagation(); setIndo(true);
+    try { const r = await A.ckContratoAbrir(id, path); const u = r.urlBaixar || r.url;
+      const a = document.createElement("a"); a.href = u; a.rel = "noopener"; a.download = ""; document.body.appendChild(a); a.click(); a.remove(); }
+    catch (x: any) { toast(x.message || "Não consegui baixar"); }
+    finally { setIndo(false); }
+  }}>{indo ? "baixando…" : "📥"}</button>;
+}
+
 function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: any) {
   const ass: any[] = t0.assinados || [];
   return <div>
@@ -1373,7 +1385,7 @@ function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: 
     {!ass.length && <div className="alert">{liberado ? "Aguardando o cliente assinar pelo QR Code (etapa 3)." : "Gere o contrato na etapa 3."}</div>}
     {ass.length > 0 && <div style={{ marginBottom: 12 }}>{ass.map((a, i) => <div key={i} className="pjrow on"><b>{a.online ? "✍️" : "📎"} {a.nome}</b><span className="hint">{fmtDateTime(a.em)}{a.por ? " · " + a.por : ""}</span>
       <span className={"pjpill " + (a.exact ? "p-ok" : "p-w")} style={{ margin: 0 }}>{a.exact ? "Exact ✓" : "só no 360"}</span>
-      {a.path && <AbrirAssinado id={c.id} path={a.path} toast={toast} />}</div>)}</div>}
+      {a.path && <AbrirAssinado id={c.id} path={a.path} toast={toast} />}{a.path && <BaixarAssinado id={c.id} path={a.path} toast={toast} />}</div>)}</div>}
     <div className="sec" style={{ marginTop: 6 }}>Assinou no papel? <span className="src p-g">alternativa</span></div>
     <Soltar aceita="application/pdf,image/*" multiplo ocupado={ocupado === "assinado"} estilo={{ padding: 14 }}
       texto={<>⬆ Suba o PDF escaneado com as assinaturas do cliente<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>ou foto pelo celular · pode subir mais de um arquivo</span></>}

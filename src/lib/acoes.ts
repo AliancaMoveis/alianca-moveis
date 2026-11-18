@@ -367,7 +367,7 @@ export const A = {
     const r = await chamarFuncao("ck-contrato-copia", JSON.stringify({ id, path }), "application/json");
     const j = await r.json().catch(() => ({}));
     if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível abrir o contrato assinado");
-    return j as { url: string };
+    return j as { url: string; urlBaixar?: string };
   },
   /** contrato do checklist com assinatura online (função "contrato"): criar · status · cancelar */
   ckContrato: async (acao: "criar" | "status" | "cancelar", id: string, extra: any = {}) => {

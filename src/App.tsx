@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { sb } from "./lib/supabase";
-import { carregarEstado, type Estado } from "./lib/dados";
+import { carregarEstado, esquecerCarga, type Estado } from "./lib/dados";
 import { AppProvider } from "./estado";
 import Login, { NovaSenha } from "./telas/Login";
 import Raiz from "./movel/Raiz";
@@ -33,6 +33,7 @@ function AppLogado() {
     sb.auth.getSession().then(({ data }) => setSessao(data.session));
     const { data: sub } = sb.auth.onAuthStateChange((ev, s) => {
       if (ev === "PASSWORD_RECOVERY") setRecuperando(true);
+      esquecerCarga();   // nunca aproveitar a carga de outra sessão/pessoa
       setSessao(s);
     });
     return () => sub.subscription.unsubscribe();
@@ -44,7 +45,7 @@ function AppLogado() {
     const uid = sessao.user.id;
     let vivo = true;
     setErro("");
-    carregarEstado()
+    carregarEstado(true)
       .then(e => { if (!vivo) return; setCarga({ uid, e }); })
       .catch(e => vivo && setErro(e?.message || "Erro ao carregar"));
     return () => { vivo = false; };

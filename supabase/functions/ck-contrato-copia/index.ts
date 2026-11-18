@@ -4,11 +4,22 @@
 //                   Serve tanto para o link da conferência quanto para o 2º link, o do titular da compra.
 //  · {id, path}   → o PROJETISTA logado abre qualquer contrato assinado da ficha (os antigos também)
 // O path só é liberado se estiver registrado em termo.assinados daquele checklist — ninguém abre arquivo de outro.
+//
+// Cada porta devolve DOIS endereços do mesmo arquivo: `url` (abre na tela) e `urlBaixar`
+// (vem marcado como anexo, então o celular SALVA em vez de só mostrar numa aba nova).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (d: unknown, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { ...CORS, "Content-Type": "application/json" } });
 const DIAS = 30 * 86400;
+
+/** nome do arquivo que o cliente vê no celular (sem caracteres que o sistema de arquivos recusa) */
+const nomeArquivo = (cliente?: string, venda?: string) =>
+  ("Contrato " + String(cliente || "").trim() + (venda ? " - venda " + venda : "")).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 90) + ".html";
+
+/** Mesma URL, mas servida como ANEXO: o navegador BAIXA em vez de abrir.
+ *  Sem isso o celular só mostra o contrato numa aba nova e o cliente não tem como salvar. */
+const comAnexo = (url: string, nome: string) => url + (url.includes("?") ? "&" : "?") + "download=" + encodeURIComponent(nome);
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -26,7 +37,8 @@ Deno.serve(async (req: Request) => {
       if (!k || !k.assinado_html_path) return json({ erro: "Contrato ainda não assinado" }, 404);
       const su = await adm.storage.from("checklist").createSignedUrl(k.assinado_html_path, DIAS);
       if (!su.data?.signedUrl) return json({ erro: "Contrato não encontrado" }, 404);
-      return json({ ok: true, url: su.data.signedUrl, nome: k.nome_assinante, em: k.assinado_em, cliente: k.cliente, venda: k.venda });
+      return json({ ok: true, url: su.data.signedUrl, urlBaixar: comAnexo(su.data.signedUrl, nomeArquivo(k.cliente, k.venda)),
+        nome: k.nome_assinante, em: k.assinado_em, cliente: k.cliente, venda: k.venda });
     }
 
     // ---------- projetista logado: qualquer assinado da ficha ----------
@@ -43,7 +55,7 @@ Deno.serve(async (req: Request) => {
     if (!assinados.some(a => String(a?.path || "") === path)) return json({ erro: "Este arquivo não é deste checklist" }, 403);
     const su = await adm.storage.from("checklist").createSignedUrl(path, 3600);
     if (!su.data?.signedUrl) return json({ erro: "Arquivo não encontrado" }, 404);
-    return json({ ok: true, url: su.data.signedUrl });
+    return json({ ok: true, url: su.data.signedUrl, urlBaixar: comAnexo(su.data.signedUrl, (path.split("/").pop() || "contrato.html")) });
   } catch (e: any) {
     return json({ erro: String(e?.message || e) }, 500);
   }

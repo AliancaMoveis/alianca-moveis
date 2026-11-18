@@ -6,7 +6,8 @@ import { sb } from "./lib/supabase";
 type Ctx = {
   st: Estado;
   R: Regras;
-  recarregar: () => Promise<void>;
+  /** completo = busca tudo de novo (ação da pessoa); sem ele, só o que mudou (atualização de fundo) */
+  recarregar: (completo?: boolean) => Promise<void>;
   toast: (m: string) => void;
   executar: (fn: () => Promise<any>, ok?: string) => Promise<boolean>;
   view: string;
@@ -42,17 +43,20 @@ export function AppProvider({ uid, inicial, children, overlays }: { uid: string;
   const toast = useCallback((m: string) => { setMsg(m); setToastOn(true); clearTimeout(tRef.current); tRef.current = setTimeout(() => setToastOn(false), 2200); }, []);
   // se já está carregando, não descarta o pedido: carrega de novo assim que terminar (senão a tela fica com dados antigos depois de uma ação)
   const carregando = useRef<Promise<void> | null>(null); const denovo = useRef(false);
-  const recarregar = useCallback(async (): Promise<void> => {
+  const tudo = useRef(false);
+  const recarregar = useCallback(async (completo = false): Promise<void> => {
+    if (completo) tudo.current = true;
     if (carregando.current) { denovo.current = true; return carregando.current; }
     const run = (async () => {
-      do { denovo.current = false; try { setSt(await carregarEstado()); } catch (e: any) { console.error(e); } } while (denovo.current);
+      do { denovo.current = false; const c = tudo.current; tudo.current = false;
+        try { setSt(await carregarEstado(c)); } catch (e: any) { console.error(e); } } while (denovo.current);
     })();
     carregando.current = run;
     try { await run; } finally { carregando.current = null; }
   }, []);
   const executar = useCallback(async (fn: () => Promise<any>, ok?: string) => {
-    try { await fn(); await recarregar(); if (ok) toast(ok); return true; }
-    catch (e: any) { toast(e?.message || "Não foi possível concluir"); await recarregar(); return false; }
+    try { await fn(); await recarregar(true); if (ok) toast(ok); return true; }
+    catch (e: any) { toast(e?.message || "Não foi possível concluir"); await recarregar(true); return false; }
   }, [recarregar, toast]);
 
   // tempo real: toda ação grava no histórico; ao chegar um evento, atualiza — mas no máximo 1 vez a cada 45 s por tela

@@ -8,9 +8,24 @@ import TermoMaterial from "../comp/TermoMaterial";
 
 /** via do cliente: baixa/abre o contrato que ele acabou de assinar (e continua valendo se reabrir o link) */
 function BaixarContrato({ token }: { token: string }) {
-  const [indo, setIndo] = useState(false); const [erro, setErro] = useState("");
+  const [indo, setIndo] = useState(""); const [erro, setErro] = useState("");
+
+  // Baixar de verdade: quem manda é o SERVIDOR, que entrega o arquivo marcado como anexo
+  // (Content-Disposition). Aí o celular salva nos Downloads / Arquivos em vez de só mostrar
+  // numa aba. O atributo download sozinho não resolve — o iPhone ignora em endereço de fora.
+  // Como o arquivo vem como anexo, o clique baixa sem tirar o cliente desta tela.
+  const baixar = async () => {
+    setIndo("b"); setErro("");
+    try {
+      const r = await contratoCopia({ token });
+      const a = document.createElement("a"); a.href = r.urlBaixar || r.url; a.rel = "noopener"; a.download = "";
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e: any) { setErro(e.message || "Não consegui baixar agora"); }
+    finally { setIndo(""); }
+  };
+
   const abrir = async () => {
-    setIndo(true); setErro("");
+    setIndo("a"); setErro("");
     const w = window.open("", "_blank");
     try {
       const r = await contratoCopia({ token });
@@ -18,14 +33,23 @@ function BaixarContrato({ token }: { token: string }) {
       if (w) { w.document.open(); w.document.write(h); w.document.close(); }
       else { const b = new Blob([h], { type: "text/html" }); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = "Contrato_assinado.html"; a.click(); setTimeout(() => URL.revokeObjectURL(u), 5000); }
     } catch (e: any) { if (w) w.close(); setErro(e.message || "Não consegui abrir agora"); }
-    finally { setIndo(false); }
+    finally { setIndo(""); }
   };
+
+  const bt = (p: boolean): React.CSSProperties => ({ padding: "13px 20px", fontSize: 16, fontWeight: 800, borderRadius: 12, border: p ? 0 : "2px solid " + COR.pri,
+    color: p ? "#fff" : COR.pri, background: p ? COR.pri : "#fff" });
   return <div style={{ marginTop: 14 }}>
-    <button type="button" onClick={abrir} disabled={indo}
-      style={{ padding: "13px 20px", fontSize: 16, fontWeight: 800, color: "#fff", background: indo ? "#9aa3b0" : "#284b8f", border: 0, borderRadius: 12 }}>
-      {indo ? "Abrindo…" : "📄 Ver / baixar a minha via"}</button>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <button type="button" onClick={baixar} disabled={!!indo} style={{ ...bt(true), background: indo ? "#9aa3b0" : COR.pri }}>
+        {indo === "b" ? "Baixando…" : "📥 Baixar a minha via"}</button>
+      <button type="button" onClick={abrir} disabled={!!indo} style={bt(false)}>
+        {indo === "a" ? "Abrindo…" : "📄 Ver na tela"}</button>
+    </div>
     {erro && <div style={{ color: "#9b1c1c", fontSize: 13, marginTop: 8 }}>{erro}</div>}
-    <div style={{ fontSize: 12.5, color: "#5a6270", marginTop: 8 }}>Abre o contrato completo, com a sua assinatura. Dá para salvar ou imprimir pelo navegador.</div>
+    <div style={{ fontSize: 12.5, color: "#5a6270", marginTop: 8 }}>
+      <b>Baixar</b> salva o contrato no seu celular (Downloads, ou Arquivos no iPhone) — depois é só abrir ou enviar por WhatsApp.
+      <b> Ver na tela</b> abre o contrato completo, com a sua assinatura; para guardar em PDF, use <i>Compartilhar → Imprimir → Salvar em PDF</i>.
+    </div>
   </div>;
 }
 

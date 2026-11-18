@@ -120,29 +120,95 @@ export async function urlAnexo(path: string): Promise<string> {
 }
 
 // logo após o login o token pode chegar alguns segundos "no futuro" para o banco (relógios); tenta de novo
-export async function carregarEstado(tentativa = 0): Promise<Estado> {
-  try { return await carregarEstadoUmaVez(); }
+export async function carregarEstado(completo = false, tentativa = 0): Promise<Estado> {
+  try { return await carregarEstadoUmaVez(completo); }
   catch (e: any) {
     if (tentativa < 4 && /issued at future|JWT|fetch/i.test(String(e?.message || e))) {
       await new Promise(r => setTimeout(r, 1500 * (tentativa + 1)));
-      return carregarEstado(tentativa + 1);
+      return carregarEstado(completo, tentativa + 1);
     }
     throw e;
   }
 }
-// carga principal numa chamada só ao banco (a permissão de cada chamado é avaliada uma vez); se a função não existir, cai no modo antigo
-async function principal(): Promise<{ chamados: any[]; historico: any[]; anexos: any[]; vendas: any[]; valores: any[]; itens: any[] }> {
-  const { data, error } = await sb.rpc("carregar_principal");
-  if (!error && data) return data as any;
+
+type Bruto = { chamados: any[]; historico: any[]; anexos: any[]; vendas: any[]; valores: any[]; itens: any[] };
+/** última carga crua guardada aqui, para as próximas trazerem só a diferença */
+let bruto: Bruto | null = null;
+/** relógio DO BANCO da última carga (nunca o do computador, que pode estar adiantado) */
+let ate: string | null = null;
+/** recomeça do zero na próxima carga (troca de usuário, erro) */
+export function esquecerCarga() { bruto = null; ate = null; }
+
+// Mescla a diferença: os clientes que vieram são substituídos por inteiro — eles e tudo o que é deles
+// (histórico, anexos, venda, valores, itens). Assim o que foi apagado some junto, sem precisar de controle
+// de exclusão. `ids` é a lista do que a pessoa pode ver agora: o que saiu dela é descartado.
+function mesclar(a: Bruto, d: any): Bruto {
+  const mud = new Set<string>((d.chamados || []).map((c: any) => String(c.id)));
+  const vis: Set<string> | null = Array.isArray(d.ids) ? new Set(d.ids.map(String)) : null;
+  const fica = (id: any) => !mud.has(String(id)) && (!vis || vis.has(String(id)));
+  const junta = (velho: any[], novo: any[], campo: string, ordem?: (x: any, y: any) => number) => {
+    const out = velho.filter(x => fica(x[campo])).concat(novo || []);
+    return ordem ? out.sort(ordem) : out;
+  };
+  const porData = (k: string) => (x: any, y: any) => String(x[k] || "").localeCompare(String(y[k] || ""));
+  return {
+    chamados: junta(a.chamados, d.chamados, "id", porData("criado_em")),
+    historico: junta(a.historico, d.historico, "chamado_id", (x, y) => Number(x.id) - Number(y.id)),
+    anexos: junta(a.anexos, d.anexos, "chamado_id", porData("criado_em")),
+    vendas: junta(a.vendas, d.vendas, "chamado_id"),
+    valores: junta(a.valores, d.valores, "chamado_id"),
+    itens: junta(a.itens, d.itens, "chamado_id", porData("registrado_em")),
+  };
+}
+
+// Carga principal numa chamada só ao banco (a permissão de cada chamado é avaliada uma vez).
+// Da segunda vez em diante pede só o que mudou desde a anterior: montar o JSON de 7.700 clientes +
+// 35.000 linhas de histórico levava ~4 s e ~24 MB POR ATUALIZAÇÃO, de cada aba aberta — era o que travava
+// o sistema nos horários cheios. Se a função não existir ou falhar, cai no modo antigo (tudo, tabela a tabela).
+async function principal(): Promise<Bruto> {
+  const { data, error } = await sb.rpc("carregar_principal", bruto && ate ? { p_desde: ate } : {});
+  if (!error && data) {
+    let d = data as any;
+    // cliente que passou a ser visível sem ter mudado (mudou a permissão da pessoa, não o cliente):
+    // ele vem na lista de ids e não nos dados. Aí não dá para remendar — busca tudo de novo.
+    if (d.parcial && bruto && Array.isArray(d.ids)) {
+      const tem = new Set(bruto.chamados.map((c: any) => String(c.id)));
+      (d.chamados || []).forEach((c: any) => tem.add(String(c.id)));
+      if (d.ids.some((i: any) => !tem.has(String(i)))) {
+        const r = await sb.rpc("carregar_principal", {});
+        if (!r.error && r.data) d = r.data as any;
+      }
+    }
+    bruto = d.parcial && bruto ? mesclar(bruto, d)
+      : { chamados: d.chamados || [], historico: d.historico || [], anexos: d.anexos || [], vendas: d.vendas || [], valores: d.valores || [], itens: d.itens || [] };
+    if (d.ate) ate = String(d.ate);
+    return bruto;
+  }
   const [chamados, vendas, valores, historico, anexos, itens] = await Promise.all([
     todos("chamados", "*", "criado_em", "id"), todos("vendas", "*", "chamado_id"), todos("vendas_valores", "*", "chamado_id"),
     todos("historico", "chamado_id,quando,quem_nome,texto,id", "id"), todos("anexos", "id,chamado_id,tipo,nome,url,storage_path,criado_em,criado_por", "criado_em", "id"),
     todos("venda_itens", "*", "registrado_em", "id").catch(() => []),
   ]);
-  return { chamados, historico, anexos, vendas, valores, itens };
+  bruto = { chamados, historico, anexos, vendas, valores, itens }; ate = null;
+  return bruto;
 }
-async function carregarEstadoUmaVez(): Promise<Estado> {
-  const [setores, tipos, usuarios, us, reps, fabs, cfg, P, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq, viscic, vtemp, uacess] = await Promise.all([
+
+// Tabelas pequenas que quase nunca mudam (setores, usuários, fábricas, config…): na atualização de fundo
+// são reaproveitadas por até 2 min. Toda ação da própria pessoa pede completo e busca tudo de novo,
+// então ninguém deixa de ver o que acabou de cadastrar.
+let apoio: any[] | null = null; let apoioEm = 0;
+const APOIO_MS = 120000;
+async function carregarEstadoUmaVez(completo = false): Promise<Estado> {
+  const usarCache = !completo && !!apoio && Date.now() - apoioEm < APOIO_MS;
+  const [P, apoioAgora] = await Promise.all([principal(), usarCache ? Promise.resolve(apoio!) : buscarApoio()]);
+  if (!usarCache) { apoio = apoioAgora; apoioEm = Date.now(); }
+  const [setores, tipos, usuarios, us, reps, fabs, cfg, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq, viscic, vtemp, uacess] = apoioAgora as any[];
+  return montar({ P, setores, tipos, usuarios, us, reps, fabs, cfg, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq, viscic, vtemp, uacess });
+}
+
+/** as tabelas de apoio, na ordem em que carregarEstadoUmaVez as desmonta */
+function buscarApoio(): Promise<any[]> {
+  return Promise.all([
     todos("setores", "*", "ordem"),
     todos("tipos", "*", "ordem"),
     todos("usuarios", "id,nome,email,somente_atribuidos,ativo,criado_em,faz_projeto,folga,turno,nome_completo,telefone,ferias_de,ferias_ate,edita_agenda,domingo_ref,na_agenda,freelancer,menus_ocultos,escala_dom", "criado_em"),
@@ -150,7 +216,6 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("representantes", "*", "criado_em"),
     todos("fabricas", "*", "criado_em"),
     sb.from("config").select("*").maybeSingle(),
-    principal(),
     todos("transferencias", "*", "quando"),
     todos("montadores", "*", "nome"),
     todos("posvenda", "*"), // só o setor Pós-venda e a Gestão recebem linhas (RLS)
@@ -164,6 +229,10 @@ async function carregarEstadoUmaVez(): Promise<Estado> {
     todos("vendas_temp", "*", "data", "id").catch(() => []), // vendas lançadas só para a Gestão conferir (RLS: só Gestão) — não geram comissão nem aviso
     todos("usuario_acessos", "usuario_id,acesso").catch(() => []), // acessos extras por pessoa (o próprio e a Gestão)
   ]);
+}
+
+async function montar(d: any): Promise<Estado> {
+  const { P, setores, tipos, usuarios, us, reps, fabs, cfg, transf, montadores, posvenda, reemb, mcruz, bloqs, vdias, mconta, cbloq, viscic, vtemp, uacess } = d;
   const { chamados, vendas, valores, historico: hist, anexos } = P; const proms = P.itens;
   // lançamentos da venda: nºs pagos, promissórias (com saldo) e pagamentos de promissória
   const itensDe: Record<string, any[]> = {};
