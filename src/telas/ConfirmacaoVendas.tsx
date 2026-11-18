@@ -11,7 +11,7 @@ import { tira } from "./Medidas";
 type Item = {
   numero: string; fonte: string; tipo: string; chamado_id: string | null; cands: { id: string; cliente: string; como: string }[]; cliente_ref: string;
   consultor_id: string | null; consultor_nome: string; mv: any; ex_cliente: string; ex_tel1: string; ex_tel2: string; ex_end: string; ex_idpessoa?: string; ex_vendedor: string;
-  vendedor_id: string | null; ex_situacao: string; motivo?: string; ex_total?: number | null; ex_recebido?: number | null; forma?: string; entrada?: number | null; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
+  vendedor_id: string | null; ex_situacao: string; incluido_por?: string; motivo?: string; ex_total?: number | null; ex_recebido?: number | null; forma?: string; entrada?: number | null; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
 };
 type Aba = "pendente" | "validada" | "negada" | "checklist" | "todas";
 const ABAS: [Aba, string][] = [["pendente", "⏳ A conferir"], ["validada", "✅ Validadas"], ["negada", "❌ Negadas"], ["checklist", "📋 Checklist"], ["todas", "Todas"]];
@@ -90,6 +90,11 @@ export default function ConfirmacaoVendas() {
   const grupos = (() => { const m = new Map<string, Item[]>(); lista.forEach(x => { const k = gk(x); m.set(k, [...(m.get(k) || []), x]); });
     return Array.from(m.entries()).map(([k, l]) => ({ k, l, nome: tira(l[0].ex_cliente) })).sort((a, b) => a.nome.localeCompare(b.nome)); })();
   const pend = doTipo.filter(x => x.status === "pendente");
+  // dinheiro do cliente: efetivadas = entrou de fato; reservas com promissória = combinado (inclui o que ainda vai entrar). Falta = reservas − efetivadas (só sugestão)
+  const resumoCli = (k: string) => { const l = doTipo.filter(i => gk(i) === k); const rec = (i: Item) => Number(i.ex_recebido) || 0;
+    const ef = l.filter(i => /^efetiv/i.test(i.ex_situacao)).reduce((s, i) => s + rec(i), 0);
+    const rs = l.filter(i => /reserva|promiss/i.test(i.ex_situacao)).reduce((s, i) => s + rec(i), 0);
+    return { ef, rs, falta: ef > 0 && rs > ef ? rs - ef : rs > 0 && ef === 0 ? rs : 0, tem: rs > 0 && l.length > 0, n: l.length }; };
   const hoje = new Date().toISOString().slice(0, 10);
   const validHoje = doTipo.filter(x => x.status === "validada" && String(x.decidido_em || "").slice(0, 10) === hoje);
 
@@ -182,12 +187,15 @@ export default function ConfirmacaoVendas() {
           <colgroup><col style={{ width: 28 }} /><col style={{ width: "12%" }} /><col style={{ width: "17%" }} /><col style={{ width: "17%" }} /><col style={{ width: "11%" }} /><col style={{ width: "14%" }} /><col style={{ width: 130 }} /><col style={{ width: 130 }} /></colgroup>
           <thead><tr><th style={th}><input type="checkbox" style={{ width: "auto" }} checked={lista.length > 0 && lista.every(x => sel[x.numero])} onChange={e => { const n: Record<string, boolean> = {}; if (e.target.checked) lista.forEach(x => (n[x.numero] = true)); setSel(n); }} /></th><th style={th}>Venda (Exact)</th><th style={th}>Cliente comprador (Exact)</th><th style={th}>Cliente no 360 / Minha Visita</th><th style={th}>Consultor / Responsável</th><th style={th}>Vendedor</th><th style={th}>Valor</th><th style={th}>Decisão</th></tr></thead>
           <tbody>{grupos.map(g => { const c0 = cli360(g.l[0]); const ja = vendas360(c0); const pg = g.l.filter(x => x.status === "pendente");
-            const cab = g.l.length > 1 || ja.length > 0;
+            const rcli = resumoCli(g.k); const cab = g.l.length > 1 || ja.length > 0 || rcli.tem;
             return <Fragment key={g.k}>
             {cab && <tr className="cv-grupo"><td colSpan={8}>
               <input type="checkbox" style={{ width: "auto", marginRight: 8 }} title="Marcar todas as vendas deste cliente" checked={g.l.every(x => sel[x.numero])} onChange={e => setSel(s => { const n = { ...s }; g.l.forEach(x => (n[x.numero] = e.target.checked)); return n; })} />
               👥 <b>{c0 ? c0.cliente : g.l[0].ex_cliente}</b>{c0 && <> <a href="#" className="hint" onClick={ev => { ev.preventDefault(); abrirDetalhe(c0.id); }}>{c0.id} · abrir ficha</a></>}
               <span className="hint"> · {g.l.length} venda{g.l.length > 1 ? "s" : ""} aqui{pg.length ? " · " + pg.length + " a conferir (" + brl(pg.reduce((s, x) => s + Number(x.valor), 0)) + ")" : ""}</span>
+              {(rcli.tem || rcli.n > 1) && <div className="hint" style={{ marginTop: 4 }}>
+                💰 Entrou de fato (efetivadas): <b>{brl(rcli.ef)}</b>{rcli.rs > 0 && <> · Combinado nas reservas: <b>{brl(rcli.rs)}</b> · <span style={{ color: "var(--warn)" }}>Falta receber (sugestão — conferir): <b>{brl(rcli.falta)}</b></span></>}
+                <span> · a soma de vendas conta só o que entrou de fato</span></div>}
               {ja.length > 0 && <div className="cv-ja">📌 Já lançado no 360: {ja.map((i: any) => <span key={i.numero + i.status} className={"cv-jai " + i.status}>{i.numero} · {brl(i.valor)} · {i.status === "registrada" ? "a confirmar" : i.status}</span>)}</div>}
               {pg.length > 1 && <button className="btn primary sm" style={{ marginLeft: 10 }} onClick={async () => { if (!confirm(`Validar as ${pg.length} vendas de ${c0 ? c0.cliente : g.l[0].ex_cliente} (${brl(pg.reduce((s, x) => s + Number(x.valor), 0))})?`)) return; for (const x of pg) await decidir(x, "validar"); }}>✅ Validar as {pg.length} deste cliente</button>}
             </td></tr>}
@@ -199,6 +207,7 @@ export default function ConfirmacaoVendas() {
               <td style={td}><input type="checkbox" style={{ width: "auto" }} checked={!!sel[x.numero]} onChange={() => setSel(s => ({ ...s, [x.numero]: !s[x.numero] }))} /></td>
               <td style={td}><b>{x.numero}</b><div className="hint">{x.data ? fmtDate(x.data) : ""}</div>
                 <div className="hint" style={{ color: /aguard|promiss/i.test(x.ex_situacao) ? "var(--warn)" : undefined }}>{x.ex_situacao}</div>
+                {x.incluido_por ? <div className="hint" title="Quem incluiu a venda no Exact" style={{ color: /^checklist/i.test(x.incluido_por) ? "#6b4fbb" : undefined }}>incluído por {x.incluido_por}</div> : null}
                 {x.motivo ? <div className="hint" style={{ whiteSpace: "normal", maxWidth: 120 }}>{x.motivo}</div> : null}
                 <span className={"cv-tipo " + x.tipo}>{x.tipo === "marketing" ? "🏬 Marketing" : "🧭 Consultor"}</span> <span className="hint">{x.fonte === "minha_visita" ? "Minha Visita" : "360"}</span></td>
               <td style={{ ...td, maxWidth: 210 }}><b>{x.ex_cliente || "—"}</b><div className="hint">{[x.ex_tel1, x.ex_tel2].filter(Boolean).join(" · ")}</div><div className="hint" style={{ maxWidth: 190 }}>{x.ex_end}</div></td>
@@ -253,7 +262,7 @@ export default function ConfirmacaoVendas() {
             </Fragment>; })}
             </Fragment>; })}</tbody>
         </table>
-        {!lista.length && <div className="empty" style={{ padding: 24 }}>{aba === "pendente" ? "Nada para conferir. Anexe o relatório do Exact em Encontrar vendas do 360 ou da Minha Visita — o que for achado aparece aqui." : "Nenhuma venda aqui."}</div>}
+        {!lista.length && <div className="empty" style={{ padding: 24 }}>{aba === "pendente" ? "Nada para conferir. O relatório do Exact é puxado sozinho em Encontrar vendas — o que for achado aparece aqui." : "Nenhuma venda aqui."}</div>}
       </div>}
   </section>;
 }
