@@ -20,7 +20,8 @@ export function DataCalendario({ value, onChange, min, className, horas = HORAS 
 
 function Calendario({ value, min, horas, fechar, escolher }: { value: string; min?: string; horas: string[]; fechar: () => void; escolher: (v: string) => void }) {
   const hoje = iso(new Date());
-  const minDia = (min || hoje).slice(0, 10);
+  // min="" = sem piso: deixa escolher dia passado (medida combinada e só registrada depois)
+  const minDia = min === "" ? "" : (min || hoje).slice(0, 10);
   const ini = value ? new Date(value.slice(0, 10) + "T12:00") : new Date();
   const [mes, setMes] = useState(new Date(ini.getFullYear(), ini.getMonth(), 1));
   const [dia, setDia] = useState(value ? value.slice(0, 10) : "");
@@ -34,7 +35,7 @@ function Calendario({ value, min, horas, fechar, escolher }: { value: string; mi
     <div className="dcal">
       <div className="dcal-h"><button type="button" onClick={() => mudarMes(-1)}>‹</button><b>{MESES[mes.getMonth()]} {mes.getFullYear()}</b><button type="button" onClick={() => mudarMes(1)}>›</button></div>
       <div className="dcal-g">{DS.map(d => <span key={d} className="dcal-ds">{d}</span>)}
-        {cel.map((d, i) => { if (!d) return <span key={i} />; const k = iso(d); const off = k < minDia;
+        {cel.map((d, i) => { if (!d) return <span key={i} />; const k = iso(d); const off = !!minDia && k < minDia;
           return <button type="button" key={i} disabled={off} className={"dcal-d" + (k === dia ? " on" : "") + (k === hoje ? " hoje" : "") + (d.getDay() === 0 || d.getDay() === 6 ? " fds" : "")} onClick={() => setDia(k)}>{d.getDate()}</button>; })}
       </div>
       {dia && <><div className="dcal-sub">Horário em {dia.slice(8, 10)}/{dia.slice(5, 7)}</div>

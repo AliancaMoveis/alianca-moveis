@@ -19,6 +19,8 @@ const icone = (m: string) => (MOTIVOS.find(x => x[0] === m) || ["", "🔒"])[1];
 const perTxt = (b: any) => b.periodo === "manha" ? "manhã" : b.periodo === "tarde" ? "tarde" : b.periodo === "horario" ? b.ini + "–" + b.fim : "dia todo";
 const primeiro = (n: string) => (n || "").replace(/^(Consultora?)\s+—\s+/, "").split(" ")[0];
 const FORA = ["visita_cancelada", "reprovado", "nao_vai_comprar"];
+// mesma cor do selo "MEDIDA PÓS-VENDA" do app de campo, para a pessoa reconhecer de longe
+const COR_MED = "#7c3aed", FUNDO_MED = "rgba(124,58,237,.14)";
 
 export const podeVerAgendaGeral = (R: any) => R.ehGestao() || R.mySetores().some((x: string) => ["marketing_supervisao", "suporte_consultores"].includes(x));
 
@@ -43,6 +45,12 @@ export default function AgendaConsultores({ movel }: { movel?: boolean }) {
   const [agCli, setAgCli] = useState<any>(null);
   const visDia = (d: string) => visitas.filter((c: any) => String(c.dataVisita).slice(0, 10) === d);
   const blqDia = (d: string) => bloqs.filter((b: any) => d >= b.de && d <= b.ate);
+  // Medida pós-venda: o compromisso que quem mede combina com o cliente. Mora no mesmo dia
+  // da agenda que as visitas — quem vai a campo precisa ver os dois juntos para não marcar em cima.
+  const medidas = useMemo(() => st.chamados.filter((c: any) => c.tipo === "medidas" && c.medidorId && c.dataMedida
+    && c.status !== "concluida" && (!alvo || c.medidorId === alvo))
+    .sort((a: any, b: any) => String(a.dataMedida).localeCompare(String(b.dataMedida))), [st.chamados, alvo]);
+  const medDia = (d: string) => medidas.filter((c: any) => String(c.dataMedida).slice(0, 10) === d);
 
   const ini = (mes.getDay() + 6) % 7, nDias = new Date(mes.getFullYear(), mes.getMonth() + 1, 0).getDate();
   const cel: (string | null)[] = [...Array(ini).fill(null), ...Array.from({ length: nDias }, (_, i) => iso(new Date(mes.getFullYear(), mes.getMonth(), i + 1)))];
@@ -68,18 +76,22 @@ export default function AgendaConsultores({ movel }: { movel?: boolean }) {
   const remover = (b: any) => { if (confirm("Reabrir a agenda de " + R.nomeUser(b.usuarioId) + " (" + b.motivo + ", " + fmt(b.de) + (b.ate !== b.de ? " a " + fmt(b.ate) : "") + ")?")) ex(() => A.consBloqueioRemover(b.id), "Agenda reaberta"); };
   const fmt = (d: string) => d.slice(8, 10) + "/" + d.slice(5, 7);
   const dSel = new Date(sel + "T12:00");
-  const listaSel = visDia(sel), blqSel = blqDia(sel), evSel = evDia(sel);
+  const listaSel = visDia(sel), blqSel = blqDia(sel), evSel = evDia(sel), medSel = medDia(sel);
   const podeFechar = (uid: string) => geral || uid === eu;
 
   const painel = <div className={movel ? "ac-lista" : "ac-side"}>
-    <h4>{DS[(dSel.getDay() + 6) % 7]}, {fmt(sel)}{alvo ? " · " + primeiro(R.nomeUser(alvo)) : ""} — {listaSel.length} visita{listaSel.length === 1 ? "" : "s"}</h4>
+    <h4>{DS[(dSel.getDay() + 6) % 7]}, {fmt(sel)}{alvo ? " · " + primeiro(R.nomeUser(alvo)) : ""} — {listaSel.length} visita{listaSel.length === 1 ? "" : "s"}{medSel.length ? " · " + medSel.length + " medida" + (medSel.length === 1 ? "" : "s") : ""}</h4>
     {blqSel.map((b: any) => <div key={b.id} className="ac-blq-i"><b>{icone(b.motivo)} {b.motivo}{quem === "todos" ? " · " + primeiro(R.nomeUser(b.usuarioId)) : ""}</b><small>{perTxt(b)}{b.de !== b.ate ? " · " + fmt(b.de) + " a " + fmt(b.ate) : ""}{b.obs ? " · " + b.obs : ""}</small>
       {podeFechar(b.usuarioId) && <button type="button" onClick={() => remover(b)}>Reabrir</button>}</div>)}
     {listaSel.map((c: any) => { const k = corCliente(R, c); return <button type="button" key={c.id} className="ac-vis-i" style={{ borderLeftColor: k.cor, background: k.fundo }} onClick={() => abrirDetalhe(c.id)}>
       <span className="ac-st" style={{ background: k.cor, color: k.k === "ctt" ? "#3a2a00" : "#fff" }}>{k.txt}</span><b>{String(c.dataVisita).slice(11, 16)} · {c.cliente}</b><small>{quem === "todos" ? primeiro(R.nomeUser(c.consultorId)) + " · " : ""}{c.endereco || "sem endereço"} · {STATUS_CLIENTE[R.statusClienteDe(c)] || ""}</small></button>; })}
+    {medSel.map((c: any) => <button type="button" key={c.id} className="ac-vis-i" style={{ borderLeftColor: COR_MED, background: FUNDO_MED }} onClick={() => abrirDetalhe(c.id)}>
+      <span className="ac-st" style={{ background: COR_MED, color: "#fff" }}>📐 MEDIDA PÓS-VENDA</span>
+      <b>{String(c.dataMedida).slice(11, 16)} · {c.cliente}</b>
+      <small>{quem === "todos" ? primeiro(R.nomeUser(c.medidorId)) + " · " : ""}{c.endereco || "sem endereço"}{c.pedido ? " · venda " + c.pedido : ""}</small></button>)}
     {evSel.map((b: any) => <div key={b.id} className="ac-ev-i"><b>📌 {b.motivo}{quem === "todos" ? " · " + primeiro(R.nomeUser(b.usuarioId)) : ""}</b><small>{perTxt(b)}{b.obs ? " · " + b.obs : ""}</small>
       {podeFechar(b.usuarioId) && <button type="button" onClick={() => { if (confirm("Apagar o evento “" + b.motivo + "”?")) ex(() => A.consBloqueioRemover(b.id), "Evento apagado"); }}>Apagar</button>}</div>)}
-    {!listaSel.length && !blqSel.length && !evSel.length && <div className="hint">Nenhuma visita neste dia.</div>}
+    {!listaSel.length && !blqSel.length && !evSel.length && !medSel.length && <div className="hint">Nenhuma visita neste dia.</div>}
     {!form && !agCli && <div className="ac-acoes">
       <button type="button" className="btn ac-fechar" onClick={() => abrirForm("bloqueio")}>🔒 Fechar datas (viagem, consulta…)</button>
       <button type="button" className="btn ac-evento" onClick={() => abrirForm("evento")}>📌 Criar evento avulso</button>
@@ -116,19 +128,21 @@ export default function AgendaConsultores({ movel }: { movel?: boolean }) {
         <button type="button" className="ac-nav hoje" onClick={() => { const d = new Date(); setMes(new Date(d.getFullYear(), d.getMonth(), 1)); setSel(hoje); }}>Hoje</button>
         {geral && <select className="ac-quem" value={quem} onChange={e => setQuem(e.target.value)}><option value="todos">👥 Todos os consultores</option>{consultores.map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}
       </div>
-      <div className="ac-leg">{Object.values(CORES_CLI).map(x => <span key={x.txt}><i style={{ background: x.cor }} />{x.txt}</span>)}<span><i style={{ background: "#5b6475" }} />🔒 Data fechada</span><span><i style={{ background: "#0e7490" }} />📌 Evento</span></div>
+      <div className="ac-leg">{Object.values(CORES_CLI).map(x => <span key={x.txt}><i style={{ background: x.cor }} />{x.txt}</span>)}<span><i style={{ background: "#5b6475" }} />🔒 Data fechada</span><span><i style={{ background: "#0e7490" }} />📌 Evento</span><span><i style={{ background: COR_MED }} />📐 Medida pós-venda</span></div>
       <div className="ac-wrap">
         <div className="ac-cal">
           <div className="ac-g">{DS.map(d => <div key={d} className="ac-ds">{movel ? d[0].toUpperCase() : d}</div>)}
             {cel.map((d, i) => { if (!d) return <div key={i} className="ac-c vazio" />;
-              const vs = visDia(d), bs = blqDia(d); const diaTodo = bs.some((b: any) => b.periodo === "dia") && (!!alvo || bs.length >= consultores.length);
+              const vs = visDia(d), bs = blqDia(d), ms = medDia(d); const diaTodo = bs.some((b: any) => b.periodo === "dia") && (!!alvo || bs.length >= consultores.length);
               return <button type="button" key={i} className={"ac-c" + (d < hoje ? " passado" : "") + (d === hoje ? " hoje" : "") + (d === sel ? " sel" : "") + (bs.length ? (diaTodo ? " bloq" : " meio") : "")} onClick={() => setSel(d)}>
                 <span className="n">{Number(d.slice(8))}</span>
-                {movel ? <span className="ac-dots">{bs.length ? <em>{icone(bs[0].motivo)}</em> : null}{evDia(d).length ? <em>📌</em> : null}{vs.slice(0, 4).map((c: any) => <i key={c.id} style={{ background: corCliente(R, c).cor }} />)}{vs.length > 4 ? <small>+{vs.length - 4}</small> : null}</span> : <>
+                {movel ? <span className="ac-dots">{bs.length ? <em>{icone(bs[0].motivo)}</em> : null}{evDia(d).length ? <em>📌</em> : null}{vs.slice(0, 3).map((c: any) => <i key={c.id} style={{ background: corCliente(R, c).cor }} />)}{ms.slice(0, 2).map((c: any) => <i key={c.id} style={{ background: COR_MED }} />)}{vs.length + ms.length > 5 ? <small>+{vs.length + ms.length - 5}</small> : null}</span> : <>
                   {bs.slice(0, 2).map((b: any) => <span key={b.id} className="ac-blq">{icone(b.motivo)} {quem === "todos" ? primeiro(R.nomeUser(b.usuarioId)) : b.motivo}<small>{perTxt(b)}</small></span>)}
                   {evDia(d).slice(0, 2).map((b: any) => <span key={"e" + b.id} className="ac-ev">📌 {b.periodo === "horario" ? b.ini + " " : ""}{b.motivo}</span>)}
                   {vs.slice(0, 3).map((c: any) => { const k = corCliente(R, c); return <span key={c.id} className="ac-vis" title={k.txt} style={{ background: k.fundo, color: k.cor, borderLeft: "3px solid " + k.cor }}>{String(c.dataVisita).slice(11, 16)} {quem === "todos" ? primeiro(R.nomeUser(c.consultorId)) + "·" + primeiro(c.cliente) : primeiro(c.cliente)}</span>; })}
-                  {vs.length > 3 && <span className="ac-mais">+{vs.length - 3} visita(s)</span>}</>}
+                  {ms.slice(0, 2).map((c: any) => <span key={c.id} className="ac-vis" title="Medida pós-venda" style={{ background: FUNDO_MED, color: COR_MED, borderLeft: "3px solid " + COR_MED }}>📐 {String(c.dataMedida).slice(11, 16)} {quem === "todos" ? primeiro(R.nomeUser(c.medidorId)) + "·" + primeiro(c.cliente) : primeiro(c.cliente)}</span>)}
+                  {vs.length > 3 && <span className="ac-mais">+{vs.length - 3} visita(s)</span>}
+                  {ms.length > 2 && <span className="ac-mais">+{ms.length - 2} medida(s)</span>}</>}
               </button>; })}
           </div>
         </div>

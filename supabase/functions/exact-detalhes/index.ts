@@ -111,6 +111,27 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, conferidas: fila.length, comImagem, semImagem: sem.length, sem: sem.slice(0, 60), erros: erros.slice(0, 20) });
     }
 
+    // Diagnóstico: mostra cru o que o Exact devolve de anexos de uma venda, para
+    // descobrir por que uma imagem aparece em um lugar e não em outro.
+    if (b.acao === "espiar") {
+      const ped = String(b.venda || "").trim();
+      const { data: tk } = await sb.from("exact_ticket").select("ticket_id").eq("sale_id", ped).maybeSingle();
+      const resumo = (x: any) => ({
+        id: x?.id, nome: String(x?.originalFileName || x?.originalName || x?.fileName || x?.name || ""),
+        tipo: String(x?.referenceType || ""), mime: String(x?.mimeType || x?.contentType || ""),
+        temUrl: /^https?:\/\//.test(String(x?.url || x?.location || x?.publicUrl || x?.link || "")),
+        chaves: Object.keys(x || {}).slice(0, 14),
+      });
+      const out: any = { venda: ped, ticket: tk?.ticket_id ?? null };
+      try { out.daVenda = lista(await exact(token, `/attachments-legacy/${ped}`)).map(resumo); }
+      catch (x: any) { out.daVendaErro = String(x?.message || x); }
+      if (tk?.ticket_id) {
+        try { const t = await exact(token, `/ticket/checklist/${tk.ticket_id}`); out.doTicket = lista(t?.attachments).map(resumo); }
+        catch (x: any) { out.doTicketErro = String(x?.message || x); }
+      }
+      return json({ ok: true, ...out });
+    }
+
     if (b.acao === "um") {
       const { data: c } = await sb.from("chamados").select("id,tratativa").eq("id", String(b.id || "")).maybeSingle();
       const ex = c?.tratativa?.medida?.exactId;

@@ -329,7 +329,10 @@ function ContatoMedida({ c }: any) {
     <div className="mv-passo"><span className={m.contatoEm ? "ok" : ""}>1</span><div>Contato com o cliente{m.contatoEm ? <small style={{ display: "block", color: "var(--ink-faint)" }}>{fmtDateTime(m.contatoEm)}</small> : null}</div>
       <button className={"mv-tg" + (m.contatoEm ? " on" : "")} disabled={!!m.contatoEm} onClick={() => ex(() => A.medidaContato(c.id, null), "Contato registrado")}>{m.contatoEm ? "Feito ✓" : "Marcar"}</button></div>
     <div className="mv-passo col"><div className="mv-passo-l"><span className={m.dataCombinadaEm ? "ok" : ""}>2</span><div>Dia combinado com o cliente{pz ? <small style={{ display: "block", color: "var(--ink-faint)" }}>até {fmtDate(pz.limite)}</small> : null}</div></div>
-      <DataCalendario value={dt} onChange={setDt} min={hojeISO() + "T00:00"} />
+      {/* sem data mínima: a medida pode ter sido combinada para um dia que já passou
+          (cliente remarcou, a pessoa só registrou depois) — travar isso deixava o
+          compromisso fora da agenda, que é pior do que aceitar uma data antiga */}
+      <DataCalendario value={dt} onChange={setDt} min="" />
       <button className="btn sm" onClick={salvarData}>{m.dataCombinadaEm ? "Alterar a data combinada" : "Salvar a data combinada"}</button></div>
   </div>;
 }
