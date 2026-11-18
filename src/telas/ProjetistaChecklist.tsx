@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
+import { ehCupomPlanejado, tetoVenda } from "../lib/tetoVenda";
 import { sb } from "../lib/supabase";
 import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import { lerListagemArquivo, type LinhaListagem, type Listagem } from "../lib/listagemPromob";
@@ -433,8 +434,8 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
   if (carregando) return <div className="body" style={{ gridTemplateColumns: "1fr" }}><div className="empty">Buscando os dados da venda no Exact…</div></div>;
   if (!d) return <div className="body" style={{ gridTemplateColumns: "1fr" }}><div className="note">Não foi possível trazer os dados da venda do Exact{erro ? " (" + erro + ")" : ""}. Confira se a venda {c.pedido} já tem ticket de checklist no Exact.</div></div>;
   const v = d.venda || {}, cl = d.cliente || {}, ps: any[] = d.produtos || [];
-  const cupom = (n: string) => /^#?\s*cupom/i.test(n);
-  const nCupom = ps.filter(p => cupom(p.nome)).length, nPronta = ps.length - nCupom;
+  const cupom = ehCupomPlanejado;
+  const { teto, nCupom, nPronta } = tetoVenda(d);
   const soma = (k: string, f?: (p: any) => boolean) => ps.filter(f || (() => true)).reduce((t, p) => t + (Number(p[k]) || 0), 0);
   const tetoCupons = soma("negociado", p => cupom(p.nome));
   const linha = (r: string, val: ReactNode) => <div className="pjv-l"><span>{r}</span><b>{val}</b></div>;
@@ -470,7 +471,7 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
       </div>
     </div>
     <div>
-      <div className="pjv-teto"><small>Teto para o projeto final (valor bruto)</small><b>{brl(nCupom ? soma("total", p => cupom(p.nome)) : v.bruto)}</b>
+      <div className="pjv-teto"><small>Teto para o projeto final (valor bruto)</small><b>{brl(teto)}</b>
         <div>{nCupom ? "Valor bruto dos cupons de planejado" + (nPronta ? " (sem a linha pronta)" : "") : "Valor bruto da venda"} — é o valor que se compara com o orçamento do Promob. O projeto final do checklist não pode passar disso; se o cliente pedir mudanças que aumentem o valor, a diferença precisa ser cobrada.</div>
         <div className="pjv-neg">Valor negociado: <b>{neg(nCupom ? tetoCupons : v.negociado)}</b> <Olho />{v.descontoPct != null ? " · desconto " + String(v.descontoPct).replace(".", ",") + " %" : ""}</div></div>
       <div className="box"><h4>Resumo</h4><div className="hist">
@@ -704,7 +705,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
                 <div className="ck" style={{ marginTop: 6 }}>{[["Ambientes escritos e confirmados", e1], ["Conferência por ambiente preenchida", e2], ["Contrato gerado", e3], ["Contrato assinado pelo cliente", e4]].map(([t, ok]: any) => <label key={t}><i className={ok ? "" : "no"}>{ok ? "✓" : ""}</i> {t}</label>)}</div></div>
                 <button className="btn sm" style={podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .5 }} disabled={!podeRealizar || !!ocupado} onClick={marcarRealizado}>✅ Finalizar atendimento</button></div>}
             {/* a folha de valores fica aqui: é o fim do atendimento, quando o projetista leva os números ao financeiro */}
-            <RecuperacaoEtapa5 c={c} projetista={proj} toast={toast} venda={arqs?.dados?.venda} ambientes={ambs.map(a => a.nome).filter(Boolean)} />
+            <RecuperacaoEtapa5 c={c} projetista={proj} toast={toast} dados={arqs?.dados} ambientes={ambs.map(a => a.nome).filter(Boolean)} />
           </div>}
           {(etapa === 1 || etapa === 2) && <div className="barra">
             <button className="btn sm" disabled={!!ocupado || !mudou} onClick={() => salvar()}>{ocupado === "salvar" ? "Salvando…" : "💾 Salvar"}</button>
@@ -1078,7 +1079,7 @@ function ConfAmb({ a, i, todos, set, sugCores, mover, c, arqs, ferragens }: { a:
  *  O projetista informa UMA coisa — quanto ficou o projeto final. O valor do cupom e o % de desconto da venda
  *  vêm do ticket do Exact, e a conta é feita no servidor (comissão é dinheiro, não pode depender da tela).
  *  Faixas sobre o valor recuperado, iguais à planilha: até 499,99 não paga · até 2.999,99 paga 2% · 3.000+ paga 5%. */
-function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any; projetista: string; toast: (m: string) => void; venda?: any; ambientes?: string[] }) {
+function RecuperacaoEtapa5({ c, projetista, toast, dados, ambientes }: { c: any; projetista: string; toast: (m: string) => void; dados?: any; ambientes?: string[] }) {
   const [vf, setVf] = useState("");
   const [vt, setVt] = useState("");   // nº da venda tirada no Tático depois do checklist
   const [obs, setObs] = useState("");
@@ -1089,8 +1090,11 @@ function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any;
   const [mao, setMao] = useState(false);
   const [mVi, setMVi] = useState(""); const [mDp, setMDp] = useState("");
   const num = (x: string) => { const t = String(x || "").replace(/[R$\s.]/g, "").replace(",", "."); const q = Number(t); return isFinite(q) && t !== "" ? q : null; };
-  const ex = venda || {};
-  const exVi = ex.bruto == null ? null : Number(ex.bruto);
+  const ex = dados?.venda || {};
+  // base da comissão = TETO do projeto final (só os cupons de planejado), nunca o bruto da venda,
+  // que inclui a linha pronta e não passa pelo projeto
+  const { teto, nPronta } = tetoVenda(dados);
+  const exVi = teto == null ? null : Number(teto);
   const exDp = ex.descontoPct == null ? null : Number(ex.descontoPct) / 100;
   const semExact = exVi == null || exDp == null;
   // percentual digitado ("79,3611") vira fração; se a pessoa já digitar fração ("0,79"), também vale
@@ -1135,7 +1139,7 @@ function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any;
             ? <>O ticket do Exact não trouxe o cupom e o desconto desta venda (acontece com venda 100% promissória ou lançada com erro). <b>Informe os três valores como estão no Tático</b> — vai para o financeiro conferir do mesmo jeito.</>
             : <>Valores informados à mão — vão para o financeiro conferir. {!travado && <button type="button" className="lk" style={{ textTransform: "none", letterSpacing: 0 }} onClick={() => setMao(false)}>usar o que veio do Exact</button>}</>}
         </div>
-      : <div className="hint" style={{ marginBottom: 8 }}>Cupom <b>{brl(vi)}</b> · desconto da venda <b>{String(ex.descontoPct).replace(".", ",")}%</b>. Informe quanto ficou o projeto final que você fechou.
+      : <div className="hint" style={{ marginBottom: 8 }}>Cupom <b>{brl(vi)}</b>{nPronta > 0 ? <> <span title="A linha pronta não passa pelo projeto, então fica de fora da conta">(só os cupons de planejado — sem a linha pronta)</span></> : ""} · desconto da venda <b>{String(ex.descontoPct).replace(".", ",")}%</b>. Informe quanto ficou o projeto final que você fechou.
           {!travado && <> · <button type="button" className="lk" style={{ textTransform: "none", letterSpacing: 0 }}
             onClick={() => { setMao(true); setMVi(String(exVi).replace(".", ",")); setMDp(String(ex.descontoPct).replace(".", ",")); }}>veio errado? informar à mão</button></>}
         </div>}
@@ -1163,6 +1167,12 @@ function RecuperacaoEtapa5({ c, projetista, toast, venda, ambientes }: { c: any;
       </div>}
       <label style={{ display: "block", fontSize: 12.5, marginTop: 8 }}><span style={{ display: "block", fontWeight: 700, marginBottom: 2 }}>Observação (opcional)</span>
         <input value={obs} disabled={travado} onChange={e => setObs(e.target.value)} placeholder="Ex.: cliente tirou o painel da TV" style={{ width: "100%" }} /></label>
+      {/* a base mudou depois que a recuperação foi informada (ex.: antes somava a linha pronta): avisa para refazer */}
+      {r && !r.manual && !mao && vi != null && r.valorInicial != null && Math.abs(Number(r.valorInicial) - vi) > 0.01 &&
+        <div className="note alert" style={{ marginTop: 8, fontSize: 12.5 }}>
+          Esta recuperação foi informada com cupom de {brl(r.valorInicial)} e o teto correto desta venda é <b>{brl(vi)}</b>
+          {nPronta > 0 ? " (o valor antigo somava a linha pronta, que não passa pelo projeto)" : ""}. Clique em <b>Atualizar a recuperação</b> para refazer a conta.
+        </div>}
       {r && <div className={"note" + (r.status === "recusado" ? " alert" : "")} style={{ marginTop: 8, fontSize: 12.5 }}>
         {r.status === "pendente" ? "⏳ Informado — aguardando o financeiro aprovar."
           : r.status === "aprovado" ? "✅ Aprovado pelo financeiro" + (r.decididoPor ? " (" + r.decididoPor + ")" : "") + " · comissão " + brl(r.comissao)
