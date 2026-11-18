@@ -6,6 +6,7 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { fmtMoeda } from "../lib/regras";
 import { FRETES, freteDe, numBR, precoItem, somaBase, somaPP, somaPromo, type PP } from "./PrePedido";
+import { PRIMEIRO, VIGENCIA, planos as planosCred } from "../lib/crediario";
 
 type PN = PP & { vendedor?: string; neg_status?: string; neg_enviado_em?: string; neg_valor?: any; neg_desconto?: any; neg_pagamento?: string; neg_obs?: string; neg_em?: string };
 const numPP = (p: PP) => p.numero ? "PP-" + String(p.numero).padStart(4, "0") : "—";
@@ -52,7 +53,7 @@ export default function Negociacao({ onVoltar }: { onVoltar?: () => void }) {
 
 /** mesa de negociação: produtos, preços cheios e a simulação do desconto */
 function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () => void }) {
-  const { toast } = useApp() as any;
+  const { toast, R } = useApp() as any;
   // O desconto cai SÓ sobre a base: produto em promoção já veio com o preço da promoção e frete é custo.
   const base = somaBase(p) || (somaPP(p) ? 0 : numBR(p.valor_bruto));
   const promo = somaPromo(p);
@@ -118,11 +119,45 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
         <label className="pp-f">Valor final R$ <small style={{ textTransform: "none", fontWeight: 500 }}>(tudo incluso)</small><input inputMode="decimal" value={valor} onChange={e => porValor(e.target.value)} placeholder={br2(bruto)} /></label></div>
       <div className="ng-final"><span>Fica por</span><b>{fmtMoeda(final)}</b>{descRS > 0.004 && <small>desconto de {fmtMoeda(descRS)} sobre {fmtMoeda(base)} ({(Math.round(descRS / base * 1000) / 10).toString().replace(".", ",")}%){foraDesc > 0 ? " · + " + fmtMoeda(foraDesc) + " sem desconto" : ""}</small>}</div>
       <div className="ng-parc">{[1, 3, 6, 10, 12].map(n => <span key={n}>{n}x {fmtMoeda(final / n)}</span>)}</div>
+      <div className="hint" style={{ marginTop: -2, marginBottom: 6 }}>Acima é a divisão pura do valor, sem custo de parcelamento — serve para o pagamento no cartão do cliente.</div>
+      {R.temAcesso("crediario") && <Crediario liquido={final} bruto={bruto} />}
       <label className="pp-f">Forma de pagamento<input value={pag} onChange={e => setPag(e.target.value)} placeholder="ex.: entrada no Pix + 10x cartão" /></label>
       <label className="pp-f">Observação da negociação<input value={obs} onChange={e => setObs(e.target.value)} /></label>
       <div className="pp-acoes"><button type="button" className="btn primary pp-salvar" disabled={salvando} onClick={() => salvar("negociando")}>💾 Salvar proposta</button>
         <button type="button" className="btn" disabled={salvando} onClick={() => salvar("fechado")}>✅ Negociação fechada</button></div>
       <div className="hint">O vendedor vê a proposta no pré-pedido dele. Só consulta — o pedido continua sendo tirado no sistema.</div>
     </div>
+  </div>;
+}
+
+/** 💳 Crediário da loja (teste · só para quem tem o acesso "crediario").
+ *  A conta vai ao contrário do normal: o gerente já fechou QUANTO A LOJA RECEBE (o valor à vista
+ *  da negociação) e a tela mostra, para cada plano, o preço que o cliente enxerga como "sem juros"
+ *  — n parcelas iguais, sem nenhuma menção a juros — e quanto de desconto ainda cabe ali dentro.
+ *  Plano em que a etiqueta passa do valor cheio aparece em vermelho: não fecha sem cobrar mais. */
+function Crediario({ liquido, bruto }: { liquido: number; bruto: number }) {
+  const [dias, setDias] = useState(30);
+  const [rec, setRec] = useState("");
+  const [tudo, setTudo] = useState(false);
+  const alvo = numBR(rec) || liquido;
+  const l = planosCred(alvo, bruto, dias);
+  const vis = tudo ? l : l.filter(x => x.plano <= 12);
+  return <div className="ng-cred">
+    <div className="pp-tit" style={{ marginTop: 4 }}>💳 Crediário da loja <small style={{ textTransform: "none", fontWeight: 500 }}>· tabela de {VIGENCIA}</small></div>
+    <div className="ng-frete">
+      <label className="pp-f" style={{ maxWidth: 190, margin: 0 }}>A loja precisa receber R$
+        <input inputMode="decimal" value={rec} onChange={e => setRec(e.target.value)} placeholder={br2(liquido)} /></label>
+      <div className="ng-rap" style={{ margin: 0 }}>{PRIMEIRO.map(([d, r]) => <button key={d} type="button" className={"chip" + (dias === d ? " on" : "")} onClick={() => setDias(d)}>1ª em {r}</button>)}</div>
+    </div>
+    <div className="hint" style={{ marginBottom: 6 }}>Sem preencher, usa o valor da negociação acima (<b>{fmtMoeda(liquido)}</b>). O preço de cada plano já está com o parcelamento embutido — o cliente vê <b>parcelas iguais</b>, e o que sobra entre esse preço e o valor cheio ({fmtMoeda(bruto)}) é o desconto que ainda dá para dar.</div>
+    <div className="ng-cred-l">
+      {vis.map(x => <div key={x.plano} className={"ng-cred-i" + (x.cabe ? "" : " nao")}>
+        <b>{x.plano}× {fmtMoeda(x.parcela)}</b>
+        <span>total {fmtMoeda(x.etiqueta)}</span>
+        {x.cabe ? <small>cabe {(x.desconto * 100).toFixed(1).replace(".", ",")}% de desconto · {fmtMoeda(x.descontoRS)}</small>
+          : <small>passa {(-x.desconto * 100).toFixed(1).replace(".", ",")}% do valor cheio</small>}
+      </div>)}
+    </div>
+    <button type="button" className="pp-link" onClick={() => setTudo(t => !t)}>{tudo ? "mostrar só até 12×" : "ver todos os planos (até 36×)"}</button>
   </div>;
 }
