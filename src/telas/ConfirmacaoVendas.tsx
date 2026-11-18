@@ -161,16 +161,19 @@ export default function ConfirmacaoVendas() {
         return <button key={k || "todos"} type="button" className={"cv-sep-b" + (tipo === k ? " on" : "")} onClick={() => { setTipo(k); setSel({}); try { localStorage.setItem("cv_tipo", k); } catch { /* sem armazenamento */ } }}>
           {l}<small>{n} a conferir</small></button>; })}
     </div>
-    <div className="cv-barra">
-      <span className="hint">Período da venda:</span>
+    <div className="card" style={{ padding: "12px 14px", margin: "6px 0 12px", borderLeft: "4px solid var(--primary)" }}>
+      <div style={{ fontWeight: 800, marginBottom: 8 }}>📅 Período da venda <span className="hint" style={{ fontWeight: 500 }}>— escolha para priorizar; o número é quanto ainda falta conferir</span></div>
       <div className="chips" style={{ margin: 0 }}>
-        {([["todas", "Todas as datas"], ...PER] as [string, string][]).map(([k, l]) => <button key={k} className={"chip" + (per === k ? " on" : "")}
-          onClick={() => { setPer(k as any); setSel({}); try { localStorage.setItem("cv_per", k); } catch { /* sem armazenamento */ } }}>{l}</button>)}
+        {([["todas", "Todas as datas"], ...PER] as [string, string][]).map(([k, l]) => {
+          const [a0, a1] = k === "todas" ? ["", ""] : faixa(k as Per, pde, pate);
+          const n = todos.filter(x => (!tipo || x.tipo === tipo) && x.status === "pendente" && (k === "todas" || (!!x.data && String(x.data).slice(0, 10) >= a0 && String(x.data).slice(0, 10) <= a1))).length;
+          return <button key={k} className={"chip" + (per === k ? " on" : "")} style={{ fontSize: 14, padding: "7px 14px" }}
+            onClick={() => { setPer(k as any); setSel({}); try { localStorage.setItem("cv_per", k); } catch { /* sem armazenamento */ } }}>{l}{k !== "outro" && <span className="n">{n}</span>}</button>; })}
       </div>
-      {per === "outro" && <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      {per === "outro" && <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
         <input type="date" value={pde} max={pate || undefined} onChange={e => setPde(e.target.value)} style={{ width: "auto" }} /> até
-        <input type="date" value={pate} min={pde || undefined} onChange={e => setPate(e.target.value)} style={{ width: "auto" }} /></span>}
-      {per !== "todas" && <span className="hint">{todos.length - doTipo.length > 0 ? (todos.length - doTipo.length) + " fora deste período" : ""}</span>}
+        <input type="date" value={pate} min={pde || undefined} onChange={e => setPate(e.target.value)} style={{ width: "auto" }} /></div>}
+      {per !== "todas" && <div className="hint" style={{ marginTop: 6 }}>Mostrando vendas de <b>{fmtDate(ini)}</b> a <b>{fmtDate(fim)}</b>{todos.length - doTipo.length > 0 ? " · " + (todos.length - doTipo.length) + " fora deste período" : ""}</div>}
     </div>
     <div className="kpis" style={{ margin: "6px 0 10px" }}>
       <Kpi n={pend.length} l={"A conferir · " + brl(pend.reduce((s, x) => s + Number(x.valor), 0))} cor="var(--warn)" />
