@@ -283,6 +283,19 @@ export const A = {
   vendaConfEditar: (numero: string, p: Record<string, any>) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(null) : rpc("venda_conf_editar", { p_numero: numero, p }),
   vendaConfDecidir: (numero: string, acao: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(acao) : rpc<string>("venda_conf_decidir", { p_numero: numero, p_acao: acao }),
   exactChecklistLista: () => rpc<any[]>("exact_checklist_lista", {}),
+  // relatório de vendas do Exact puxado sozinho (rota tickets/sales-report): lê o que já foi puxado / pede a atualização agora e espera
+  exactVendasLista: (de: string, ate: string) => (import.meta as any).env?.VITE_MOCK ? Promise.resolve([] as any[]) : rpc<any[]>("exact_vendas_rel_lista", { p_de: de, p_ate: ate }),
+  exactVendasUltima: () => (import.meta as any).env?.VITE_MOCK ? Promise.resolve(null as string | null) : rpc<string | null>("exact_vendas_ultima", {}),
+  exactVendasAtualizar: async (de: string, ate: string): Promise<any> => {
+    if ((import.meta as any).env?.VITE_MOCK) return { linhas: 0, novos: 0, atualizados: 0 };
+    const id = await rpc<number>("exact_vendas_atualizar", { p_de: de, p_ate: ate });
+    for (let i = 0; i < 75; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const d: any = await rpc<any>("exact_vendas_resultado", { p_req: id });
+      if (d) { if (d.erro) throw new Error(d.erro); return d; }
+    }
+    throw new Error("O Exact está demorando. A atualização segue sozinha; tente de novo em alguns minutos.");
+  },
   cienteCancelamento: (id: string) => rpc("ciente_cancelamento", { p_id: id }),
   excluirClienteMkt: async (id: string, motivo: string) => {
     const paths = await rpc<string[]>("mkt_excluir_cliente", { p_id: id, p_motivo: motivo });

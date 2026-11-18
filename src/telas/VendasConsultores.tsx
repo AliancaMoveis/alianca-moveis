@@ -4,13 +4,13 @@ import { useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { Kpi } from "./Dashboard";
 import { baixarXlsx } from "../lib/planilha";
-import { fmtDate, fmtMoeda, hojeISO, isoLocal, numerosVenda, parseData } from "../lib/regras";
+import { competenciaItem, fmtDate, fmtMoeda, hojeISO, isoLocal, numerosVenda, parseData } from "../lib/regras";
 import RelConferenciaExternos from "./RelConferenciaExternos";
 
-type Per = "hoje" | "7d" | "mes" | "mesp" | "ano" | "outro";
-const PER: [Per, string][] = [["hoje", "Hoje"], ["7d", "Últimos 7 dias"], ["mes", "Este mês"], ["mesp", "Mês passado"], ["ano", "Este ano"], ["outro", "Escolher datas"]];
+export type Per = "hoje" | "7d" | "mes" | "mesp" | "ano" | "outro";
+export const PER: [Per, string][] = [["hoje", "Hoje"], ["7d", "Últimos 7 dias"], ["mes", "Este mês"], ["mesp", "Mês passado"], ["ano", "Este ano"], ["outro", "Escolher datas"]];
 const somaDias = (iso: string, n: number) => { const d = parseData(iso + "T12:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
-function faixa(p: Per, de: string, ate: string): [string, string] {
+export function faixa(p: Per, de: string, ate: string): [string, string] {
   const h = hojeISO(), [y, m] = h.split("-").map(Number);
   const pad = (n: number) => String(n).padStart(2, "0");
   if (p === "hoje") return [h, h];
@@ -36,7 +36,8 @@ export default function VendasConsultores() {
   // todas as vendas (nº a nº) dos clientes do 360, sem canceladas
   const todas: Linha[] = useMemo(() => (st.chamados || []).filter((c: any) => R.domMarketing(c) && c.venda).flatMap((c: any) => {
     const direto = R.ehDireto(c); const consId = direto ? c.solicitanteId : c.consultorId;
-    return numerosVenda(c.venda).map((i: any) => ({ c, i, dia: String(i.dataVenda || i.registradoEm || c.venda.dataVendaReal || c.venda.dataVenda || "").slice(0, 10),
+    return numerosVenda(c.venda).map((i: any) => ({ c, i, // mês do pagamento do consultor: venda de mês anterior validada agora conta no mês da validação (dia 1); venda do mês corrente mantém a data
+      dia: String(competenciaItem(i.dataVenda || c.venda.dataVendaReal || c.venda.dataVenda || "", i.decididoEm, i.registradoEm) || "").slice(0, 10),
       valor: Number(i.valor) || 0, consId: consId || "", cons: consId ? R.nomeUser(consId) : "— sem " + (direto ? "responsável" : "consultor"), ok: i.status !== "registrada", direto }));
   }), [st.chamados]);
 

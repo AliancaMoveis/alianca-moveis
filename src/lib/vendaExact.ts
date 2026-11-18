@@ -35,7 +35,10 @@ export const camposExact = (ex: Linha) => ({
   numero: String(col(ex, "ID")).replace(/\D/g, ""),
   ex_cliente: col(ex, "Cliente").trim(), ex_tel1: col(ex, "ClienteTel1").trim(), ex_tel2: col(ex, "ClienteTel2").trim(),
   ex_end: col(ex, "Orçamento").trim(), ex_idpessoa: col(ex, "IDPessoaCli").trim(), ex_vendedor: col(ex, "Vendedor").trim(),
-  ex_situacao: col(ex, "SituaçãoVenda").trim(), ex_total: numBr(col(ex, "ValorTotal")) || null, ex_recebido: numBr(col(ex, "ValorTotaRecebido")),
+  ex_situacao: col(ex, "SituaçãoVenda").trim(), incluido_por: col(ex, "Incluído por", "Incluido por", "IncluidoPor").trim(), ex_total: numBr(col(ex, "ValorTotal")) || null, ex_recebido: numBr(col(ex, "ValorTotaRecebido")),
   valor: numBr(col(ex, "ValorTotaRecebido")) || numBr(col(ex, "ValorTotal")),
   data: isoBr(col(ex, "DataSituação", "IncluidaEm")),
 });
+
+/** quem incluiu a venda no Exact: "Checklist.Silvane" etc. = pedido da fábrica de um checklist finalizado (não é venda); VENDAS01 e o resto = venda da loja */
+export const incluidoPorChecklist = (s: string) => /^checklist/i.test(String(s || "").trim());

@@ -5,13 +5,14 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
-import { fmtDate, fmtMoeda, numerosVenda } from "../lib/regras";
+import { fmtDate, fmtMoeda, moedaDigitando, numerosVenda } from "../lib/regras";
 import { tira } from "./Medidas";
+import { faixa, PER, type Per } from "./VendasConsultores";
 
 type Item = {
   numero: string; fonte: string; tipo: string; chamado_id: string | null; cands: { id: string; cliente: string; como: string }[]; cliente_ref: string;
   consultor_id: string | null; consultor_nome: string; mv: any; ex_cliente: string; ex_tel1: string; ex_tel2: string; ex_end: string; ex_idpessoa?: string; ex_vendedor: string;
-  vendedor_id: string | null; ex_situacao: string; motivo?: string; ex_total?: number | null; ex_recebido?: number | null; forma?: string; entrada?: number | null; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
+  vendedor_id: string | null; ex_situacao: string; incluido_por?: string; motivo?: string; ex_total?: number | null; ex_recebido?: number | null; forma?: string; entrada?: number | null; valor: number; valor_exact: number; data: string | null; como: string; status: string; decidido_em: string | null; decidido_por: string | null; criado_em: string;
 };
 type Aba = "pendente" | "validada" | "negada" | "checklist" | "todas";
 const ABAS: [Aba, string][] = [["pendente", "⏳ A conferir"], ["validada", "✅ Validadas"], ["negada", "❌ Negadas"], ["checklist", "📋 Checklist"], ["todas", "Todas"]];
@@ -34,6 +35,10 @@ export default function ConfirmacaoVendas() {
   const [itens, setItens] = useState<Item[] | null>(null);
   const [aba, setAba] = useState<Aba>("pendente");
   const [tipo, setTipo] = useState<"" | "consultor" | "marketing">(() => { try { const v = localStorage.getItem("cv_tipo"); return v === "consultor" || v === "marketing" ? v : ""; } catch { return ""; } });
+  // período da venda (data da situação no Exact) para priorizar: este mês, mês passado, datas à escolha
+  const [per, setPer] = useState<"todas" | Per>(() => { try { return (localStorage.getItem("cv_per") as any) || "todas"; } catch { return "todas"; } });
+  const [pde, setPde] = useState(""); const [pate, setPate] = useState("");
+  const [ini, fim] = per === "todas" ? ["", ""] : faixa(per, pde, pate);
   const [q, setQ] = useState(""); const [ocup, setOcup] = useState<Record<string, boolean>>({});
   const [valEd, setValEd] = useState<Record<string, string>>({});
   const [metodo, setMetodo] = useState(""); const [sel, setSel] = useState<Record<string, boolean>>({});
@@ -81,7 +86,7 @@ export default function ConfirmacaoVendas() {
   const gk = (x: Item) => { const c = cli360(x); return c ? c.id : x.ex_idpessoa ? "p:" + x.ex_idpessoa : "n:" + tira(x.ex_cliente); };
 
   const todos = itens || [];
-  const doTipo = todos.filter(x => !tipo || x.tipo === tipo);
+  const doTipo = todos.filter(x => (!tipo || x.tipo === tipo) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim)));
   const busca = tira(q), dig = q.replace(/\D/g, "");
   const lista = doTipo.filter(x => (aba === "todas" || x.status === aba) && (!metodo || x.como === metodo)
     && (!q || tira([x.ex_cliente, x.cliente_ref, chamado(x.chamado_id)?.cliente || "", x.consultor_nome, x.ex_vendedor].join(" ")).includes(busca) || (dig.length >= 3 && (x.numero.includes(dig) || (x.ex_tel1 + x.ex_tel2).replace(/\D/g, "").includes(dig)))))
@@ -90,6 +95,11 @@ export default function ConfirmacaoVendas() {
   const grupos = (() => { const m = new Map<string, Item[]>(); lista.forEach(x => { const k = gk(x); m.set(k, [...(m.get(k) || []), x]); });
     return Array.from(m.entries()).map(([k, l]) => ({ k, l, nome: tira(l[0].ex_cliente) })).sort((a, b) => a.nome.localeCompare(b.nome)); })();
   const pend = doTipo.filter(x => x.status === "pendente");
+  // dinheiro do cliente: efetivadas = entrou de fato; reservas com promissória = combinado (inclui o que ainda vai entrar). Falta = reservas − efetivadas (só sugestão)
+  const resumoCli = (k: string) => { const l = doTipo.filter(i => gk(i) === k); const rec = (i: Item) => Number(i.ex_recebido) || 0;
+    const ef = l.filter(i => /^efetiv/i.test(i.ex_situacao)).reduce((s, i) => s + rec(i), 0);
+    const rs = l.filter(i => /reserva|promiss/i.test(i.ex_situacao)).reduce((s, i) => s + rec(i), 0);
+    return { ef, rs, falta: ef > 0 && rs > ef ? rs - ef : rs > 0 && ef === 0 ? rs : 0, tem: rs > 0 && l.length > 0, n: l.length }; };
   const hoje = new Date().toISOString().slice(0, 10);
   const validHoje = doTipo.filter(x => x.status === "validada" && String(x.decidido_em || "").slice(0, 10) === hoje);
 
@@ -151,6 +161,20 @@ export default function ConfirmacaoVendas() {
         return <button key={k || "todos"} type="button" className={"cv-sep-b" + (tipo === k ? " on" : "")} onClick={() => { setTipo(k); setSel({}); try { localStorage.setItem("cv_tipo", k); } catch { /* sem armazenamento */ } }}>
           {l}<small>{n} a conferir</small></button>; })}
     </div>
+    <div className="card" style={{ padding: "12px 14px", margin: "6px 0 12px", borderLeft: "4px solid var(--primary)" }}>
+      <div style={{ fontWeight: 800, marginBottom: 8 }}>📅 Período da venda <span className="hint" style={{ fontWeight: 500 }}>— escolha para priorizar; o número é quanto ainda falta conferir</span></div>
+      <div className="chips" style={{ margin: 0 }}>
+        {([["todas", "Todas as datas"], ...PER] as [string, string][]).map(([k, l]) => {
+          const [a0, a1] = k === "todas" ? ["", ""] : faixa(k as Per, pde, pate);
+          const n = todos.filter(x => (!tipo || x.tipo === tipo) && x.status === "pendente" && (k === "todas" || (!!x.data && String(x.data).slice(0, 10) >= a0 && String(x.data).slice(0, 10) <= a1))).length;
+          return <button key={k} className={"chip" + (per === k ? " on" : "")} style={{ fontSize: 14, padding: "7px 14px" }}
+            onClick={() => { setPer(k as any); setSel({}); try { localStorage.setItem("cv_per", k); } catch { /* sem armazenamento */ } }}>{l}{k !== "outro" && <span className="n">{n}</span>}</button>; })}
+      </div>
+      {per === "outro" && <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+        <input type="date" value={pde} max={pate || undefined} onChange={e => setPde(e.target.value)} style={{ width: "auto" }} /> até
+        <input type="date" value={pate} min={pde || undefined} onChange={e => setPate(e.target.value)} style={{ width: "auto" }} /></div>}
+      {per !== "todas" && <div className="hint" style={{ marginTop: 6 }}>Mostrando vendas de <b>{fmtDate(ini)}</b> a <b>{fmtDate(fim)}</b>{todos.length - doTipo.length > 0 ? " · " + (todos.length - doTipo.length) + " fora deste período" : ""}</div>}
+    </div>
     <div className="kpis" style={{ margin: "6px 0 10px" }}>
       <Kpi n={pend.length} l={"A conferir · " + brl(pend.reduce((s, x) => s + Number(x.valor), 0))} cor="var(--warn)" />
       <Kpi n={pend.filter(x => comoDe(x.como)[1] === "ok").length} l="🟢 Achadas por telefone / nº" cor="var(--st-concluida)" />
@@ -182,12 +206,15 @@ export default function ConfirmacaoVendas() {
           <colgroup><col style={{ width: 28 }} /><col style={{ width: "12%" }} /><col style={{ width: "17%" }} /><col style={{ width: "17%" }} /><col style={{ width: "11%" }} /><col style={{ width: "14%" }} /><col style={{ width: 130 }} /><col style={{ width: 130 }} /></colgroup>
           <thead><tr><th style={th}><input type="checkbox" style={{ width: "auto" }} checked={lista.length > 0 && lista.every(x => sel[x.numero])} onChange={e => { const n: Record<string, boolean> = {}; if (e.target.checked) lista.forEach(x => (n[x.numero] = true)); setSel(n); }} /></th><th style={th}>Venda (Exact)</th><th style={th}>Cliente comprador (Exact)</th><th style={th}>Cliente no 360 / Minha Visita</th><th style={th}>Consultor / Responsável</th><th style={th}>Vendedor</th><th style={th}>Valor</th><th style={th}>Decisão</th></tr></thead>
           <tbody>{grupos.map(g => { const c0 = cli360(g.l[0]); const ja = vendas360(c0); const pg = g.l.filter(x => x.status === "pendente");
-            const cab = g.l.length > 1 || ja.length > 0;
+            const rcli = resumoCli(g.k); const cab = g.l.length > 1 || ja.length > 0 || rcli.tem;
             return <Fragment key={g.k}>
             {cab && <tr className="cv-grupo"><td colSpan={8}>
               <input type="checkbox" style={{ width: "auto", marginRight: 8 }} title="Marcar todas as vendas deste cliente" checked={g.l.every(x => sel[x.numero])} onChange={e => setSel(s => { const n = { ...s }; g.l.forEach(x => (n[x.numero] = e.target.checked)); return n; })} />
               👥 <b>{c0 ? c0.cliente : g.l[0].ex_cliente}</b>{c0 && <> <a href="#" className="hint" onClick={ev => { ev.preventDefault(); abrirDetalhe(c0.id); }}>{c0.id} · abrir ficha</a></>}
               <span className="hint"> · {g.l.length} venda{g.l.length > 1 ? "s" : ""} aqui{pg.length ? " · " + pg.length + " a conferir (" + brl(pg.reduce((s, x) => s + Number(x.valor), 0)) + ")" : ""}</span>
+              {(rcli.tem || rcli.n > 1) && <div className="hint" style={{ marginTop: 4 }}>
+                💰 Entrou de fato (efetivadas): <b>{brl(rcli.ef)}</b>{rcli.rs > 0 && <> · Combinado nas reservas: <b>{brl(rcli.rs)}</b> · <span style={{ color: "var(--warn)" }}>Falta receber (sugestão — conferir): <b>{brl(rcli.falta)}</b></span></>}
+                <span> · a soma de vendas conta só o que entrou de fato</span></div>}
               {ja.length > 0 && <div className="cv-ja">📌 Já lançado no 360: {ja.map((i: any) => <span key={i.numero + i.status} className={"cv-jai " + i.status}>{i.numero} · {brl(i.valor)} · {i.status === "registrada" ? "a confirmar" : i.status}</span>)}</div>}
               {pg.length > 1 && <button className="btn primary sm" style={{ marginLeft: 10 }} onClick={async () => { if (!confirm(`Validar as ${pg.length} vendas de ${c0 ? c0.cliente : g.l[0].ex_cliente} (${brl(pg.reduce((s, x) => s + Number(x.valor), 0))})?`)) return; for (const x of pg) await decidir(x, "validar"); }}>✅ Validar as {pg.length} deste cliente</button>}
             </td></tr>}
@@ -199,6 +226,7 @@ export default function ConfirmacaoVendas() {
               <td style={td}><input type="checkbox" style={{ width: "auto" }} checked={!!sel[x.numero]} onChange={() => setSel(s => ({ ...s, [x.numero]: !s[x.numero] }))} /></td>
               <td style={td}><b>{x.numero}</b><div className="hint">{x.data ? fmtDate(x.data) : ""}</div>
                 <div className="hint" style={{ color: /aguard|promiss/i.test(x.ex_situacao) ? "var(--warn)" : undefined }}>{x.ex_situacao}</div>
+                {x.incluido_por ? <div className="hint" title="Quem incluiu a venda no Exact" style={{ color: /^checklist/i.test(x.incluido_por) ? "#6b4fbb" : undefined }}>incluído por {x.incluido_por}</div> : null}
                 {x.motivo ? <div className="hint" style={{ whiteSpace: "normal", maxWidth: 120 }}>{x.motivo}</div> : null}
                 <span className={"cv-tipo " + x.tipo}>{x.tipo === "marketing" ? "🏬 Marketing" : "🧭 Consultor"}</span> <span className="hint">{x.fonte === "minha_visita" ? "Minha Visita" : "360"}</span></td>
               <td style={{ ...td, maxWidth: 210 }}><b>{x.ex_cliente || "—"}</b><div className="hint">{[x.ex_tel1, x.ex_tel2].filter(Boolean).join(" · ")}</div><div className="hint" style={{ maxWidth: 190 }}>{x.ex_end}</div></td>
@@ -222,7 +250,7 @@ export default function ConfirmacaoVendas() {
                   : <div className="hint">360: {vend || (c?.atendenteId ? R.nomeUser(c.atendenteId) : "—")}</div>}</td>
               <td style={{ ...td, width: 130, minWidth: 130 }}>
                 {pendente ? <input className="cv-valor" inputMode="decimal" value={ed !== undefined ? ed : Number(x.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  onChange={e => setValEd(v => ({ ...v, [x.numero]: e.target.value }))} onBlur={() => salvarValor(x)} onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                  onChange={e => setValEd(v => ({ ...v, [x.numero]: moedaDigitando(e.target.value) }))} onBlur={() => salvarValor(x)} onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
                   : <b>{brl(x.valor)}</b>}
                 {mudou && <div className="hint">Exact: {brl(x.valor_exact)}</div>}
                 {x.forma === "entrada" && <div className="hint">à vista {brl(Number(x.entrada))} · promissória {brl(Number(x.valor) - Number(x.entrada))}</div>}
@@ -243,8 +271,8 @@ export default function ConfirmacaoVendas() {
             {prom[x.numero] && (() => { const p = prom[x.numero]; const tot = lerValor(p.total), ent = lerValor(p.entrada), resto = Math.max(0, tot - ent);
               return <tr className="cv-prom-row"><td colSpan={8}><div className="cv-prom">
                 <b>💳 Promissória · venda {x.numero}</b>
-                <label>Total da venda<input inputMode="decimal" value={p.total} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, total: e.target.value } }))} /></label>
-                <label>Pago à vista (entrada)<input inputMode="decimal" value={p.entrada} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: e.target.value } }))} /></label>
+                <label>Total da venda<input inputMode="decimal" value={p.total} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, total: moedaDigitando(e.target.value) } }))} /></label>
+                <label>Pago à vista (entrada)<input inputMode="decimal" value={p.entrada} onChange={e => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: moedaDigitando(e.target.value) } }))} /></label>
                 <button className="btn ghost sm" type="button" onClick={() => setProm(q => ({ ...q, [x.numero]: { ...p, entrada: "0,00" } }))}>100% promissória</button>
                 <div className="cv-prom-res">Promissória: <b>{brl(resto)}</b>{tot > 0 ? " (" + Math.round(resto / tot * 100) + "%)" : ""}<br /><span className="hint">{ent > 0 ? "Fica: Vendido — entrada + promissória" : "Fica: Vendido — 100% promissória (reserva)"}</span></div>
                 <button className="btn primary sm" type="button" disabled={!!ocup[x.numero]} onClick={() => confirmarProm(x)}>✅ Confirmar promissória</button>
@@ -253,7 +281,7 @@ export default function ConfirmacaoVendas() {
             </Fragment>; })}
             </Fragment>; })}</tbody>
         </table>
-        {!lista.length && <div className="empty" style={{ padding: 24 }}>{aba === "pendente" ? "Nada para conferir. Anexe o relatório do Exact em Encontrar vendas do 360 ou da Minha Visita — o que for achado aparece aqui." : "Nenhuma venda aqui."}</div>}
+        {!lista.length && <div className="empty" style={{ padding: 24 }}>{aba === "pendente" ? "Nada para conferir. O relatório do Exact é puxado sozinho em Encontrar vendas — o que for achado aparece aqui." : "Nenhuma venda aqui."}</div>}
       </div>}
   </section>;
 }

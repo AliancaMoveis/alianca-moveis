@@ -7,7 +7,7 @@ import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
 import { col, lerArquivo, mesmoNome, tira } from "./Medidas";
 import { tipoPlanilha, type Linha } from "../lib/cruzarVendas";
-import { camposExact } from "../lib/vendaExact";
+import { camposExact, incluidoPorChecklist } from "../lib/vendaExact";
 import { baixarXlsx } from "../lib/planilha";
 import { STATUS_CLIENTE, fmtDate, fmtMoeda, itensVenda } from "../lib/regras";
 
@@ -32,6 +32,27 @@ export default function EncontrarVendas360() {
   const [f, setF] = useState<"todas" | "confirmar" | "ok" | "vend">("confirmar");
   const [q, setQ] = useState(""); const [sel, setSel] = useState<Record<string, boolean>>({}); const [rodando, setRodando] = useState("");
   const gestao = R.ehGestao();
+  // relatório do Exact puxado sozinho (tickets/sales-report): período padrão = do dia 1 do mês até hoje
+  const hojeIso = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const [de, setDe] = useState(hojeIso.slice(0, 8) + "01"); const [ate, setAte] = useState(hojeIso);
+  const [puxando, setPuxando] = useState(false); const [ultima, setUltima] = useState<string | null>(null);
+  const NOME_AUTO = "Exact · automático"; const jaPuxou = useRef(false);
+  async function lerAuto() {
+    if (!gestao || !de || !ate || ate < de) return;
+    try {
+      const l = ((await A.exactVendasLista(de, ate)) || []) as Linha[];
+      setArqs(x => [...x.filter(a => a.nome !== NOME_AUTO), ...(l.length ? [{ nome: NOME_AUTO, linhas: l }] : [])]);
+      const u = await A.exactVendasUltima(); setUltima(u);
+      // ao abrir a tela: se o último relatório tem mais de 15 min, já puxa do Exact (1 vez por abertura)
+      if (!jaPuxou.current && (!u || Date.now() - new Date(u).getTime() > 15 * 60e3)) { jaPuxou.current = true; puxarAgora(); }
+    } catch (e: any) { toast(e.message || "Não consegui ler o relatório do Exact"); }
+  }
+  useEffect(() => { lerAuto(); }, [gestao, de, ate]);
+  async function puxarAgora() {
+    if (puxando) return; setPuxando(true);
+    try { const r = await A.exactVendasAtualizar(de, ate); await lerAuto(); toast("Exact atualizado: " + r.linhas + " linhas (" + r.novos + " novas, " + r.atualizados + " atualizadas)"); }
+    catch (e: any) { toast(e.message || "Não consegui atualizar do Exact"); } finally { setPuxando(false); }
+  }
   // vendas do Exact que são de CHECKLIST finalizado (pedido da fábrica, outro nº): não são venda nova, ficam guardadas à parte
   const [ckl, setCkl] = useState<Record<string, any>>({});
   const lerCkl = async () => { try { const l = await A.exactChecklistLista(); setCkl(Object.fromEntries((l || []).map((x: any) => [String(x.numero), x]))); } catch { /* sem acesso */ } };
@@ -96,7 +117,8 @@ export default function EncontrarVendas360() {
   const origem = (r: Res) => { const c = alvo(r); return !c ? "nada" : R.ehDireto(c) ? "mkt" : "cons"; };
   const itemDe = (r: Res) => { const c = alvo(r); return c && c.venda ? itensVenda(c.venda).find((i: any) => so(String(i.numero)) === r.n && i.status !== "cancelada") || (so(String(c.venda.numero)) === r.n && c.venda.status !== "cancelada" ? { status: c.venda.status === "registrada" ? "registrada" : "efetivada" } : null) : null; };
   const estado = (r: Res): "ok" | "lancada" | "nova" => { const i: any = itemDe(r); return !i ? "nova" : i.status === "registrada" ? "lancada" : "ok"; };
-  const ehCk = (r: Res) => !!ckl[r.n];
+  // checklist = marcado à mão OU incluído por "Checklist.<nome>" no Exact (pedido da fábrica, não é venda)
+  const ehCk = (r: Res) => !!ckl[r.n] || incluidoPorChecklist(col(r.ex, "Incluído por"));
   const vendEf = (r: Res) => r.vendU || (vendMan[r.n] ? vendedores.find((u: any) => u.id === vendMan[r.n]) || null : null);
   const vendDif = (r: Res) => { const c = alvo(r), v = vendEf(r); return !!(c && v && c.atendenteId && v.id !== c.atendenteId); };
   // quem comprou é outra pessoa (ex.: orçamento com a Maria, compra no nome do João): ao confirmar, ela vira o "cliente pagador"
@@ -188,11 +210,18 @@ export default function EncontrarVendas360() {
   return (
     <section className="view active">
       <div className="view-head"><div><h2>Encontrar vendas do 360</h2>
-        <p>Anexe o <b>relatório de vendas do Exact</b>. O sistema procura cada venda nos clientes do ALIANÇA 360 — <b>consultores</b> e <b>marketing</b> — pelo nº da venda, pelo <b>telefone</b> e pelo nome. Vale o que está no Exact: nº, valor, situação e <b>vendedor</b>. Ao confirmar, a venda entra no 360 já validada pela Gestão e o vendedor do cliente é corrigido quando for diferente.</p></div></div>
+        <p>O <b>relatório de vendas do Exact</b> é puxado sozinho (não precisa mais anexar). Vendas <b>incluídas por Checklist.*</b> são pedido da fábrica e não contam como venda. O sistema procura cada venda nos clientes do ALIANÇA 360 — <b>consultores</b> e <b>marketing</b> — pelo nº da venda, pelo <b>telefone</b> e pelo nome. Vale o que está no Exact: nº, valor, situação e <b>vendedor</b>. Ao confirmar, a venda entra no 360 já validada pela Gestão e o vendedor do cliente é corrigido quando for diferente.</p></div></div>
       <div className="ev-caixa">
         <div style={{ fontWeight: 800 }}>🧾 Exact · relatório de vendas <span className="pill">{totLinhas} linhas</span></div>
+        {gestao && <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 13 }}>
+          <span>Período (data da situação):</span>
+          <input type="date" value={de} max={ate} onChange={e => setDe(e.target.value)} style={{ width: "auto" }} /> <span>até</span>
+          <input type="date" value={ate} min={de} onChange={e => setAte(e.target.value)} style={{ width: "auto" }} />
+          <button className="btn primary sm" disabled={puxando} onClick={puxarAgora}>{puxando ? "Puxando do Exact…" : "🔄 Atualizar do Exact agora"}</button>
+          <span className="hint">{ultima ? "Última atualização: " + new Date(ultima).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + " · " : ""}puxa ao abrir esta tela (se passou de 15 min) e sozinho a cada 2 h, das 7h41 às 19h41</span>
+        </div>}
         {arqs.map((a, i) => <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>📄 <span style={{ flex: 1 }}>{a.nome}</span><span className="pill">{a.linhas.length}</span><button className="btn ghost sm" style={{ color: "var(--danger)" }} onClick={() => setArqs(x => x.filter((_, j) => j !== i))}>✕</button></div>)}
-        <div><button className="btn sm" onClick={() => inp.current?.click()}>＋ {arqs.length ? "Adicionar outro relatório" : "Adicionar relatório"}</button></div>
+        <div><button className="btn sm" onClick={() => inp.current?.click()}>＋ Anexar um relatório à mão (opcional)</button></div>
         <input ref={inp} type="file" accept=".csv,.xlsx" multiple style={{ display: "none" }} onChange={e => { add(e.target.files); e.target.value = ""; }} />
       </div>
       {res.length > 0 && <>
