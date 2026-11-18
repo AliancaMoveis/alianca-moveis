@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { ciclo, cicloDe, moverCiclo } from "../lib/cicloCk";
+import { Calendario } from "./Checklist";
 import { fmtDate, hojeISO } from "../lib/regras";
 
 type Linha = {
@@ -32,7 +33,9 @@ export default function RecuperacaoCk() {
   const [dia, setDia] = useState(hojeISO());
   const [d, setD] = useState<any>(null);
   const [quem, setQuem] = useState("");
+  const [sit, setSit] = useState("");
   const [edit, setEdit] = useState<Record<string, string>>({});
+  const [editV, setEditV] = useState<Record<string, string>>({});   // nº da venda nova, corrigido pelo financeiro
   const [ocupado, setOcupado] = useState("");
   const c = ciclo(ym);
   const per = aba === "ciclo" ? { de: c.de, ate: c.ate } : { de: dia, ate: dia };
@@ -40,9 +43,10 @@ export default function RecuperacaoCk() {
   const carregar = () => A.ckRecupLista(per.de, per.ate, quem || undefined).then(setD).catch((e: any) => { toast(e.message); setD({ linhas: [] }); });
   useEffect(() => { setD(null); carregar(); }, [per.de, per.ate, quem]);
 
-  const linhas: Linha[] = d?.linhas || [];
+  const todas: Linha[] = d?.linhas || [];
+  const linhas: Linha[] = sit ? todas.filter(x => x.status === sit) : todas;
   const podeDecidir = !!d?.podeDecidir;
-  const projetistas = useMemo(() => [...new Set(linhas.map(l => l.projetista))].sort(), [linhas]);
+  const projetistas = useMemo(() => [...new Set(todas.map(l => l.projetista))].sort(), [todas]);
   const soma = (k: keyof Linha) => linhas.reduce((t, l) => t + (Number(l[k]) || 0), 0);
   const porPessoa = useMemo(() => {
     const m = new Map<string, { n: number; dif: number; rec: number; com: number; pend: number }>();
@@ -61,8 +65,9 @@ export default function RecuperacaoCk() {
     let motivo = "";
     if (status === "recusado") { motivo = prompt("Por que está recusando a comissão de " + l.cliente + "?") || ""; if (!motivo.trim()) return; }
     setOcupado(l.chamado);
-    try { await A.ckRecupDecidir(l.chamado, status, { valorFinal: vf || undefined, motivo });
+    try { await A.ckRecupDecidir(l.chamado, status, { valorFinal: vf || undefined, vendaTatico: editV[l.chamado] || undefined, motivo });
       setEdit(e => { const n = { ...e }; delete n[l.chamado]; return n; });
+      setEditV(e => { const n = { ...e }; delete n[l.chamado]; return n; });
       toast(status === "aprovado" ? "Comissão aprovada" : status === "pago" ? "Marcada como paga" : status === "recusado" ? "Comissão recusada" : "Voltou para análise");
       carregar(); }
     catch (e: any) { toast(e.message || "não deu"); } finally { setOcupado(""); }
@@ -86,11 +91,11 @@ tfoot td{font-weight:700;background:#f3f3f3}
 </style></head><body>
 <header><b>ALIANÇA MÓVEIS</b><span>${tit}</span></header>
 ${sub ? `<div class="sub">${sub}</div>` : ""}
-<table><thead><tr><th>Data</th><th>Projetista</th><th>Cliente</th><th>CPF</th><th>Venda</th><th>Cupom</th><th>Projeto final</th><th>Diferença</th><th>Desc.</th><th>Recuperado</th><th>%</th><th>Comissão</th><th>Situação</th></tr></thead>
-<tbody>${linhas.map(l => `<tr><td>${l.data ? fmtDate(l.data) : "—"}</td><td>${l.projetista}</td><td>${l.cliente}</td><td>${doc(l.cpf)}</td><td>${l.venda || "—"}</td>
+<table><thead><tr><th>Data</th><th>Projetista</th><th>Cliente</th><th>CPF</th><th>Venda de origem</th><th>Venda nova</th><th>Cupom</th><th>Projeto final</th><th>Diferença</th><th>Desc.</th><th>Recuperado</th><th>%</th><th>Comissão</th><th>Situação</th></tr></thead>
+<tbody>${linhas.map(l => `<tr><td>${l.data ? fmtDate(l.data) : "—"}</td><td>${l.projetista}</td><td>${l.cliente}</td><td>${doc(l.cpf)}</td><td>${l.venda || "—"}</td><td><b>${l.vendaTatico || "—"}</b></td>
 <td class="n">${brl(l.valorInicial)}</td><td class="n">${brl(l.valorFinal)}</td><td class="n">${brl(l.diferenca)}</td><td class="n">${pct(l.descontoPct)}</td>
 <td class="n">${brl(l.recuperado)}</td><td class="n">${l.faixa === 0 ? "—" : pct(l.faixa)}</td><td class="n">${brl(l.comissao)}</td><td>${(SIT[l.status] || [l.status])[0].replace(/^\S+\s/, "")}</td></tr>`).join("")}</tbody>
-<tfoot><tr><td colspan="7">Total · ${linhas.length} cliente(s)</td><td class="n">${brl(soma("diferenca"))}</td><td></td><td class="n">${brl(soma("recuperado"))}</td><td></td><td class="n">${brl(linhas.filter(l => l.status !== "recusado").reduce((t, l) => t + (Number(l.comissao) || 0), 0))}</td><td></td></tr></tfoot></table>
+<tfoot><tr><td colspan="8">Total · ${linhas.length} cliente(s)</td><td class="n">${brl(soma("diferenca"))}</td><td></td><td class="n">${brl(soma("recuperado"))}</td><td></td><td class="n">${brl(linhas.filter(l => l.status !== "recusado").reduce((t, l) => t + (Number(l.comissao) || 0), 0))}</td><td></td></tr></tfoot></table>
 <div class="ass"><div>Checklist${quem ? " · " + quem : ""}</div><div>Financeiro — conferido e aprovado</div></div>
 </body></html>`);
     w.document.close(); setTimeout(() => w.print(), 400);
@@ -116,9 +121,12 @@ ${sub ? `<div class="sub">${sub}</div>` : ""}
           <input type="date" value={dia} max={hojeISO()} onChange={e => e.target.value && setDia(e.target.value)} style={{ maxWidth: 160 }} />
           <button className="btn sm" onClick={() => setDia(hojeISO())}>Hoje</button>
         </>}
-        {!d?.soMinhas && projetistas.length > 1 && <select value={quem} onChange={e => setQuem(e.target.value)} style={{ maxWidth: 190, marginLeft: "auto" }}>
+        {!d?.soMinhas && <select value={quem} onChange={e => setQuem(e.target.value)} style={{ maxWidth: 200, marginLeft: "auto" }} title="Filtrar por projetista">
           <option value="">Todos os projetistas</option>{projetistas.map(p => <option key={p} value={p}>{p}</option>)}</select>}
-        <button className="btn primary sm" disabled={!linhas.length} onClick={imprimir} style={!d?.soMinhas && projetistas.length > 1 ? undefined : { marginLeft: "auto" }}>🖨 Imprimir</button>
+        <select value={sit} onChange={e => setSit(e.target.value)} style={{ maxWidth: 190 }} title="Filtrar pela situação">
+          <option value="">Todas as situações</option><option value="pendente">⏳ Aguardando o financeiro</option>
+          <option value="aprovado">✅ Aprovadas</option><option value="pago">💰 Pagas</option><option value="recusado">❌ Recusadas</option></select>
+        <button className="btn primary sm" disabled={!linhas.length} onClick={imprimir}>🖨 Imprimir</button>
       </div>
 
       {d === null ? <div className="hint">Carregando…</div> : !linhas.length ? <div className="cp-card hint">
@@ -141,13 +149,17 @@ ${sub ? `<div class="sub">${sub}</div>` : ""}
         <div className="sec-label">{aba === "ciclo" ? "Clientes do ciclo" : "Clientes do dia"}</div>
         <div className="card" style={{ padding: "8px 14px", overflowX: "auto" }}>
           <table className="ng-tab">
-            <thead><tr><th>Data</th><th>Cliente</th><th>Venda</th><th>Cupom</th><th>Projeto final</th><th>Diferença</th><th>Desc.</th><th>Recuperado</th><th>%</th><th>Comissão</th><th>Situação</th>{podeDecidir && <th></th>}</tr></thead>
+            <thead><tr><th>Data</th><th>Cliente</th><th>Venda de origem</th><th>Venda nova (Tático)</th><th>Cupom</th><th>Projeto final</th><th>Diferença</th><th>Desc.</th><th>Recuperado</th><th>%</th><th>Comissão</th><th>Situação</th>{podeDecidir && <th></th>}</tr></thead>
             <tbody>{linhas.map(l => { const sit = SIT[l.status] || [l.status, "var(--line)"];
               return <tr key={l.chamado}>
                 <td>{l.data ? fmtDate(l.data) : "—"}</td>
                 <td><b>{l.cliente}</b>{!d?.soMinhas && <small style={{ display: "block", opacity: .7 }}>{l.projetista}</small>}
                   {l.obs && <small style={{ display: "block", opacity: .7 }}>{l.obs}</small>}</td>
                 <td>{l.venda || "—"}</td>
+                <td>{podeDecidir && l.status !== "pago"
+                  ? <input inputMode="numeric" style={{ width: 100, fontSize: 12.5 }} placeholder="nº da venda"
+                      value={editV[l.chamado] ?? (l.vendaTatico || "")} onChange={e => setEditV(x => ({ ...x, [l.chamado]: e.target.value }))} />
+                  : l.vendaTatico ? <b>{l.vendaTatico}</b> : <span style={{ color: "var(--warn)", fontWeight: 700, fontSize: 12 }}>falta tirar</span>}</td>
                 <td>{brl(l.valorInicial)}</td>
                 <td>{podeDecidir && l.status !== "pago" ? <input inputMode="decimal" style={{ width: 110, fontSize: 12.5 }}
                   value={edit[l.chamado] ?? (l.valorFinal == null ? "" : String(l.valorFinal).replace(".", ","))}
@@ -249,6 +261,37 @@ td.n{text-align:right;white-space:nowrap}td.ok{width:22mm}tfoot td{font-weight:7
           </div>
           <div className="hint" style={{ marginTop: 8 }}>A folha impressa leva duas colunas em branco para a Regina marcar: venda validada e comissão aprovada.{R.ehGestao && R.ehGestao() ? "" : ""}</div>
         </>}
+    </section>
+  );
+}
+
+
+/** 📅 Agenda geral para o projetista: a mesma agenda do setor Checklist, só que sem poder mexer.
+ *  Ele não lê os chamados de checklist direto (a permissão é do setor Checklist), então a lista vem
+ *  pronta do servidor e é remontada no formato que o calendário espera. */
+export function AgendaGeralProjetista() {
+  const { toast } = useApp() as any;
+  const [ch, setCh] = useState<any[] | null>(null);
+  useEffect(() => {
+    const d = new Date(); const de = new Date(d); de.setDate(de.getDate() - 45); const ate = new Date(d); ate.setDate(ate.getDate() + 90);
+    const iso = (x: Date) => x.toISOString().slice(0, 10);
+    A.ckProjetistaAgenda("*", iso(de), iso(ate))
+      .then(l => setCh((l || []).map((c: any) => ({
+        id: c.id, tipo: "checklist", cliente: c.cliente, pedido: c.pedido, telefone: c.telefone, status: c.status,
+        tratativa: { checklist: {
+          etapa: c.etapa, agendadoPara: c.agendadoPara, duracaoMin: c.duracaoMin, projetista: c.projetista,
+          diasExtras: Array.isArray(c.diasExtras) ? c.diasExtras : [], confirmacao: c.confirmacao, proposta: c.proposta,
+          propostaDiasExtras: c.propostaDiasExtras, propostaProjetista: c.propostaProjetista, local: c.local,
+          ambiente: c.ambiente, encaixe: c.encaixe, realizadoEm: c.realizadoEm, termo: c.termo,
+        } },
+      }))))
+      .catch((e: any) => { toast(e.message); setCh([]); });
+  }, []);
+  return (
+    <section className="view active">
+      <div className="view-head"><div><h2>📅 Agenda geral do checklist</h2>
+        <p>A agenda de todos os projetistas, no mesmo formato do setor Checklist: escolha o dia e veja quem está com quem. Aqui é só visualização — quem altera a agenda é o setor Checklist.</p></div></div>
+      {ch === null ? <div className="hint">Carregando a agenda…</div> : <Calendario soLeitura fonte={ch} />}
     </section>
   );
 }

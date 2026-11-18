@@ -1144,7 +1144,7 @@ export function Sugestoes({ valor, onPick, excluirId, projetista, durMin }: { va
 // ---------- calendário: DIA por projetista (padrão do sistema interno), semana e mês ----------
 const H_FIM = 19, F_ALMOCO = 0.35;
 const almocoH = (h: number) => h >= 13 && h < 15;
-function Calendario() {
+export function Calendario({ soLeitura, fonte }: { soLeitura?: boolean; fonte?: any[] } = {}) {
   const [modo, setModo] = useState<string>("dia");
   return (
     <>
@@ -1153,12 +1153,18 @@ function Calendario() {
         <button className={modo === "semana" ? "on" : ""} onClick={() => setModo("semana")}>Semana</button>
         <button className={modo === "mes" ? "on" : ""} onClick={() => setModo("mes")}>Mês</button>
       </div>
-      {modo === "dia" ? <CalendarioDia /> : <CalendarioSemanaMes modo={modo as any} onModo={setModo} />}
+      {modo === "dia" ? <CalendarioDia soLeitura={soLeitura} fonte={fonte} /> : <CalendarioSemanaMes modo={modo as any} onModo={setModo} fonte={fonte} />}
     </>
   );
 }
-function CalendarioDia() {
+/** `soLeitura`: o projetista vê a agenda de todos para se achar, mas não arrasta nem estica nada —
+ *  quem mexe na agenda é o setor Checklist. */
+function CalendarioDia({ soLeitura, fonte }: { soLeitura?: boolean; fonte?: any[] } = {}) {
   const { st, R: Rg, abrirDetalhe } = useApp() as any;
+  // `fonte`: o projetista não lê os chamados de checklist direto (a permissão é do setor Checklist),
+  // então a agenda dele vem pronta do servidor e entra por aqui, no mesmo desenho.
+  const base: any[] = fonte || st.chamados;
+  const vejo = (c: any) => (fonte ? true : Rg.podeVer(c));
   const cfg = cfgAgenda(st); _projs = cfg.projetistas;
   const [dia, setDia] = useState(hoje());
   const [ocultos, setOcultos] = useState<string[]>([]);
@@ -1174,7 +1180,8 @@ function CalendarioDia() {
   const hhmm = (m: number) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
   function soltar(e: React.DragEvent, proj: string) {
     e.preventDefault();
-    const id = e.dataTransfer.getData("text/plain"); const c = st.chamados.find((x: any) => x.id === id); if (!c || !proj) return;
+    if (soLeitura) return;
+    const id = e.dataTransfer.getData("text/plain"); const c = base.find((x: any) => x.id === id); if (!c || !proj) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const d0 = durCk(c, cfg);
     const ini = Math.max(H_INI * 60, Math.min(snap(minOf(e.clientY - r.top - pega.current)), H_FIM * 60 - d0));
@@ -1184,6 +1191,7 @@ function CalendarioDia() {
   }
   // estender (ou encurtar) o atendimento puxando a borda de baixo — mouse, caneta ou dedo
   function esticar(e: React.PointerEvent, c: any, ini: number, fim0: number) {
+    if (soLeitura) return;
     e.preventDefault(); e.stopPropagation();
     const y0 = e.clientY; let fim = fim0;
     const yFim = yOf(fim0);
@@ -1195,7 +1203,7 @@ function CalendarioDia() {
     window.addEventListener("pointermove", mv, { passive: false }); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
   }
   // pula só os dias sem atendimento: dia fora da configuração (ex.: sábado) aparece quando tem cliente marcado
-  const diasComCliente = new Set<string>(st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).flatMap((c: any) => {
+  const diasComCliente = new Set<string>(base.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && vejo(c)).flatMap((c: any) => {
     const e = etapaCk(c), k = ck(c);
     if (e === "agendado" || e === "realizado") return atendimentos(c, cfg).map(a => a.slot.slice(0, 10));
     return ofer && e === "aguardando" && k.proposta ? [String(k.proposta).slice(0, 10)] : [];
@@ -1203,7 +1211,7 @@ function CalendarioDia() {
   const mover = (n: number) => { const d = parseData(dia); do { d.setDate(d.getDate() + n); } while (!diaComAgenda(cfg, isoDia(d)) && !diasComCliente.has(isoDia(d)) && Math.abs(+d - +parseData(dia)) < 8 * 864e5); setDia(isoDia(d)); };
   type Ev = { c: any; ini: number; fim: number; proj: string; tipo: "ag" | "of"; venc?: boolean; lane?: number; lanes?: number; extra?: number; n?: number; total?: number };
   const minDe = (slot: string) => { const d = parseData(slot); return d.getHours() * 60 + d.getMinutes(); };
-  const evs: Ev[] = st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).flatMap((c: any) => {
+  const evs: Ev[] = base.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && vejo(c)).flatMap((c: any) => {
     const k = ck(c), e = etapaCk(c);
     if (e === "agendado" || e === "realizado") return atendimentos(c, cfg).filter(a => a.slot.slice(0, 10) === dia).map(a => { const ini = minDe(a.slot); return { c, ini, fim: ini + a.dur, proj: a.proj, tipo: "ag", extra: a.extra, n: a.n, total: a.total } as Ev; });
     // data oferecida: ocupa o mesmo tempo escolhido na mensagem (e os dias seguintes, se for mais de um dia)
@@ -1295,7 +1303,7 @@ function CalendarioDia() {
                 const w = 100 / (x.lanes || 1), conf = k.confirmacao;
                 return (
                   <div key={x.c.id + ":" + (x.extra ?? -1)} onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + (x.tipo === "ag" && (x.extra ?? -1) < 0 ? " — arraste para outro horário ou projetista" : (x.extra ?? -1) >= 0 ? " — dia adicional (altere na ficha do cliente)" : "")}
-                    draggable={x.tipo === "ag" && (x.extra ?? -1) < 0} onDragStart={e => { e.dataTransfer.setData("text/plain", x.c.id); e.dataTransfer.effectAllowed = "move"; pega.current = e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top; }}
+                    draggable={!soLeitura && x.tipo === "ag" && (x.extra ?? -1) < 0} onDragStart={e => { e.dataTransfer.setData("text/plain", x.c.id); e.dataTransfer.effectAllowed = "move"; pega.current = e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top; }}
                     style={{ position: "absolute", zIndex: 2, top: top + 1, height: alt, left: `calc(${(x.lane || 0) * w}% + 3px)`, width: `calc(${w}% - 6px)`, overflow: "hidden", cursor: "pointer",
                       borderRadius: 4, padding: "4px 6px", fontSize: 11.5, lineHeight: 1.3, color: x.tipo === "ag" ? "#fff" : x.venc ? "#7c2d12" : "#6b4a00",
                       background: x.tipo === "ag" ? cor : x.venc ? "repeating-linear-gradient(45deg,#ffedd5,#ffedd5 6px,#fed7aa 6px,#fed7aa 12px)" : "#ffe8a3", border: x.tipo === "ag" ? (k.encaixe ? "2.5px solid var(--danger)" : "none") : x.venc ? "2.5px dashed #9a3412" : `2px dashed ${cor}` }}>
@@ -1306,7 +1314,7 @@ function CalendarioDia() {
                       <div>Venda {x.c.pedido}</div>
                       {x.tipo === "ag" ? <div><b>Presença:</b> {conf === "confirmada" ? "Confirmada ✅" : conf === "enviada" ? "Aguardando" : "A confirmar"}</div>
                         : <div style={{ fontWeight: 700 }}>{x.venc ? "⚠️ Prazo vencido — liberar ou renovar" : "Aguardando resposta"}</div>}</>)}
-                    {x.tipo === "ag" && (x.extra ?? -1) < 0 && <div className="ck-estica" title="Arraste para aumentar ou diminuir o tempo" draggable={false} onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
+                    {!soLeitura && x.tipo === "ag" && (x.extra ?? -1) < 0 && <div className="ck-estica" title="Arraste para aumentar ou diminuir o tempo" draggable={false} onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
                       onClick={e => e.stopPropagation()} onPointerDown={e => esticar(e, x.c, x.ini, x.fim)}><i />{estica && estica.id === x.c.id ? <b>até {hm(x.fim)} · {Math.round((x.fim - x.ini) / 6) / 10}h</b> : <span>⇕ puxe para estender</span>}</div>}
                   </div>);
               })}
@@ -1318,14 +1326,14 @@ function CalendarioDia() {
 }
 
 // ---------- calendário (semana / mês) ----------
-function CalendarioSemanaMes({ modo: modo0, onModo }: { modo: "semana" | "mes"; onModo: (m: string) => void }) {
+function CalendarioSemanaMes({ modo: modo0, onModo, fonte }: { modo: "semana" | "mes"; onModo: (m: string) => void; fonte?: any[] }) {
   const { st, R: Rg, abrirDetalhe } = useApp() as any;
   const cfg = cfgAgenda(st); _projs = cfg.projetistas;
   const modo = modo0; const setModo = (m: any) => onModo(m);
   const [ref, setRef] = useState(hoje());
   const [fp, setFp] = useState("");
   const [ofer, setOfer] = useState(true);
-  const evs = st.chamados.filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && Rg.podeVer(c)).map((c: any) => {
+  const evs = (fonte || st.chamados).filter((c: any) => c.tipo === "checklist" && (c.status !== "concluida" || etapaCk(c) === "realizado") && (fonte ? true : Rg.podeVer(c))).map((c: any) => {
     const k = ck(c), e = etapaCk(c);
     if ((e === "agendado" || e === "realizado") && k.agendadoPara) return atendimentos(c, cfg).map(a => ({ c, quando: a.slot, tipo: "ag", proj: a.proj, enc: !!k.encaixe && a.extra < 0, n: a.n, total: a.total }));
     if (ofer && e === "aguardando" && k.proposta) return propostaDias(c, cfg).map(x => ({ c, quando: x.slot, tipo: "of", proj: k.propostaProjetista || "", venc: diasDesde(k.ultimoContato) > cfg.seguraDias }));
