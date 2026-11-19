@@ -338,6 +338,16 @@ export const A = {
     if (!data?.ok) throw new Error(data?.erro || "A Kommo não confirmou o envio");
     return data as { ok: true; lead_id: number; contato_id: number; origem: string };
   },
+  /**
+   * Manda um texto livre pelo número do checklist (Kommo), sem modelo da Meta.
+   * Só chega se o cliente escreveu nas últimas 24h — fora da janela a Meta barra.
+   */
+  kommoMensagem: async (p: { chamado: string; cliente: string; telefone: string; pedido?: string | null; texto: string; por?: string; assunto?: string }) => {
+    const { data, error } = await sb.functions.invoke("kommo", { body: { acao: "mensagem", ...p } });
+    if (error) throw new Error(error.message || "Não consegui falar com a Kommo");
+    if (!data?.ok) throw new Error(data?.erro || "A Kommo não confirmou o envio");
+    return data as { ok: true; lead_id: number };
+  },
   // área do projetista do checklist (agenda dele + termo de ciência a partir da listagem do Promob — sem valores)
   ckProjetistaEu: () => rpc<{ projetista: string | null; podeTodos: boolean; projetistas: string[] }>("ck_projetista_eu"),
   ckProjetistaAgenda: (proj: string | null, de: string, ate: string) => rpc<any[]>("ck_projetista_agenda", { p_proj: proj, p_de: de, p_ate: ate }),

@@ -1478,7 +1478,13 @@ function DocsDoCliente({ c, t0, ass, toast, recarregar }: { c: any; t0: any; ass
   const guardar = async (tipo: "contrato" | "imagens", b: Blob, nome: string) => {
     try { await A.ckDocCliente(c.id, tipo, nome, b); await recarregar?.(); } catch (e: any) { toast("Gerado, mas não consegui guardar na ficha: " + e.message); }
   };
-  /** manda o link do PDF pelo WhatsApp e registra quem mandou e quando */
+  /**
+   * Manda o link do PDF pelo WhatsApp e registra quem mandou e quando.
+   * Primeiro tenta pelo número do checklist (Kommo): sai da empresa, fica registrado
+   * na conversa do cliente e ninguém usa o WhatsApp pessoal. A Meta só entrega texto
+   * livre se o cliente escreveu nas últimas 24h — se ela barrar, o 360 abre o WhatsApp
+   * com a mensagem pronta para a pessoa mandar na mão, e diz por que caiu nessa.
+   */
   const enviar = async (tipo: "contrato" | "imagens") => {
     const d = doc(tipo); if (!d) { toast("Gere o documento primeiro"); return; }
     if (!tel) { toast("Este cliente está sem telefone na ficha"); return; }
@@ -1489,10 +1495,17 @@ function DocsDoCliente({ c, t0, ass, toast, recarregar }: { c: any; t0: any; ass
       const txt = tipo === "contrato"
         ? `Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o contrato do checklist do seu projeto da Aliança Móveis, com a sua assinatura. Venda ${venda}.\n\n${link}`
         : `Olá, ${primeiroNome(cap(c.cliente))}! Aqui estão as imagens do projeto final que você conferiu no checklist da Aliança Móveis. Venda ${venda}.\n\n${link}`;
-      abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(txt));
-      await A.ckDocEnviado(c.id, d.path, { via: "whatsapp", para: tel });
-      await recarregar?.();
-      toast("Enviado — e registrado na ficha");
+      try {
+        await A.kommoMensagem({ chamado: c.id, cliente: c.cliente, telefone: tel, pedido: venda || null, texto: txt, assunto: tipo });
+        await A.ckDocEnviado(c.id, d.path, { via: "checklist", para: tel });
+        await recarregar?.();
+        toast("Enviado pelo WhatsApp do checklist — e registrado na ficha");
+      } catch (x: any) {
+        abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(txt));
+        await A.ckDocEnviado(c.id, d.path, { via: "whatsapp", para: tel });
+        await recarregar?.();
+        toast("O número do checklist não entregou (" + (x.message || "sem resposta") + ") — abri o WhatsApp com a mensagem pronta");
+      }
     } catch (e: any) { toast(e.message || "Não consegui enviar"); }
     finally { setIndo(""); }
   };
@@ -1536,12 +1549,12 @@ function DocsDoCliente({ c, t0, ass, toast, recarregar }: { c: any; t0: any; ass
         {d && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
           disabled={!!indo || !tel} onClick={() => enviar(tipo)}>{indo === "e" + tipo ? "Enviando…" : "💬 Enviar ao cliente"}</button>}
         {d && <span className="hint">gerado {fmtDateTime(d.em)}{d.por ? " · " + d.por : ""}</span>}
-        {envios.length > 0 && <span className="pjpill p-ok" style={{ margin: 0 }} title={envios.map((e: any) => fmtDateTime(e.em) + (e.por ? " · " + e.por : "")).join("\n")}>
-          ✓ enviado ao WhatsApp {fmtDateTime(envios[envios.length - 1].em)}{envios[envios.length - 1].por ? " · por " + envios[envios.length - 1].por : ""}{envios.length > 1 ? " (" + envios.length + "x)" : ""}</span>}
+        {envios.length > 0 && <span className="pjpill p-ok" style={{ margin: 0 }} title={envios.map((e: any) => fmtDateTime(e.em) + (e.por ? " · " + e.por : "") + (e.via === "checklist" ? " · pelo número do checklist" : " · pelo WhatsApp de quem enviou")).join("\n")}>
+          ✓ enviado {envios[envios.length - 1].via === "checklist" ? "pelo checklist" : "no WhatsApp"} {fmtDateTime(envios[envios.length - 1].em)}{envios[envios.length - 1].por ? " · por " + envios[envios.length - 1].por : ""}{envios.length > 1 ? " (" + envios.length + "x)" : ""}</span>}
       </div>;
     })}
     {passo && <div className="hint" style={{ marginTop: 6 }}>⏳ {passo}</div>}
-    <div className="hint" style={{ marginTop: 6 }}>O <b>contrato</b> sai igualzinho ao que o cliente assinou, com a assinatura, a selfie e o hash. O <b>detalhamento</b> traz só as imagens do projeto, uma por página, com o ambiente — sem valor, sem listagem e sem dado interno.</div>
+    <div className="hint" style={{ marginTop: 6 }}>O <b>contrato</b> sai igualzinho ao que o cliente assinou, com a assinatura, a selfie e o hash. O <b>detalhamento</b> traz só as imagens do projeto, uma por página, com o ambiente — sem valor, sem listagem e sem dado interno.<br />O envio sai pelo <b>número do checklist</b> (41 3316-9095), não pelo seu WhatsApp. A Meta só entrega mensagem escrita por nós se o cliente falou com a gente nas <b>últimas 24h</b> — fora dessa janela o 360 avisa e abre o WhatsApp com a mensagem pronta.</div>
   </div>;
 }
 

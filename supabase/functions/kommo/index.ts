@@ -10,6 +10,7 @@
 //   localizar    — onde o cliente está na Kommo, pelo telefone
 //   sincronizar  — garante lead no funil do checklist (aplicar:false = simulação)
 //   enviar       — grava os campos no lead e dispara o bot que manda a mensagem
+//   mensagem     — manda um texto livre (só vale dentro das 24h da Meta)
 
 const FUNIL_PRE = 13398119;         // VENDAS E AGENDAMENTO
 const FUNIL_CK = 13550523;          // Pós Venda Proj. / Checklist
@@ -269,6 +270,47 @@ Deno.serve(async (req) => {
       });
       await registrarEvento({ chamado_id: it.id, tipo: ok ? "enviado" : "falhou", modelo: novaData ? "retorno" : "primeiro",
         por: String(b.atendente || ""), data_oferecida: String(b.data || ""), erro: ok ? null : `a Kommo recusou o disparo (${run.st})` });
+      return json(ok
+        ? { ok: true, lead_id: g.lead_id, contato_id: g.contato_id, origem: g.origem }
+        : { ok: false, erro: `a Kommo recusou o disparo (${run.st})` });
+    }
+
+    // mensagem: manda um texto livre pelo número do checklist.
+    // Não usa modelo da Meta: o 360 grava o texto no campo do lead e dispara um bot de
+    // um passo só, que entrega esse campo. A Meta só deixa passar texto livre se o
+    // cliente escreveu nas últimas 24h — fora disso a mensagem não chega, e quem envia
+    // precisa saber disso (o 360 avisa na tela).
+    if (acao === "mensagem") {
+      const texto = String(b.texto || "").trim();
+      if (!b.chamado || !texto) return json({ erro: "faltou chamado ou texto" }, 400);
+      const it = { id: b.chamado, cliente: b.cliente, telefone: b.telefone, pedido: b.pedido };
+
+      let cf = 0, bot = 0;
+      try { cf = Number(await segredo("kommo_cf_mensagem")); bot = Number(await segredo("kommo_bot_mensagem")); } catch { /* ainda não configurado */ }
+      if (!cf || !bot) return json({ ok: false, erro: "o envio de mensagem pelo número do checklist ainda não está configurado na Kommo" }, 200);
+
+      const g = await garantirLead(it);
+      if (!g.ok) {
+        await registrarEvento({ chamado_id: it.id, tipo: "falhou", modelo: String(b.assunto || "documento"), por: String(b.por || ""), erro: g.motivo });
+        return json({ ok: false, erro: g.motivo }, 200);
+      }
+
+      const up = await kommo(`/api/v4/leads/${g.lead_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ custom_fields_values: [{ field_id: cf, values: [{ value: texto }] }] }),
+      });
+      if (up.st !== 200) {
+        const erro = `não consegui gravar a mensagem no lead (${up.st})`;
+        await registrarEvento({ chamado_id: it.id, tipo: "falhou", modelo: String(b.assunto || "documento"), por: String(b.por || ""), erro });
+        return json({ ok: false, erro }, 200);
+      }
+
+      const run = await kommo(`/api/v4/bots/${bot}/run`, {
+        method: "POST", body: JSON.stringify({ entity_id: g.lead_id, entity_type: "leads" }),
+      });
+      const ok = run.st >= 200 && run.st < 300;
+      await registrarEvento({ chamado_id: it.id, tipo: ok ? "enviado" : "falhou", modelo: String(b.assunto || "documento"),
+        por: String(b.por || ""), erro: ok ? null : `a Kommo recusou o disparo (${run.st})` });
       return json(ok
         ? { ok: true, lead_id: g.lead_id, contato_id: g.contato_id, origem: g.origem }
         : { ok: false, erro: `a Kommo recusou o disparo (${run.st})` });
