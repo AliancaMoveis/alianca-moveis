@@ -457,15 +457,18 @@ export default function MontagemPagamento() {
           <button className="btn primary" disabled={aprovando} onClick={aprovarSel}>{aprovando ? "Aprovando…" : "✅ Aprovar para pagamento"}</button>
           <button className="btn ghost sm" onClick={() => setSel(new Set())}>Limpar</button></div>}
         {!vis.length ? <div className="empty" style={{ padding: 24 }}>{dados && dados.ef.length ? "Nenhuma montagem efetivada neste período." : "Envie o relatório do Exact para começar."}</div> :
-          <table className="ma-tab"><thead><tr><th style={{ width: 28 }}></th><Th k="nome" l="Montador" /><Th k="n" l="Montagens" n /><Th k="prod" l="Produtos" n /><Th k="adic" l="Adicionais" n /><Th k="total" l="Total a pagar" n /><Th k="aprov" l="✅ Aprovado" n /><Th k="agu" l="⏳ Aguardando" n /><th>Conta para pagamento</th><th>Nota fiscal</th></tr></thead>
+          <table className="ma-tab"><thead><tr><th style={{ width: 28 }}></th><Th k="nome" l="Montador" /><Th k="n" l="Montagens" n /><Th k="prod" l="Produtos" n /><Th k="adic" l="Adicionais" n /><Th k="total" l="Total das O.S." n /><th className="n">➖ Descontos</th><th className="n">💰 A pagar</th><Th k="aprov" l="✅ Aprovado" n /><Th k="agu" l="⏳ Aguardando" n /><th>Conta para pagamento</th><th>Nota fiscal</th></tr></thead>
             <tbody>{vis.map(g => <Linha key={g.nome} g={g} recarregar={recarregar} sel={sel} alternar={alternar} aberto={aberto === g.nome} abrir={() => setAberto(aberto === g.nome ? "" : g.nome)} cadastro={cadastro} temConta={temConta(g)}
               gest={gest} nf={nfs.find(x => x.chave === chaveNf(g) && x.de === de && x.ate === ate) || null} de={de} ate={ate} recNf={recNf}
               descs={descDe(g)} refQ={refAtual} recDesc={recDesc} podeDesc={gest || fin} quem={R.nomeUser?.(R.currentUserId) || ""}
               vincular={async (id: string | null) => { try { await vincular(g.nome, id); await recarregar(); toast("Vínculo salvo"); } catch (e: any) { toast(e.message); } }} dataDe={dataDe} />)}</tbody>
-            <tfoot><tr><td></td><td>Total</td><td className="n">{soma(g => g.n)}</td><td className="n">{fmtMoeda(soma(g => g.prod))}</td><td className="n">{fmtMoeda(soma(g => g.adic))}</td><td className="n">{fmtMoeda(soma(g => g.total))}</td><td className="n">{fmtMoeda(soma(g => g.aprov))}</td><td className="n">{fmtMoeda(soma(g => g.agu))}</td><td></td></tr></tfoot>
+            <tfoot><tr><td></td><td>Total</td><td className="n">{soma(g => g.n)}</td><td className="n">{fmtMoeda(soma(g => g.prod))}</td><td className="n">{fmtMoeda(soma(g => g.adic))}</td><td className="n">{fmtMoeda(soma(g => g.total))}</td>
+              <td className="n">{soma(totDesc) ? <span style={{ color: "var(--danger)" }}>– {fmtMoeda(soma(totDesc))}</span> : "—"}</td>
+              <td className="n"><b>{fmtMoeda(r2(soma(g => g.total) - soma(totDesc)))}</b></td>
+              <td className="n">{fmtMoeda(soma(g => g.aprov))}</td><td className="n">{fmtMoeda(soma(g => g.agu))}</td><td></td><td></td></tr></tfoot>
           </table>}
       </div>
-      <p className="hint" style={{ marginTop: 10 }}>Total a pagar = total dos produtos + adicionais (o “Total OS” do Exact). Toque num montador para ver as O.S. A conta vem do cadastro de montadores; o nome do Exact (ex.: “enilson.rodrigues”) é ligado sozinho ao cadastro quando o nome bate — se não bater, escolha na coluna “Conta”.</p>
+      <p className="hint" style={{ marginTop: 10 }}>Total das O.S. = produtos + adicionais (o “Total OS” do Exact), sem o que está marcado para não pagar. <b>A pagar = total das O.S. menos os descontos do montador</b> — é esse valor que vai para o financeiro e para a nota. Toque num montador para ver as O.S. A conta vem do cadastro de montadores; o nome do Exact (ex.: “enilson.rodrigues”) é ligado sozinho ao cadastro quando o nome bate — se não bater, escolha na coluna “Conta”.</p>
     </section>
   );
 }
@@ -502,7 +505,9 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
       <td onClick={e => e.stopPropagation()}>{gest && agu.length > 0 && <input type="checkbox" title={"Selecionar as " + agu.length + " O.S. aguardando deste montador"} checked={nSel === agu.length} ref={el => { if (el) el.indeterminate = nSel > 0 && nSel < agu.length; }} onChange={e => alternar(agu.map(x => x.chave), e.target.checked)} />}</td>
       <td><b>{g.cad?.nome || g.nome}</b>{g.cad && g.cad.nome !== g.nome ? <small className="hint"> · Exact: {g.nome}</small> : null}</td>
       <td className="n">{g.n}</td><td className="n">{fmtMoeda(g.prod)}</td><td className="n">{fmtMoeda(g.adic)}</td>
-      <td className="n"><b>{fmtMoeda(g.total)}</b>{tDesc > 0 && <div style={{ fontSize: 12 }}><span style={{ color: "var(--danger)" }}>➖ {fmtMoeda(tDesc)}</span><br /><b>= {fmtMoeda(r2(g.total - tDesc))}</b></div>}</td>
+      <td className="n">{fmtMoeda(g.total)}</td>
+      <td className="n" title={tDesc > 0 ? descs.map((d: Desc) => (d.parcela ? d.parcela + " " : "") + d.descricao + ": " + fmtMoeda(d.valor)).join("\n") : undefined}>{tDesc > 0 ? <span style={{ color: "var(--danger)" }}>– {fmtMoeda(tDesc)}</span> : "—"}</td>
+      <td className="n"><b>{fmtMoeda(r2(g.total - tDesc))}</b></td>
       <td className="n">{g.aprovN ? fmtMoeda(g.aprov) : "—"}</td>
       <td className="n">{g.aguN ? fmtMoeda(g.agu) : "—"}</td>
       <td onClick={e => e.stopPropagation()} style={{ minWidth: 220 }}>
@@ -514,7 +519,7 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
       </td>
       <td onClick={e => e.stopPropagation()} style={{ minWidth: 150, fontSize: 12.5 }}>{nf?.recebida_em ? <span style={{ color: "var(--st-concluida)", fontWeight: 700 }}>✅ Nota recebida</span> : nf?.solicitada_em ? <span style={{ color: "#8a5a00" }}>📨 NF solicitada</span> : <span className="hint">pedido da nota: depois do fechamento enviado ao financeiro</span>}</td>
     </tr>
-    {aberto && <tr className="ma-dias"><td colSpan={10}>
+    {aberto && <tr className="ma-dias"><td colSpan={12}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "2px 0 8px" }}>
         {gest && <button className="btn sm primary" onClick={() => setModal(<ModalAvulsa cadastro={cadastro} pronto={recarregar} de={dataDe(g.itens[0]) || hoje()} ate={hoje()} inicial={{ montador: nomeAv }} />)}>＋ Incluir ordem avulsa</button>}
         <span className="hint">Serviço dentro da loja, frete ou outro pagamento manual — entra no total deste montador.</span>
