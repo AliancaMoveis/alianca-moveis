@@ -43,6 +43,15 @@ export function FotoViewer({ fotos, inicio = 0, onFechar, acoes, tituloImp }: { 
     return () => { document.removeEventListener("keydown", k); document.body.style.overflow = ov; };
   }, [fotos.length]);
   useEffect(() => { const el = tiras.current?.children[i] as HTMLElement | undefined; el?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" }); }, [i]);
+  // o voltar do Android e o gesto de voltar do iPhone fecham a foto, não a tela de trás
+  const fecharRef = useRef(onFechar); fecharRef.current = onFechar;
+  useEffect(() => {
+    let meu = true;
+    try { history.pushState({ fv: 1 }, ""); } catch { meu = false; }
+    const pop = () => { meu = false; fecharRef.current(); };
+    window.addEventListener("popstate", pop);
+    return () => { window.removeEventListener("popstate", pop); if (meu) { try { history.back(); } catch { /* sem histórico */ } } };
+  }, []);
   // link vencido: pede um novo para o arquivo
   const falhou = async () => { const p = f.path || f.storage_path; if (!p || url[i]) return; try { const u = await urlAnexo(p); if (u) setUrl(m => ({ ...m, [i]: u })); } catch { /* fica sem */ } };
   const src = url[i] || f.url;
@@ -73,6 +82,7 @@ export function FotoViewer({ fotos, inicio = 0, onFechar, acoes, tituloImp }: { 
   if (!fotos.length) return null;
   return createPortal(<div className="fv" role="dialog" aria-label="Fotos">
     <div className="fv-top">
+      <button type="button" className="fv-voltar" onClick={onFechar} aria-label="Voltar" title="Voltar (Esc)">‹ Voltar</button>
       <span className="fv-cont">{i + 1} / {fotos.length}{f.legenda ? " · " + f.legenda : ""}{msgT ? " · " + msgT : ""}</span>
       <span className="fv-bts">
         <button type="button" onClick={() => zoom(1 / 1.4)} aria-label="Diminuir zoom" title="Diminuir (−)">−</button>
