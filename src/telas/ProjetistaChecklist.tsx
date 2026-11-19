@@ -695,7 +695,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
           {etapa === 3 && <Etapa3 c={c} t0={t0} ambs={ambs} proj={proj} imgsProj={imgsProj} naoInc={naoInc} obs={obs} ferragens={ferragens} arqs={arqs} liberado={e2} ocupado={ocupado} toast={toast}
             ct={ct} setCt={setCt} assinado={e4} seguir={() => setEtapa(5)} antes={async () => (mudou ? await salvar("salvar", {}, "") : true)}
             gerar={async (paginas: number) => salvar("impressao", { impressao: { paginas } }, "Impressão registrada")} />}
-          {etapa === 4 && <Etapa4 c={c} t0={t0} ct={ct} ocupado={ocupado} setOcupado={setOcupado} toast={toast} liberado={e3} recarregar={recarregar}
+          {etapa === 4 && <Etapa4 c={c} t0={t0} ct={ct} arqs={arqs} ocupado={ocupado} setOcupado={setOcupado} toast={toast} liberado={e3} recarregar={recarregar}
             registrar={(assinado: any) => salvar("assinado", { assinado }, assinado.exact ? "Digitalizado anexado e enviado ao Exact" : "Digitalizado anexado no 360")} />}
           {etapa === 5 && <div>
             <div className="sec">5 · Marcar realizado</div>
@@ -705,7 +705,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
                 <div className="ck" style={{ marginTop: 6 }}>{[["Ambientes escritos e confirmados", e1], ["Conferência por ambiente preenchida", e2], ["Contrato gerado", e3], ["Contrato assinado pelo cliente", e4]].map(([t, ok]: any) => <label key={t}><i className={ok ? "" : "no"}>{ok ? "✓" : ""}</i> {t}</label>)}</div></div>
                 <button className="btn sm" style={podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .5 }} disabled={!podeRealizar || !!ocupado} onClick={marcarRealizado}>✅ Finalizar atendimento</button></div>}
             {/* os PDFs do cliente também aqui: é na finalização que se lembra de mandar, e continua valendo depois de finalizado */}
-            {(t0.assinados || []).some((a: any) => a.online && a.path) && <DocsDoCliente c={c} t0={t0} ass={t0.assinados || []} toast={toast} recarregar={recarregar} />}
+            {(t0.assinados || []).some((a: any) => a.online && a.path) && <DocsDoCliente c={c} t0={t0} ass={t0.assinados || []} arqs={arqs} toast={toast} recarregar={recarregar} />}
             {/* a folha de valores fica aqui: é o fim do atendimento, quando o projetista leva os números ao financeiro */}
             <RecuperacaoEtapa5 c={c} projetista={proj} toast={toast} dados={arqs?.dados} ambientes={ambs.map(a => a.nome).filter(Boolean)} />
           </div>}
@@ -963,6 +963,12 @@ const palavras = (t: string) => String(t || "").normalize("NFD").replace(/[\u030
   .replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, " ").trim().split(" ")
   .filter(w => w.length > 2 && !["imagem","imagens","projeto","projetos","final","render","renders","foto","fotos","pdf","arquivo","novo","nova"].includes(w));
 
+/** O nome do arquivo diz o ambiente? ("imagens qto casal.pdf" → Dormitório casal) */
+const casaAmb = (nomeArq: string, nomeAmb: string) => {
+  const f = palavras(nomeArq), a = palavras(nomeAmb);
+  return a.some(w => f.some(v => v.startsWith(w) || w.startsWith(v)));
+};
+
 function ImagensProjeto({ c, ambs, setAmbs, imgs, setImgs, arqs, toast }: any) {
   const [env, setEnv] = useState(false);
   const { setModal } = useApp() as any;
@@ -970,6 +976,28 @@ function ImagensProjeto({ c, ambs, setAmbs, imgs, setImgs, arqs, toast }: any) {
   const noAmb = (a: Amb, x: Img) => (a.imagens || []).some(m => chave(m) === chave(x));
   const alternar = (a: Amb, x: Img) => setAmbs((xs: Amb[]) => xs.map(y => y._k !== a._k ? y : { ...y, imagens: noAmb(y, x) ? (y.imagens || []).filter(m => chave(m) !== chave(x)) : [...(y.imagens || []), { fonte: x.fonte, id: x.id, path: x.path, nome: x.nome }] }));
   const comUrl = (x: any) => ({ ...x, tipo: ehPdf(x.nome) ? "pdf" : "img", url: (arqs?.ck || []).find((k: any) => k.path === x.path)?.url || x.url || "" });
+
+  // Fichas de antes da regra ficaram com imagem anexada e sem ambiente — e aí ela não sai
+  // em lugar nenhum. Ao abrir, o 360 vincula o que dá para vincular com segurança: um
+  // ambiente só, ou o nome do arquivo apontando para um ambiente e só um. O projetista vê
+  // o aviso e pode desmarcar; o padrão é vincular, não deixar solto.
+  const olhou = useRef("");
+  useEffect(() => {
+    if (olhou.current === c.id || !imgs.length || !ambs.length) return;
+    olhou.current = c.id;
+    const soltas = imgs.filter((x: Img) => !ambs.some((a: Amb) => noAmb(a, x)));
+    if (!soltas.length) return;
+    const auto = new Map<string, Img[]>();
+    for (const n of soltas) {
+      const cands = ambs.length === 1 ? ambs : ambs.filter((y: Amb) => casaAmb(n.nome, y.nome || ""));
+      if (cands.length === 1) auto.set(cands[0]._k, [...(auto.get(cands[0]._k) || []), n]);
+    }
+    if (!auto.size) return;
+    setAmbs((xs: Amb[]) => xs.map(y => auto.has(y._k) ? { ...y, imagens: [...(y.imagens || []), ...(auto.get(y._k) || []).map(({ url, ...n }: any) => n)] } : y));
+    const n = Array.from(auto.values()).reduce((t, l) => t + l.length, 0);
+    toast(n + " imagem(ns) sem ambiente foi(ram) vinculada(s) pelo nome do arquivo — confira e salve");
+  }, [c.id, imgs.length, ambs.length]);
+
   return <div className="pjab" style={{ marginTop: 14 }}>
     <h5>🖼 Imagens do projeto final <span style={{ fontWeight: 600, color: "var(--pj-s)" }}>· vão para o cliente no contrato</span></h5>
     <Soltar aceita="image/*,.pdf,application/pdf" multiplo ocupado={env} texto={<>⬆ Anexar o PDF das imagens do projeto (ou fotos / renders)<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>cada página do PDF vira uma imagem na folha do ambiente · marque abaixo de qual ambiente é</span></>}
@@ -982,9 +1010,8 @@ function ImagensProjeto({ c, ambs, setAmbs, imgs, setImgs, arqs, toast }: any) {
         else {
           // vincula sozinho quando o nome do arquivo diz o ambiente ("imagens cozinha.pdf" → Cozinha)
           // bate se alguma palavra do nome do arquivo casa com o ambiente, e só com ele ("qto casal" → Dormitório casal)
-          const casa = (nomeArq: string, nomeAmb: string) => { const f = palavras(nomeArq), a = palavras(nomeAmb); return a.some(w => f.some(v => v.startsWith(w) || w.startsWith(v))); };
           const auto = new Map<string, Img[]>();
-          for (const n of novos) { const cands = ambs.filter((y: Amb) => casa(n.nome, y.nome || "")); if (cands.length === 1) auto.set(cands[0]._k, [...(auto.get(cands[0]._k) || []), n]); }
+          for (const n of novos) { const cands = ambs.filter((y: Amb) => casaAmb(n.nome, y.nome || "")); if (cands.length === 1) auto.set(cands[0]._k, [...(auto.get(cands[0]._k) || []), n]); }
           if (auto.size) setAmbs((xs: Amb[]) => xs.map(y => auto.has(y._k) ? { ...y, imagens: [...(y.imagens || []), ...(auto.get(y._k) || []).map(({ url, ...n }: any) => n)] } : y));
           const sobrou = novos.length - Array.from(auto.values()).reduce((t, l) => t + l.length, 0);
           toast(novos.length + " arquivo(s) anexado(s)" + (auto.size ? " · " + (novos.length - sobrou) + " já vinculado(s) pelo nome" : "") + (sobrou ? " — marque o ambiente de " + sobrou : ""));
@@ -1206,6 +1233,44 @@ function RecuperacaoEtapa5({ c, projetista, toast, dados, ambientes }: { c: any;
   </div>;
 }
 
+/**
+ * Manda o link de assinatura pelo número do checklist (Kommo), com o telefone à vista e
+ * editável — às vezes quem está na loja é um terceiro, ou o WhatsApp do cliente é outro.
+ * A Meta só entrega texto livre dentro das 24h; fora disso o 360 abre o WhatsApp com a
+ * mensagem pronta, em vez de deixar o projetista achando que foi.
+ */
+function EnviarLinkWhats({ c, texto, telPadrao, assunto, toast }: { c: any; texto: string; telPadrao: string; assunto: string; toast: (m: string) => void }) {
+  const [num, setNum] = useState(telPadrao || "");
+  const [indo, setIndo] = useState(false);
+  const [feito, setFeito] = useState<{ em: string; via: string; para: string } | null>(null);
+  const limpo = sanitizeWhats(num);
+  const enviar = async () => {
+    if (!limpo) { toast("Escreva o WhatsApp de quem vai assinar"); return; }
+    setIndo(true);
+    try {
+      await A.kommoMensagem({ chamado: c.id, cliente: c.cliente, telefone: limpo, pedido: c.pedido || null, texto, assunto });
+      setFeito({ em: new Date().toISOString(), via: "checklist", para: limpo });
+      toast("Link enviado pelo WhatsApp do checklist");
+    } catch (e: any) {
+      abrirWhats("https://wa.me/" + limpo + "?text=" + encodeURIComponent(texto));
+      setFeito({ em: new Date().toISOString(), via: "whatsapp", para: limpo });
+      toast("O número do checklist não entregou (" + (e.message || "sem resposta") + ") — abri o WhatsApp com a mensagem pronta");
+    } finally { setIndo(false); }
+  };
+  return <div style={{ marginTop: 10, padding: "9px 11px", border: "1.5px solid var(--line,#e0e3e8)", borderRadius: 10 }}>
+    <div className="lbl2">Enviar o link por WhatsApp</div>
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 5 }}>
+      <input value={num} onChange={e => setNum(e.target.value)} inputMode="tel" placeholder="WhatsApp de quem vai assinar"
+        style={{ flex: "1 1 190px", minWidth: 0, padding: "8px 10px", fontSize: 14, borderRadius: 8, border: "1.5px solid var(--line,#e0e3e8)" }} />
+      <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
+        disabled={indo || !limpo} onClick={enviar}>{indo ? "Enviando…" : feito ? "💬 Enviar de novo" : "💬 Enviar pelo checklist"}</button>
+    </div>
+    <div className="hint" style={{ marginTop: 5 }}>{feito
+      ? (feito.via === "checklist" ? "✓ enviado pelo número do checklist em " : "✓ aberto no seu WhatsApp em ") + fmtDateTime(feito.em)
+      : "Sai do número da loja (41 3316-9095), não do seu. Confira o número antes — às vezes quem está aqui é um terceiro."}</div>
+  </div>;
+}
+
 // ---------------- etapa 3: contrato para assinatura online (link + QR Code) ----------------
 const blobParaDataUrl = (b: Blob) => new Promise<string>((ok, er) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = er; r.readAsDataURL(b); });
 const ehPdf = (n: string) => /\.pdf$/i.test(n || "");
@@ -1386,9 +1451,9 @@ function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs
         <div className="hint" style={{ margin: "8px 0", wordBreak: "break-all" }}>{linkTitular}</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(linkTitular); toast("Link do titular copiado"); } catch { prompt("Copie o link:", linkTitular); } }}>📋 Copiar link do titular</button>
-          {tel && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
-            onClick={() => abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(`Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o link para você assinar o contrato do checklist do seu projeto da Aliança Móveis: ${linkTitular}`))}>💬 Enviar ao titular pelo WhatsApp</button>}
         </div>
+        <EnviarLinkWhats c={c} telPadrao={c.telefone || c.telefone2 || ""} assunto="contrato-titular" toast={toast}
+          texto={`Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o link para você assinar o contrato do checklist do seu projeto da Aliança Móveis.\n\n${linkTitular}`} />
         <div className="hint" style={{ marginTop: 8 }}>⏳ Aguardando a assinatura do titular… · link vale até {fmtDateTime(ct.expira)}</div>
         <button className="btn sm ghost" style={{ marginTop: 8 }} onClick={() => setRefazer(v => !v)}>{refazer ? "✕ Deixar como está" : "↻ Refazer o contrato"}</button>
         {refazer && <div style={{ marginTop: 8 }}>
@@ -1408,12 +1473,12 @@ function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs
         <div className="hint" style={{ margin: "8px 0", wordBreak: "break-all" }}>{link}</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <button className="btn sm" onClick={copiar}>📋 Copiar link</button>
-          {tel && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
-            onClick={() => abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(`Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o contrato do checklist do seu projeto da Aliança Móveis para conferir e assinar: ${link}`))}>💬 Enviar por WhatsApp</button>}
           <button className="btn sm" disabled={!!montando} onClick={() => imprimir(true)}>{montando === "ler" ? "Montando…" : "🖨 Imprimir para o cliente ler antes"}</button>
           <button className="btn sm ghost" disabled={!!montando} onClick={gerarLink}>{montando === "link" ? "Gerando…" : "↻ Gerar de novo"}</button>
           <button className="btn sm ghost" onClick={async () => { if (!confirm("Cancelar este link? O cliente não vai mais conseguir assinar por ele.")) return; try { await A.ckContrato("cancelar", c.id); setCt(null); } catch (e: any) { toast(e.message); } }}>✕ Cancelar link</button>
         </div>
+        <EnviarLinkWhats c={c} telPadrao={ct.representanteTel || c.telefone || c.telefone2 || ""} assunto="contrato-link" toast={toast}
+          texto={`Olá, ${ct.representante ? primeiroNome(cap(ct.representante)) : primeiroNome(cap(c.cliente))}! Aqui está o contrato do checklist do projeto da Aliança Móveis para conferir e assinar${ct.representante ? " (venda de " + cap(c.cliente) + ")" : ""}.\n\n${link}`} />
         <div className="hint" style={{ marginTop: 8 }}>⏳ Aguardando a assinatura… · link vale até {fmtDateTime(ct.expira)}</div>
         {/* dá para corrigir quem assina e gerar o link de novo, sem cancelar antes */}
         {escolhaAmbientes}
@@ -1468,7 +1533,7 @@ function BaixarAssinado({ id, path, toast }: { id: string; path: string; toast: 
 }
 
 /** documentos que vão para o cliente: contrato assinado em PDF e o detalhamento das imagens */
-function DocsDoCliente({ c, t0, ass, toast, recarregar }: { c: any; t0: any; ass: any[]; toast: (m: string) => void; recarregar?: () => any }) {
+function DocsDoCliente({ c, t0, ass, arqs, toast, recarregar }: { c: any; t0: any; ass: any[]; arqs?: any; toast: (m: string) => void; recarregar?: () => any }) {
   const [indo, setIndo] = useState("");
   const [passo, setPasso] = useState("");
   const ultimo = [...ass].reverse().find((a: any) => a.online && a.path);
@@ -1526,18 +1591,67 @@ function DocsDoCliente({ c, t0, ass, toast, recarregar }: { c: any; t0: any; ass
     finally { setIndo(""); setPasso(""); }
   };
 
+  /**
+   * O detalhamento das imagens é INDEPENDENTE do contrato: ele monta direto com as imagens
+   * da aba "Conferência e imagens" da ficha. Antes saía do contrato assinado, e aí o
+   * contrato gerado sem imagem vinculada deixava o cliente sem nada. Mandar o contrato é
+   * uma coisa, mandar as imagens é outra.
+   * O ambiente de cada arquivo vem do que o projetista marcou; se não marcou, o nome do
+   * arquivo decide ("imagens cozinha.pdf" → Cozinha). Sem ambiente, a imagem vai mesmo assim.
+   */
   const imagens = async () => {
     setIndo("i"); setPasso("juntando as imagens…");
     try {
-      const r = await A.ckContratoAbrir(c.id, ultimo.path);
-      const html = await (await fetch(r.url)).text();
-      const { imagensDoContrato, pdfDasImagens, nomePdf } = await import("../lib/contratoPdf");
-      const imgs = imagensDoContrato(html);
-      if (!imgs.length) { toast("Este contrato foi gerado sem imagens do projeto"); return; }
+      const { pdfDasImagens, imagensDoContrato, nomePdf } = await import("../lib/contratoPdf");
+      const ck: any[] = arqs?.ck || [];
+      const ambsT: any[] = t0.ambientes || [];
+      const todas: any[] = t0.imagensProjeto || [];
+      const kk = (x: any) => x.path || x.id || x.nome;
+      const casa = (nomeArq: string, nomeAmb: string) => { const f = palavras(nomeArq), a = palavras(nomeAmb); return a.some(w => f.some(v => v.startsWith(w) || w.startsWith(v))); };
+      const ambDe = (m: any) => {
+        const marcado = ambsT.find(a => (a.imagens || []).some((y: any) => kk(y) === kk(m)));
+        if (marcado) return String(marcado.nome || "").trim();
+        const cands = ambsT.filter(a => casa(m.nome || "", a.nome || ""));
+        return cands.length === 1 ? String(cands[0].nome || "").trim() : "";
+      };
+      const blobDe = async (m: any): Promise<Blob | null> => {
+        if (m.fonte === "legacy" && m.id) return A.ckBaixar(c.id, m.id);
+        const u = m.fonte === "checklist" ? ck.find((x: any) => x.path === m.path)?.url || "" : m.url || "";
+        if (!u) return null;
+        const r = await fetch(u); if (!r.ok) throw new Error("arquivo " + r.status);
+        return r.blob();
+      };
+      const imgs: { ambiente: string; nome: string; src: string }[] = [];
+      const falhas: string[] = [];
+      for (const m of todas) {
+        setPasso("lendo " + m.nome + "…");
+        try {
+          const b = await blobDe(m); if (!b) { falhas.push(m.nome + " (arquivo não encontrado)"); continue; }
+          const amb = ambDe(m);
+          if (ehPdf(m.nome) || b.type === "application/pdf") {
+            const pags = await pdfParaImagens(b);
+            if (!pags.length) falhas.push(m.nome + " (PDF sem páginas)");
+            pags.forEach((src, i, l) => imgs.push({ ambiente: amb, nome: m.nome + (l.length > 1 ? " · pág. " + (i + 1) : ""), src }));
+          } else imgs.push({ ambiente: amb, nome: m.nome, src: await blobParaJpeg(b).catch(() => blobParaDataUrl(b)) });
+        } catch (e: any) { falhas.push(m.nome + " (" + (e?.message || "não abriu") + ")"); }
+      }
+      // ficha sem imagem anexada: ainda tenta o que o cliente assinou, para não ficar sem nada
+      if (!imgs.length) {
+        const r = await A.ckContratoAbrir(c.id, ultimo.path);
+        const html = await (await fetch(r.url)).text();
+        imgs.push(...imagensDoContrato(html));
+      }
+      if (!imgs.length) {
+        toast(todas.length
+          ? "Não consegui abrir nenhuma das imagens anexadas" + (falhas.length ? ": " + falhas.join(", ") : "")
+          : "Esta ficha não tem imagens do projeto — anexe na aba “Conferência e imagens”");
+        return;
+      }
+      setPasso("montando o PDF…");
       const b = await pdfDasImagens({ cliente: c.cliente, venda, data: fmtDateTime(ultimo.em).slice(0, 10), imagens: imgs });
       const nome = nomePdf("Projeto", c.cliente, venda);
       baixar(b, nome); setPasso("guardando na ficha…"); await guardar("imagens", b, nome);
-      toast(imgs.length + " imagem(ns) no PDF");
+      toast(imgs.length + " imagem(ns) no PDF" + (falhas.length ? " · ficou(aram) de fora: " + falhas.join(", ") : ""));
     } catch (e: any) { toast(e.message || "Não consegui montar o PDF das imagens"); }
     finally { setIndo(""); setPasso(""); }
   };
@@ -1560,7 +1674,7 @@ function DocsDoCliente({ c, t0, ass, toast, recarregar }: { c: any; t0: any; ass
   </div>;
 }
 
-function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado, recarregar }: any) {
+function Etapa4({ c, t0, ct, arqs, ocupado, setOcupado, toast, registrar, liberado, recarregar }: any) {
   const ass: any[] = t0.assinados || [];
   return <div>
     <div className="sec">4 · Contrato assinado <span className="src p-b">vai para o Exact como “Outros”</span></div>
@@ -1569,7 +1683,7 @@ function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado, re
     {ass.length > 0 && <div style={{ marginBottom: 12 }}>{ass.map((a, i) => <div key={i} className="pjrow on"><b>{a.online ? "✍️" : "📎"} {a.nome}</b><span className="hint">{fmtDateTime(a.em)}{a.por ? " · " + a.por : ""}</span>
       <span className={"pjpill " + (a.exact ? "p-ok" : "p-w")} style={{ margin: 0 }}>{a.exact ? "Exact ✓" : "só no 360"}</span>
       {a.path && <AbrirAssinado id={c.id} path={a.path} toast={toast} />}{a.path && <BaixarAssinado id={c.id} path={a.path} toast={toast} />}</div>)}</div>}
-    {ass.some((a: any) => a.online && a.path) && <DocsDoCliente c={c} t0={t0} ass={ass} toast={toast} recarregar={recarregar} />}
+    {ass.some((a: any) => a.online && a.path) && <DocsDoCliente c={c} t0={t0} ass={ass} arqs={arqs} toast={toast} recarregar={recarregar} />}
     <div className="sec" style={{ marginTop: 6 }}>Assinou no papel? <span className="src p-g">alternativa</span></div>
     <Soltar aceita="application/pdf,image/*" multiplo ocupado={ocupado === "assinado"} estilo={{ padding: 14 }}
       texto={<>⬆ Suba o PDF escaneado com as assinaturas do cliente<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>ou foto pelo celular · pode subir mais de um arquivo</span></>}
