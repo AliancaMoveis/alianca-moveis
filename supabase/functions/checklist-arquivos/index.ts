@@ -82,10 +82,11 @@ Deno.serve(async (req: Request) => {
     // ---------- arquivos da venda + medição ----------
     if (b.acao === "arquivos") {
       const avisos: string[] = []; const venda: any[] = []; const medicao: any[] = []; const outrosTicket: any[] = []; let dados: any = null;
+      let exactFalhou = false;
       if (!token) avisos.push("EXACT_TOKEN não configurado — sem os arquivos do Exact");
       if (token && pedido) {
         try { lista(await exact(token, "GET", `/attachments-legacy/${pedido}`)).forEach(a => venda.push(norm(a, "legacy"))); }
-        catch (x: any) { avisos.push("Arquivos da venda (Exact): " + String(x.message || x).slice(0, 160)); }
+        catch (x: any) { exactFalhou = true; avisos.push("Arquivos da venda (Exact): " + String(x.message || x).slice(0, 160)); }
       }
       if (token && ticket) {
         try {
@@ -102,8 +103,32 @@ Deno.serve(async (req: Request) => {
             if (!n.url) return;
             if (n.categoria === "MEASURING") medicao.push(n); else if (n.categoria === "FINAL_PROJECT" || n.categoria === "INITIAL_PROJECT") venda.push(n); else outrosTicket.push(n);
           });
-        } catch (x: any) { avisos.push("Ticket do checklist (Exact): " + String(x.message || x).slice(0, 160)); }
+        } catch (x: any) { exactFalhou = true; avisos.push("Ticket do checklist (Exact): " + String(x.message || x).slice(0, 160)); }
       } else if (token) avisos.push("Venda sem ticket de checklist no Exact (ainda não sincronizada)");
+
+      // ---------- espelho: guarda o que veio bom, serve a última cópia quando o Exact cai ----------
+      // Sem isso, Exact fora do ar = tela vazia e projetista parado (aconteceu em 19/11/2026).
+      let espelhoEm: string | null = null;
+      if (dados) {
+        // veio dado bom: atualiza a cópia
+        await adm.from("exact_espelho").upsert({
+          chamado_id: String(ctx.id), pedido: pedido || null, ticket_id: ticket || null,
+          conteudo: { dados, venda, medicao, outrosTicket }, em: new Date().toISOString(),
+        }, { onConflict: "chamado_id" });
+      } else if (exactFalhou) {
+        const { data: esp } = await adm.from("exact_espelho").select("conteudo,em").eq("chamado_id", String(ctx.id)).maybeSingle();
+        const cc: any = esp?.conteudo;
+        if (cc?.dados) {
+          dados = cc.dados;
+          espelhoEm = esp!.em as string;
+          // os links dos arquivos do Exact expiram e só o Exact os serve: mostra a lista,
+          // marcada, para a pessoa saber o que existe — mas sem prometer que abre agora
+          for (const a of (cc.venda || [])) venda.push({ ...a, url: "", offline: true });
+          for (const a of (cc.medicao || [])) medicao.push({ ...a, url: "", offline: true });
+          for (const a of (cc.outrosTicket || [])) outrosTicket.push({ ...a, url: "", offline: true });
+          avisos.push("O Exact não respondeu — a tela está mostrando a última cópia guardada no 360.");
+        }
+      }
       // medidas do 360 (fotos/planta anexadas no chamado de medidas da venda)
       const ids: string[] = Array.isArray(ctx.medidas) ? ctx.medidas : [];
       let m360: any[] = [];
@@ -123,7 +148,7 @@ Deno.serve(async (req: Request) => {
         const { data: s } = await adm.storage.from("checklist").createSignedUrls(ps, 3600);
         (s || []).forEach((x: any, i: number) => { const nome = String(ps[i].split("/").pop()).replace(/^[0-9a-f-]{36}-/, ""); ck.push({ fonte: "checklist", id: ps[i], path: ps[i], nome, tipo: tipoDe(nome), url: x.signedUrl || "", em: (objs[i] as any).created_at || null }); });
       }
-      return json({ ok: true, venda, medicao, m360, ck, outrosTicket, avisos, ticketId: ticket || null, dados });
+      return json({ ok: true, venda, medicao, m360, ck, outrosTicket, avisos, ticketId: ticket || null, dados, espelhoEm });
     }
 
     // ---------- baixar um arquivo da venda (Exact legacy) ----------

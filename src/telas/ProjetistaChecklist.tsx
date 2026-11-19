@@ -205,7 +205,7 @@ const CSS = `
 .pj .barra{position:sticky;bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin-top:12px;border:1px solid var(--pj-l);border-radius:10px;background:var(--pj-bg);box-shadow:0 4px 18px rgba(0,0,0,.12)}
 `;
 
-type Arqs = { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null; dados?: any };
+type Arqs = { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null; dados?: any; espelhoEm?: string | null };
 
 export default function ProjetistaChecklist() {
   const { toast, st, preset } = useApp() as any;
@@ -636,6 +636,11 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
         <button className={"tab" + (aba === "historico" ? " on" : "")} onClick={() => setAba("historico")}>🕘 Histórico</button>
       </div>
 
+      {/* Exact fora do ar: a tela trabalha com a última cópia guardada no 360, com a data à vista */}
+      {arqs?.espelhoEm && <div className="alert" style={{ margin: "10px 14px 0", background: "#fff8e8", borderColor: "#f0d9a8" }}>
+        ⚠️ <b>O Exact não está respondendo.</b> Estes dados são a <b>última cópia guardada no 360</b>, de {fmtDateTime(arqs.espelhoEm)}.
+        Dá para trabalhar normal — só os arquivos que ficam no Exact não abrem até ele voltar, e o que você fizer agora sobe para lá depois.
+      </div>}
       {aba === "dados" && <DadosVenda d={arqs?.dados} carregando={arqs === null} erro={arqErro} c={c} />}
 
       {aba === "venda" && <div className="body">

@@ -358,7 +358,8 @@ export const A = {
     const { data, error } = await sb.functions.invoke("checklist-arquivos", { body: { acao: "arquivos", id } });
     if (error) { let m = error.message; try { const j = await (error as any).context?.json?.(); if (j?.erro) m = j.erro; } catch { /* */ } throw new Error(m || "Não foi possível buscar os arquivos"); }
     if (data?.erro) throw new Error(data.erro);
-    return data as { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null };
+    // espelhoEm: o Exact não respondeu e a resposta veio da cópia guardada no 360 (data da cópia)
+    return data as { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null; dados?: any; espelhoEm?: string | null };
   },
   /** conteúdo de um arquivo da venda (Exact) — volta como Blob para miniatura / visualização / download */
   ckBaixar: async (id: string, anexo: string) => {
