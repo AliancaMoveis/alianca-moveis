@@ -16,7 +16,7 @@ import { podeMontagemAgend } from "./MontagemAgend";
 import { Modal } from "../comp/Modal";
 import { pagaDia10 } from "../lib/montagemDia10";
 
-type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number; origem?: string; descricao?: string | null; criado_por?: string | null; tipo?: string | null; aprovado_em?: string | null; aprovado_por?: string | null; nao_pagar_em?: string | null; nao_pagar_por?: string | null; nao_pagar_motivo?: string | null; nao_pagar_obs?: string | null };
+type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number; origem?: string; descricao?: string | null; criado_por?: string | null; tipo?: string | null; aprovado_em?: string | null; aprovado_por?: string | null; nao_pagar_em?: string | null; nao_pagar_por?: string | null; nao_pagar_motivo?: string | null; nao_pagar_obs?: string | null; exact_pag_em?: string | null; exact_pag_erro?: string | null };
 // motivos de não pagar uma O.S. que já está aprovada (ou aguardando): a linha continua à vista, mas sai do total
 export const MOTIVOS_NP: Record<string, string> = {
   erro_montador: "Montador fez errado · retrabalho",
@@ -116,7 +116,7 @@ async function carregar(): Promise<{ ef: Ef[]; vinc: Record<string, string | nul
   if (MOCK) return { ef: mockEf, vinc: { ...mockVinc } };
   const ef: Ef[] = [];
   for (let i = 0; ; i += 1000) {
-    const { data, error } = await sb.from("montagem_efet").select("chave,os,montador,status,data_montagem,data_finalizacao,produtos,adicionais,total,origem,descricao,criado_por,tipo,aprovado_em,aprovado_por,nao_pagar_em,nao_pagar_por,nao_pagar_motivo,nao_pagar_obs").is("excluido_em", null).order("chave").range(i, i + 999);
+    const { data, error } = await sb.from("montagem_efet").select("chave,os,montador,status,data_montagem,data_finalizacao,produtos,adicionais,total,origem,descricao,criado_por,tipo,aprovado_em,aprovado_por,nao_pagar_em,nao_pagar_por,nao_pagar_motivo,nao_pagar_obs,exact_pag_em,exact_pag_erro").is("excluido_em", null).order("chave").range(i, i + 999);
     if (error) throw new Error(error.message);
     ef.push(...((data || []) as any[]).map(a => ({ ...a, produtos: Number(a.produtos) || 0, adicionais: Number(a.adicionais) || 0, total: Number(a.total) || 0 })));
     if (!data || data.length < 1000) break;
@@ -158,6 +158,15 @@ async function salvarAvulsa(p: any): Promise<string> {
 async function aprovarOS(chaves: string[], desfazer = false): Promise<number> {
   if (MOCK) { let n = 0; mockEf = mockEf.map(a => chaves.includes(a.chave) && (desfazer ? !!a.aprovado_em : !aprovado(a)) ? (n++, { ...a, aprovado_em: desfazer ? null : new Date().toISOString(), aprovado_por: desfazer ? null : "você" }) : a); return n; }
   const { data, error } = await sb.rpc("montagem_aprovar", { p_chaves: chaves, p_desfazer: desfazer }); if (error) throw new Error(error.message); return data as number;
+}
+/** manda para o Exact o que foi aprovado aqui (lote por montador) — devolve o id da requisição */
+async function exactPagar(chaves: string[]): Promise<number> {
+  if (MOCK) return 0;
+  const { data, error } = await sb.rpc("montagem_exact_pagar", { p_chaves: chaves }); if (error) throw new Error(error.message); return data as number;
+}
+async function exactPagarResultado(req: number): Promise<any> {
+  if (MOCK) return { pronto: true, corpo: { aprovadas: 0, falhas: [] } };
+  const { data, error } = await sb.rpc("montagem_exact_pagar_resultado", { p_req: req }); if (error) throw new Error(error.message); return data;
 }
 /** marca (ou desmarca) uma O.S. como "não pagar", com motivo — ela sai do total e do fechamento */
 async function naoPagarOS(chaves: string[], motivo: string, obs: string, desfazer = false): Promise<number> {
@@ -351,10 +360,38 @@ export default function MontagemPagamento() {
   const alternar = (chaves: string[], on: boolean) => setSel(x => { const n = new Set(x); chaves.forEach(c => on ? n.add(c) : n.delete(c)); return n; });
   const aprovarSel = async () => {
     const tot = r2(selItens.reduce((s, e) => s + e.total, 0));
-    if (!confirm("Aprovar para pagamento " + selItens.length + " O.S. (" + fmtMoeda(tot) + ")?\n\nElas passam para ✅ Aprovado. Depois é só fechar o pagamento da quinzena.")) return;
+    const doExact = selItens.filter(e => e.origem !== "avulsa");
+    if (!confirm("Aprovar para pagamento " + selItens.length + " O.S. (" + fmtMoeda(tot) + ")?\n\n"
+      + (doExact.length ? "• " + doExact.length + " vão também para o Exact (passam para “Pagamento efetuado” lá)\n" : "")
+      + (selItens.length - doExact.length ? "• " + (selItens.length - doExact.length) + " são ordens avulsas, que só existem aqui\n" : "")
+      + "\nDepois é só fechar o pagamento da quinzena.")) return;
     setAprovando(true);
-    try { const n = await aprovarOS(selItens.map(e => e.chave)); toast(n + " O.S. aprovada(s) para pagamento"); setSel(new Set()); await recarregar(); }
-    catch (e: any) { toast(e.message); } finally { setAprovando(false); }
+    try {
+      const n = await aprovarOS(selItens.map(e => e.chave));
+      toast(n + " O.S. aprovada(s) para pagamento");
+      setSel(new Set());
+      if (doExact.length) { setAprovando(false); await enviarAoExact(doExact.map(e => e.chave)); }
+      await recarregar();
+    } catch (e: any) { toast(e.message); } finally { setAprovando(false); }
+  };
+  // empurra a aprovação para o Exact (lote por montador) e espera a resposta
+  const [noExact, setNoExact] = useState("");
+  const enviarAoExact = async (chaves: string[]) => {
+    setNoExact("Aprovando no Exact…");
+    try {
+      const req = await exactPagar(chaves);
+      for (let i = 0; i < 40; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        const r: any = await exactPagarResultado(req);
+        if (!r?.pronto) continue;
+        const c = r.corpo || {};
+        if (c.erro) { toast("Exact: " + c.erro); break; }
+        const f = (c.falhas || []).length;
+        toast(f ? c.aprovadas + " aprovada(s) no Exact · " + f + " não foram (veja na linha)" : c.aprovadas + " aprovada(s) também no Exact ✅");
+        break;
+      }
+    } catch (e: any) { toast("Não consegui falar com o Exact: " + e.message); }
+    finally { setNoExact(""); await recarregar(); }
   };
   const periodo = (a: string, b: string) => { setDe(a); setAte(b); };
   const mesPassado = () => { const d = new Date(h.slice(0, 8) + "01T12:00:00Z"); d.setUTCDate(0); const fim = d.toISOString().slice(0, 10); periodo(fim.slice(0, 8) + "01", fim); };
@@ -452,6 +489,7 @@ export default function MontagemPagamento() {
           {gest && aguTodas.length > 0 && <button className="btn sm" onClick={() => setSel(sel.size === aguTodas.length ? new Set() : new Set(aguTodas.map(e => e.chave)))}>{sel.size === aguTodas.length ? "Limpar seleção" : "☑ Selecionar todas aguardando (" + aguTodas.length + ")"}</button>}
           {gest && <button className="btn sm" style={{ borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} disabled={!grupos.length} onClick={() => setModal(<ModalFechar de={de} ate={ate} pelo={pelo} fs={fs} grupos={grupos} totDescontos={r2(grupos.reduce((s, g) => s + totDesc(g), 0))} mapa={Object.fromEntries(grupos.flatMap(g => Array.from(new Set([g.nome, ...g.itens.map(e => e.montador)])).map(n => [n, g.cad?.id || ""])))} pronto={() => setTela("hist")} />)}>🔒 Fechar pagamento da quinzena</button>}
         </div>
+        {noExact && <div className="resp-box" style={{ margin: "10px 0", fontWeight: 700 }}>⏳ {noExact}</div>}
         {selItens.length > 0 && <div className="ma-aprovar">
           <span><b>{selItens.length} O.S. selecionada(s)</b> · {fmtMoeda(r2(selItens.reduce((s, e) => s + e.total, 0)))} · {new Set(selItens.map(e => e.montador)).size} montador(es)</span>
           <button className="btn primary" disabled={aprovando} onClick={aprovarSel}>{aprovando ? "Aprovando…" : "✅ Aprovar para pagamento"}</button>
@@ -461,7 +499,7 @@ export default function MontagemPagamento() {
             <tbody>{vis.map(g => <Linha key={g.nome} g={g} recarregar={recarregar} sel={sel} alternar={alternar} aberto={aberto === g.nome} abrir={() => setAberto(aberto === g.nome ? "" : g.nome)} cadastro={cadastro} temConta={temConta(g)}
               gest={gest} nf={nfs.find(x => x.chave === chaveNf(g) && x.de === de && x.ate === ate) || null} de={de} ate={ate} recNf={recNf}
               descs={descDe(g)} refQ={refAtual} recDesc={recDesc} podeDesc={gest || fin} quem={R.nomeUser?.(R.currentUserId) || ""}
-              vincular={async (id: string | null) => { try { await vincular(g.nome, id); await recarregar(); toast("Vínculo salvo"); } catch (e: any) { toast(e.message); } }} dataDe={dataDe} />)}</tbody>
+              vincular={async (id: string | null) => { try { await vincular(g.nome, id); await recarregar(); toast("Vínculo salvo"); } catch (e: any) { toast(e.message); } }} dataDe={dataDe} aoExact={enviarAoExact} />)}</tbody>
             <tfoot><tr><td></td><td>Total</td><td className="n">{soma(g => g.n)}</td><td className="n">{fmtMoeda(soma(g => g.prod))}</td><td className="n">{fmtMoeda(soma(g => g.adic))}</td><td className="n">{fmtMoeda(soma(g => g.total))}</td>
               <td className="n">{soma(totDesc) ? <span style={{ color: "var(--danger)" }}>– {fmtMoeda(soma(totDesc))}</span> : "—"}</td>
               <td className="n"><b>{fmtMoeda(r2(soma(g => g.total) - soma(totDesc)))}</b></td>
@@ -480,7 +518,7 @@ function msgNf(nome: string, de: string, ate: string, valor: number) {
   const pn = prim ? prim.charAt(0).toUpperCase() + prim.slice(1).toLowerCase() : "";
   return `Olá${pn ? ", " + pn : ""}! Tudo bem?\n\nO fechamento da ${ehQ ? nomeMes(qz.ref) : "período de " + br(de) + " a " + br(ate)} está pronto e precisamos da *nota fiscal* para enviar ao financeiro.\n*Valor total da nota: ${fmtMoeda(valor)}*\n\nPor favor, emita a nota com o valor total e envie para o e-mail contasapagar@aliancamoveis.com.br\n\nObrigada!`;
 }
-function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarregar, sel, alternar, gest, nf, de, ate, recNf, descs = [], refQ = "", recDesc, podeDesc, quem }: any) {
+function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarregar, sel, alternar, gest, nf, de, ate, recNf, descs = [], refQ = "", recDesc, podeDesc, quem, aoExact }: any) {
   const tDesc = r2(descs.reduce((s: number, d: Desc) => s + d.valor, 0));
   const [nd, setNd] = useState({ descricao: "", parcela: "", valor: "" });
   const addDesc = async () => { const v = Number(String(nd.valor).replace(/\./g, "").replace(",", ".")); if (!g.cad) { toast("Vincule o montador ao cadastro antes"); return; } if (!(v > 0)) { toast("Informe o valor do desconto"); return; } if (!nd.descricao.trim()) { toast("Descreva o desconto"); return; }
@@ -543,7 +581,10 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
                 <small className="hint"> · {MOTIVOS_NP[e.nao_pagar_motivo || "outro"] || "Outro motivo"}{e.nao_pagar_obs ? ": " + e.nao_pagar_obs : ""} · <a href="#" onClick={x => { x.preventDefault(); voltarAPagar(e); }}>voltar a pagar</a></small></>
             : aprovado(e)
               ? <><span className="vinda ok">✅ Aprovado{e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? " (360)" : ""}</span>
-                  <small className="hint" title={e.aprovado_em ? "por " + (e.aprovado_por || "") + " em " + new Date(e.aprovado_em).toLocaleString("pt-BR").slice(0, 16) : "aprovada no Exact"}> <a href="#" onClick={x => { x.preventDefault(); e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? desfazerAprov(e) : desaprovar(e); }}>desaprovar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); naoPagarOs(e); }}>não pagar</a></small></>
+                  <small className="hint" title={e.aprovado_em ? "por " + (e.aprovado_por || "") + " em " + new Date(e.aprovado_em).toLocaleString("pt-BR").slice(0, 16) : "aprovada no Exact"}> <a href="#" onClick={x => { x.preventDefault(); e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? desfazerAprov(e) : desaprovar(e); }}>desaprovar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); naoPagarOs(e); }}>não pagar</a></small>
+              {e.origem !== "avulsa" && (e.exact_pag_erro
+                ? <div style={{ fontSize: 11.5, color: "var(--danger)" }} title={e.exact_pag_erro}>✕ não foi ao Exact{aoExact ? <> · <a href="#" onClick={x => { x.preventDefault(); aoExact([e.chave]); }}>reenviar</a></> : null}</div>
+                : e.exact_pag_em ? <div style={{ fontSize: 11.5, color: "var(--st-concluida)" }} title={"enviado em " + new Date(e.exact_pag_em).toLocaleString("pt-BR").slice(0, 16)}>→ aprovada no Exact</div> : null)}</>
               : <><span className="vinda pend">⏳ Aguardando</span>
                   <small className="hint"> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); naoPagarOs(e); }}>não pagar</a></small></>}</td>
           <td className="n" style={naoPaga(e) ? { textDecoration: "line-through", opacity: .55 } : undefined}>{fmtMoeda(e.produtos)}</td>
