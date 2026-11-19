@@ -1230,6 +1230,7 @@ function ContratoAssinado({ ct, toast }: { ct: any; toast: (m: string) => void }
 }
 function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs, liberado, ocupado, toast, gerar, ct, setCt, assinado, seguir, antes }: any) {
   const [montando, setMontando] = useState("");
+  const [refazer, setRefazer] = useState(false); // refazer o contrato depois de assinado / aguardando o titular
   // quem está aqui é o titular da compra? Se não, ele assina como representante e o titular assina depois, pelo 2º link.
   const [quem, setQuem] = useState<"" | "titular" | "representante">("");
   // ambientes que entram NESTE contrato (às vezes um ambiente fica para depois e o resto já é fechado)
@@ -1300,6 +1301,7 @@ function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs
         + "Gerar assim mesmo?")) return;
       const r = await A.ckContrato("criar", c.id, { dados });
       setCt({ token: r.token, status: "pendente", expira: r.expira, representante: quem === "representante" ? reprNome.trim() : "", reprTelefone: reprTel.trim() });
+      setRefazer(false);
       toast(quem === "representante" ? "Contrato gerado — quem está aqui assina como representante" : "Contrato gerado — mostre o QR Code ao cliente");
     } catch (e: any) { toast(e.message || "Não foi possível gerar o contrato"); }
     finally { setMontando(""); }
@@ -1360,7 +1362,20 @@ function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs
     {!liberado && <div className="alert">O contrato libera quando a conferência de todos os ambientes estiver completa (nada em amarelo). Volte à etapa 2.</div>}
     {ct?.status === "assinado" ? <>
       <ContratoAssinado ct={ct} toast={toast} />
-      <button className="btn sm" style={{ background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" }} onClick={seguir}>Seguir → Finalizar atendimento</button>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <button className="btn sm" style={{ background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" }} onClick={seguir}>Seguir → Finalizar atendimento</button>
+        <button className="btn sm ghost" onClick={() => setRefazer(v => !v)}>{refazer ? "✕ Deixar como está" : "↻ Fazer um contrato novo"}</button>
+      </div>
+      {refazer && <div className="imp" style={{ marginTop: 10, alignItems: "flex-start", flexWrap: "wrap", background: "#fff8e8", borderColor: "#f0d9a8" }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <b style={{ fontSize: 14.5 }}>Fazer um contrato novo</b>
+          <span>Use quando o contrato assinado saiu errado — sem as imagens do projeto, com o ambiente errado, ou assinado por quem não era o titular.</span>
+          <div className="hint" style={{ marginTop: 6 }}>O contrato que já foi assinado <b>continua guardado na etapa 4</b>, com a prova da assinatura. O novo entra ao lado dele; não apaga nada.</div>
+          {escolhaAmbientes}
+          {perguntaTitular}
+          <button className="btn primary sm" style={{ marginTop: 10 }} disabled={!liberado || !!montando || !!ocupado} onClick={gerarLink}>{montando === "link" ? "Montando o contrato…" : "📲 Gerar o link do contrato novo"}</button>
+        </div>
+      </div>}
     </> : ct?.status === "aguardando_titular" ? <div className="imp" style={{ alignItems: "flex-start", flexWrap: "wrap", background: "#eef3ff", borderColor: "#c9d8f5" }}>
       {linkTitular && <img src={qrDataUrl(linkTitular, 240)} alt="QR Code para o titular" style={{ width: 200, height: 200, border: "1px solid var(--line,#e0e3e8)", borderRadius: 10, background: "#fff" }} />}
       <div style={{ flex: 1, minWidth: 240 }}>
@@ -1373,6 +1388,13 @@ function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs
             onClick={() => abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(`Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o link para você assinar o contrato do checklist do seu projeto da Aliança Móveis: ${linkTitular}`))}>💬 Enviar ao titular pelo WhatsApp</button>}
         </div>
         <div className="hint" style={{ marginTop: 8 }}>⏳ Aguardando a assinatura do titular… · link vale até {fmtDateTime(ct.expira)}</div>
+        <button className="btn sm ghost" style={{ marginTop: 8 }} onClick={() => setRefazer(v => !v)}>{refazer ? "✕ Deixar como está" : "↻ Refazer o contrato"}</button>
+        {refazer && <div style={{ marginTop: 8 }}>
+          <div className="hint">Marcou errado quem assina, ou faltou imagem? Corrija aqui e gere de novo — esta conferência é descartada.</div>
+          {escolhaAmbientes}
+          {perguntaTitular}
+          <button className="btn primary sm" style={{ marginTop: 8 }} disabled={!liberado || !!montando || !!ocupado} onClick={gerarLink}>{montando === "link" ? "Montando…" : "📲 Gerar o contrato de novo"}</button>
+        </div>}
       </div>
     </div> : ct?.status === "pendente" && link ? <div className="imp" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
       {ct.representante && <div style={{ flexBasis: "100%", background: "#eef3ff", border: "1.5px solid #c9d8f5", borderRadius: 10, padding: "8px 12px", marginBottom: 8, fontSize: 13.5 }}>
