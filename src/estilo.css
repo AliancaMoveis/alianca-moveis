@@ -1428,7 +1428,9 @@ i.ex,.ap-origem.externo{background:#5b7fc7}
 .vinda { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 .vinda.ok { background: rgba(15,138,95,.14); color: #0b6b47; border: 1px solid rgba(15,138,95,.45); }
 .vinda.pend { background: rgba(214,150,40,.14); color: #8a5a00; border: 1px solid rgba(214,150,40,.5); }
-:root[data-theme="dark"] .vinda.ok { color: #7fe0b5; } :root[data-theme="dark"] .vinda.pend { color: #f0c24b; }
+.vinda.np { background: rgba(180,35,24,.12); color: #8f1e14; border: 1px solid rgba(180,35,24,.45); }
+:root[data-theme="dark"] .vinda.ok { color: #7fe0b5; } :root[data-theme="dark"] .vinda.pend { color: #f0c24b; } :root[data-theme="dark"] .vinda.np { color: #ff9e95; }
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .vinda.np { color: #ff9e95; }}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .vinda.ok { color: #7fe0b5; } :root:not([data-theme="light"]) .vinda.pend { color: #f0c24b; }}
 
 /* Montagem · agendamentos */

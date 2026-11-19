@@ -16,7 +16,15 @@ import { podeMontagemAgend } from "./MontagemAgend";
 import { Modal } from "../comp/Modal";
 import { pagaDia10 } from "../lib/montagemDia10";
 
-type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number; origem?: string; descricao?: string | null; criado_por?: string | null; tipo?: string | null; aprovado_em?: string | null; aprovado_por?: string | null };
+type Ef = { chave: string; os: string; montador: string; status: string; data_montagem: string; data_finalizacao: string | null; produtos: number; adicionais: number; total: number; origem?: string; descricao?: string | null; criado_por?: string | null; tipo?: string | null; aprovado_em?: string | null; aprovado_por?: string | null; nao_pagar_em?: string | null; nao_pagar_por?: string | null; nao_pagar_motivo?: string | null; nao_pagar_obs?: string | null };
+// motivos de não pagar uma O.S. que já está aprovada (ou aguardando): a linha continua à vista, mas sai do total
+export const MOTIVOS_NP: Record<string, string> = {
+  erro_montador: "Montador fez errado · retrabalho",
+  desaprovado: "Desaprovado depois de reclamação do cliente",
+  adiantado: "Pagamento já adiantado em outra ordem",
+  duplicado: "Lançamento duplicado",
+  outro: "Outro motivo",
+};
 // ordem avulsa: serviço dentro da loja, frete ou outro pagamento manual — entra no total do montador
 export const TIPOS_AV: Record<string, string> = { servico_loja: "🏬 Serviço na loja", frete: "🚚 Frete", frete_assistencia: "🛠 Frete de assistência", outro: "📝 Outro" };
 const rotAv = (e: Ef) => (TIPOS_AV[e.tipo || "outro"] || "Avulsa").replace(/^\S+ /, "") + (e.descricao ? ": " + e.descricao : "");
@@ -32,6 +40,8 @@ const norm = (s: string) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").t
 const aprovado = (e: Ef) => /pagamento efetuado/i.test(e.status) || (!!e.aprovado_em && /aguardando aprova/i.test(e.status));
 const aguardando = (e: Ef) => /aguardando aprova/i.test(e.status) && !e.aprovado_em;
 const conta = (e: Ef) => aprovado(e) || aguardando(e);
+// marcada para NÃO pagar: continua listada (com o motivo à vista) e fora de todo valor e do fechamento
+const naoPaga = (e: Ef) => !!e.nao_pagar_em;
 
 function converter(linhas: any[]): Ef[] {
   const m = new Map<string, Ef>();
@@ -106,7 +116,7 @@ async function carregar(): Promise<{ ef: Ef[]; vinc: Record<string, string | nul
   if (MOCK) return { ef: mockEf, vinc: { ...mockVinc } };
   const ef: Ef[] = [];
   for (let i = 0; ; i += 1000) {
-    const { data, error } = await sb.from("montagem_efet").select("chave,os,montador,status,data_montagem,data_finalizacao,produtos,adicionais,total,origem,descricao,criado_por,tipo,aprovado_em,aprovado_por").is("excluido_em", null).order("chave").range(i, i + 999);
+    const { data, error } = await sb.from("montagem_efet").select("chave,os,montador,status,data_montagem,data_finalizacao,produtos,adicionais,total,origem,descricao,criado_por,tipo,aprovado_em,aprovado_por,nao_pagar_em,nao_pagar_por,nao_pagar_motivo,nao_pagar_obs").is("excluido_em", null).order("chave").range(i, i + 999);
     if (error) throw new Error(error.message);
     ef.push(...((data || []) as any[]).map(a => ({ ...a, produtos: Number(a.produtos) || 0, adicionais: Number(a.adicionais) || 0, total: Number(a.total) || 0 })));
     if (!data || data.length < 1000) break;
@@ -148,6 +158,16 @@ async function salvarAvulsa(p: any): Promise<string> {
 async function aprovarOS(chaves: string[], desfazer = false): Promise<number> {
   if (MOCK) { let n = 0; mockEf = mockEf.map(a => chaves.includes(a.chave) && (desfazer ? !!a.aprovado_em : !aprovado(a)) ? (n++, { ...a, aprovado_em: desfazer ? null : new Date().toISOString(), aprovado_por: desfazer ? null : "você" }) : a); return n; }
   const { data, error } = await sb.rpc("montagem_aprovar", { p_chaves: chaves, p_desfazer: desfazer }); if (error) throw new Error(error.message); return data as number;
+}
+/** marca (ou desmarca) uma O.S. como "não pagar", com motivo — ela sai do total e do fechamento */
+async function naoPagarOS(chaves: string[], motivo: string, obs: string, desfazer = false): Promise<number> {
+  if (MOCK) { let n = 0; mockEf = mockEf.map(a => chaves.includes(a.chave) ? (n++, { ...a, nao_pagar_em: desfazer ? null : new Date().toISOString(), nao_pagar_por: desfazer ? null : "você", nao_pagar_motivo: desfazer ? null : motivo, nao_pagar_obs: desfazer ? null : obs }) : a); return n; }
+  const { data, error } = await sb.rpc("montagem_nao_pagar", { p_chaves: chaves, p_motivo: motivo || null, p_obs: obs || null, p_desfazer: desfazer }); if (error) throw new Error(error.message); return data as number;
+}
+/** desaprova: tira a aprovação do 360; se veio aprovada do Exact, marca como não pagar (o 360 não altera o Exact) */
+async function desaprovarOS(chaves: string[], obs: string): Promise<number> {
+  if (MOCK) { let n = 0; mockEf = mockEf.map(a => chaves.includes(a.chave) ? (n++, a.aprovado_em ? { ...a, aprovado_em: null, aprovado_por: null } : { ...a, nao_pagar_em: new Date().toISOString(), nao_pagar_por: "você", nao_pagar_motivo: "desaprovado", nao_pagar_obs: obs }) : a); return n; }
+  const { data, error } = await sb.rpc("montagem_desaprovar", { p_chaves: chaves, p_obs: obs || null }); if (error) throw new Error(error.message); return data as number;
 }
 async function excluirAvulsa(ch: string) {
   if (MOCK) { mockEf = mockEf.filter(a => a.chave !== ch); return; }
@@ -208,7 +228,7 @@ async function vincular(nome: string, id: string | null) {
   const { error } = await sb.rpc("montagem_vincular", { p_nome: nome, p_montador: id }); if (error) throw new Error(error.message);
 }
 
-type G = { nome: string; cad: any | null; n: number; prod: number; adic: number; total: number; aprov: number; aprovN: number; agu: number; aguN: number; itens: Ef[] };
+type G = { nome: string; cad: any | null; n: number; prod: number; adic: number; total: number; aprov: number; aprovN: number; agu: number; aguN: number; np: number; npN: number; itens: Ef[] };
 
 export default function MontagemPagamento() {
   const { R, st, toast } = useApp() as any;
@@ -306,9 +326,12 @@ export default function MontagemPagamento() {
   // agrupa pelo cadastro do montador: a ordem avulsa (lançada com o nome do cadastro) cai na mesma linha das O.S. do Exact
   const grupos: G[] = Object.values(lista.reduce((m: Record<string, G>, e) => {
     const cad = cadDe(e.montador), k = cad ? "id:" + cad.id : e.montador;
-    const g = (m[k] = m[k] || { nome: e.montador, cad, n: 0, prod: 0, adic: 0, total: 0, aprov: 0, aprovN: 0, agu: 0, aguN: 0, itens: [] });
+    const g = (m[k] = m[k] || { nome: e.montador, cad, n: 0, prod: 0, adic: 0, total: 0, aprov: 0, aprovN: 0, agu: 0, aguN: 0, np: 0, npN: 0, itens: [] });
     if (e.origem !== "avulsa" && g.itens.every(x => x.origem === "avulsa")) g.nome = e.montador; // nome do Exact (para o vínculo)
-    g.n++; g.prod += e.produtos; g.adic += e.adicionais; g.total += e.total; g.itens.push(e);
+    g.itens.push(e);
+    // marcada para não pagar: fica à vista na lista, mas não entra em nenhum valor
+    if (naoPaga(e)) { g.np += e.total; g.npN++; return m; }
+    g.n++; g.prod += e.produtos; g.adic += e.adicionais; g.total += e.total;
     if (aprovado(e)) { g.aprov += e.total; g.aprovN++; } else { g.agu += e.total; g.aguN++; }
     return m;
   }, {})).sort((a, b) => b.total - a.total);
@@ -398,6 +421,7 @@ export default function MontagemPagamento() {
         <Kpi n={fmtMoeda(r2(lista.filter(e => e.origem === "avulsa").reduce((s, e) => s + e.total, 0)))} l={"Ordens avulsas (" + lista.filter(e => e.origem === "avulsa").length + ") · já no total"} fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.aprov))} l={"✅ Aprovado p/ pagamento (" + soma(g => g.aprovN) + ")"} fs={20} />
         <Kpi n={fmtMoeda(soma(g => g.agu))} l={"⏳ Aguardando aprovação (" + soma(g => g.aguN) + ")"} fs={20} cls={soma(g => g.agu) ? "alert" : ""} />
+        {soma(g => g.npN) > 0 && <Kpi n={fmtMoeda(soma(g => g.np))} l={"🚫 Não pagar (" + soma(g => g.npN) + ")"} fs={20} cls="alert" cor="var(--critico)" />}
       </div>
       {gest && ehQzP && <div className="card" style={{ marginTop: 12, padding: "10px 14px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", borderLeft: "4px solid var(--st-concluida)" }}>
         <span style={{ flex: 1, minWidth: 220 }}><b>Pagamento de {nomeMes(qzP.ref)}</b> · confira, aprove o que faltar e feche. Depois, no 📚 Histórico, envie para o financeiro.</span>
@@ -461,6 +485,12 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
   const agu: Ef[] = g.itens.filter((e: Ef) => aguardando(e));
   const nSel = agu.filter(e => sel.has(e.chave)).length;
   const desfazerAprov = async (e: Ef) => { if (!confirm("Desfazer a aprovação no 360 da " + (e.origem === "avulsa" ? "ordem avulsa" : e.os) + "? Ela volta para ⏳ Aguardando.")) return; try { await aprovarOS([e.chave], true); toast("Aprovação desfeita"); await recarregar(); } catch (x: any) { toast(x.message); } };
+  const naoPagarOs = (e: Ef) => setModal(<ModalNaoPagar e={e} pronto={recarregar} />);
+  const desaprovar = (e: Ef) => setModal(<ModalNaoPagar e={e} pronto={recarregar} desaprovando />);
+  const voltarAPagar = async (e: Ef) => {
+    if (!confirm("Voltar a pagar " + (e.origem === "avulsa" ? "a ordem avulsa" : e.os) + " de " + fmtMoeda(e.total) + "?\n\nEla volta a contar no total do montador e no fechamento.")) return;
+    try { await naoPagarOS([e.chave], "", "", true); toast("De volta ao pagamento"); await recarregar(); } catch (x: any) { toast(x.message); }
+  };
   const k = g.cad?.conta;
   const [trocar, setTrocar] = useState(false);
   const { toast, setModal } = useApp() as any;
@@ -503,7 +533,17 @@ function Linha({ g, aberto, abrir, cadastro, temConta, vincular, dataDe, recarre
       </div>}
       <table className="ma-os"><thead><tr><th style={{ width: 26 }}>{agu.length > 0 && <input type="checkbox" title="Selecionar todas aguardando" checked={nSel === agu.length} onChange={e => alternar(agu.map(x => x.chave), e.target.checked)} />}</th><th>O.S.</th><th>Montagem</th><th>Finalização</th><th>Status</th><th className="n">Produtos</th><th className="n">Adicionais</th><th className="n">Total</th></tr></thead>
         <tbody>{g.itens.slice().sort((a: any, b: any) => dataDe(a).localeCompare(dataDe(b))).map((e: any) => <tr key={e.chave} className={sel.has(e.chave) ? "ma-sel" : ""}><td>{aguardando(e) && <input type="checkbox" checked={sel.has(e.chave)} onChange={x => alternar([e.chave], x.target.checked)} />}</td><td>{e.origem === "avulsa" ? <><span className="pill" style={{ background: "var(--primary)", color: "#fff", fontSize: 10.5 }}>AVULSA</span> {rotAv(e)}{e.data_finalizacao && e.data_finalizacao !== e.data_montagem ? <small className="hint"> · período {br(e.data_montagem)} a {br(e.data_finalizacao)}</small> : null} <a href="#" onClick={x => { x.preventDefault(); editar(e); }}>editar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); excluirAv(e); }}>excluir</a></> : e.os}</td><td>{br(e.data_montagem)}{dataDe(e) < de && <span title="De quinzena anterior, ainda não paga" style={{ color: "var(--tn-blue-i)" }}> 📥</span>}</td><td>{br(e.data_finalizacao)}</td>
-          <td>{aprovado(e) ? <><span className="vinda ok">✅ Aprovado{e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? " (360)" : ""}</span>{e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? <small className="hint" title={"por " + (e.aprovado_por || "") + " em " + new Date(e.aprovado_em).toLocaleString("pt-BR").slice(0, 16)}> <a href="#" onClick={x => { x.preventDefault(); desfazerAprov(e); }}>desfazer</a></small> : null}</> : <span className="vinda pend">⏳ Aguardando</span>}</td><td className="n">{fmtMoeda(e.produtos)}</td><td className="n">{e.adicionais ? fmtMoeda(e.adicionais) : "—"}</td><td className="n"><b>{fmtMoeda(e.total)}</b></td></tr>)}</tbody></table>
+          <td>{naoPaga(e)
+            ? <><span className="vinda np" title={"por " + (e.nao_pagar_por || "") + " em " + new Date(e.nao_pagar_em).toLocaleString("pt-BR").slice(0, 16) + (e.nao_pagar_obs ? "\n" + e.nao_pagar_obs : "")}>🚫 Não pagar</span>
+                <small className="hint"> · {MOTIVOS_NP[e.nao_pagar_motivo || "outro"] || "Outro motivo"}{e.nao_pagar_obs ? ": " + e.nao_pagar_obs : ""} · <a href="#" onClick={x => { x.preventDefault(); voltarAPagar(e); }}>voltar a pagar</a></small></>
+            : aprovado(e)
+              ? <><span className="vinda ok">✅ Aprovado{e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? " (360)" : ""}</span>
+                  <small className="hint" title={e.aprovado_em ? "por " + (e.aprovado_por || "") + " em " + new Date(e.aprovado_em).toLocaleString("pt-BR").slice(0, 16) : "aprovada no Exact"}> <a href="#" onClick={x => { x.preventDefault(); e.aprovado_em && !/pagamento efetuado/i.test(e.status) ? desfazerAprov(e) : desaprovar(e); }}>desaprovar</a> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); naoPagarOs(e); }}>não pagar</a></small></>
+              : <><span className="vinda pend">⏳ Aguardando</span>
+                  <small className="hint"> · <a href="#" style={{ color: "var(--danger)" }} onClick={x => { x.preventDefault(); naoPagarOs(e); }}>não pagar</a></small></>}</td>
+          <td className="n" style={naoPaga(e) ? { textDecoration: "line-through", opacity: .55 } : undefined}>{fmtMoeda(e.produtos)}</td>
+          <td className="n" style={naoPaga(e) ? { textDecoration: "line-through", opacity: .55 } : undefined}>{e.adicionais ? fmtMoeda(e.adicionais) : "—"}</td>
+          <td className="n" style={naoPaga(e) ? { textDecoration: "line-through", opacity: .55 } : undefined}><b>{fmtMoeda(e.total)}</b></td></tr>)}</tbody></table>
     </td></tr>}
   </>;
 }
@@ -527,10 +567,10 @@ function ModalFechar({ de, ate, pelo, fs, grupos, mapa, pronto, totDescontos = 0
   const [ref, setRef] = useState(ehQ ? qz.ref : ate.slice(0, 7)); const [obs, setObs] = useState(""); const [ind, setInd] = useState(false);
   const opRef = (() => { const l = [quinzenaDe(hoje())]; for (let k = 0; k < 7; k++) l.push(quinzenaAntes(l[l.length - 1])); const r = l.map(q => q.ref); if (!r.includes(ref)) r.unshift(ref); return r; })();
   const tot = grupos.reduce((s: number, g: any) => s + g.total, 0), n = grupos.reduce((s: number, g: any) => s + g.n, 0);
-  const _itens = grupos.map((g: any) => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, nome_exact: g.nome, montador_id: g.cad?.id || null, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipo_conta: k.tipoConta, pix_tipo: k.pixTipo, pix_chave: k.pixChave, montagens: g.n, produtos: r2(g.prod), adicionais: r2(g.adic), total: r2(g.total), aprovado: r2(g.aprov), aguardando: r2(g.agu), ordens: g.itens.map((e: any) => ({ chave: e.chave, os: e.os, desc: e.descricao, origem: e.origem, tipo: e.tipo, status: e.status, mont: e.data_montagem, fin: e.data_finalizacao, prod: e.produtos, adic: e.adicionais, total: e.total })) }; });
+  const _itens = grupos.map((g: any) => { const k = g.cad?.conta || {}; return { montador: g.cad?.nome || g.nome, nome_exact: g.nome, montador_id: g.cad?.id || null, titular: k.titular, doc: k.docTitular, banco: k.banco, agencia: k.agencia, conta: k.conta, tipo_conta: k.tipoConta, pix_tipo: k.pixTipo, pix_chave: k.pixChave, montagens: g.n, produtos: r2(g.prod), adicionais: r2(g.adic), total: r2(g.total), aprovado: r2(g.aprov), aguardando: r2(g.agu), ordens: g.itens.filter((e: any) => !naoPaga(e)).map((e: any) => ({ chave: e.chave, os: e.os, desc: e.descricao, origem: e.origem, tipo: e.tipo, status: e.status, mont: e.data_montagem, fin: e.data_finalizacao, prod: e.produtos, adic: e.adicionais, total: e.total })) }; });
   const ir = async (substituir: boolean) => {
     setInd(true);
-    try { await fechar({ referencia: ref, de, ate, pelo, filtro: fs, obs, mapa, substituir, _itens, chaves: grupos.flatMap((g: any) => g.itens.map((e: any) => e.chave)) }); toast("Pagamento de " + nomeMes(ref) + " fechado e guardado no histórico"); setModal(null); pronto(); }
+    try { await fechar({ referencia: ref, de, ate, pelo, filtro: fs, obs, mapa, substituir, _itens, chaves: grupos.flatMap((g: any) => g.itens.filter((e: any) => !naoPaga(e)).map((e: any) => e.chave)) }); toast("Pagamento de " + nomeMes(ref) + " fechado e guardado no histórico"); setModal(null); pronto(); }
     catch (e: any) { if (/já existe/i.test(e.message) && !substituir) { if (confirm("Já existe um fechamento de " + nomeMes(ref) + ".\n\nSubstituir? O fechamento anterior NÃO é apagado: fica guardado no histórico como “substituído”.")) { setInd(false); return ir(true); } } else toast(e.message); }
     finally { setInd(false); }
   };
@@ -645,4 +685,48 @@ function NfCelula({ g, nf, de, ate, recNf, valor }: any) {
     {nf?.recebida_em ? <span style={{ color: "var(--st-concluida)", fontWeight: 700 }}>✅ Nota recebida {quando(nf.recebida_em)}{nf.recebida_por ? " · " + nf.recebida_por : ""} <a href="#" style={{ fontWeight: 400 }} onClick={e => { e.preventDefault(); if (confirm("Desfazer o recebimento da nota de " + nome + "?")) ac("desfazer"); }}>desfazer</a></span>
       : <button className="btn sm" style={{ alignSelf: "flex-start", borderColor: "var(--st-concluida)", color: "var(--st-concluida)", fontWeight: 700 }} onClick={() => ac("recebida")}>✅ Nota recebida</button>}
   </div>;
+}
+
+/** não pagar uma O.S.: escolhe o motivo e escreve o que aconteceu. A linha fica à vista, mas sai do total e do fechamento. */
+function ModalNaoPagar({ e, pronto, desaprovando }: { e: Ef; pronto: () => any; desaprovando?: boolean }) {
+  const { setModal, toast } = useApp() as any;
+  const [motivo, setMotivo] = useState(desaprovando ? "desaprovado" : "erro_montador");
+  const [obs, setObs] = useState("");
+  const [sal, setSal] = useState(false);
+  const rotulo = e.origem === "avulsa" ? "a ordem avulsa “" + rotAv(e) + "”" : e.os;
+  const ir = async () => {
+    if (motivo === "outro" && !obs.trim()) { toast("Escreva o que aconteceu"); return; }
+    setSal(true);
+    try {
+      if (desaprovando) await desaprovarOS([e.chave], obs.trim());
+      else await naoPagarOS([e.chave], motivo, obs.trim());
+      toast(desaprovando ? "Aprovação desfeita" : "Marcada para não pagar");
+      setModal(null); await pronto();
+    } catch (x: any) { toast(x.message); } finally { setSal(false); }
+  };
+  return (
+    <Modal titulo={desaprovando ? "Desaprovar " + rotulo : "Não pagar " + rotulo} onFechar={() => setModal(null)}>
+      <p style={{ margin: "0 0 14px", fontSize: 14, lineHeight: "20px", color: "var(--muted)" }}>
+        {e.montador} · {fmtMoeda(e.total)} · montagem de {br(e.data_montagem)}.
+        {desaprovando
+          ? " A O.S. sai do pagamento. Se a aprovação foi feita aqui no 360, ela volta para ⏳ Aguardando; se veio aprovada do Exact, fica marcada como não paga (o 360 não altera o Exact)."
+          : " A linha continua aparecendo com o motivo à vista, mas não entra no total do montador nem no fechamento. Dá para voltar atrás depois."}
+      </p>
+      <div className="field" style={{ marginBottom: 14 }}>
+        <label>Motivo <span className="req-star">*</span></label>
+        <select value={motivo} onChange={x => setMotivo(x.target.value)} disabled={desaprovando}>
+          {Object.entries(MOTIVOS_NP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </div>
+      <div className="field" style={{ marginBottom: 18 }}>
+        <label>O que aconteceu {motivo === "outro" ? <span className="req-star">*</span> : <span className="hint">(opcional, mas ajuda muito depois)</span>}</label>
+        <textarea value={obs} onChange={x => setObs(x.target.value)} style={{ minHeight: 90 }}
+          placeholder="Ex.: cliente reclamou da montagem em 18/11, montador refez e cobrou de novo" />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn primary" disabled={sal} onClick={ir}>{sal ? "Salvando…" : desaprovando ? "Desaprovar" : "🚫 Não pagar"}</button>
+        <button className="btn" onClick={() => setModal(null)}>Cancelar</button>
+      </div>
+    </Modal>
+  );
 }
