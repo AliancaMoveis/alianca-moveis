@@ -692,7 +692,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
             ferragens={ferragens} setFerragens={(f: any) => { setFerragens(f); setMudou(true); }}
             imgsProj={imgsProj} setImgsProj={(f: any) => { setImgsProj(f); setMudou(true); }}
             aoLer={(nome: string, l: Listagem) => { setArquivos(xs => [...new Set([...xs, nome])]); setMeta((m: any) => ({ cliente: m.cliente || l.cliente, projeto: [m.projeto, l.projeto].filter(Boolean).join(" · "), data: m.data || l.data })); setMudou(true); }} />}
-          {etapa === 3 && <Etapa3 c={c} t0={t0} ambs={ambs} proj={proj} naoInc={naoInc} obs={obs} ferragens={ferragens} arqs={arqs} liberado={e2} ocupado={ocupado} toast={toast}
+          {etapa === 3 && <Etapa3 c={c} t0={t0} ambs={ambs} proj={proj} imgsProj={imgsProj} naoInc={naoInc} obs={obs} ferragens={ferragens} arqs={arqs} liberado={e2} ocupado={ocupado} toast={toast}
             ct={ct} setCt={setCt} assinado={e4} seguir={() => setEtapa(5)} antes={async () => (mudou ? await salvar("salvar", {}, "") : true)}
             gerar={async (paginas: number) => salvar("impressao", { impressao: { paginas } }, "Impressão registrada")} />}
           {etapa === 4 && <Etapa4 c={c} t0={t0} ct={ct} ocupado={ocupado} setOcupado={setOcupado} toast={toast} liberado={e3}
@@ -956,6 +956,11 @@ function Etapa2({ c, ambs, setAmbs, arqs, toast, naoInc, setNaoInc, obs, setObs,
 }
 
 /** imagens do projeto final (PDF de imagens ou fotos): vão para o cliente, no contrato, na folha de cada ambiente marcado */
+/** palavras úteis de um nome, sem acento e sem as genéricas ("imagens projeto do da 01.pdf" → []) */
+const palavras = (t: string) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, " ").trim().split(" ")
+  .filter(w => w.length > 2 && !["imagem","imagens","projeto","projetos","final","render","renders","foto","fotos","pdf","arquivo","novo","nova"].includes(w));
+
 function ImagensProjeto({ c, ambs, setAmbs, imgs, setImgs, arqs, toast }: any) {
   const [env, setEnv] = useState(false);
   const { setModal } = useApp() as any;
@@ -971,8 +976,17 @@ function ImagensProjeto({ c, ambs, setAmbs, imgs, setImgs, arqs, toast }: any) {
         for (const f of fs) { try { const r = await A.ckSubir(c.id, "imagem", f); novos.push({ fonte: "checklist", id: r.path, path: r.path, nome: r.nome, url: r.url }); } catch (e: any) { toast(e.message); } }
         setEnv(false); if (!novos.length) return;
         setImgs((xs: Img[]) => [...xs, ...novos]);
-        if (ambs.length === 1) setAmbs((xs: Amb[]) => xs.map(y => ({ ...y, imagens: [...(y.imagens || []), ...novos.map(({ url, ...n }) => n)] })));
-        toast(novos.length + " arquivo(s) de imagem anexado(s)" + (ambs.length > 1 ? " — marque os ambientes" : ""));
+        if (ambs.length === 1) { setAmbs((xs: Amb[]) => xs.map(y => ({ ...y, imagens: [...(y.imagens || []), ...novos.map(({ url, ...n }) => n)] }))); toast(novos.length + " arquivo(s) de imagem anexado(s)"); }
+        else {
+          // vincula sozinho quando o nome do arquivo diz o ambiente ("imagens cozinha.pdf" → Cozinha)
+          // bate se alguma palavra do nome do arquivo casa com o ambiente, e só com ele ("qto casal" → Dormitório casal)
+          const casa = (nomeArq: string, nomeAmb: string) => { const f = palavras(nomeArq), a = palavras(nomeAmb); return a.some(w => f.some(v => v.startsWith(w) || w.startsWith(v))); };
+          const auto = new Map<string, Img[]>();
+          for (const n of novos) { const cands = ambs.filter((y: Amb) => casa(n.nome, y.nome || "")); if (cands.length === 1) auto.set(cands[0]._k, [...(auto.get(cands[0]._k) || []), n]); }
+          if (auto.size) setAmbs((xs: Amb[]) => xs.map(y => auto.has(y._k) ? { ...y, imagens: [...(y.imagens || []), ...(auto.get(y._k) || []).map(({ url, ...n }: any) => n)] } : y));
+          const sobrou = novos.length - Array.from(auto.values()).reduce((t, l) => t + l.length, 0);
+          toast(novos.length + " arquivo(s) anexado(s)" + (auto.size ? " · " + (novos.length - sobrou) + " já vinculado(s) pelo nome" : "") + (sobrou ? " — marque o ambiente de " + sobrou : ""));
+        }
       }} />
     {imgs.length > 0 && <div style={{ marginTop: 8 }}>{imgs.map((x: Img, i: number) => <div key={chave(x) + i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderTop: i ? "1px solid #eef0f2" : 0, flexWrap: "wrap" }}>
       <Miniatura a={comUrl(x)} c={c} style={{ width: 54, height: 54, flex: "none" }} onClick={() => setModal(<Visualizar a={comUrl(x)} c={c} onFechar={() => setModal(null)} />)} />
@@ -1214,7 +1228,7 @@ function ContratoAssinado({ ct, toast }: { ct: any; toast: (m: string) => void }
     <button className="btn sm" disabled={abrindo || !ct.url} onClick={imprimir}>{abrindo ? "Abrindo…" : "🖨 Imprimir contrato assinado"}</button>
   </div>;
 }
-function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocupado, toast, gerar, ct, setCt, assinado, seguir, antes }: any) {
+function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs, liberado, ocupado, toast, gerar, ct, setCt, assinado, seguir, antes }: any) {
   const [montando, setMontando] = useState("");
   // quem está aqui é o titular da compra? Se não, ele assina como representante e o titular assina depois, pelo 2º link.
   const [quem, setQuem] = useState<"" | "titular" | "representante">("");
@@ -1279,8 +1293,14 @@ function Etapa3({ c, t0, ambs, proj, naoInc, obs, ferragens, arqs, liberado, ocu
       const { dados, falhas } = await montar();
       if (falhas.length && !confirm("Estas imagens NÃO entraram no contrato:\n\n• " + falhas.join("\n• ") + "\n\nGerar o link mesmo assim?")) return;
       const nImg = dados.ambientes.reduce((n, a) => n + a.imagens.length, 0);
+      // o cliente assina declarando que viu as imagens do projeto: sem imagem, o contrato não vale a pena
+      if (!nImg && !confirm((imgsProj.length
+        ? "Você anexou " + imgsProj.length + " arquivo(s) de imagem do projeto, mas NÃO marcou de qual ambiente cada um é.\n\n"
+        : "Nenhuma imagem do projeto foi anexada.\n\n")
+        + "O contrato vai sair SEM as imagens e o cliente vai assinar declarando que viu um projeto que não está no documento.\n\n"
+        + (imgsProj.length ? "Volte em “Conferência e imagens” e marque o ambiente de cada arquivo.\n\n" : "")
+        + "Gerar assim mesmo?")) return;
       const r = await A.ckContrato("criar", c.id, { dados });
-      if (!nImg) toast("Atenção: contrato sem imagens do projeto");
       setCt({ token: r.token, status: "pendente", expira: r.expira, representante: quem === "representante" ? reprNome.trim() : "", reprTelefone: reprTel.trim() });
       toast(quem === "representante" ? "Contrato gerado — quem está aqui assina como representante" : "Contrato gerado — mostre o QR Code ao cliente");
     } catch (e: any) { toast(e.message || "Não foi possível gerar o contrato"); }
@@ -1410,13 +1430,19 @@ function AbrirAssinado({ id, path, toast }: { id: string; path: string; toast: (
 /** baixa o contrato assinado como arquivo (o servidor manda como anexo) — para guardar ou mandar para o cliente */
 function BaixarAssinado({ id, path, toast }: { id: string; path: string; toast: (m: string) => void }) {
   const [indo, setIndo] = useState(false);
-  return <button className="btn ghost sm" disabled={indo} title="Baixar o contrato assinado" onClick={async e => {
+  // abre o contrato numa janela e já chama a impressão, para sair em PDF em vez do .html
+  return <button className="btn ghost sm" disabled={indo} title="Baixar o contrato assinado em PDF" onClick={async e => {
     e.stopPropagation(); setIndo(true);
-    try { const r = await A.ckContratoAbrir(id, path); const u = r.urlBaixar || r.url;
-      const a = document.createElement("a"); a.href = u; a.rel = "noopener"; a.download = ""; document.body.appendChild(a); a.click(); a.remove(); }
-    catch (x: any) { toast(x.message || "Não consegui baixar"); }
+    const w = window.open("", "_blank");
+    try {
+      const r = await A.ckContratoAbrir(id, path);
+      const html = await (await fetch(r.url)).text();
+      if (w) { w.document.open(); w.document.write(html); w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch { /* o navegador recusou */ } }, 500); }
+      else { const u = r.urlBaixar || r.url; const a = document.createElement("a"); a.href = u; a.rel = "noopener"; a.download = ""; document.body.appendChild(a); a.click(); a.remove(); toast("Libere as janelas do navegador para salvar em PDF"); }
+    }
+    catch (x: any) { w?.close(); toast(x.message || "Não consegui baixar"); }
     finally { setIndo(false); }
-  }}>{indo ? "baixando…" : "📥"}</button>;
+  }}>{indo ? "abrindo…" : "📥 PDF"}</button>;
 }
 
 function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: any) {

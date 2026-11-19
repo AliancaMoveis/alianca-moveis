@@ -187,7 +187,6 @@ ${CONDICOES_CONTRATO.map((t, i) => `${i === INICIO_MONTAGEM ? `<h3 style="margin
 ${amb.imagens.length ? `<div class="imgs">${amb.imagens.map(x => `<figure><img src="${esc(x.src)}" alt=""><figcaption>${esc(x.nome)}</figcaption></figure>`).join("")}</div>` : `<p class="rub">Sem imagens anexadas para este ambiente.</p>`}
 ${fic.length ? `<h3>Checklist do ambiente <i>(conferido pelo projetista com o cliente)</i></h3><table>${fic.map(([k, v]) => `<tr><td>${esc(k)}</td><td style="width:22mm">${bx(v === true)}Sim</td><td style="width:22mm">${bx(v === false)}Não</td></tr>`).join("")}</table>` : ""}
 ${amb.fichaObs ? `<h3>Observações do ambiente</h3><p class="cor">${esc(amb.fichaObs)}</p>` : ""}
-${amb.itens?.length ? `<h3>Resumo do que foi comprado <i>(sem valores)</i></h3><table class="it2"><tr><th style="width:18mm">Qtd</th><th>Descrição</th><th style="width:38mm">Medidas (L × A × P)</th></tr>${amb.itens.map(x => `<tr><td>${esc(x.qtd)}</td><td>${esc(x.descricao)}</td><td>${esc(x.medidas)}</td></tr>`).join("")}</table>` : ""}
 ${assinado ? `<div class="ok">☑ O cliente visualizou as imagens do projeto deste ambiente e declarou que elas representam o projeto conforme solicitado.</div>` : ""}${rodape}</div>`;
   }).join("");
 

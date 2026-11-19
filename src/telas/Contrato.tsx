@@ -10,9 +10,11 @@ import TermoMaterial from "../comp/TermoMaterial";
  *  No celular o navegador bloqueia janela nova (window.open) quase sempre: o cliente clicava em
  *  "Ver o documento completo" e não acontecia nada. Aqui o contrato abre por cima da página, dentro
  *  de um quadro, com botão de imprimir — sem depender de pop-up, no Android e no iPhone. */
-function VerDocumento({ html, onFechar }: { html: string; onFechar: () => void }) {
+function VerDocumento({ html, onFechar, autoPdf }: { html: string; onFechar: () => void; autoPdf?: boolean }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const imprimir = () => { const w = ref.current?.contentWindow; if (!w) return; try { w.focus(); w.print(); } catch { /* o navegador recusou */ } };
+  // "Baixar em PDF": abre a caixa de impressão já no destino "Salvar como PDF" assim que o documento desenha
+  const pronto = () => { if (autoPdf) setTimeout(imprimir, 400); };
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onFechar(); }; window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc); }, [onFechar]);
   return <div style={{ position: "fixed", inset: 0, background: "rgba(16,20,26,.75)", zIndex: 9999, display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 12px", background: "#fff", borderBottom: "1px solid #e0e3e8" }}>
@@ -20,13 +22,14 @@ function VerDocumento({ html, onFechar }: { html: string; onFechar: () => void }
       <button type="button" onClick={imprimir} style={{ padding: "9px 14px", fontWeight: 800, fontSize: 14, color: "#fff", background: "#284b8f", border: 0, borderRadius: 10 }}>🖨 Imprimir / salvar PDF</button>
       <button type="button" onClick={onFechar} style={{ padding: "9px 14px", fontWeight: 800, fontSize: 14, color: "#284b8f", background: "#fff", border: "2px solid #284b8f", borderRadius: 10 }}>Fechar</button>
     </div>
-    <iframe ref={ref} srcDoc={html} title="Documento" style={{ flex: 1, width: "100%", border: 0, background: "#fff" }} />
+    {autoPdf && <div style={{ padding: "8px 12px", background: "#e9eff9", color: "#284b8f", fontSize: 13, fontWeight: 600 }}>Na janela que abrir, escolha <b>Salvar como PDF</b> (no iPhone, toque em Compartilhar › Salvar em Arquivos).</div>}
+    <iframe ref={ref} srcDoc={html} title="Documento" onLoad={pronto} style={{ flex: 1, width: "100%", border: 0, background: "#fff" }} />
   </div>;
 }
 
 /** via do cliente: baixa/abre o contrato que ele acabou de assinar (e continua valendo se reabrir o link) */
 function BaixarContrato({ token }: { token: string }) {
-  const [indo, setIndo] = useState(""); const [erro, setErro] = useState(""); const [doc, setDoc] = useState("");
+  const [indo, setIndo] = useState(""); const [erro, setErro] = useState(""); const [doc, setDoc] = useState(""); const [pdf, setPdf] = useState(false);
 
   // Baixar de verdade: quem manda é o SERVIDOR, que entrega o arquivo marcado como anexo
   // (Content-Disposition). Aí o celular salva nos Downloads / Arquivos em vez de só mostrar
@@ -43,8 +46,8 @@ function BaixarContrato({ token }: { token: string }) {
   };
 
   // na própria tela, pelo mesmo motivo do documento completo: no celular a janela nova é bloqueada
-  const abrir = async () => {
-    setIndo("a"); setErro("");
+  const abrir = async (pdf: boolean) => {
+    setIndo(pdf ? "p" : "a"); setErro(""); setPdf(pdf);
     try {
       const r = await contratoCopia({ token });
       setDoc(await (await fetch(r.url)).text());
@@ -56,16 +59,17 @@ function BaixarContrato({ token }: { token: string }) {
     color: p ? "#fff" : COR.pri, background: p ? COR.pri : "#fff" });
   return <div style={{ marginTop: 14 }}>
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      <button type="button" onClick={baixar} disabled={!!indo} style={{ ...bt(true), background: indo ? "#9aa3b0" : COR.pri }}>
-        {indo === "b" ? "Baixando…" : "📥 Baixar a minha via"}</button>
-      <button type="button" onClick={abrir} disabled={!!indo} style={bt(false)}>
+      <button type="button" onClick={() => abrir(true)} disabled={!!indo} style={{ ...bt(true), background: indo ? "#9aa3b0" : COR.pri }}>
+        {indo === "p" ? "Montando o PDF…" : "📥 Baixar em PDF"}</button>
+      <button type="button" onClick={() => abrir(false)} disabled={!!indo} style={bt(false)}>
         {indo === "a" ? "Abrindo…" : "📄 Ver na tela"}</button>
     </div>
-    {doc && <VerDocumento html={doc} onFechar={() => setDoc("")} />}
+    {doc && <VerDocumento html={doc} autoPdf={pdf} onFechar={() => setDoc("")} />}
     {erro && <div style={{ color: "#9b1c1c", fontSize: 13, marginTop: 8 }}>{erro}</div>}
     <div style={{ fontSize: 12.5, color: "#5a6270", marginTop: 8 }}>
-      <b>Baixar</b> salva o contrato no seu celular (Downloads, ou Arquivos no iPhone) — depois é só abrir ou enviar por WhatsApp.
-      <b> Ver na tela</b> abre o contrato completo, com a sua assinatura; e tem botão de imprimir / salvar em PDF ali dentro.
+      <b>Baixar em PDF</b> abre a sua via e a caixa de salvar — escolha <b>Salvar como PDF</b> e o arquivo fica no celular, pronto para enviar por WhatsApp.
+      <b> Ver na tela</b> abre o contrato completo com a sua assinatura.
+      <div style={{ marginTop: 6 }}><a href="#" onClick={e => { e.preventDefault(); baixar(); }} style={{ color: COR.s }}>{indo === "b" ? "baixando…" : "ou baixar o arquivo original (.html)"}</a></div>
     </div>
   </div>;
 }
