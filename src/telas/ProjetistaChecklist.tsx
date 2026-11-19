@@ -1581,8 +1581,19 @@ function DocsDoCliente({ c, t0, ass, arqs, toast, recarregar }: { c: any; t0: an
         await recarregar?.();
         toast("Enviado pelo WhatsApp do checklist");
       } catch (x: any) {
-        setErro(e => ({ ...e, [tipo]: x.message || "a Kommo não confirmou o envio" }));
-        toast("Não enviou — veja o motivo na linha do documento");
+        // Texto livre não passou: o cliente não escreve para a gente há mais de 24h e a
+        // Meta bloqueia. Em vez de devolver o problema para quem clicou, o 360 já pergunta
+        // ao cliente se pode mandar. Ele respondendo qualquer coisa, o documento sai
+        // sozinho — ninguém precisa voltar aqui e clicar de novo.
+        try {
+          const r = await A.ckLiberacaoPedir({ id: c.id, cliente: c.cliente, telefone: tel, pedido: venda });
+          setErro(e => ({ ...e, [tipo]: "" }));
+          await recarregar?.();
+          toast("O cliente não fala com a gente há mais de um dia — perguntei se posso mandar. Assim que ele responder, " + (r.docs.length > 1 ? "os documentos vão" : "o documento vai") + " sozinho.");
+        } catch (y: any) {
+          setErro(e => ({ ...e, [tipo]: (x.message || "a Kommo não confirmou o envio") + " · o pedido de liberação também não saiu: " + (y.message || "sem motivo") }));
+          toast("Não enviou — veja o motivo na linha do documento");
+        }
       }
     } catch (e: any) { toast(e.message || "Não consegui enviar"); }
     finally { setIndo(""); }
@@ -1693,17 +1704,9 @@ function DocsDoCliente({ c, t0, ass, arqs, toast, recarregar }: { c: any; t0: an
         Assim que ele responder <b>qualquer coisa</b>, o 360 manda {(lib.docs || []).length === 1 ? "o documento" : "os dois documentos"} sozinho.
       </div>;
       if (lib?.status === "enviado") return <div className="note" style={{ marginTop: 10 }}>✅ O cliente liberou e os documentos já foram enviados pelo WhatsApp do checklist.</div>;
-      return <div style={{ marginTop: 10 }}>
-        <button className="btn sm" disabled={!!indo || !tel} onClick={async () => {
-          setIndo("lib");
-          try { const r = await A.ckLiberacaoPedir({ id: c.id, cliente: c.cliente, telefone: tel, pedido: venda }); await recarregar?.(); toast("Pedido enviado — " + r.docs.length + " documento(s) vão sair quando ele responder"); }
-          catch (e: any) { toast(e.message || "Não consegui pedir a liberação"); }
-          finally { setIndo(""); }
-        }}>{indo === "lib" ? "Enviando…" : "📨 Pedir liberação e enviar quando ele responder"}</button>
-        <div className="hint" style={{ marginTop: 5 }}>Use quando o cliente não fala com a gente há mais de um dia. O 360 pergunta se pode mandar; ele respondendo qualquer coisa, os documentos saem na hora, sozinhos.</div>
-      </div>;
+      return null;
     })()}
-    <div className="hint" style={{ marginTop: 6 }}>O <b>contrato</b> sai igualzinho ao que o cliente assinou, com a assinatura, a selfie e o hash. O <b>detalhamento</b> traz só as imagens do projeto, uma por página, com o ambiente — sem valor, sem listagem e sem dado interno.<br />O envio sai pelo <b>número do checklist</b> (41 3316-9095), não pelo seu WhatsApp. A Meta só entrega mensagem escrita por nós se o cliente falou com a gente nas <b>últimas 24h</b> — fora dessa janela o 360 avisa e abre o WhatsApp com a mensagem pronta.</div>
+    <div className="hint" style={{ marginTop: 6 }}>O <b>contrato</b> sai igualzinho ao que o cliente assinou, com a assinatura, a selfie e o hash. O <b>detalhamento</b> traz só as imagens do projeto, uma por página, com o ambiente — sem valor, sem listagem e sem dado interno.<br />Clique uma vez em <b>Enviar ao cliente</b> e pronto: sai pelo <b>número do checklist</b> (41 3316-9095), nunca pelo seu WhatsApp. Se o cliente não fala com a gente há mais de um dia, o 360 pergunta a ele se pode mandar — e quando ele responder <b>qualquer coisa</b>, o documento vai sozinho, sem você voltar aqui.</div>
   </div>;
 }
 

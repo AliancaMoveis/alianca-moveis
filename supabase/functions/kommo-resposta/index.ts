@@ -112,12 +112,6 @@ async function rpc(nome: string, corpo: unknown = {}): Promise<string | null> {
   return t && t !== "null" ? t : null;
 }
 
-/**
- * Manda a confirmação de volta para o cliente.
- * Vai como texto livre, e não como modelo, porque o cliente acabou de escrever:
- * dentro das 24h a Meta entrega texto livre, sem custo de template.
- * Antes de disparar, garante que a data impressa na mensagem é a que foi confirmada.
- */
 /** chamada de função do banco que devolve JSON (objeto), e não texto */
 async function rpcJson(nome: string, corpo: unknown = {}): Promise<any> {
   try {
@@ -181,6 +175,12 @@ async function mandarDocumentos(chamado: string, lib: any, lead_id: number | nul
   } catch (e) { return "falhou: " + String((e as Error).message || e).slice(0, 120); }
 }
 
+/**
+ * Manda a confirmação de volta para o cliente.
+ * Vai como texto livre, e não como modelo, porque o cliente acabou de escrever:
+ * dentro das 24h a Meta entrega texto livre, sem custo de template.
+ * Antes de disparar, garante que a data impressa na mensagem é a que foi confirmada.
+ */
 async function confirmarParaCliente(chamado: string, lead_id: number | null): Promise<string> {
   try {
     const r = await fetch(`${SB()}/rest/v1/kommo_vinculo?chamado_id=eq.${encodeURIComponent(chamado)}&select=lead_id,envio_data_oferecida`, { headers: cab() });
