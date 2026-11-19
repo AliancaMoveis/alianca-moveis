@@ -371,6 +371,16 @@ export const A = {
     if (!r.ok || j.erro) throw new Error(j.erro || "Não foi possível abrir o contrato assinado");
     return j as { url: string; urlBaixar?: string };
   },
+  /** guarda um PDF que vai para o cliente (contrato ou detalhamento das imagens) e registra na ficha */
+  ckDocCliente: async (id: string, tipo: "contrato" | "imagens", nome: string, arquivo: Blob) => {
+    const f = new File([arquivo], nome, { type: "application/pdf" });
+    const r = await A.ckSubir(id, "cliente" as any, f);
+    const d = await rpc<any>("ck_doc_cliente_salvar", { p_chamado: id, p: { tipo, nome, path: r.path } });
+    return { ...d, path: r.path, nome };
+  },
+  /** registra que o documento foi enviado ao cliente: quem, quando e por onde */
+  ckDocEnviado: (id: string, path: string, p: { via?: string; para?: string; janela?: string }) =>
+    rpc("ck_doc_cliente_enviado", { p_chamado: id, p_path: path, p }),
   /** contrato do checklist com assinatura online (função "contrato"): criar · status · cancelar */
   ckContrato: async (acao: "criar" | "status" | "cancelar", id: string, extra: any = {}) => {
     const r = await chamarFuncao("contrato", JSON.stringify({ acao, id, ...extra }), "application/json");

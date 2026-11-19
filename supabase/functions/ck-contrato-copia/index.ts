@@ -3,7 +3,8 @@
 //  · {token}      → o CLIENTE, sem login, baixa o contrato que ele acabou de assinar (ou reabre o link depois).
 //                   Serve tanto para o link da conferência quanto para o 2º link, o do titular da compra.
 //  · {id, path}   → o PROJETISTA logado abre qualquer contrato assinado da ficha (os antigos também)
-// O path só é liberado se estiver registrado em termo.assinados daquele checklist — ninguém abre arquivo de outro.
+// O path só é liberado se estiver registrado em termo.assinados ou em termo.docsCliente
+// daquele checklist — ninguém abre arquivo de outro.
 //
 // Cada porta devolve DOIS endereços do mesmo arquivo: `url` (abre na tela) e `urlBaixar`
 // (vem marcado como anexo, então o celular SALVA em vez de só mostrar numa aba nova).
@@ -49,13 +50,19 @@ Deno.serve(async (req: Request) => {
     if (e1) return json({ erro: e1.message }, 403);
     const path = String(b.path || "");
     if (!path) return json({ erro: "falta o arquivo" }, 400);
-    // o arquivo precisa estar registrado nos assinados deste checklist
+    // o arquivo precisa estar registrado neste checklist: contrato assinado ou documento do cliente
     const { data: ch } = await adm.from("chamados").select("tratativa").eq("id", ctx.id).maybeSingle();
-    const assinados: any[] = ch?.tratativa?.checklist?.termo?.assinados || [];
-    if (!assinados.some(a => String(a?.path || "") === path)) return json({ erro: "Este arquivo não é deste checklist" }, 403);
-    const su = await adm.storage.from("checklist").createSignedUrl(path, 3600);
+    const termo: any = ch?.tratativa?.checklist?.termo || {};
+    const assinados: any[] = termo.assinados || [];
+    const docs: any[] = termo.docsCliente || [];
+    const doc = docs.find(d => String(d?.path || "") === path);
+    if (!assinados.some(a => String(a?.path || "") === path) && !doc) return json({ erro: "Este arquivo não é deste checklist" }, 403);
+    // o PDF que vai para o cliente precisa de um endereço que dure: ele guarda o link no WhatsApp
+    const dur = doc ? DIAS : 3600;
+    const su = await adm.storage.from("checklist").createSignedUrl(path, dur);
     if (!su.data?.signedUrl) return json({ erro: "Arquivo não encontrado" }, 404);
-    return json({ ok: true, url: su.data.signedUrl, urlBaixar: comAnexo(su.data.signedUrl, (path.split("/").pop() || "contrato.html")) });
+    const nome = doc?.nome || path.split("/").pop() || "contrato.html";
+    return json({ ok: true, url: su.data.signedUrl, urlBaixar: comAnexo(su.data.signedUrl, nome), nome, dias: dur / 86400 });
   } catch (e: any) {
     return json({ erro: String(e?.message || e) }, 500);
   }

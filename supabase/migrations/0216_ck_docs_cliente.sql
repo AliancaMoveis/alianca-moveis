@@ -1,0 +1,5 @@
+-- Documentos que vão para o cliente (contrato em PDF e detalhamento das imagens) e o
+-- registro de cada envio pelo WhatsApp: quem mandou, quando e por qual caminho.
+-- Ficam em tratativa.checklist.termo.docsCliente, ao lado de "assinados".
+-- (já aplicada no banco em 19/11/2026)
+-- ver funções ck_doc_cliente_salvar e ck_doc_cliente_enviado

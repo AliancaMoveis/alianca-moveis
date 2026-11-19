@@ -695,7 +695,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
           {etapa === 3 && <Etapa3 c={c} t0={t0} ambs={ambs} proj={proj} imgsProj={imgsProj} naoInc={naoInc} obs={obs} ferragens={ferragens} arqs={arqs} liberado={e2} ocupado={ocupado} toast={toast}
             ct={ct} setCt={setCt} assinado={e4} seguir={() => setEtapa(5)} antes={async () => (mudou ? await salvar("salvar", {}, "") : true)}
             gerar={async (paginas: number) => salvar("impressao", { impressao: { paginas } }, "Impressão registrada")} />}
-          {etapa === 4 && <Etapa4 c={c} t0={t0} ct={ct} ocupado={ocupado} setOcupado={setOcupado} toast={toast} liberado={e3}
+          {etapa === 4 && <Etapa4 c={c} t0={t0} ct={ct} ocupado={ocupado} setOcupado={setOcupado} toast={toast} liberado={e3} recarregar={recarregar}
             registrar={(assinado: any) => salvar("assinado", { assinado }, assinado.exact ? "Digitalizado anexado e enviado ao Exact" : "Digitalizado anexado no 360")} />}
           {etapa === 5 && <div>
             <div className="sec">5 · Marcar realizado</div>
@@ -1466,12 +1466,36 @@ function BaixarAssinado({ id, path, toast }: { id: string; path: string; toast: 
 }
 
 /** documentos que vão para o cliente: contrato assinado em PDF e o detalhamento das imagens */
-function DocsDoCliente({ c, ass, toast }: { c: any; ass: any[]; toast: (m: string) => void }) {
+function DocsDoCliente({ c, t0, ass, toast, recarregar }: { c: any; t0: any; ass: any[]; toast: (m: string) => void; recarregar?: () => any }) {
   const [indo, setIndo] = useState("");
   const [passo, setPasso] = useState("");
   const ultimo = [...ass].reverse().find((a: any) => a.online && a.path);
   const venda = String(c.pedido || "");
-  const salvar = (b: Blob, nome: string) => { const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); };
+  const docs: any[] = t0?.docsCliente || [];
+  const doc = (tipo: string) => docs.find((d: any) => d.tipo === tipo);
+  const tel = sanitizeWhats(c.telefone || c.telefone2 || "");
+  const baixar = (b: Blob, nome: string) => { const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); };
+  const guardar = async (tipo: "contrato" | "imagens", b: Blob, nome: string) => {
+    try { await A.ckDocCliente(c.id, tipo, nome, b); await recarregar?.(); } catch (e: any) { toast("Gerado, mas não consegui guardar na ficha: " + e.message); }
+  };
+  /** manda o link do PDF pelo WhatsApp e registra quem mandou e quando */
+  const enviar = async (tipo: "contrato" | "imagens") => {
+    const d = doc(tipo); if (!d) { toast("Gere o documento primeiro"); return; }
+    if (!tel) { toast("Este cliente está sem telefone na ficha"); return; }
+    setIndo("e" + tipo);
+    try {
+      const r = await A.ckContratoAbrir(c.id, d.path);
+      const link = r.urlBaixar || r.url;
+      const txt = tipo === "contrato"
+        ? `Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o contrato do checklist do seu projeto da Aliança Móveis, com a sua assinatura. Venda ${venda}.\n\n${link}`
+        : `Olá, ${primeiroNome(cap(c.cliente))}! Aqui estão as imagens do projeto final que você conferiu no checklist da Aliança Móveis. Venda ${venda}.\n\n${link}`;
+      abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(txt));
+      await A.ckDocEnviado(c.id, d.path, { via: "whatsapp", para: tel });
+      await recarregar?.();
+      toast("Enviado — e registrado na ficha");
+    } catch (e: any) { toast(e.message || "Não consegui enviar"); }
+    finally { setIndo(""); }
+  };
 
   const contrato = async () => {
     setIndo("c"); setPasso("abrindo o contrato…");
@@ -1480,8 +1504,9 @@ function DocsDoCliente({ c, ass, toast }: { c: any; ass: any[]; toast: (m: strin
       const html = await (await fetch(r.url)).text();
       const { pdfDoContrato, nomePdf } = await import("../lib/contratoPdf");
       const b = await pdfDoContrato(html, (f, t) => setPasso("folha " + Math.min(f + 1, t) + " de " + t + "…"));
-      salvar(b, nomePdf("Contrato", c.cliente, venda));
-      toast("Contrato em PDF gerado");
+      const nome = nomePdf("Contrato", c.cliente, venda);
+      baixar(b, nome); setPasso("guardando na ficha…"); await guardar("contrato", b, nome);
+      toast("Contrato em PDF pronto");
     } catch (e: any) { toast(e.message || "Não consegui gerar o PDF"); }
     finally { setIndo(""); setPasso(""); }
   };
@@ -1495,7 +1520,8 @@ function DocsDoCliente({ c, ass, toast }: { c: any; ass: any[]; toast: (m: strin
       const imgs = imagensDoContrato(html);
       if (!imgs.length) { toast("Este contrato foi gerado sem imagens do projeto"); return; }
       const b = await pdfDasImagens({ cliente: c.cliente, venda, data: fmtDateTime(ultimo.em).slice(0, 10), imagens: imgs });
-      salvar(b, nomePdf("Projeto", c.cliente, venda));
+      const nome = nomePdf("Projeto", c.cliente, venda);
+      baixar(b, nome); setPasso("guardando na ficha…"); await guardar("imagens", b, nome);
       toast(imgs.length + " imagem(ns) no PDF");
     } catch (e: any) { toast(e.message || "Não consegui montar o PDF das imagens"); }
     finally { setIndo(""); setPasso(""); }
@@ -1503,16 +1529,23 @@ function DocsDoCliente({ c, ass, toast }: { c: any; ass: any[]; toast: (m: strin
 
   return <div className="pjab" style={{ marginBottom: 12 }}>
     <h5>📄 Documentos para o cliente <span style={{ fontWeight: 600, color: "var(--pj-s)" }}>· em PDF, sem valores</span></h5>
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-      <button className="btn sm primary" disabled={!!indo} onClick={contrato}>{indo === "c" ? "Gerando…" : "📄 Contrato assinado em PDF"}</button>
-      <button className="btn sm" disabled={!!indo} onClick={imagens}>{indo === "i" ? "Gerando…" : "🖼 Detalhamento das imagens"}</button>
-    </div>
+    {([["contrato", "📄 Contrato assinado em PDF", contrato, "c"], ["imagens", "🖼 Detalhamento das imagens", imagens, "i"]] as const).map(([tipo, rot, fn, k]) => {
+      const d = doc(tipo); const envios: any[] = d?.enviado || [];
+      return <div key={tipo} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+        <button className={"btn sm" + (tipo === "contrato" ? " primary" : "")} disabled={!!indo} onClick={fn}>{indo === k ? "Gerando…" : (d ? "↻ " : "") + rot}</button>
+        {d && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
+          disabled={!!indo || !tel} onClick={() => enviar(tipo)}>{indo === "e" + tipo ? "Enviando…" : "💬 Enviar ao cliente"}</button>}
+        {d && <span className="hint">gerado {fmtDateTime(d.em)}{d.por ? " · " + d.por : ""}</span>}
+        {envios.length > 0 && <span className="pjpill p-ok" style={{ margin: 0 }} title={envios.map((e: any) => fmtDateTime(e.em) + (e.por ? " · " + e.por : "")).join("\n")}>
+          ✓ enviado ao WhatsApp {fmtDateTime(envios[envios.length - 1].em)}{envios[envios.length - 1].por ? " · por " + envios[envios.length - 1].por : ""}{envios.length > 1 ? " (" + envios.length + "x)" : ""}</span>}
+      </div>;
+    })}
     {passo && <div className="hint" style={{ marginTop: 6 }}>⏳ {passo}</div>}
     <div className="hint" style={{ marginTop: 6 }}>O <b>contrato</b> sai igualzinho ao que o cliente assinou, com a assinatura, a selfie e o hash. O <b>detalhamento</b> traz só as imagens do projeto, uma por página, com o ambiente — sem valor, sem listagem e sem dado interno.</div>
   </div>;
 }
 
-function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: any) {
+function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado, recarregar }: any) {
   const ass: any[] = t0.assinados || [];
   return <div>
     <div className="sec">4 · Contrato assinado <span className="src p-b">vai para o Exact como “Outros”</span></div>
@@ -1521,7 +1554,7 @@ function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: 
     {ass.length > 0 && <div style={{ marginBottom: 12 }}>{ass.map((a, i) => <div key={i} className="pjrow on"><b>{a.online ? "✍️" : "📎"} {a.nome}</b><span className="hint">{fmtDateTime(a.em)}{a.por ? " · " + a.por : ""}</span>
       <span className={"pjpill " + (a.exact ? "p-ok" : "p-w")} style={{ margin: 0 }}>{a.exact ? "Exact ✓" : "só no 360"}</span>
       {a.path && <AbrirAssinado id={c.id} path={a.path} toast={toast} />}{a.path && <BaixarAssinado id={c.id} path={a.path} toast={toast} />}</div>)}</div>}
-    {ass.some((a: any) => a.online && a.path) && <DocsDoCliente c={c} ass={ass} toast={toast} />}
+    {ass.some((a: any) => a.online && a.path) && <DocsDoCliente c={c} t0={t0} ass={ass} toast={toast} recarregar={recarregar} />}
     <div className="sec" style={{ marginTop: 6 }}>Assinou no papel? <span className="src p-g">alternativa</span></div>
     <Soltar aceita="application/pdf,image/*" multiplo ocupado={ocupado === "assinado"} estilo={{ padding: 14 }}
       texto={<>⬆ Suba o PDF escaneado com as assinaturas do cliente<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>ou foto pelo celular · pode subir mais de um arquivo</span></>}
