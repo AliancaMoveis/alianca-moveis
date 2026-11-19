@@ -1465,6 +1465,53 @@ function BaixarAssinado({ id, path, toast }: { id: string; path: string; toast: 
   }}>{indo ? "abrindo…" : "📥 PDF"}</button>;
 }
 
+/** documentos que vão para o cliente: contrato assinado em PDF e o detalhamento das imagens */
+function DocsDoCliente({ c, ass, toast }: { c: any; ass: any[]; toast: (m: string) => void }) {
+  const [indo, setIndo] = useState("");
+  const [passo, setPasso] = useState("");
+  const ultimo = [...ass].reverse().find((a: any) => a.online && a.path);
+  const venda = String(c.pedido || "");
+  const salvar = (b: Blob, nome: string) => { const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); };
+
+  const contrato = async () => {
+    setIndo("c"); setPasso("abrindo o contrato…");
+    try {
+      const r = await A.ckContratoAbrir(c.id, ultimo.path);
+      const html = await (await fetch(r.url)).text();
+      const { pdfDoContrato, nomePdf } = await import("../lib/contratoPdf");
+      const b = await pdfDoContrato(html, (f, t) => setPasso("folha " + Math.min(f + 1, t) + " de " + t + "…"));
+      salvar(b, nomePdf("Contrato", c.cliente, venda));
+      toast("Contrato em PDF gerado");
+    } catch (e: any) { toast(e.message || "Não consegui gerar o PDF"); }
+    finally { setIndo(""); setPasso(""); }
+  };
+
+  const imagens = async () => {
+    setIndo("i"); setPasso("juntando as imagens…");
+    try {
+      const r = await A.ckContratoAbrir(c.id, ultimo.path);
+      const html = await (await fetch(r.url)).text();
+      const { imagensDoContrato, pdfDasImagens, nomePdf } = await import("../lib/contratoPdf");
+      const imgs = imagensDoContrato(html);
+      if (!imgs.length) { toast("Este contrato foi gerado sem imagens do projeto"); return; }
+      const b = await pdfDasImagens({ cliente: c.cliente, venda, data: fmtDateTime(ultimo.em).slice(0, 10), imagens: imgs });
+      salvar(b, nomePdf("Projeto", c.cliente, venda));
+      toast(imgs.length + " imagem(ns) no PDF");
+    } catch (e: any) { toast(e.message || "Não consegui montar o PDF das imagens"); }
+    finally { setIndo(""); setPasso(""); }
+  };
+
+  return <div className="pjab" style={{ marginBottom: 12 }}>
+    <h5>📄 Documentos para o cliente <span style={{ fontWeight: 600, color: "var(--pj-s)" }}>· em PDF, sem valores</span></h5>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+      <button className="btn sm primary" disabled={!!indo} onClick={contrato}>{indo === "c" ? "Gerando…" : "📄 Contrato assinado em PDF"}</button>
+      <button className="btn sm" disabled={!!indo} onClick={imagens}>{indo === "i" ? "Gerando…" : "🖼 Detalhamento das imagens"}</button>
+    </div>
+    {passo && <div className="hint" style={{ marginTop: 6 }}>⏳ {passo}</div>}
+    <div className="hint" style={{ marginTop: 6 }}>O <b>contrato</b> sai igualzinho ao que o cliente assinou, com a assinatura, a selfie e o hash. O <b>detalhamento</b> traz só as imagens do projeto, uma por página, com o ambiente — sem valor, sem listagem e sem dado interno.</div>
+  </div>;
+}
+
 function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: any) {
   const ass: any[] = t0.assinados || [];
   return <div>
@@ -1474,6 +1521,7 @@ function Etapa4({ c, t0, ct, ocupado, setOcupado, toast, registrar, liberado }: 
     {ass.length > 0 && <div style={{ marginBottom: 12 }}>{ass.map((a, i) => <div key={i} className="pjrow on"><b>{a.online ? "✍️" : "📎"} {a.nome}</b><span className="hint">{fmtDateTime(a.em)}{a.por ? " · " + a.por : ""}</span>
       <span className={"pjpill " + (a.exact ? "p-ok" : "p-w")} style={{ margin: 0 }}>{a.exact ? "Exact ✓" : "só no 360"}</span>
       {a.path && <AbrirAssinado id={c.id} path={a.path} toast={toast} />}{a.path && <BaixarAssinado id={c.id} path={a.path} toast={toast} />}</div>)}</div>}
+    {ass.some((a: any) => a.online && a.path) && <DocsDoCliente c={c} ass={ass} toast={toast} />}
     <div className="sec" style={{ marginTop: 6 }}>Assinou no papel? <span className="src p-g">alternativa</span></div>
     <Soltar aceita="application/pdf,image/*" multiplo ocupado={ocupado === "assinado"} estilo={{ padding: 14 }}
       texto={<>⬆ Suba o PDF escaneado com as assinaturas do cliente<br /><span style={{ fontWeight: 500, color: "var(--pj-s)" }}>ou foto pelo celular · pode subir mais de um arquivo</span></>}
