@@ -118,6 +118,69 @@ async function rpc(nome: string, corpo: unknown = {}): Promise<string | null> {
  * dentro das 24h a Meta entrega texto livre, sem custo de template.
  * Antes de disparar, garante que a data impressa na mensagem é a que foi confirmada.
  */
+/** chamada de função do banco que devolve JSON (objeto), e não texto */
+async function rpcJson(nome: string, corpo: unknown = {}): Promise<any> {
+  try {
+    const r = await fetch(`${SB()}/rest/v1/rpc/${nome}`, { method: "POST", headers: cab(), body: JSON.stringify(corpo) });
+    if (r.status !== 200) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+/** link temporário de um arquivo do balde do checklist (30 dias, igual ao resto dos documentos do cliente) */
+async function linkDoc(path: string): Promise<string> {
+  const r = await fetch(`${SB()}/storage/v1/object/sign/checklist/${path.split("/").map(encodeURIComponent).join("/")}`, {
+    method: "POST", headers: { ...cab(), "Content-Type": "application/json" },
+    body: JSON.stringify({ expiresIn: 30 * 24 * 3600 }),
+  });
+  if (r.status !== 200) return "";
+  const d = await r.json().catch(() => ({}));
+  const u = String(d?.signedURL || d?.signedUrl || "");
+  return u ? `${SB()}/storage/v1${u.startsWith("/") ? "" : "/"}${u}` : "";
+}
+
+const ROTULO: Record<string, string> = { contrato: "📄 Contrato assinado", imagens: "🖼 Detalhamento das imagens" };
+
+/**
+ * Manda os documentos que o cliente acabou de liberar.
+ * Usa EXATAMENTE os caminhos gravados no pedido de liberação — nunca procura "o mais
+ * recente" — e ainda confere que cada caminho é da pasta deste chamado. É o que garante
+ * que nunca sai o contrato de outro cliente.
+ */
+async function mandarDocumentos(chamado: string, lib: any, lead_id: number | null): Promise<string> {
+  try {
+    if (!lead_id) return "sem lead na Kommo";
+    const docs: any[] = (lib.docs || []).filter((d: any) => String(d?.path || "").startsWith(chamado + "/"));
+    if (!docs.length) return "nenhum documento confere com este cliente — não enviei";
+
+    const linhas: string[] = [];
+    for (const d of docs) {
+      const u = await linkDoc(String(d.path));
+      if (u) linhas.push(`${ROTULO[String(d.tipo)] || "📎 Documento"}:\n${u}`);
+    }
+    if (!linhas.length) return "não consegui gerar os links — não enviei";
+
+    const nome = String(lib.cliente || "").trim().split(/\s+/)[0] || "";
+    const texto = `Perfeito${nome ? ", " + nome : ""}! Aqui estão os documentos do seu projeto da Aliança Móveis`
+      + (lib.pedido ? ` — venda ${lib.pedido}` : "") + `.\n\n${linhas.join("\n\n")}\n\nOs links ficam disponíveis por 30 dias.`;
+
+    const cf = Number(await segredo("kommo_cf_mensagem")), bot = Number(await segredo("kommo_bot_mensagem"));
+    if (!cf || !bot) return "envio de mensagem livre não configurado";
+    const up = await kommo(`/api/v4/leads/${lead_id}`, {
+      method: "PATCH", body: JSON.stringify({ custom_fields_values: [{ field_id: cf, values: [{ value: texto }] }] }),
+    });
+    if (up.st !== 200) return `não gravei a mensagem no lead (${up.st})`;
+    const run = await kommo(`/api/v4/bots/${bot}/run`, { method: "POST", body: JSON.stringify({ entity_id: lead_id, entity_type: "leads" }) });
+    if (!(run.st >= 200 && run.st < 300)) return `a Kommo recusou o disparo (${run.st})`;
+
+    await fetch(`${SB()}/rest/v1/rpc/ck_doc_liberacao_enviado`, {
+      method: "POST", headers: cab(),
+      body: JSON.stringify({ p_chamado: chamado, p: { para: String(lib.telefone || "") } }),
+    });
+    return `${docs.length} documento(s) enviado(s)`;
+  } catch (e) { return "falhou: " + String((e as Error).message || e).slice(0, 120); }
+}
+
 async function confirmarParaCliente(chamado: string, lead_id: number | null): Promise<string> {
   try {
     const r = await fetch(`${SB()}/rest/v1/kommo_vinculo?chamado_id=eq.${encodeURIComponent(chamado)}&select=lead_id,envio_data_oferecida`, { headers: cab() });
@@ -200,6 +263,22 @@ Deno.serve(async (req) => {
           method: "PATCH", headers: cab(),
           body: JSON.stringify({ lead_id, contato_id, atualizado_em: new Date().toISOString() }),
         });
+      }
+    }
+
+    // --- o cliente autorizou o envio dos documentos? ---
+    // Se existe pedido de liberação aberto, QUALQUER resposta dele vale como "pode mandar":
+    // é a resposta que abre a janela de 24h da Meta. Mandamos e saímos — essa mensagem não
+    // é resposta de agendamento e não pode ser interpretada como tal.
+    if (chamado) {
+      const lib = await rpcJson("ck_doc_liberacao_pendente", { p_chamado: chamado });
+      if (lib && Array.isArray(lib.docs) && lib.docs.length) {
+        decisao = "liberou os documentos · " + await mandarDocumentos(chamado, lib, lead_id);
+        await fetch(`${SB()}/rest/v1/kommo_resposta`, {
+          method: "POST", headers: { ...cab(), Prefer: "resolution=ignore-duplicates" },
+          body: JSON.stringify([{ mensagem_id: msg_id, lead_id, contato_id, chamado_id: chamado, texto, decisao, erro, bruto: m }]),
+        });
+        return ok({ ok: true, chamado, decisao });
       }
     }
 

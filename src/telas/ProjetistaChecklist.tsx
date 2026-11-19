@@ -1682,6 +1682,27 @@ function DocsDoCliente({ c, t0, ass, arqs, toast, recarregar }: { c: any; t0: an
       </div>;
     })}
     {passo && <div className="hint" style={{ marginTop: 6 }}>⏳ {passo}</div>}
+
+    {/* Fora da janela de 24h da Meta, texto livre não chega. Então o 360 pergunta por modelo
+        aprovado; a resposta do cliente abre a janela e o envio sai sozinho, com os documentos
+        que foram travados no momento do pedido. */}
+    {docs.length > 0 && (() => {
+      const lib = t0?.liberacao;
+      if (lib?.status === "aguardando") return <div className="note" style={{ marginTop: 10 }}>
+        ⏳ <b>Aguardando o cliente responder.</b> Pedimos a liberação em {fmtDateTime(lib.em)}{lib.por ? " · por " + lib.por : ""}.
+        Assim que ele responder <b>qualquer coisa</b>, o 360 manda {(lib.docs || []).length === 1 ? "o documento" : "os dois documentos"} sozinho.
+      </div>;
+      if (lib?.status === "enviado") return <div className="note" style={{ marginTop: 10 }}>✅ O cliente liberou e os documentos já foram enviados pelo WhatsApp do checklist.</div>;
+      return <div style={{ marginTop: 10 }}>
+        <button className="btn sm" disabled={!!indo || !tel} onClick={async () => {
+          setIndo("lib");
+          try { const r = await A.ckLiberacaoPedir({ id: c.id, cliente: c.cliente, telefone: tel, pedido: venda }); await recarregar?.(); toast("Pedido enviado — " + r.docs.length + " documento(s) vão sair quando ele responder"); }
+          catch (e: any) { toast(e.message || "Não consegui pedir a liberação"); }
+          finally { setIndo(""); }
+        }}>{indo === "lib" ? "Enviando…" : "📨 Pedir liberação e enviar quando ele responder"}</button>
+        <div className="hint" style={{ marginTop: 5 }}>Use quando o cliente não fala com a gente há mais de um dia. O 360 pergunta se pode mandar; ele respondendo qualquer coisa, os documentos saem na hora, sozinhos.</div>
+      </div>;
+    })()}
     <div className="hint" style={{ marginTop: 6 }}>O <b>contrato</b> sai igualzinho ao que o cliente assinou, com a assinatura, a selfie e o hash. O <b>detalhamento</b> traz só as imagens do projeto, uma por página, com o ambiente — sem valor, sem listagem e sem dado interno.<br />O envio sai pelo <b>número do checklist</b> (41 3316-9095), não pelo seu WhatsApp. A Meta só entrega mensagem escrita por nós se o cliente falou com a gente nas <b>últimas 24h</b> — fora dessa janela o 360 avisa e abre o WhatsApp com a mensagem pronta.</div>
   </div>;
 }

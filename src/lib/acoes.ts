@@ -389,6 +389,26 @@ export const A = {
     const d = await rpc<any>("ck_doc_cliente_salvar", { p_chamado: id, p: { tipo, nome, path: r.path } });
     return { ...d, path: r.path, nome };
   },
+  /**
+   * Pede ao cliente, por modelo aprovado da Meta, liberação para mandar os documentos.
+   * Grava no banco os caminhos EXATOS do que será enviado (nunca "o mais recente") e
+   * dispara o modelo. A resposta do cliente — qualquer uma — abre a janela de 24h, e o
+   * webhook manda contrato e imagens sozinho.
+   */
+  ckLiberacaoPedir: async (c: { id: string; cliente: string; telefone: string; pedido?: string | null }) => {
+    const docs = await rpc<any[]>("ck_doc_liberacao_pedir", { p_chamado: c.id });
+    try {
+      const { data, error } = await sb.functions.invoke("kommo", { body: { acao: "liberacao", chamado: c.id, cliente: c.cliente, telefone: c.telefone, pedido: c.pedido || null } });
+      if (error) throw new Error(error.message || "Não consegui falar com a Kommo");
+      if (!data?.ok) throw new Error(data?.erro || "A Kommo não confirmou o envio");
+    } catch (e) {
+      // a pergunta não saiu: desfaz o "aguardando", senão a próxima resposta do cliente
+      // sobre qualquer assunto dispararia o envio dos documentos
+      await rpc("ck_doc_liberacao_cancelar", { p_chamado: c.id }).catch(() => null);
+      throw e;
+    }
+    return { docs: docs || [] };
+  },
   /** registra que o documento foi enviado ao cliente: quem, quando e por onde */
   ckDocEnviado: (id: string, path: string, p: { via?: string; para?: string; janela?: string }) =>
     rpc("ck_doc_cliente_enviado", { p_chamado: id, p_path: path, p }),
