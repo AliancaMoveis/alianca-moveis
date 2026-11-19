@@ -1249,18 +1249,19 @@ function EnviarLinkWhats({ c, texto, telPadrao, assunto, toast }: { c: any; text
   const [num, setNum] = useState(telPadrao || "");
   const [indo, setIndo] = useState(false);
   const [feito, setFeito] = useState<{ em: string; via: string; para: string } | null>(null);
+  const [falhou, setFalhou] = useState("");
   const limpo = sanitizeWhats(num);
   const enviar = async () => {
     if (!limpo) { toast("Escreva o WhatsApp de quem vai assinar"); return; }
-    setIndo(true);
+    setIndo(true); setFalhou("");
     try {
       await A.kommoMensagem({ chamado: c.id, cliente: c.cliente, telefone: limpo, pedido: c.pedido || null, texto, assunto });
       setFeito({ em: new Date().toISOString(), via: "checklist", para: limpo });
       toast("Link enviado pelo WhatsApp do checklist");
     } catch (e: any) {
-      abrirWhats("https://wa.me/" + limpo + "?text=" + encodeURIComponent(texto));
-      setFeito({ em: new Date().toISOString(), via: "whatsapp", para: limpo });
-      toast("O número do checklist não entregou (" + (e.message || "sem resposta") + ") — abri o WhatsApp com a mensagem pronta");
+      // não abre o WhatsApp de ninguém: mostra o motivo e deixa a pessoa decidir
+      setFalhou(e.message || "a Kommo não confirmou o envio");
+      toast("Não enviou — o motivo está abaixo do campo");
     } finally { setIndo(false); }
   };
   return <div style={{ marginTop: 10, padding: "9px 11px", border: "1.5px solid var(--line,#e0e3e8)", borderRadius: 10 }}>
@@ -1271,8 +1272,9 @@ function EnviarLinkWhats({ c, texto, telPadrao, assunto, toast }: { c: any; text
       <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
         disabled={indo || !limpo} onClick={enviar}>{indo ? "Enviando…" : feito ? "💬 Enviar de novo" : "💬 Enviar pelo checklist"}</button>
     </div>
+    {falhou && <div className="hint" style={{ marginTop: 5, color: "#8a5d00" }}>⚠️ não enviou: {falhou}</div>}
     <div className="hint" style={{ marginTop: 5 }}>{feito
-      ? (feito.via === "checklist" ? "✓ enviado pelo número do checklist em " : "✓ aberto no seu WhatsApp em ") + fmtDateTime(feito.em)
+      ? "✓ enviado pelo número do checklist em " + fmtDateTime(feito.em)
       : "Sai do número da loja (41 3316-9095), não do seu. Confira o número antes — às vezes quem está aqui é um terceiro."}</div>
   </div>;
 }
@@ -1542,6 +1544,7 @@ function BaixarAssinado({ id, path, toast }: { id: string; path: string; toast: 
 function DocsDoCliente({ c, t0, ass, arqs, toast, recarregar }: { c: any; t0: any; ass: any[]; arqs?: any; toast: (m: string) => void; recarregar?: () => any }) {
   const [indo, setIndo] = useState("");
   const [passo, setPasso] = useState("");
+  const [erro, setErro] = useState<Record<string, string>>({});
   const ultimo = [...ass].reverse().find((a: any) => a.online && a.path);
   const venda = String(c.pedido || "");
   const docs: any[] = t0?.docsCliente || [];
@@ -1568,16 +1571,18 @@ function DocsDoCliente({ c, t0, ass, arqs, toast, recarregar }: { c: any; t0: an
       const txt = tipo === "contrato"
         ? `Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o contrato do checklist do seu projeto da Aliança Móveis, com a sua assinatura. Venda ${venda}.\n\n${link}`
         : `Olá, ${primeiroNome(cap(c.cliente))}! Aqui estão as imagens do projeto final que você conferiu no checklist da Aliança Móveis. Venda ${venda}.\n\n${link}`;
+      // Sai SEMPRE pelo número do checklist, pela Kommo. Não abre o WhatsApp de ninguém:
+      // abrir a tela escondia o motivo da falha e fazia a mensagem sair do aparelho da
+      // pessoa, que é justamente o que a gente não quer.
       try {
         await A.kommoMensagem({ chamado: c.id, cliente: c.cliente, telefone: tel, pedido: venda || null, texto: txt, assunto: tipo });
+        setErro(e => ({ ...e, [tipo]: "" }));
         await A.ckDocEnviado(c.id, d.path, { via: "checklist", para: tel });
         await recarregar?.();
-        toast("Enviado pelo WhatsApp do checklist — e registrado na ficha");
+        toast("Enviado pelo WhatsApp do checklist");
       } catch (x: any) {
-        abrirWhats("https://wa.me/" + tel + "?text=" + encodeURIComponent(txt));
-        await A.ckDocEnviado(c.id, d.path, { via: "whatsapp", para: tel });
-        await recarregar?.();
-        toast("O número do checklist não entregou (" + (x.message || "sem resposta") + ") — abri o WhatsApp com a mensagem pronta");
+        setErro(e => ({ ...e, [tipo]: x.message || "a Kommo não confirmou o envio" }));
+        toast("Não enviou — veja o motivo na linha do documento");
       }
     } catch (e: any) { toast(e.message || "Não consegui enviar"); }
     finally { setIndo(""); }
@@ -1673,6 +1678,7 @@ function DocsDoCliente({ c, t0, ass, arqs, toast, recarregar }: { c: any; t0: an
         {d && <span className="hint">gerado {fmtDateTime(d.em)}{d.por ? " · " + d.por : ""}</span>}
         {envios.length > 0 && <span className="pjpill p-ok" style={{ margin: 0 }} title={envios.map((e: any) => fmtDateTime(e.em) + (e.por ? " · " + e.por : "") + (e.via === "checklist" ? " · pelo número do checklist" : " · pelo WhatsApp de quem enviou")).join("\n")}>
           ✓ enviado {envios[envios.length - 1].via === "checklist" ? "pelo checklist" : "no WhatsApp"} {fmtDateTime(envios[envios.length - 1].em)}{envios[envios.length - 1].por ? " · por " + envios[envios.length - 1].por : ""}{envios.length > 1 ? " (" + envios.length + "x)" : ""}</span>}
+        {erro[tipo] && <span className="pjpill p-w" style={{ margin: 0 }}>⚠️ não enviou: {erro[tipo]}</span>}
       </div>;
     })}
     {passo && <div className="hint" style={{ marginTop: 6 }}>⏳ {passo}</div>}
