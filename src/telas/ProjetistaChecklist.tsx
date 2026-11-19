@@ -640,6 +640,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
       {arqs?.espelhoEm && <div className="alert" style={{ margin: "10px 14px 0", background: "#fff8e8", borderColor: "#f0d9a8" }}>
         ⚠️ <b>O Exact não está respondendo.</b> Estes dados são a <b>última cópia guardada no 360</b>, de {fmtDateTime(arqs.espelhoEm)}.
         Dá para trabalhar normal — só os arquivos que ficam no Exact não abrem até ele voltar, e o que você fizer agora sobe para lá depois.
+        {!(arqs?.dados?.produtos || []).length && <> <b>Esta cópia é parcial:</b> tem o cliente e os valores da venda, mas não a lista de produtos/cupons.</>}
       </div>}
       {aba === "dados" && <DadosVenda d={arqs?.dados} carregando={arqs === null} erro={arqErro} c={c} />}
 
