@@ -1270,11 +1270,9 @@ function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs
           } else imgs.push({ nome: m.nome, src: await blobParaJpeg(b).catch(() => blobParaDataUrl(b)) });
         } catch (e: any) { falhas.push(m.nome + " (" + (e?.message || "não abriu") + ")"); }
       }
-      // resumo do que foi comprado (sem valores): peças iguais juntas
-      const grupos = new Map<string, { l: LinhaListagem; n: number }>();
-      for (const l of a.itens.filter(l => l.tipo !== "consumivel")) { const k = `${l.descricao}|${l.medidas}|${/M2/i.test(l.qtd) ? "" : l.qtd}`; const g = grupos.get(k); if (g) g.n++; else grupos.set(k, { l, n: 1 }); }
+      // a listagem de itens não vai mais no contrato (pedido da loja): o documento fica no termo, no checklist e nas imagens
       ambientes.push({ nome: a.nome.trim(), termo: termoDoAmb(a, ferragens), ficha: fichaDe(a).map(([k, v]) => [k, v ?? null]), fichaObs: [a.fichaObs, a.obs].filter(Boolean).join(" — "),
-        itens: [...grupos.values()].map(({ l, n }) => ({ qtd: n > 1 ? n + " peças" : /M2/i.test(l.qtd) ? "1 peça" : l.qtd, descricao: l.descricao, medidas: l.medidas })), imagens: imgs });
+        imagens: imgs });
     }
     return { dados: { venda: String(c.pedido || ""), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj,
       data: fmtDate(hojeISO()), ambientes, naoInclusos: naoInc, obs, ferragens,
