@@ -704,6 +704,8 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
               : <div className="imp"><div><b>{podeRealizar ? "Tudo pronto para finalizar" : "Ainda não dá para marcar realizado"}</b>
                 <div className="ck" style={{ marginTop: 6 }}>{[["Ambientes escritos e confirmados", e1], ["Conferência por ambiente preenchida", e2], ["Contrato gerado", e3], ["Contrato assinado pelo cliente", e4]].map(([t, ok]: any) => <label key={t}><i className={ok ? "" : "no"}>{ok ? "✓" : ""}</i> {t}</label>)}</div></div>
                 <button className="btn sm" style={podeRealizar ? { background: "#3f8f4f", color: "#fff", borderColor: "#3f8f4f" } : { opacity: .5 }} disabled={!podeRealizar || !!ocupado} onClick={marcarRealizado}>✅ Finalizar atendimento</button></div>}
+            {/* os PDFs do cliente também aqui: é na finalização que se lembra de mandar, e continua valendo depois de finalizado */}
+            {(t0.assinados || []).some((a: any) => a.online && a.path) && <DocsDoCliente c={c} t0={t0} ass={t0.assinados || []} toast={toast} recarregar={recarregar} />}
             {/* a folha de valores fica aqui: é o fim do atendimento, quando o projetista leva os números ao financeiro */}
             <RecuperacaoEtapa5 c={c} projetista={proj} toast={toast} dados={arqs?.dados} ambientes={ambs.map(a => a.nome).filter(Boolean)} />
           </div>}
