@@ -184,10 +184,18 @@ export default function PrePedidos({ onVoltar, id }: { onVoltar: () => void; id?
             <button type="button" className="pp-x" title="Tirar do pré-pedido" onClick={() => tirar(k)}>🗑</button></div>
         </div>)}
         {temPreco(pp) && <>
-          {somaPromo(pp) > 0 && <div className="pp-total" style={{ fontWeight: 600 }}><span>Preço cheio (entra no desconto)</span><b>{fmtMoeda(somaBase(pp))}</b></div>}
-          {somaPromo(pp) > 0 && <div className="pp-total" style={{ fontWeight: 600 }}><span>🏷 Em promoção (sem desconto)</span><b>{fmtMoeda(somaPromo(pp))}</b></div>}
-          {freteDe(pp) > 0 && <div className="pp-total" style={{ fontWeight: 600 }}><span>🚚 Frete</span><b>{fmtMoeda(freteDe(pp))}</b></div>}
-          <div className="pp-total"><span>Total dos produtos{freteDe(pp) > 0 ? " + frete" : ""}</span><b>{fmtMoeda(somaPP(pp) + freteDe(pp))}</b></div></>}
+          {/* mesma leitura que o gerente tem na negociação: do preço de tabela até o valor cheio */}
+          <div className="ng-res">
+            <div><span>Soma pelo preço de tabela</span><b>{fmtMoeda(somaTabela(pp))}</b></div>
+            {descontoPromo(pp) > 0.004 && <div className="d"><span>🏷 Promoção já aplicada</span><b>− {fmtMoeda(descontoPromo(pp))}</b></div>}
+            {freteDe(pp) > 0 && <div><span>🚚 Frete</span><b>+ {fmtMoeda(freteDe(pp))}</b></div>}
+          </div>
+          <div className="ng-bruto"><span>Valor cheio</span><b>{fmtMoeda(somaPP(pp) + freteDe(pp))}</b></div>
+          {(somaPromo(pp) > 0 || freteDe(pp) > 0) && <div className="ng-bases">
+            <div className="ng-b1"><span>Entra no desconto</span><b>{fmtMoeda(somaBase(pp))}</b></div>
+            {somaPromo(pp) > 0 && <div className="ng-b2"><span>🏷 Em promoção <small>sem desconto</small></span><b>{fmtMoeda(somaPromo(pp))}</b></div>}
+            {freteDe(pp) > 0 && <div className="ng-b2"><span>🚚 Frete <small>sem desconto</small></span><b>{fmtMoeda(freteDe(pp))}</b></div>}
+          </div>}</>}
         <button type="button" className="pp-link" onClick={() => { if (pp.id) gravarAlvo(pp.id); onVoltar(); }}>＋ adicionar produto a este cliente</button>
         <ItemPromob add={(nome, preco) => mudar({ itens: [...pp.itens, { codigo: "PROMOB", nome: "PROMOB — " + nome, qtd: 1, preco, promob: true }] })} />
       </div>
