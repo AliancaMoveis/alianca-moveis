@@ -409,6 +409,16 @@ export const A = {
     }
     return { docs: docs || [] };
   },
+  /**
+   * Dossiê do cliente para o Jurídico: tudo que aconteceu com ele, numa busca só.
+   * Aceita CPF/CNPJ, telefone, nome ou nº da venda — a identidade é resolvida em três
+   * eixos porque o CPF sozinho não acha o que nasce dentro do 360 (checklist, medidas).
+   * Toda abertura fica registrada: é dado sensível junto num lugar só.
+   */
+  juridicoDossie: (busca: string) => rpc<any>("juridico_dossie", { p_busca: busca }),
+  /** todos os contratos do checklist com a prova da assinatura (hash, IP, data) */
+  juridicoContratos: (busca = "", de: string | null = null, ate: string | null = null) =>
+    rpc<any[]>("juridico_contratos", { p_busca: busca, p_de: de, p_ate: ate }),
   /** registra que o documento foi enviado ao cliente: quem, quando e por onde */
   ckDocEnviado: (id: string, path: string, p: { via?: string; para?: string; janela?: string }) =>
     rpc("ck_doc_cliente_enviado", { p_chamado: id, p_path: path, p }),

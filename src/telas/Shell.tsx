@@ -50,6 +50,8 @@ import Medidas from "./Medidas";
 import EncontrarVendas from "./EncontrarVendas";
 import Treino from "./Treino";
 import { Juridico, SetorFila, listaSetor } from "./Setores";
+import { JuridicoDossie } from "./JuridicoDossie";
+import { JuridicoContratos } from "./JuridicoContratos";
 import Consultores from "./Consultores";
 import { MensagensChecklist, ProdutividadeChecklist } from "./PainelChecklist";
 import RecuperacaoCk, { AgendaGeralProjetista, ValidacoesDoDia } from "./RecuperacaoCk";
@@ -249,7 +251,9 @@ export default function Shell() {
             {atual === "negociacao" && R.podeNegociacao() && <section className="view active cp"><Negociacao /></section>}
             {atual === "treino" && <Treino />}
             {atual.startsWith("st_") && (() => { const m = atual.match(/^st_(.+)_([a-z]+)$/); return m ? <SetorFila key={atual} setor={m[1]} aba={m[2]} /> : null; })()}
-            {atual.startsWith("jur_") && <Juridico key={atual} aba={atual.slice(4)} />}
+            {atual === "jur_dossie" && <JuridicoDossie />}
+            {atual === "jur_contratos" && <JuridicoContratos />}
+            {atual.startsWith("jur_") && !["jur_dossie", "jur_contratos"].includes(atual) && <Juridico key={atual} aba={atual.slice(4)} />}
             {atual.startsWith("ce_") && !["ce_agenda", "ce_realizadas", "ce_vendas"].includes(atual) && <Consultores key={atual} aba={atual.slice(3)} />}
           </main>
         </div>

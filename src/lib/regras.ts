@@ -330,7 +330,8 @@ export function criarRegras(state: Estado, currentUserId: string) {
   const me = () => getUser(currentUserId);
   const mySetores = () => (me() || ({} as any)).setores || [];
   /** base de clientes (CPF, endereço, histórico de compras): Gestão, call center e supervisão — o banco confere o mesmo */
-  const podeBaseClientes = () => ehGestao() || mySetores().includes("callcenter") || mySetores().includes("supervisao");
+  // o Jurídico precisa da base para responder Procon/Reclame Aqui: é a mesma consulta do SAC
+  const podeBaseClientes = () => ehGestao() || mySetores().includes("callcenter") || mySetores().includes("supervisao") || mySetores().includes("juridico");
   const myLibs = () => { const acc: Record<string, boolean> = {}; mySetores().forEach((id: string) => { const s = getSetor(id); if (s && s.liberacoes) Object.keys(s.liberacoes).forEach(k => { if (s.liberacoes[k]) acc[k] = true; }); }); return acc; };
   const temLib = (k: string) => !!myLibs()[k];
   const setoresLabel = (u: any) => ((u && u.setores) || []).map(setorNome).join(", ") || "—";
@@ -1102,7 +1103,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
       : [["fin_pag", "💰 Pagamentos (montagem e fretes)"], ["montagem_pag", "Notas fiscais dos montadores"], ["montagem_agend", "Agendadoras da montagem · valores"]] });
     if (podeConsultaProduto()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Produtos", ic: "🏷", itens: [["consulta_produto", "Consulta de produto"], ...(podeNegociacao() ? [["negociacao", "🤝 Negociação"]] : [])] });
     if (podeEncontrarVendas()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Encontrar vendas", ic: "🔎", itens: [["confirmacao_vendas", "✅ Confirmação de vendas"], ["encontrar_vendas360", "Encontrar vendas do 360"], ["encontrar_vendas", "Encontrar vendas da Minha Visita"]] });
-    if (ehJuridico() || ehGestao()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Jurídico", ic: "⚖", itens: [["jur_novo", "Novo caso"], ["jur_andamento", "Casos em andamento"], ["jur_prazos", "Prazos (próx. 15 dias)"], ["jur_encerrados", "Encerrados"]] });
+    if (ehJuridico() || ehGestao()) G.splice(G.findIndex(g => g.g === "Gestão") >= 0 ? G.findIndex(g => g.g === "Gestão") : G.length, 0, { g: "Jurídico", ic: "⚖", itens: [["jur_dossie", "🔎 Dossiê do cliente"], ["jur_novo", "Novo caso"], ["jur_andamento", "Casos em andamento"], ["jur_prazos", "Prazos (próx. 15 dias)"], ["jur_encerrados", "Encerrados"], ["jur_contratos", "Contratos assinados"]] });
     if (!veCC && consultaNoSetor && (ehJuridico() || podeChecklist() || ehSupMedidas() || ehPosvenda())) {
       const gi = G.findIndex(g => ["Jurídico", "Checklist", "Medidas", "Pós-venda"].includes(g.g)); if (gi >= 0) G[gi].itens.push(["consulta", "Consulta"]);
     }
