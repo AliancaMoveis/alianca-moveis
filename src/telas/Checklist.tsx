@@ -13,6 +13,7 @@ import { abrirTermo } from "./ProjetistaChecklist";
 
 export const ETAPA_CK: Record<string, [string, string]> = {
   a_contatar: ["A contatar", "var(--primary)"], aguardando: ["Mensagem enviada · aguardando resposta", "var(--warn)"], outra_data: ["🔄 Pediu nova data", "var(--st-respondida)"],
+  sem_retorno: ["📨 Enviada · sem resposta", "var(--danger)"],
   em_obras: ["Aguardando · obra", "var(--st-tratativa)"], sem_resposta: ["Aguardando · sem resposta", "var(--danger)"], espera: ["Aguardando", "var(--st-tratativa)"],
   agendado: ["Agendado", "var(--st-concluida)"], realizado: ["Checklist realizado", "var(--st-concluida)"], desistiu: ["Encerrado sem checklist", "var(--ink-faint)"],
 };
@@ -59,7 +60,9 @@ export const aConfirmar = (c: any, dias: number) => grupoCk(c) === "agendado" &&
 export function aFazerHoje(c: any) {
   if (grupoCk(c) !== "agendar") return false;
   const e = etapaCk(c), k = ck(c);
-  if (e === "a_contatar") return true;
+  // quem recebeu mensagem e não respondeu precisa de data nova: entra no "fazer hoje" igual
+  // a quem nunca foi contatado — o que não pode é ele sumir no meio dos não contatados
+  if (e === "a_contatar" || e === "sem_retorno") return true;
   if (k.retornarEm && String(k.retornarEm).slice(0, 10) <= hoje()) return true;
   return e === "aguardando" && diasDesde(k.ultimoContato) >= 2;
 }
@@ -92,7 +95,7 @@ export function mensagemCk(tipo: string, c: any, data: string, remetente: string
 }
 
 const ABAS: Record<string, [string, string]> = {
-  agendar: ["A agendar", "Clientes para chamar no WhatsApp e agendar. Quem não puder agora vai para “Aguardando”, com o motivo."],
+  agendar: ["A agendar", "Clientes para chamar no WhatsApp e agendar. Quem recebeu mensagem e não respondeu fica em “Enviada · sem resposta”, com a data que foi oferecida — nunca volta para “não contatados”. Quem não puder agora vai para “Aguardando”, com o motivo."],
   aguardando: ["Aguardando", "Clientes que ainda não podem agendar: obra, sem resposta, medida… Cada um com o motivo e a data de retorno."],
   agendados: ["Agendados", "Checklists com data marcada, por dia. Altere, desmarque ou marque como realizado."],
   confirmar: ["Confirmação de presença", "Agendados com data próxima: envie a confirmação pronta e marque quando o cliente confirmar."],
@@ -131,6 +134,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       hoje: ["Para fazer hoje", aFazerHoje],
       a_contatar: ["Ainda não contatados", c => G("agendar")(c) && etapaCk(c) === "a_contatar"],
       msg: ["Mensagem enviada · aguardando resposta", c => G("agendar")(c) && etapaCk(c) === "aguardando"],
+      sem_retorno: ["📨 Enviada · sem resposta", c => G("agendar")(c) && etapaCk(c) === "sem_retorno"],
       nova_data: ["🔄 Pediram nova data", c => G("agendar")(c) && etapaCk(c) === "outra_data"],
       vencido: ["⚠️ Prazo vencido", c => G("agendar")(c) && reservaVencida(c, cfgAgenda(st))],
       todos: ["Todos a agendar", G("agendar")],
@@ -288,7 +292,7 @@ function CartaoCk({ c, aba }: any) {
   const { abrirDetalhe, setModal, executar, st, toast, irPara } = useApp() as any;
   const k = ck(c), e = etapaCk(c), g = grupoCk(c), [nome, cor0] = ETAPA_CK[e] || [e, "var(--line)"];
   const segura = cfgAgenda(st).seguraDias, venc = reservaVencida(c, cfgAgenda(st)), atrasoV = diasDesde(k.ultimoContato) - segura;
-  const liberar = () => { if (confirm("🔓 Liberar a agenda de " + c.cliente + "?\n\nO horário de " + fmtDateTime(k.proposta) + (k.propostaProjetista ? " com " + k.propostaProjetista : "") + " fica livre e o cliente volta para “A agendar”. O histórico das tentativas fica salvo.")) executar(() => A.checklistRegistrar(c.id, { acao: "liberar" }), "Agenda liberada — cliente voltou para A agendar"); };
+  const liberar = () => { if (confirm("🔓 Liberar a agenda de " + c.cliente + "?\n\nO horário de " + fmtDateTime(k.proposta) + (k.propostaProjetista ? " com " + k.propostaProjetista : "") + " fica livre e o cliente vai para “Enviada · sem resposta”, guardando a data que foi oferecida. O histórico das tentativas fica salvo.")) executar(() => A.checklistRegistrar(c.id, { acao: "liberar" }), "Agenda liberada — cliente foi para Enviada · sem resposta"); };
   const renovar = () => executar(() => A.checklistRegistrar(c.id, { acao: "renovar" }), "Reserva renovada por mais " + segura + " dias");
   const conf = CONF_CK[k.confirmacao || ""] || CONF_CK[""];
   const cor = g === "agendado" ? conf[1] : cor0;
@@ -323,6 +327,10 @@ function CartaoCk({ c, aba }: any) {
               : k.exactPend && Date.now() - +new Date(k.exactPend) > 120e3 ? <span className="pill" style={{ background: "var(--warn)", color: "#fff", fontWeight: 800 }} title="A alteração ainda não foi confirmada pelo Exact">⏳ enviando ao Exact</span> : null}
             {Array.isArray(k.outrasVendas) && k.outrasVendas.length > 0 && <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 800 }} title="A planilha trouxe outra venda deste mesmo cliente — não foi criado outro checklist. Se for duplicidade, nada a fazer; se for venda nova, faça o checklist junto.">👥 outra venda: {k.outrasVendas.join(", ")}</span>}
             {e === "aguardando" && <span>oferecido {fmtDateTime(k.proposta)} · {k.contatos || 1}º contato · há {diasDesde(k.ultimoContato)}d</span>}
+            {/* já foi abordado e não respondeu: mostra o que foi oferecido para ninguém repetir a mesma data */}
+            {e === "sem_retorno" && <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 700 }}
+              title={"Mensagem enviada em " + fmtDateTime(k.semRetorno?.em) + (k.semRetorno?.data ? "\nOferecemos: " + k.semRetorno.data : "") + (k.semRetorno?.projetista ? "\nProjetista: " + k.semRetorno.projetista : "") + "\nO cliente não respondeu. Ofereça uma data diferente desta."}>
+              📨 enviada há {diasDesde(k.semRetorno?.em)}d{k.semRetorno?.data ? " · ofereceram " + k.semRetorno.data : ""}{(k.semRetorno?.tentativas || 1) > 1 ? " · " + k.semRetorno.tentativas + " tentativas" : ""} · sem resposta</span>}
             {k.respostaNaoLida?.em && <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 800 }}
               title="A Kommo registrou resposta do cliente, mas a mensagem não chegou ao 360. Abra a conversa no WhatsApp do checklist e trate na mão.">❗ Cliente respondeu — abrir no WhatsApp</span>}
             {k.respostaCliente?.texto && k.respostaCliente.tipo === "outro" && <span className="pill" style={{ background: "var(--warn)", color: "#fff", fontWeight: 800 }}
@@ -1101,7 +1109,7 @@ export function Sugestoes({ valor, onPick, excluirId, projetista, durMin }: { va
   const lib = liberaveis(st, excluirId, mes ? 40 : 12, durMin, mes || undefined, so ? projetista : undefined);
   const usarLib = async (x: { slot: string; proj: string; bloq: Ocup[] }) => {
     const nomes = Array.from(new Set(x.bloq.map(o => o.cliente))).join(" e ");
-    if (!confirm("Liberar a reserva de " + nomes + " (prazo vencido) e usar " + fmtDateTime(x.slot) + " com " + x.proj + "?\n\nO cliente volta para “A agendar” e o histórico fica salvo.")) return;
+    if (!confirm("Liberar a reserva de " + nomes + " (prazo vencido) e usar " + fmtDateTime(x.slot) + " com " + x.proj + "?\n\nO cliente vai para “Enviada · sem resposta”, com a data oferecida guardada, e o histórico fica salvo.")) return;
     setLiberando(x.slot + x.proj);
     try {
       for (const id of Array.from(new Set(x.bloq.map(o => o.id).filter(Boolean)))) await A.checklistRegistrar(id as string, { acao: "liberar" });
