@@ -71,13 +71,13 @@ export function JuridicoDossie() {
         <button className="btn" disabled={indo} onClick={buscar}>{indo ? "Varrendo…" : "🔎 Montar dossiê"}</button>
       </div>
 
-      {erro && <div className="alert" style={{ background: "#fff8e8", borderColor: "#f0d9a8" }}>⚠️ {erro}</div>}
+      {erro && <div className="alerta" style={{ background: "var(--warn-bg)", borderColor: "var(--warn)" }}>⚠️ {erro}</div>}
 
       {d && !d.achou && <Vazio big="Não achei esse cliente">Tente o CPF, o número da venda ou o telefone. Cliente antigo pode estar só pelo telefone.</Vazio>}
 
       {d?.achou && <>
         {/* o que entrou na varredura — e, por tabela, o que pode ter ficado de fora */}
-        <div className="card" style={{ marginTop: 10, background: "var(--bg-soft, #f7f8fa)" }}>
+        <div className="card" style={{ marginTop: 10, background: "var(--surface-2)" }}>
           <b>Como eu achei:</b>{" "}
           {d.como.cpf ? "CPF " + d.como.cpf : "sem CPF no cadastro"}
           {" · "}{(d.como.vendas || []).length} venda(s){(d.como.vendas || []).length ? " (" + d.como.vendas.join(", ") + ")" : ""}

@@ -48,7 +48,7 @@ export function JuridicoContratos() {
         <button className="btn" disabled={indo} onClick={buscar}>{indo ? "Buscando…" : "Buscar"}</button>
       </div>
 
-      {erro && <div className="alert" style={{ background: "#fff8e8", borderColor: "#f0d9a8" }}>⚠️ {erro}</div>}
+      {erro && <div className="alerta" style={{ background: "var(--warn-bg)", borderColor: "var(--warn)" }}>⚠️ {erro}</div>}
 
       {l && <div className="hint" style={{ marginBottom: 8 }}>{vis.length} contrato(s){vis.length !== (l || []).length ? " de " + l.length : ""}.</div>}
 
@@ -60,7 +60,7 @@ export function JuridicoContratos() {
           </div>
           <div className="hint">Gerado {dt(k.gerado_em)}{k.gerado_por ? " por " + k.gerado_por : ""}{k.repr ? " · representante: " + k.repr : ""}</div>
 
-          {k.assinado_em ? <div style={{ marginTop: 6, padding: "6px 8px", background: "var(--bg-soft,#f7f8fa)", borderRadius: 8 }}>
+          {k.assinado_em ? <div style={{ marginTop: 6, padding: "8px 10px", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 8 }}>
             <div>Assinado por <b>{k.assinante}</b>{k.cpf ? " · CPF " + k.cpf : ""} em <b>{dt(k.assinado_em)}</b></div>
             <div className="hint">IP {k.ip || "—"} · {String(k.navegador || "").slice(0, 80)}</div>
             <div className="hint">Hash: <code style={{ wordBreak: "break-all" }}>{k.hash || "—"}</code></div>

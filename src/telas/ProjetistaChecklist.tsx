@@ -637,7 +637,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
       </div>
 
       {/* Exact fora do ar: a tela trabalha com a última cópia guardada no 360, com a data à vista */}
-      {arqs?.espelhoEm && <div className="alert" style={{ margin: "10px 14px 0", background: "#fff8e8", borderColor: "#f0d9a8" }}>
+      {arqs?.espelhoEm && <div className="alerta" style={{ margin: "10px 14px 0", background: "var(--warn-bg)", borderColor: "var(--warn)" }}>
         ⚠️ <b>O Exact não está respondendo.</b> Estes dados são a <b>última cópia guardada no 360</b>, de {fmtDateTime(arqs.espelhoEm)}.
         Dá para trabalhar normal — só os arquivos que ficam no Exact não abrem até ele voltar, e o que você fizer agora sobe para lá depois.
         {!(arqs?.dados?.produtos || []).length && <> <b>Esta cópia é parcial:</b> tem o cliente e os valores da venda, mas não a lista de produtos/cupons.</>}
@@ -1272,7 +1272,7 @@ function EnviarLinkWhats({ c, texto, telPadrao, assunto, toast }: { c: any; text
       <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }}
         disabled={indo || !limpo} onClick={enviar}>{indo ? "Enviando…" : feito ? "💬 Enviar de novo" : "💬 Enviar pelo checklist"}</button>
     </div>
-    {falhou && <div className="hint" style={{ marginTop: 5, color: "#8a5d00" }}>⚠️ não enviou: {falhou}</div>}
+    {falhou && <div className="hint" style={{ marginTop: 5, color: "var(--warn)", fontWeight: 600 }}>⚠️ não enviou: {falhou}</div>}
     <div className="hint" style={{ marginTop: 5 }}>{feito
       ? "✓ enviado pelo número do checklist em " + fmtDateTime(feito.em)
       : "Sai do número da loja (41 3316-9095), não do seu. Confira o número antes — às vezes quem está aqui é um terceiro."}</div>
