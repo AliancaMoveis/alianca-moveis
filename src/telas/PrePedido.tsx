@@ -56,8 +56,11 @@ export const descontoPromo = (p: PP) => Math.round((somaTabela(p) - somaPP(p)) *
 export const somaBase = (p: PP) => p.itens.filter(i => !i.promo).reduce((s, i) => s + precoItem(i) * (Number(i.qtd) || 0), 0);
 /** produtos em promoção: entram pelo valor da promoção e ficam fora do desconto */
 export const somaPromo = (p: PP) => p.itens.filter(i => i.promo).reduce((s, i) => s + precoItem(i) * (Number(i.qtd) || 0), 0);
-/** frete: o que o gerente ajustou na negociação vale acima do que o vendedor marcou */
-export const freteDe = (p: PP) => numBR(p.neg_frete ?? "") || numBR(p.frete);
+/** frete: o que o gerente ajustou na negociação vale acima do que o vendedor marcou.
+ *  Atenção ao ZERO: quando o gerente tira o frete na mesa, neg_frete fica 0 e isso VALE —
+ *  não pode cair no frete do vendedor (era o bug de reabrir a negociação com o frete de volta). */
+const negPosto = (v: any) => v !== null && v !== undefined && String(v).trim() !== "";
+export const freteDe = (p: PP) => negPosto(p.neg_frete) ? numBR(p.neg_frete) : numBR(p.frete);
 /** FRETE_PADRAO: Curitiba e região. Litoral e fora são mais caros — o gerente ajusta na mesa. */
 export const FRETE_PADRAO = "100,00";
 export const FRETES: [string, string][] = [["100,00", "Curitiba e região"], ["250,00", "Litoral"], ["300,00", "Fora"]];

@@ -29,7 +29,7 @@ export default function Negociacao({ onVoltar }: { onVoltar?: () => void }) {
     try { await A.negociacaoExcluir(p.id!); if (abrir === p.id) setAbrir(""); toast("Tirado da negociação"); carregar(); }
     catch (e: any) { toast(e.message || "Não consegui tirar da negociação"); }
   };
-  if (atual) return <Mesa p={atual} voltar={() => { setAbrir(""); carregar(); }} excluir={() => excluir(atual)} />;
+  if (atual) return <Mesa p={atual} voltar={() => { setAbrir(""); carregar(); }} recarregar={carregar} excluir={() => excluir(atual)} />;
   return <div className="ng">
     {onVoltar && <button type="button" className="btn ghost sm" onClick={onVoltar}>‹ Voltar</button>}
     <div className="pp-tit" style={{ fontSize: 17, margin: "6px 0" }}>🤝 Negociação</div>
@@ -52,7 +52,7 @@ export default function Negociacao({ onVoltar }: { onVoltar?: () => void }) {
 }
 
 /** mesa de negociação: produtos, preços cheios e a simulação do desconto */
-function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () => void }) {
+function Mesa({ p, voltar, recarregar, excluir }: { p: PN; voltar: () => void; recarregar?: () => void; excluir?: () => void }) {
   const { toast, R } = useApp() as any;
   // o gerente pode tirar e incluir produto durante a negociação; as contas seguem esta lista
   const [itens, setItens] = useState<any[]>(p.itens || []);
@@ -69,7 +69,10 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
   const foraDesc = promo + fret;                           // o que não aceita desconto
   const ini = numBR(p.neg_valor) || numBR(p.valor_negociado) || 0;
   const [valor, setValor] = useState(br2(ini));
-  const [desc, setDesc] = useState(ini && base ? br2(Math.round((1 - Math.max(0, ini - foraDesc) / base) * 1000) / 10) : "");
+  // o % que o gerente salvou é o que vale ao reabrir; só recalcula quando não há proposta salva
+  const [desc, setDesc] = useState(numBR(p.neg_desconto) > 0
+    ? br2(numBR(p.neg_desconto))
+    : ini && base ? br2(Math.round((1 - Math.max(0, ini - foraDesc) / base) * 1000) / 10) : "");
   const [pag, setPag] = useState(p.neg_pagamento || p.pagamento || "");
   const [obs, setObs] = useState(p.neg_obs || "");
   const [modo, setModo] = useState("");   // como o cliente vai pagar: à vista, cartão ou crediário
@@ -88,8 +91,23 @@ function Mesa({ p, voltar, excluir }: { p: PN; voltar: () => void; excluir?: () 
   }
   async function salvar(status: string) {
     setSalvando(true);
-    try { await A.negociacaoSalvar(p.id!, { status, valor: numBR(valor) ? numBR(valor).toFixed(2) : "", desconto: numBR(desc) ? String(numBR(desc)) : "", frete: fret ? fret.toFixed(2) : "", pagamento: pag, obs }); toast(status === "fechado" ? "Negociação fechada" : "Proposta salva — o vendedor já vê"); voltar(); }
-    catch (e: any) { toast(e.message || "Não consegui salvar"); } finally { setSalvando(false); }
+    try {
+      // o frete vai SEMPRE, inclusive "0.00": é assim que "tirei o frete" fica gravado
+      // e não volta para o frete do vendedor quando o gerente reabre a mesa
+      await A.negociacaoSalvar(p.id!, {
+        status,
+        valor: numBR(valor) ? numBR(valor).toFixed(2) : "",
+        desconto: numBR(desc) ? String(numBR(desc)) : "",
+        frete: fret.toFixed(2),
+        pagamento: pag,
+        obs,
+      });
+      if (status === "fechado") { toast("Negociação fechada"); voltar(); }
+      // negociação em andamento: o gerente fica na mesa, com o cliente na frente dele
+      else { toast("Proposta salva — o vendedor já vê"); recarregar?.(); }
+    }
+    catch (e: any) { toast(e.message || "Não consegui salvar"); }
+    finally { setSalvando(false); }
   }
   const promob = itens.filter((i: any) => i.promob), prontos = itens.filter((i: any) => !i.promob);
   const somaDe = (l: any[]) => l.reduce((s, i) => s + precoItem(i) * (Number(i.qtd) || 0), 0);
