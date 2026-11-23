@@ -24,6 +24,12 @@ export const MOTIVOS_ESPERA: Record<string, string> = {
 export const CONF_CK: Record<string, [string, string]> = { "": ["⏳ Presença a confirmar", "var(--warn)"], enviada: ["📨 Aguardando confirmação de presença", "var(--st-respondida)"], confirmada: ["✅ Presença confirmada", "var(--st-concluida)"] };
 export const ck = (c: any) => (c.tratativa && c.tratativa.checklist) || {};
 export const etapaCk = (c: any) => ck(c).etapa || (c.status === "concluida" ? "realizado" : "a_contatar");
+/** O cliente escreveu alguma coisa que o robô não soube classificar (não foi "confirmo", "outra data"
+ *  nem "em obra") e ninguém leu ainda. Ele NÃO é "sem resposta": respondeu, e precisa de gente. */
+export const respondeuManual = (c: any) => {
+  const r = ck(c).respostaCliente;
+  return !!r && r.tipo === "outro" && !r.lidoEm && c.status !== "concluida";
+};
 const hoje = () => hojeISO();
 /** cliente pediu encaixe: aceitou a data, mas quer ser antecipado se abrir vaga */
 /** cidade/bairro do cliente (base de clientes, pelo nº da venda) — importante para escolher o projetista */
@@ -134,7 +140,8 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       hoje: ["Para fazer hoje", aFazerHoje],
       a_contatar: ["Ainda não contatados", c => G("agendar")(c) && etapaCk(c) === "a_contatar"],
       msg: ["Mensagem enviada · aguardando resposta", c => G("agendar")(c) && etapaCk(c) === "aguardando"],
-      sem_retorno: ["📨 Enviada · sem resposta", c => G("agendar")(c) && etapaCk(c) === "sem_retorno"],
+      respondeu: ["💬 Respondeu · ler e responder", c => G("agendar")(c) && respondeuManual(c)],
+      sem_retorno: ["📨 Enviada · sem resposta", c => G("agendar")(c) && etapaCk(c) === "sem_retorno" && !respondeuManual(c)],
       nova_data: ["🔄 Pediram nova data", c => G("agendar")(c) && etapaCk(c) === "outra_data"],
       vencido: ["⚠️ Prazo vencido", c => G("agendar")(c) && reservaVencida(c, cfgAgenda(st))],
       todos: ["Todos a agendar", G("agendar")],
@@ -328,6 +335,7 @@ function CartaoCk({ c, aba }: any) {
               : k.exactPend && Date.now() - +new Date(k.exactPend) > 120e3 ? <span className="pill" style={{ background: "var(--warn)", color: "#fff", fontWeight: 800 }} title="A alteração ainda não foi confirmada pelo Exact">⏳ enviando ao Exact</span> : null}
             {Array.isArray(k.outrasVendas) && k.outrasVendas.length > 0 && <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 800 }} title="A planilha trouxe outra venda deste mesmo cliente — não foi criado outro checklist. Se for duplicidade, nada a fazer; se for venda nova, faça o checklist junto.">👥 outra venda: {k.outrasVendas.join(", ")}</span>}
             {e === "aguardando" && <span>oferecido {fmtDateTime(k.proposta)} · {k.contatos || 1}º contato · há {diasDesde(k.ultimoContato)}d</span>}
+            {respondeuManual(c) && <RespostaDoCliente c={c} />}
             {/* já foi abordado e não respondeu: mostra o que foi oferecido para ninguém repetir a mesma data */}
             {e === "sem_retorno" && <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 700 }}
               title={"Mensagem enviada em " + fmtDateTime(k.semRetorno?.em) + (k.semRetorno?.data ? "\nOferecemos: " + k.semRetorno.data : "") + (k.semRetorno?.projetista ? "\nProjetista: " + k.semRetorno.projetista : "") + "\nO cliente não respondeu. Ofereça uma data diferente desta."}>
@@ -1462,6 +1470,37 @@ function ModalHorarios() {
 }
 
 const proximoDiaUtil = () => { const d = new Date(); d.setDate(d.getDate() + 1); while ([0, 6].includes(d.getDay())) d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T10:00`; };
+
+/** O cliente escreveu alguma coisa que o robô não classificou. Mostra o que ele disse, abre a
+ *  conversa na Kommo para responder na mão e deixa marcar como lido — senão ele continuaria
+ *  parecendo "sem resposta" para sempre. */
+function RespostaDoCliente({ c }: { c: any }) {
+  const { R, toast, recarregar } = useApp() as any;
+  const r = ck(c).respostaCliente || {};
+  const [indo, setIndo] = useState("");
+  const abrir = async () => {
+    setIndo("abrir");
+    try {
+      const v = await A.ckKommoConversa(c.id);
+      if (!v?.leadId) { toast("Este cliente ainda não tem conversa vinculada na Kommo"); return; }
+      window.open("https://aliancamoveis.kommo.com/leads/detail/" + v.leadId, "_blank", "noopener");
+    } catch (e: any) { toast(e.message); } finally { setIndo(""); }
+  };
+  const lido = async () => {
+    setIndo("lido");
+    try { await A.ckRespostaLida(c.id, R.me()?.nome || ""); toast("Marcado como lido"); recarregar?.(); }
+    catch (e: any) { toast(e.message); } finally { setIndo(""); }
+  };
+  return <div className="alerta" style={{ flexBasis: "100%", background: "var(--warn-bg)", margin: "6px 0 0" }}
+    onClick={ev => ev.stopPropagation()}>
+    <b>💬 O cliente respondeu{r.em ? " em " + fmtDateTime(r.em) : ""}:</b>
+    <div style={{ margin: "4px 0 8px", fontStyle: "italic" }}>“{String(r.texto || "").slice(0, 400)}”</div>
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <button className="btn sm" disabled={!!indo} onClick={abrir}>{indo === "abrir" ? "Abrindo…" : "💬 Abrir conversa na Kommo"}</button>
+      <button className="btn sm" disabled={!!indo} onClick={lido}>{indo === "lido" ? "…" : "✓ Já respondi"}</button>
+    </div>
+  </div>;
+}
 
 /** Aviso de liberação da agenda para quem não respondeu.
  *  O cliente recebeu a mensagem do agendamento e ficou em silêncio. Passados 3 dias a loja avisa

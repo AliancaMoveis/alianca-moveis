@@ -403,6 +403,10 @@ export const A = {
    * dispara o modelo. A resposta do cliente — qualquer uma — abre a janela de 24h, e o
    * webhook manda contrato e imagens sozinho.
    */
+  /** marca que alguém leu (e vai responder) a mensagem que o cliente mandou */
+  ckRespostaLida: (id: string, por = "") => rpc("ck_resposta_lida", { p_chamado: id, p_por: por }),
+  /** abre a conversa do cliente na Kommo, para responder na mão */
+  ckKommoConversa: (id: string) => rpc<{ leadId: number | null; contatoId: number | null } | null>("ck_kommo_conversa", { p_chamado: id }),
   /** quem recebeu a mensagem do agendamento e não respondeu há mais de N dias */
   ckSemRetornoPendentes: (dias = 3) => rpc<any[]>("ck_sem_retorno_pendentes", { p_dias: dias }),
   /** avisa o cliente que a data reservada foi liberada e que vamos sugerir outra.
