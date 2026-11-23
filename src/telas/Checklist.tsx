@@ -375,7 +375,7 @@ function CartaoCk({ c, aba }: any) {
           {g === "agendado" && !k.confirmacao && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} inicial="confirmacao" />)}>📨 Enviar confirmação</button>}
           {g === "agendado" && k.confirmacao !== "confirmada" && <button className="btn sm" style={{ background: "var(--ok, #0f8a5f)", color: "#fff", borderColor: "var(--ok, #0f8a5f)", fontWeight: 700 }} onClick={() => executar(() => A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }), "Presença confirmada")}>✅ Confirmou presença</button>}
           {g === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Não pode vir</button>}
-          {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>{e === "sem_retorno" ? "📅 Enviar nova data" : "📨 Enviar mensagem"}</button>}
+          {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>{["sem_retorno", "respondeu"].includes(e) ? "📅 Enviar nova data" : "📨 Enviar mensagem"}</button>}
           {e === "aguardando" && k.proposta && c.status !== "concluida" && <button className="btn sm" style={venc ? { background: "#9a3412", color: "#fff", borderColor: "#9a3412", fontWeight: 700 } : undefined} onClick={liberar} title="Libera o horário oferecido e o cliente volta para A agendar">🔓 Liberar agenda</button>}
           {e === "aguardando" && k.proposta && c.status !== "concluida" && venc && <button className="btn sm" style={{ color: "#9a3412", borderColor: "#9a3412", fontWeight: 700 }} onClick={renovar} title={"Mantém o horário por mais " + segura + " dias"}>🔁 Renovar +{segura} dias</button>}
           {g === "agendar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="espera" />)}>⏸ Aguardando</button>}
@@ -1572,7 +1572,9 @@ export function ModalWhats({ c, inicial }: any) {
   // "sem_retorno" (mensagem enviada e o cliente não respondeu) pede NOVA DATA, não primeiro contato:
   // o cliente já foi contatado, e a nova data é modelo aprovado pela Meta — entrega fora das 24h.
   // Antes a condição testava "sem_resposta", que não é o nome da etapa: caía em "primeiro".
-  const [tipo, setTipo] = useState(inicial || (e === "agendado" ? "confirmacao" : e === "sem_retorno" ? "retorno" : e === "aguardando" ? "cobranca" : ["em_obras", "outra_data", "espera"].includes(e) ? "retorno" : "primeiro"));
+  // quem RESPONDEU pede nova data, não primeiro contato: é o modelo 99588, o único aprovado
+  // para esse caso, e é ele que abre o campo de escolher a data
+  const [tipo, setTipo] = useState(inicial || (e === "agendado" ? "confirmacao" : e === "sem_retorno" ? "retorno" : e === "aguardando" ? "cobranca" : ["em_obras", "outra_data", "espera", "respondeu"].includes(e) ? "retorno" : "primeiro"));
   const primeira = e === "agendado" || k.proposta ? null : sugestoes(st, c.id, 1, undefined, Number(k.duracaoMin) || durSugeridaCk(c).min)[0];
   const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : k.proposta) || (primeira && primeira.slot) || proximoDiaUtil()).slice(0, 16));
   const [proj, setProj] = useState<string>((e === "agendado" ? k.projetista : k.propostaProjetista) || (primeira && primeira.livres[0]) || "");
