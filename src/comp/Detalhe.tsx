@@ -123,7 +123,10 @@ export default function Detalhe({ id }: { id: string }) {
             {Object.entries((c.tratativa || {}).pagadores || {}).map(([v, p]: any) => <Row key={v} k={"Cliente comprador"}><b>{p.nome}</b> <span className="hint">venda {v}{p.telefone1 ? " · " + p.telefone1 : ""}{p.endereco ? " · " + p.endereco : ""}</span></Row>)}
             <Row k="CPF">{c.clienteDoc || "—"}</Row>
             {!ehFab && <Row k="Contato">{(() => { const tels = separarTelefones(c.telefone); const eu = R.nomeUser(R.currentUserId); const msg = c.tipo === "medidas" ? R.msgWhatsMedida(c) : msgWhatsCliente(c, eu ? eu.split(" ")[0] : "");
-              return tels.length ? <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>{tels.map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b><BotaoWhats tel={t} texto={msg} /></span>)}</span> : (c.telefone || "—"); })()}</Row>}
+              return <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {tels.length ? tels.map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b><BotaoWhats tel={t} texto={msg} /></span>) : <span>{c.telefone || "—"}</span>}
+                <AddTelefone c={c} />
+              </span>; })()}</Row>}
             {c.endereco ? <Row k="Endereço">{c.endereco}</Row> : null}
             <Row k="Pedido venda">{c.pedido}{c.dataVenda ? " · " + fmtDate(c.dataVenda) : ""}</Row>
             <Row k="Produto">{c.produto}</Row>
@@ -773,39 +776,79 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
 export const TIPOS_MONTAGEM = ["retorno_montador", "assistencia", "vistoria", "montagem", "horario_montagem", "previsao_assistencia", "desmontagem_estofado"];
 
 function MontagemFeita({ c }: any) {
-  const { executar: ex, toast } = useApp() as any;
+  const { R, executar: ex, toast } = useApp() as any;
   const [hist, setHist] = useState<any[] | null>(null);
   const [buscando, setBuscando] = useState(false);
+  const [trocar, setTrocar] = useState("");
   if (!TIPOS_MONTAGEM.includes(c.tipo)) return null;
   const m = (c.tratativa || {}).montagem;
   const buscar = async () => {
     setBuscando(true);
-    try { setHist(((await A.montagemDoCliente(c.cliente, 10)) || []) as any[]); }
+    try { setHist(((await A.montagemDoCliente(c.cliente, 12)) || []) as any[]); }
     catch (e: any) { toast(e.message || "Não consegui buscar o histórico de montagem"); }
     finally { setBuscando(false); }
   };
   const quando = (x: any) => x && x.data ? fmtDate(x.data) : "sem data";
+  // o nome do Exact pode não ser mais quem cuida disso: a troca escolhe gente do setor de Montagem
+  const doSetor = (R.state.usuarios || []).filter((u: any) => u.ativo && (u.setores || []).includes("montagem"))
+    .map((u: any) => u.nome).sort((a: string, b: string) => a.localeCompare(b, "pt-BR"));
+  const montadores = (R.state.montadores || []).filter((x: any) => x.ativo).map((x: any) => x.nome)
+    .sort((a: string, b: string) => a.localeCompare(b, "pt-BR"));
+  // função, não componente: componente declarado aqui dentro vira tipo novo a cada render e remonta
+  const trocarUI = (quem: "montador" | "operadora", opcoes: string[], vazio: string) =>
+    trocar !== quem ? <button className="pp-link" style={{ marginLeft: 8 }} onClick={() => setTrocar(quem)}>alterar</button>
+      : <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginLeft: 8 }}>
+          <select defaultValue="__" onChange={e => { const v = e.target.value; if (v === "__") return; ex(() => A.montagemPessoa(c.id, quem, v === "__setor" ? "" : v), "Alterado").then(() => setTrocar("")); }}>
+            <option value="__">escolher…</option>
+            <option value="__setor">{vazio}</option>
+            {opcoes.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <button className="btn ghost sm" onClick={() => setTrocar("")}>cancelar</button>
+        </span>;
   return <div className="resp-box" style={{ margin: "12px 0" }}>
     <h4>🔧 Montagem deste cliente</h4>
     {m ? <>
-      <RowSb k="Montador" bold>{m.montador || "—"}</RowSb>
-      <RowSb k="Quem agendou">{m.operadora || "—"}</RowSb>
+      <RowSb k="Montador" bold>{m.montador || "—"}{trocarUI("montador", montadores, "Montador não identificado")}</RowSb>
+      <RowSb k="Quem agendou">{m.operadora || "—"}{trocarUI("operadora", doSetor, "Setor de Montagem (sem pessoa)")}</RowSb>
       <RowSb k="Serviço">{m.os || "—"} · {quando(m)}{m.tipos ? " · " + m.tipos : ""}</RowSb>
-      {m.de === "mao" && <div className="hint" style={{ marginTop: 6 }}>Vinculada à mão por {m.por || "—"}.</div>}
-    </> : <div className="hint">Não achei no histórico de montagem um serviço <b>já feito</b> para {c.cliente}. Costuma ser venda anterior à importação do Exact, ou o nome escrito diferente lá.</div>}
+      {m.de === "mao" && <div className="hint" style={{ marginTop: 6 }}>Ajustado à mão por {m.por || "—"}.</div>}
+    </> : <div className="hint">Não achei no histórico uma <b>montagem de origem já feita</b> para {c.cliente}. Costuma ser venda anterior à importação do Exact, nome escrito diferente lá, ou o cliente só ter passagem de assistência — que não diz quem montou. Veja o histórico abaixo e vincule à mão se for o caso.</div>}
     <div className="row" style={{ gap: 8, marginTop: 10 }}>
       <button className="btn sm" disabled={buscando} onClick={buscar}>{buscando ? "buscando…" : hist ? "↻ Atualizar histórico" : "Ver as montagens deste cliente"}</button>
     </div>
     {hist && (hist.length ? <div style={{ marginTop: 10 }}>
       {hist.map((x: any, i: number) => <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderTop: "1px solid var(--linha)" }}>
         <span style={{ flex: "1 1 240px", fontSize: 12.5 }}>
-          <b>{x.montador || "—"}</b>{x.feita ? "" : " (ainda não montou)"}
+          <b>{x.montador || "—"}</b>{x.origem ? "" : " · " + x.servico}{x.feita ? "" : " · ainda não aconteceu"}
           <small style={{ display: "block", opacity: .75 }}>{x.os} · {quando(x)} · agendou {x.operadora || "—"}</small></span>
         {m && m.os === x.os ? <span className="pill">vinculada</span>
           : <button className="btn ghost sm" onClick={() => ex(() => A.montagemVincular(c.id, x.os), "Montagem vinculada")}>vincular esta</button>}
       </div>)}
+      <div className="hint" style={{ marginTop: 8 }}>O vínculo automático usa só a <b>montagem de origem</b> (O.S. própria). Assistência e entrega aparecem aqui para consulta, mas não dizem quem montou o móvel.</div>
     </div> : <div className="hint" style={{ marginTop: 8 }}>Nenhuma montagem no histórico para este nome.</div>)}
   </div>;
+}
+
+// 📞 Adicionar telefone — a Supervisão de Medidas precisa cadastrar o número que o medidor
+// conseguiu em campo, sem ter o "editar dados do cliente" inteiro. Só acrescenta, nunca troca.
+function AddTelefone({ c }: any) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const [abrir, setAbrir] = useState(false);
+  const [tel, setTel] = useState("");
+  const ehMedida = c.tipo === "medidas" || c.tipo === "solicitacao_medida";
+  if (!(R.podeEditarCliente() || (ehMedida && R.ehSupMedidas()))) return null;
+  const ok = async () => {
+    const d = tel.replace(/\D/g, "");
+    if (d.length < 10 || d.length > 13) { toast("Telefone com DDD, por favor"); return; }
+    if (await ex(() => A.telefoneIncluir(c.id, tel), "Telefone incluído")) { setTel(""); setAbrir(false); }
+  };
+  if (!abrir) return <button className="btn sm" onClick={() => setAbrir(true)}>📞 Adicionar telefone</button>;
+  return <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+    <input value={tel} autoFocus inputMode="tel" placeholder="(41) 9 9999-9999" style={{ maxWidth: 170 }}
+      onChange={e => setTel(e.target.value)} onKeyDown={e => { if (e.key === "Enter") ok(); }} />
+    <button className="btn primary sm" onClick={ok}>Incluir</button>
+    <button className="btn ghost sm" onClick={() => { setAbrir(false); setTel(""); }}>cancelar</button>
+  </span>;
 }
 
 // 📝 Complemento de quem ABRIU a solicitação. A anotação interna exige tratar o chamado, e quem

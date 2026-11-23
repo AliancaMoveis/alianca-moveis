@@ -32,6 +32,10 @@ export const A = {
   // quem montou e quem agendou: histórico de montagem do cliente (Exact) e o vínculo na solicitação
   montagemDoCliente: (cliente: string, limite = 6) => rpc<any[]>("montagem_do_cliente", { p_cliente: cliente, p_limite: limite }),
   montagemVincular: (id: string, os = "") => rpc<any>("chamado_montagem_vincular", { p_id: id, p_os: os }),
+  // o nome que veio do Exact pode não ser mais quem cuida disso: troca à mão, ou joga para o setor
+  montagemPessoa: (id: string, quem: "montador" | "operadora", valor = "") => rpc<any>("chamado_montagem_pessoa", { p_id: id, p_quem: quem, p_valor: valor }),
+  // só ACRESCENTA telefone na ficha do cliente: nunca apaga nem troca o que já estava
+  telefoneIncluir: (id: string, telefone: string) => rpc<any>("chamado_telefone_incluir", { p_id: id, p_telefone: telefone }),
   definirCanalAnuncio: (id: string, canal: string) => rpc("definir_canal_anuncio", { p_id: id, p_canal: canal }),
   salvarTratativa: (id: string, campos: any) => rpc("salvar_tratativa", { p_id: id, p_campos: campos }),
   alternarMarcacao: (id: string, campo: string) => rpc("alternar_marcacao", { p_id: id, p_campo: campo }),
