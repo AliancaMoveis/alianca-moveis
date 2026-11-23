@@ -259,6 +259,9 @@ export default function MontagemPagamento() {
   const { setModal } = useApp() as any;
   const [pagas, setPagas] = useState<{ por: Map<string, string>; desde: string } | null>(null);
   const [incluirPend, setIncluirPend] = useState(true);
+  // tem que ficar aqui em cima: abaixo existem "return" antecipados (sem acesso, histórico),
+  // e hook declarado depois deles quebra a tela inteira com erro de ordem de hooks
+  const [noExact, setNoExact] = useState("");
   const [descs, setDescs] = useState<Desc[]>([]);
   const recarregar = () => { carregarPagas().then(setPagas).catch(() => setPagas({ por: new Map(), desde: "" })); return carregar().then(setDados).catch(e => setErro(e.message)); };
   const [nfs, setNfs] = useState<Nf[]>([]);
@@ -375,7 +378,6 @@ export default function MontagemPagamento() {
     } catch (e: any) { toast(e.message); } finally { setAprovando(false); }
   };
   // empurra a aprovação para o Exact (lote por montador) e espera a resposta
-  const [noExact, setNoExact] = useState("");
   const enviarAoExact = async (chaves: string[]) => {
     setNoExact("Aprovando no Exact…");
     try {
