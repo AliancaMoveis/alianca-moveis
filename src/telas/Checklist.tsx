@@ -147,6 +147,9 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
   const todos = st.chamados.filter((c: any) => c.tipo === "checklist" && R.podeVer(c) && noPer(c));
   const mes = hoje().slice(0, 7);
   const G = (g: string) => (c: any) => grupoCk(c) === g;
+  // o ciclo: manda data → aguardando → 2 dias sem resposta → sem resposta (conta 1 tentativa) →
+  // manda nova data → aguardando de novo… e na 3ª vira ligação, que tem aba própria
+  const semResposta = (c: any) => G("agendar")(c) && etapaCk(c) === "sem_retorno" && !respondeuManual(c) && !precisaLigar(c);
   const FILTROS_ABA: Record<string, Record<string, [string, (c: any) => boolean]>> = {
     agendar: {
       hoje: ["Para fazer hoje", aFazerHoje],
@@ -154,7 +157,9 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       msg: ["Mensagem enviada · aguardando resposta", c => G("agendar")(c) && etapaCk(c) === "aguardando"],
       respondeu: ["💬 Respondeu · ler e responder", c => G("agendar")(c) && respondeuManual(c)],
       ligar: ["📞 Ligar · 3 tentativas sem resposta", c => G("agendar")(c) && precisaLigar(c)],
-      sem_retorno: ["📨 Enviada · sem resposta", c => G("agendar")(c) && etapaCk(c) === "sem_retorno" && !respondeuManual(c) && !precisaLigar(c)],
+      sem_retorno: ["📨 Enviada · sem resposta", semResposta],
+      sr1: ["↳ 1ª tentativa", c => semResposta(c) && tentativasCk(c) <= 1],
+      sr2: ["↳ 2ª tentativa", c => semResposta(c) && tentativasCk(c) === 2],
       nova_data: ["🔄 Pediram nova data", c => G("agendar")(c) && etapaCk(c) === "outra_data"],
       vencido: ["⚠️ Prazo vencido", c => G("agendar")(c) && reservaVencida(c, cfgAgenda(st))],
       todos: ["Todos a agendar", G("agendar")],
