@@ -205,7 +205,7 @@ const CSS = `
 .pj .barra{position:sticky;bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin-top:12px;border:1px solid var(--pj-l);border-radius:10px;background:var(--pj-bg);box-shadow:0 4px 18px rgba(0,0,0,.12)}
 `;
 
-type Arqs = { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null; dados?: any; espelhoEm?: string | null };
+type Arqs = { venda: any[]; medicao: any[]; m360: any[]; ck: any[]; outrosTicket: any[]; avisos: string[]; ticketId: number | null; dados?: any; espelhoEm?: string | null; irmas?: any[] };
 
 export default function ProjetistaChecklist() {
   const { toast, st, preset } = useApp() as any;
@@ -557,7 +557,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
   const setMudou = (v: boolean) => { _setMudou(v); setSujo(v); };
   const [ocupado, setOcupado] = useState("");
 
-  const carregarArqs = () => { setArqErro(""); return A.ckArquivos(c.id).then(setArqs).catch((e: any) => { setArqErro(e.message); setArqs({ venda: [], medicao: [], m360: [], ck: [], outrosTicket: [], avisos: [], ticketId: null }); }); };
+  const carregarArqs = (irmas = false) => { setArqErro(""); return A.ckArquivos(c.id, irmas).then(setArqs).catch((e: any) => { setArqErro(e.message); setArqs({ venda: [], medicao: [], m360: [], ck: [], outrosTicket: [], avisos: [], ticketId: null, irmas: [] }); }); };
   useEffect(() => { carregarArqs(); }, [c.id]);
   useEffect(() => () => setSujo(false), []);
 
@@ -654,7 +654,9 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
               <div className="files">{arqs.ck.map((a, i) => <Arquivo key={"ck" + i} a={a} c={c} onVer={() => setVer(a, arqs.ck)} />)}</div></>}
             <div className="sec">Medição {c.medida && <span className={"src " + (c.medida.etapa === "liberada" ? "p-ok" : "p-w")}>{MEDIDA_CURTA[c.medida.etapa] || c.medida.etapa}</span>}<span className="src p-g">Exact + medidas do 360</span>
               {(arqs.medicao.length + arqs.m360.length) > 0 && <button className="lk" style={{ marginLeft: "auto", textTransform: "none", letterSpacing: 0 }} onClick={() => setAba("medicao")}>ver todas ({arqs.medicao.length + arqs.m360.length}) →</button>}</div>
-            {(() => { const fotos = [...arqs.medicao, ...arqs.m360].filter(a => a.tipo === "img"); return fotos.length ? <div className="pjmini">{fotos.slice(0, 6).map((a, i) => <Miniatura key={i} a={a} c={c} onClick={() => setVer(a, fotos)} />)}{fotos.length > 6 && <div className="th outro" style={{ fontSize: 13, fontWeight: 800 }} onClick={() => setAba("medicao")}>+{fotos.length - 6}</div>}</div> : <div className="note" style={{ marginBottom: 8 }}>⚠️ Sem fotos da medição.</div>; })()}
+            {(() => { const fotos = [...arqs.medicao, ...arqs.m360].filter(a => a.tipo === "img"); return fotos.length ? <div className="pjmini">{fotos.slice(0, 6).map((a, i) => <Miniatura key={i} a={a} c={c} onClick={() => setVer(a, fotos)} />)}{fotos.length > 6 && <div className="th outro" style={{ fontSize: 13, fontWeight: 800 }} onClick={() => setAba("medicao")}>+{fotos.length - 6}</div>}</div> : <div className="note" style={{ marginBottom: 8 }}>⚠️ Sem fotos da medição.
+              {(arqs.irmas || []).length > 0 && <> Este cliente tem outra venda no sistema — <button className="lk" style={{ textTransform: "none", letterSpacing: 0 }} onClick={() => setAba("medicao")}>veja a medição dela na aba Medição →</button></>}
+            </div>; })()}
             <NotaMedida c={c} />
             {(arqs.avisos.length > 0 || arqErro) && <div className="hint" style={{ marginTop: 10 }}>{[arqErro, ...arqs.avisos].filter(Boolean).map((x, i) => <div key={i}>⚠️ {x}</div>)}</div>}
           </>}
@@ -675,6 +677,7 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
           {arqs === null ? <div className="empty">Buscando no Exact…</div> : arqs.medicao.length ? <div className="files">{arqs.medicao.map((a, i) => <Arquivo key={i} a={a} c={c} onVer={() => setVer(a, [...arqs.medicao, ...arqs.m360])} />)}</div> : <div className="note" style={{ marginBottom: 18 }}>Nenhuma foto de medição no ticket do Exact.</div>}
           <div className="sec">Medidas do 360 <span className="src p-g">setor de medidas / Minha Visita</span></div>
           {arqs && arqs.m360.length > 0 && <div className="files">{arqs.m360.map((a, i) => <Arquivo key={i} a={a} c={c} onVer={() => setVer(a, [...arqs.medicao, ...arqs.m360])} />)}</div>}
+          {arqs && <OutrasVendas c={c} arqs={arqs} recarregar={carregarArqs} setVer={setVer} />}
           <NotaMedida c={c} />
         </div>
         <div>
@@ -757,6 +760,48 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
       </div>}
     </section>
   );
+}
+
+/** Medição que está em OUTRA venda do mesmo cliente.
+ *  O cliente volta para medir e o Exact abre uma venda nova. A medição fica no ticket da venda
+ *  antiga e aqui aparecia só "medição duplicada", sem foto nenhuma — o projetista ficava sem ver
+ *  o que já foi medido. As vendas irmãs saem do cruzamento na nossa base (CPF quando existe,
+ *  telefone e nome), e deixamos bem claro que a foto é de outra venda. */
+function OutrasVendas({ c, arqs, recarregar, setVer }: { c: any; arqs: Arqs; recarregar: (irmas?: boolean) => any; setVer: (a: any, l: any[]) => void }) {
+  const [buscando, setBuscando] = useState(false);
+  const irmas = arqs.irmas || [];
+  if (!irmas.length) return null;
+  const COMO: Record<string, string> = { cpf: "mesmo CPF", telefone: "mesmo telefone", nome: "mesmo nome" };
+  const naoBuscou = irmas.some(v => v.fotos === null);
+  const todas = irmas.flatMap((v: any) => (v.fotos || []).map((a: any) => ({ ...a, _venda: v.pedido })));
+  return <>
+    <div className="sec">Outras vendas deste cliente <span className="src p-w">conferir</span></div>
+    <div className="note" style={{ marginBottom: 10 }}>
+      Este cliente tem {irmas.length === 1 ? "outra venda" : irmas.length + " outras vendas"} no sistema.
+      Quando o Exact diz <b>“medição duplicada”</b>, a medição costuma estar numa delas.
+      {naoBuscou && <> <button className="lk" style={{ textTransform: "none", letterSpacing: 0 }} disabled={buscando}
+        onClick={async () => { setBuscando(true); try { await recarregar(true); } finally { setBuscando(false); } }}>
+        {buscando ? "Buscando no Exact…" : "buscar a medição dessas vendas →"}</button></>}
+    </div>
+    {irmas.map((v: any) => <div key={v.pedido} style={{ border: "1.5px solid var(--pj-l, rgba(128,140,160,.35))", borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
+        <b>venda {v.pedido}</b>
+        <span className="pjpill p-g">{COMO[v.como] || v.como}</span>
+        {v.quando && <span style={{ opacity: .75 }}>{v.quando.split("-").reverse().join("/")}</span>}
+        {v.projetista && <span style={{ opacity: .75 }}>· projetista {v.projetista}</span>}
+        {!v.ticket && <span className="pjpill p-w">sem ticket no Exact</span>}
+      </div>
+      {v.erro && <div className="hint" style={{ marginTop: 4 }}>⚠️ {v.erro}</div>}
+      {v.fotos === null ? null
+        : v.fotos.length ? <div className="pjmini" style={{ marginTop: 6 }}>{v.fotos.map((a: any, i: number) =>
+            <Miniatura key={i} a={a} c={c} onClick={() => setVer({ ...a, _venda: v.pedido }, todas)} />)}</div>
+        : <div className="hint" style={{ marginTop: 4 }}>Sem foto de medição nesta venda.</div>}
+    </div>)}
+    <div className="hint" style={{ marginBottom: 14 }}>
+      ⚠️ Estas fotos <b>são de outra venda</b> do mesmo cliente — confira se o ambiente é o mesmo antes de usar no checklist.
+      {irmas.some(v => v.como !== "cpf") && <> O vínculo foi por {irmas.some(v => v.como === "telefone") ? "telefone" : "nome"}, não por CPF: confirme que é a mesma pessoa.</>}
+    </div>
+  </>;
 }
 
 function NotaMedida({ c }: { c: any }) {

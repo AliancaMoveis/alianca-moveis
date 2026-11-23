@@ -148,7 +148,46 @@ Deno.serve(async (req: Request) => {
         const { data: s } = await adm.storage.from("checklist").createSignedUrls(ps, 3600);
         (s || []).forEach((x: any, i: number) => { const nome = String(ps[i].split("/").pop()).replace(/^[0-9a-f-]{36}-/, ""); ck.push({ fonte: "checklist", id: ps[i], path: ps[i], nome, tipo: tipoDe(nome), url: x.signedUrl || "", em: (objs[i] as any).created_at || null }); });
       }
-      return json({ ok: true, venda, medicao, m360, ck, outrosTicket, avisos, ticketId: ticket || null, dados, espelhoEm });
+      // ---------- medição que está em OUTRA venda do mesmo cliente ----------
+      // O cliente volta para medir e o Exact abre venda nova; a medição fica na venda antiga e
+      // aqui só aparece "medição duplicada", sem foto. Descobrimos as vendas irmãs na nossa base
+      // (CPF quando existe, telefone, nome) e buscamos a medição de cada uma no Exact.
+      // Só busca sozinho quando ESTA venda não tem medição — é o caso do problema. Tendo medição,
+      // devolve a lista das vendas irmãs e a tela carrega sob demanda, para não dobrar o Exact.
+      let irmas: any[] = [];
+      try {
+        const { data: vi } = await usu.rpc("ck_vendas_irmas", { p_id: String(b.id || "") });
+        irmas = (Array.isArray(vi) ? vi : []).slice(0, 4);
+      } catch { /* sem as irmãs a tela segue igual */ }
+      const buscarIrma = async (v: any) => {
+        const fotos: any[] = [];
+        if (token && v.ticket) {
+          try {
+            const t2 = await exact(token, "GET", `/ticket/checklist/${v.ticket}`);
+            const fr2 = [t2?.fieldReport, t2?.fieldReports].flat(2).filter((r: any) => r && typeof r === "object");
+            const vis = new Set<string>();
+            fr2.filter((r: any) => !r.type || r.type === "MEASURING").forEach((r: any) => (Array.isArray(r.attachments) ? r.attachments : []).forEach((a: any) => {
+              const n = { ...norm(a, "ticket"), categoria: "MEASURING" }; if (n.url && !vis.has(n.id)) { vis.add(n.id); fotos.push(n); } }));
+            lista(t2?.attachments).forEach(a => {
+              if (vis.has(String(a.id))) return;
+              const n = norm(a, "ticket");
+              if (n.url && n.categoria === "MEASURING") { vis.add(n.id); fotos.push(n); }
+            });
+          } catch (x: any) { v.erro = String(x.message || x).slice(0, 140); }
+        }
+        v.fotos = fotos;
+        return v;
+      };
+      const semMedicao = medicao.length === 0;
+      if (irmas.length && (semMedicao || b.irmas === true)) {
+        irmas = await Promise.all(irmas.map(v => buscarIrma(v).catch(() => ({ ...v, fotos: [] }))));
+        const n = irmas.reduce((x: number, v: any) => x + (v.fotos || []).length, 0);
+        if (semMedicao && n) avisos.push("Esta venda está sem medição, mas achei " + n + " foto(s) de medição em outra venda deste mesmo cliente — confira abaixo.");
+      } else {
+        irmas = irmas.map(v => ({ ...v, fotos: null }));   // null = ainda não buscado
+      }
+
+      return json({ ok: true, venda, medicao, m360, ck, outrosTicket, avisos, ticketId: ticket || null, dados, espelhoEm, irmas });
     }
 
     // ---------- baixar um arquivo da venda (Exact legacy) ----------
