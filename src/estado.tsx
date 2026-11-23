@@ -17,7 +17,7 @@ type Ctx = {
   abrirDetalhe: (id: string, foco?: string) => void;
   fecharDetalhe: () => void;
   focoDetalhe: string | null;
-  openImg: (lista: string[] | string, i?: number) => void;
+  openImg: (lista: any[] | string, i?: number) => void;
   abrirGaleria: (id: string, editavel: boolean) => void;
   modal: React.ReactNode;
   setModal: (n: React.ReactNode) => void;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { FotoAnexo } from "./FotoAnexo";
 import JSZip from "jszip";
 import { urlAnexo } from "../lib/dados";
 import { useApp } from "../estado";
@@ -67,7 +68,7 @@ export function Overlays({ lb, setLb, gal, setGal }: any) {
 
   return (
     <>
-      {lb && <FotoViewer fotos={lb.lista.map((u: string) => ({ url: u }))} inicio={lb.i} onFechar={() => setLb(null)} />}
+      {lb && <FotoViewer fotos={lb.lista.map((u: any) => typeof u === "string" ? { url: u } : u)} inicio={lb.i} onFechar={() => setLb(null)} />}
       <div className={"overlay" + (gal && c ? " on" : "")} id="galOverlay" onClick={e => { if (e.target === e.currentTarget) setGal(null); }}>
         {gal && c && (
           <div className="gal-box">
@@ -81,7 +82,7 @@ export function Overlays({ lb, setLb, gal, setGal }: any) {
             <div className="gal-grid" id="galGrid">
               {imgs.map((a: any, i: number) => (
                 <div className="gal-item" key={a.id || i}>
-                  <img src={a.url} alt={a.nome || ""} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />
+                  <FotoAnexo a={a} onClick={() => openImg(imgs, i)} />
                   <button className="dl" title="Baixar esta foto" onClick={e => { e.stopPropagation(); baixarUm(a); }}>⬇</button>
                   {gal.editavel && a.id && R.podeRemoverAnexo(a) && <button className="rm" title="Remover" onClick={e => { e.stopPropagation(); if (confirm("Apagar esta foto?")) executar(() => A.removerAnexo(a.id), "Foto apagada"); }}>×</button>}
                   <div className="nm">{a.nome || "foto"}</div>

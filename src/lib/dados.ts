@@ -77,18 +77,39 @@ async function todos<T = any>(tabela: string, colunas = "*", ordem?: string, des
 const hora = (v: string | null) => (v ? String(v).slice(0, 16) : "");
 export const fmtValor = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// cache de URLs assinadas das fotos (evita baixar de novo a cada atualização)
+// cache de URLs assinadas das fotos (evita baixar de novo a cada atualização).
+// Fica guardado no navegador: antes vivia só na memória, então cada F5 mandava o banco
+// assinar tudo de novo — conferindo permissão foto por foto — e o 360 travava.
+const CHAVE_CACHE = "a360:urls";
+const TETO_CACHE = 1500;   // só o que foi visto de verdade; o resto é assinado quando aparece na tela
 const cacheUrl = new Map<string, { url: string; exp: number }>();
+try {
+  const g = JSON.parse(localStorage.getItem(CHAVE_CACHE) || "[]");
+  const agora = Date.now();
+  if (Array.isArray(g)) g.forEach((x: any) => { if (x && x.p && x.u && x.e > agora) cacheUrl.set(x.p, { url: x.u, exp: x.e }); });
+} catch { /* navegador sem localStorage ou cache corrompido: segue sem */ }
+let salvando: any = null;
+function guardarCache() {
+  clearTimeout(salvando);
+  salvando = setTimeout(() => {
+    try {
+      const agora = Date.now();
+      const l = Array.from(cacheUrl.entries()).filter(([, v]) => v.exp > agora).slice(-TETO_CACHE)
+        .map(([p, v]) => ({ p, u: v.url, e: v.exp }));
+      localStorage.setItem(CHAVE_CACHE, JSON.stringify(l));
+    } catch { /* cota cheia: o cache em memória continua valendo nesta sessão */ }
+  }, 1500);
+}
 // Assina em lotes pequenos: um pedido com mais de mil fotos estourava o tempo do banco (permissão conferida foto a foto)
 // e voltava sem nenhuma URL — as imagens apareciam quebradas e o .zip saía vazio.
 async function assinarLote(lote: string[], agora: number) {
   for (let t = 0; t < 2; t++) {
     const { data, error } = await sb.storage.from("anexos").createSignedUrls(lote, 3600);
-    if (!error) { (data || []).forEach(d => { if (d.signedUrl && d.path) cacheUrl.set(d.path, { url: d.signedUrl, exp: agora + 50 * 60 * 1000 }); }); return; }
+    if (!error) { (data || []).forEach(d => { if (d.signedUrl && d.path) cacheUrl.set(d.path, { url: d.signedUrl, exp: agora + 50 * 60 * 1000 }); }); guardarCache(); return; }
     await new Promise(r => setTimeout(r, 600));
   }
 }
-async function assinar(paths: string[]) {
+export async function assinar(paths: string[]) {
   const agora = Date.now();
   const faltam = Array.from(new Set(paths.filter(p => { const c = cacheUrl.get(p); return !c || c.exp < agora; })));
   const lotes: string[][] = []; for (let i = 0; i < faltam.length; i += 100) lotes.push(faltam.slice(i, i + 100));
@@ -115,7 +136,7 @@ export async function urlAnexo(path: string): Promise<string> {
   if (!path) return "";
   const c = cacheUrl.get(path); if (c && c.exp > Date.now()) return c.url;
   const { data } = await sb.storage.from("anexos").createSignedUrl(path, 3600);
-  if (data?.signedUrl) cacheUrl.set(path, { url: data.signedUrl, exp: Date.now() + 50 * 60 * 1000 });
+  if (data?.signedUrl) { cacheUrl.set(path, { url: data.signedUrl, exp: Date.now() + 50 * 60 * 1000 }); guardarCache(); }
   return data?.signedUrl || "";
 }
 
@@ -265,8 +286,11 @@ async function montar(d: any): Promise<Estado> {
     descontoStatus: p.desconto_status || "", descontoEm: p.desconto_em || "",
   }));
 
-  const paths = anexos.filter((a: any) => a.storage_path).map((a: any) => a.storage_path);
-  // as fotos não seguram a abertura do sistema: espera no máximo 2,5 s; o que faltar é assinado em segundo plano e preenchido depois
+  // Antes isto assinava a URL de TODAS as fotos de TODOS os tickets a cada carregamento —
+  // quase 10 mil, com o Storage conferindo permissão uma por uma. Era a causa das travadas.
+  // Agora só os anexos que viram link (PDF e vídeo), que não têm como se consertar depois;
+  // as fotos são assinadas quando entram na tela (ver comp/FotoAnexo).
+  const paths = anexos.filter((a: any) => a.storage_path && a.tipo !== "img").map((a: any) => a.storage_path);
   let assinando: Promise<void> | null = null;
   if (paths.length) {
     assinando = assinar(paths).catch(() => null) as Promise<void>;

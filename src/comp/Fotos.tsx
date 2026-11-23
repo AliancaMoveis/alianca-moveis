@@ -76,6 +76,18 @@ export function FotoViewer({ fotos, inicio = 0, onFechar, acoes, tituloImp }: { 
     if (o && z.s === 1 && pts.current.size === 0) { const dx = e.clientX - o.px; if (Math.abs(dx) > 50 && !o.d) ir(dx < 0 ? 1 : -1); }
     if (pts.current.size === 0) ini.current = null;
   };
+  // as fotos são assinadas quando aparecem; para imprimir todas, resolve antes o que falta —
+  // senão a folha sai sem as fotos que o usuário ainda não passou no visualizador
+  const imprimirTodas = async () => {
+    const l = await Promise.all(fotos.map(async (x, j) => {
+      let u = url[j] || x.url || "";
+      const p = x.path || x.storage_path;
+      if (!u && p) { try { u = await urlAnexo(p); } catch { u = ""; } }
+      return { url: u, nome: x.nome };
+    }));
+    imprimirFotos(l, tituloImp || "Fotos", l.filter(x => x.url).length + " imagens");
+  };
+
   const baixar = async () => { try { salvarBlob(await blobDe({ ...f, url: src, path: f.path || f.storage_path }), f.nome || "foto-" + (i + 1) + ".jpg"); } catch { /* sem rede */ } };
   const [todas, setTodas] = useState(false); const [msgT, setMsgT] = useState("");
   const baixarTodas = async () => { setTodas(true); setMsgT(""); try { setMsgT(await baixarTodasFotos(fotos)); } finally { setTodas(false); } };
@@ -93,7 +105,7 @@ export function FotoViewer({ fotos, inicio = 0, onFechar, acoes, tituloImp }: { 
         <button type="button" onClick={baixar} title="Baixar esta foto">⬇</button>
         {/* imprimir sem fechar a foto: esta, ou todas as que estão no visualizador */}
         <button type="button" onClick={() => imprimirFotos([{ url: src, nome: f.nome }], tituloImp || "Foto", f.nome || "")} title="Imprimir só esta">🖨</button>
-        {fotos.length > 1 && <button type="button" className="fv-todas" onClick={() => imprimirFotos(fotos.map((x, j) => ({ url: url[j] || x.url, nome: x.nome })), tituloImp || "Fotos", fotos.length + " imagens")} title="Imprimir todas as fotos">🖨 Todas</button>}
+        {fotos.length > 1 && <button type="button" className="fv-todas" onClick={imprimirTodas} title="Imprimir todas as fotos">🖨 Todas</button>}
         {fotos.length > 1 && <button type="button" className="fv-todas" onClick={baixarTodas} disabled={todas} title="Baixar todas as fotos de uma vez">{todas ? "…" : "⬇ Todas (" + fotos.length + ")"}</button>}
         <button type="button" className="fv-x" onClick={onFechar} aria-label="Fechar" title="Fechar (Esc)">✕</button>
       </span>

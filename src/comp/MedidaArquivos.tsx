@@ -6,11 +6,14 @@ import { A } from "../lib/acoes";
 import { fmtDateTime } from "../lib/regras";
 import { FotoViewer } from "./Fotos";
 import { imprimirFotos, type FotoImp } from "../lib/imprimirFotos";
+import { urlAnexo } from "../lib/dados";
 import { useApp } from "../estado";
 
 const cache = new Map<string, Promise<string>>();
 const urlDe = (c: any, x: any) => {
   if (x.url) return Promise.resolve(x.url);
+  // foto do nosso storage: a URL é assinada só agora, quando a foto apareceu na tela
+  if (x.path) return urlAnexo(x.path);
   const k = c.id + ":" + x.id;
   if (!cache.has(k)) cache.set(k, A.medidaBaixar(c.id, x.id).then(b => URL.createObjectURL(b)).catch(e => { cache.delete(k); throw e; }));
   return cache.get(k)!;
@@ -81,15 +84,15 @@ export function Anteriores({ c }: { c: any }) {
   const [d, setD] = useState<any>(null);
   const [ver, setVer] = useState<number | null>(null); const [urls, setUrls] = useState<Record<string, string>>({});
   useEffect(() => { A.medidaAnteriores(c.id).then(setD).catch(e => setD({ exact: { fotos: [], notas: "" }, visita: [], avisos: [e.message] })); }, [c.id]);
-  const minhas = (c.anexos || []).filter((a: any) => a.url);
+  const minhas = (c.anexos || []).filter((a: any) => a.url || a.path);
   const ant: any[] = m.anteriores || [];
   const caixa: any = { border: "1.5px solid rgba(128,140,160,.35)", borderRadius: 12, padding: "10px 12px", margin: "8px 0" };
 
   // uma lista só com TODAS as fotos, na ordem em que aparecem: assim as setas do visualizador passam de um grupo para o outro
-  const fotosMinhas: Item[] = minhas.filter((a: any) => a.tipo === "img").map((a: any, i: number) => ({ key: "m" + i, x: { id: "m" + i, url: a.url, nome: a.nome }, nome: a.nome }));
+  const fotosMinhas: Item[] = minhas.filter((a: any) => a.tipo === "img").map((a: any, i: number) => ({ key: "m" + i, x: { id: "m" + i, url: a.url, path: a.path, nome: a.nome }, nome: a.nome }));
   // as fotos da medição no Exact já vêm para a ficha (viram anexo da medida): aqui só aparece o que ainda não veio,
   // senão a mesma foto apareceria duas vezes na tela
-  const jaNaFicha = new Set(minhas.map((a: any) => a.url));
+  const jaNaFicha = new Set(minhas.map((a: any) => a.url).filter(Boolean));
   const soNoExact = ((d?.exact?.fotos || []) as any[]).filter(x => x.img && !jaNaFicha.has(x.url));
   const fotosExact: Item[] = soNoExact.map((x, i) => ({ key: "e" + i, x: { id: "e" + i, url: x.url, nome: x.nome }, nome: x.nome }));
   const fotosVisita: Record<string, Item[]> = {};

@@ -2,6 +2,7 @@
 // Marketing (agendado pelas operadoras), Externo (veio do consultor) e Porta (entrou direto na loja, sem marketing e sem consultor).
 // Aqui se confirma a vinda, define/troca o vendedor, vê as fotos e registra o cliente porta.
 import { useState } from "react";
+import { FotoAnexo } from "../comp/FotoAnexo";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { fmtDate, hojeISO, isoLocal, parseData, STATUS_CLIENTE } from "../lib/regras";
@@ -82,7 +83,7 @@ function Cartao({ c, porta, tag }: { c: any; porta: boolean; tag?: string }) {
           {porta ? <span>registrado por {c.solicitante}</span> : null}
           {c.tratativa && c.tratativa.querProjeto === "sim" ? <span className="marca-loja sim">📐 Quer projeto</span> : null}
         </div>
-        {fotos.length > 0 && <div className="pres-fotos" onClick={() => abrirDetalhe(c.id)} title="Abrir a ficha para ver as fotos">{fotos.slice(0, 4).map((a: any) => <img key={a.id} src={a.url} alt="" loading="lazy" />)}{fotos.length > 4 && <span>+{fotos.length - 4}</span>}</div>}
+        {fotos.length > 0 && <div className="pres-fotos" onClick={() => abrirDetalhe(c.id)} title="Abrir a ficha para ver as fotos">{fotos.slice(0, 4).map((a: any) => <FotoAnexo key={a.id} a={a} />)}{fotos.length > 4 && <span>+{fotos.length - 4}</span>}</div>}
         {!fotos.length && !porta && <div className="pres-semfoto">⚠️ Sem foto/planta anexada</div>}
         {R.atendendoAgora(c) ? <div className="pres-ematd">🟢 Em atendimento desde {new Date(c.tratativa.emAtendimento).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
           : porta && R.podeIniciarAtend(c) && String(c.dataLoja).slice(0, 10) === hojeISO() ? <button className="btn pres-iniciar" onClick={() => { if (confirm("Iniciar o atendimento de " + c.cliente + " com " + R.nomeUser(c.atendenteId) + "?")) ex(() => A.iniciarAtendimento(c.id), "Atendimento iniciado"); }}>▶️ Iniciar atendimento</button> : null}

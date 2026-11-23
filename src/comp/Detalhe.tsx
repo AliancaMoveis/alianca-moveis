@@ -1,5 +1,6 @@
 // Ficha do chamado/cliente — porta do abrirDetalhe() do protótipo, com os mesmos blocos e textos.
 import { jaResolvido } from "../lib/resolvido";
+import { FotoAnexo } from "./FotoAnexo";
 import { ImagensVenda, Anteriores } from "./MedidaArquivos";
 import { DataCalendario } from "./DataCalendario";
 import { confirmarConsultor, marcaConsultor, sugestaoConsultor, textoConflito } from "../lib/agendaConsultor";
@@ -582,7 +583,7 @@ function Destaque({ c, anexar }: any) {
             <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)" }}>Planta, fotos e vídeos do consultor ({imgs.length + links.length})</div>
             {imgs.length > 0 && <button className="btn sm" onClick={() => abrirGaleria(c.id, anexar)}>Ver e baixar</button>}
           </div>
-          <div className="thumbs">{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><img className="thumb" src={a.url} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />{anexar && R.podeRemoverAnexo(a) && <button className="rm2" title="Apagar foto" onClick={() => apagarFoto(a)}>✕</button>}</span>)}
+          <div className="thumbs">{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><FotoAnexo a={a} className="thumb" onClick={() => openImg(imgs, i)} />{anexar && R.podeRemoverAnexo(a) && <button className="rm2" title="Apagar foto" onClick={() => apagarFoto(a)}>✕</button>}</span>)}
             {links.map((a: any, i: number) => <a key={"l" + i} className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{a.tipo === "pdf" ? "📄 " + (a.nome.length > 22 ? "PDF" : a.nome) : a.tipo === "video" ? "🎬 vídeo" : "🔗 link"}</a>)}</div>
         </div>
       ) : R.semAnexo(c) ? <div className="aviso-anexo" style={{ marginTop: 12 }}>⚠️ <b>Sem anexo.</b> Nenhuma planta ou foto do cliente — {c.consultorId ? "o consultor precisa anexar" : "anexe a planta ou fotos"} antes do atendimento na loja.</div>
@@ -683,7 +684,7 @@ function Anexos({ c, editavel }: any) {
   return (
     <div className="resp-box"><h4>Anexos{lista.length ? " — planta, vídeos e links (" + lista.length + ")" : ""}</h4>
       {mostrarFotos && imgs.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-        <div className="thumbs" style={{ flex: 1 }}>{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><img className="thumb" src={a.url} onClick={() => openImg(imgs.map((x: any) => x.url), i)} />{editavel && R.podeRemoverAnexo(a) && <button className="rm2" title="Apagar foto" onClick={() => apagar(a)}>✕</button>}</span>)}</div>
+        <div className="thumbs" style={{ flex: 1 }}>{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><FotoAnexo a={a} className="thumb" onClick={() => openImg(imgs, i)} />{editavel && R.podeRemoverAnexo(a) && <button className="rm2" title="Apagar foto" onClick={() => apagar(a)}>✕</button>}</span>)}</div>
         <button className="btn sm" onClick={() => abrirGaleria(c.id, editavel)}>Ver e baixar</button></div>}
       {lista.length ? <div className="thumbs" id="dThumbs">{lista.map((a: any) => (
         <div className="thumb-wrap" key={a.id}><a className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{icone(a)} {a.tipo === "link" ? (a.nome.length > 22 ? "link" : a.nome) : (a.nome.length > 26 ? a.nome.slice(0, 24) + "…" : a.nome)}</a>{editavel && R.podeRemoverAnexo(a) && <button className="rm" title="Apagar" onClick={() => apagar(a)}>×</button>}</div>
@@ -834,7 +835,7 @@ function MedidaBloco({ c }: any) {
           <small>{[(c.anexos || []).length ? (c.anexos || []).length + " da medida" + (quemMediu ? " · " + quemMediu : "") : "", vis360.length ? vis360.reduce((s: number, v: any) => s + (v.anexos || []).length, 0) + " da visita do consultor " + vis360.map((v: any) => R.nomeUser(v.consultorId)).join(", ") + " (antes da venda)" : ""].filter(Boolean).join(" · ")}</small></div>
         <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{vis360.length > 0 && <button className="btn sm" onClick={() => setModal(<Galeria360 lista={vis360} titulo={c.cliente} />)}>Ver visita do consultor</button>}
           {nFotos > 0 && <button className="btn primary sm" disabled={zipando} onClick={baixarTudo}>{zipando ? "Preparando…" : "⬇ Baixar todas (" + nFotos + ")"}</button>}</span>
-        {fotosTodas.length > 0 && <div className="md-tiras">{fotosTodas.map((a: any, k: number) => <img key={a.id || k} src={a.url} alt={a.nome || ""} loading="lazy" title={a.legenda} onClick={() => setVerFoto(k)} />)}</div>}
+        {fotosTodas.length > 0 && <div className="md-tiras">{fotosTodas.map((a: any, k: number) => <FotoAnexo key={a.id || k} a={a} title={a.legenda} onClick={() => setVerFoto(k)} />)}</div>}
         {sup && ["pendente", "agendada"].includes(etapa) && vis360.length > 0 && <div style={{ flexBasis: "100%" }}><AprovarMedida medida={c} visita={vis360[0]} /> <span className="hint">usa as fotos da visita do consultor como medida oficial</span></div>}
       </div>}
       {verFoto !== null && <FotoViewer fotos={fotosTodas} inicio={verFoto} onFechar={() => setVerFoto(null)} acoes={<AprovarMedida medida={c} visita={vis360[0]} depois={() => setVerFoto(null)} />} />}

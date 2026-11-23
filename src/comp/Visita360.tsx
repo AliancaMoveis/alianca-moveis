@@ -6,6 +6,7 @@ import { useApp } from "../estado";
 import { Modal } from "./Modal";
 import { fmtDate } from "../lib/regras";
 import { baixarFotosZip } from "./Overlays";
+import { FotoAnexo } from "./FotoAnexo";
 import { FotoViewer } from "./Fotos";
 import { A } from "../lib/acoes";
 
@@ -101,7 +102,7 @@ export function Galeria360({ lista, titulo, medida }: { lista: any[]; titulo: st
             <small>consultor {R.nomeUser(v.consultorId)}{v.dataVisita ? " · visita " + fmtDate(v.dataVisita) : ""}{v.telefone ? " · " + v.telefone : ""}{v.produto ? " · " + v.produto : ""}</small></div>
           {t.medidas && <div className="g360-t"><b>Medidas anotadas:</b> {t.medidas}</div>}
           {t.obs && <div className="g360-t"><b>Obs. do consultor:</b> {t.obs}</div>}
-          {imgs(v).length ? <div className="g360-fotos">{imgs(v).map((a: any) => <img key={a.id} src={a.url} alt={a.nome} loading="lazy" onClick={() => setVer(idx(v, a))} />)}</div>
+          {imgs(v).length ? <div className="g360-fotos">{imgs(v).map((a: any) => <FotoAnexo key={a.id} a={a} onClick={() => setVer(idx(v, a))} />)}</div>
             : <div className="hint">Nenhuma foto anexada nesta visita.</div>}
           {arqs(v).length > 0 && <div className="g360-arqs">{arqs(v).map((a: any) => <a key={a.id} href={a.url} target="_blank" rel="noopener">{a.tipo === "pdf" ? "📄" : a.tipo === "video" ? "🎬" : "🔗"} {a.nome || "arquivo"}</a>)}</div>}
           <button className="btn ghost sm" onClick={() => { fechar(); abrirDetalhe(v.id); }}>Abrir a ficha da visita</button>
