@@ -150,11 +150,13 @@ export default function Detalhe({ id }: { id: string }) {
           ))}
           {c.tipo === "medidas" && (() => { const o = origemMedida(R, c), w = ondeMedida(R, st, c); return (o.txt || w.k) ? <Row k="Medida">{o.txt ? <span className={"md-tipo " + o.cls} style={{ marginLeft: 0 }}>{o.txt}</span> : null}{o.quem ? " " + o.quem : ""}{w.k ? <span className={"md-onde " + w.k}>{w.txt}</span> : null}</Row> : null; })()}
           {c.tipo === "medidas" && <MedidaBloco c={c} />}
+          {!presale && <MontagemFeita c={c} />}
           {!presale && <Anexos c={c} editavel={anexar} />}
           {!presale && <HistoricoCliente c={c} />}
           {tratar ? <AcoesGerais c={c} link={link} presale={presale} notaRef={notaRef} foco={focoDetalhe} />
             : R.podeAcompanhar(c) ? <AcompanhamentoCC c={c} link={link} notaRef={notaRef} foco={focoDetalhe} />
             : <div className="ro-note">Você tem acesso de leitura a este chamado. Quem trata é o setor <b>{R.setorNome(c.setorDestino)}</b>.{anexar ? " Você pode anexar comprovações acima." : ""}</div>}
+          {!presale && <Complemento c={c} />}
           {!presale && <FinalizarAtend c={c} />}
           {!presale && <AcompSupervisao c={c} />}
           {presale && (R.veAnuncios() || R.ehGestao() || R.temMarketing()) && <div className="resp-box" style={{ marginBottom: 12 }}><h4>📣 Canal do anúncio</h4>
@@ -764,19 +766,92 @@ function AcoesGerais({ c, link, presale, notaRef, foco }: any) {
   </>;
 }
 
-// ✓ finalizar o atendimento (call center e setor responsável), em qualquer motivo — exceto medidas, que seguem o fluxo próprio
+// 🔧 Quem montou e quem agendou. A solicitação de retorno do montador / assistência / vistoria
+// chegava no setor sem dizer quem fez o serviço reclamado. O vínculo sai do histórico de montagem
+// do Exact (onde o "Líder" é a operadora que agendou), cruzado pelo nome do cliente, e fica gravado
+// na solicitação quando ela é aberta.
+export const TIPOS_MONTAGEM = ["retorno_montador", "assistencia", "vistoria", "montagem", "horario_montagem", "previsao_assistencia", "desmontagem_estofado"];
+
+function MontagemFeita({ c }: any) {
+  const { executar: ex, toast } = useApp() as any;
+  const [hist, setHist] = useState<any[] | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  if (!TIPOS_MONTAGEM.includes(c.tipo)) return null;
+  const m = (c.tratativa || {}).montagem;
+  const buscar = async () => {
+    setBuscando(true);
+    try { setHist(((await A.montagemDoCliente(c.cliente, 10)) || []) as any[]); }
+    catch (e: any) { toast(e.message || "Não consegui buscar o histórico de montagem"); }
+    finally { setBuscando(false); }
+  };
+  const quando = (x: any) => x && x.data ? fmtDate(x.data) : "sem data";
+  return <div className="resp-box" style={{ margin: "12px 0" }}>
+    <h4>🔧 Montagem deste cliente</h4>
+    {m ? <>
+      <RowSb k="Montador" bold>{m.montador || "—"}</RowSb>
+      <RowSb k="Quem agendou">{m.operadora || "—"}</RowSb>
+      <RowSb k="Serviço">{m.os || "—"} · {quando(m)}{m.tipos ? " · " + m.tipos : ""}</RowSb>
+      {m.de === "mao" && <div className="hint" style={{ marginTop: 6 }}>Vinculada à mão por {m.por || "—"}.</div>}
+    </> : <div className="hint">Não achei no histórico de montagem um serviço <b>já feito</b> para {c.cliente}. Costuma ser venda anterior à importação do Exact, ou o nome escrito diferente lá.</div>}
+    <div className="row" style={{ gap: 8, marginTop: 10 }}>
+      <button className="btn sm" disabled={buscando} onClick={buscar}>{buscando ? "buscando…" : hist ? "↻ Atualizar histórico" : "Ver as montagens deste cliente"}</button>
+    </div>
+    {hist && (hist.length ? <div style={{ marginTop: 10 }}>
+      {hist.map((x: any, i: number) => <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderTop: "1px solid var(--linha)" }}>
+        <span style={{ flex: "1 1 240px", fontSize: 12.5 }}>
+          <b>{x.montador || "—"}</b>{x.feita ? "" : " (ainda não montou)"}
+          <small style={{ display: "block", opacity: .75 }}>{x.os} · {quando(x)} · agendou {x.operadora || "—"}</small></span>
+        {m && m.os === x.os ? <span className="pill">vinculada</span>
+          : <button className="btn ghost sm" onClick={() => ex(() => A.montagemVincular(c.id, x.os), "Montagem vinculada")}>vincular esta</button>}
+      </div>)}
+    </div> : <div className="hint" style={{ marginTop: 8 }}>Nenhuma montagem no histórico para este nome.</div>)}
+  </div>;
+}
+
+// 📝 Complemento de quem ABRIU a solicitação. A anotação interna exige tratar o chamado, e quem
+// pediu (gerente, loja, outro setor) não trata — ficava sem como acrescentar informação depois.
+function Complemento({ c }: any) {
+  const { R, executar: ex, toast } = useApp() as any;
+  const [abrir, setAbrir] = useState(false);
+  const [tx, setTx] = useState("");
+  // quem trata e o call center já têm a "Anotação interna" no bloco de ações
+  if (c.status === "concluida" || c.solicitanteId !== R.currentUserId) return null;
+  if (R.podeTratar(c) || R.mySetores().includes("callcenter")) return null;
+  const ok = async () => {
+    const v = tx.trim();
+    if (v.length < 3) { toast("Escreva o complemento"); return; }
+    if (await ex(() => A.chamadoComplementar(c.id, v), "Complemento enviado ao setor")) { setTx(""); setAbrir(false); }
+  };
+  return <div style={{ margin: "12px 0" }}>
+    {!abrir ? <button className="btn" onClick={() => setAbrir(true)}>📝 Complementar a solicitação</button>
+      : <div className="resp-box"><h4>📝 Complementar a solicitação</h4>
+        <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 8px" }}>Você abriu esta solicitação. O que escrever aqui entra no detalhe que o setor <b>{R.setorNome(c.setorDestino)}</b> lê, e fica no histórico.</p>
+        <div className="field"><textarea value={tx} onChange={e => setTx(e.target.value)} placeholder="O que faltou dizer: informação nova, correção, o que o cliente contou depois…" /></div>
+        <div className="row" style={{ gap: 8, marginTop: 8 }}>
+          <button className="btn primary sm" onClick={ok}>Enviar complemento</button>
+          <button className="btn sm" onClick={() => { setAbrir(false); setTx(""); }}>Cancelar</button>
+        </div></div>}
+  </div>;
+}
+
+// ✓ finalizar o atendimento (call center e setor responsável), em qualquer motivo.
+// Medidas seguem o fluxo próprio — só a supervisão de medidas (e a Gestão) encerram o ticket por aqui,
+// que é como se fecha um cliente duplicado, com dois tickets de medida para a mesma venda.
 function FinalizarAtend({ c }: any) {
   const { R, executar: ex, toast } = useApp() as any;
   const [abrir, setAbrir] = useState(false);
   const [tx, setTx] = useState("");
-  if (c.status === "concluida" || c.tipo === "medidas") return null;
-  if (!(R.podeTratar(c) || R.mySetores().includes("callcenter"))) return null;
+  const supMedidas = R.ehGestao() || R.mySetores().includes("medidas_supervisao");
+  if (c.status === "concluida") return null;
+  if (c.tipo === "medidas" && !supMedidas) return null;
+  if (!(R.podeTratar(c) || R.mySetores().includes("callcenter") || (c.tipo === "medidas" && supMedidas))) return null;
   // desmontagem de estofado e erro de venda: só a Supervisão (Salete) / Gestão finalizam; desmontagem depois de enviada ao estofador
   if (["desmontagem_estofado", "erro_venda"].includes(c.tipo) && !(R.ehGestao() || R.mySetores().includes("supervisao"))) return null;
   if (c.tipo === "desmontagem_estofado" && !(c.tratativa || {}).estofadorEnviado) return null;
   // setor que não fala com o cliente (ex.: Solicitação Fábrica): não encerra — passa para o call center informar o cliente
   const passaCC = R.viaCC(c.setorDestino) && !R.mySetores().includes("callcenter") && !R.verTudo() && c.status !== "informar";
-  const titulo = passaCC ? "✓ Solução pronta — call center informa o cliente" : "✓ Finalizar atendimento";
+  const ehMedida = c.tipo === "medidas";
+  const titulo = passaCC ? "✓ Solução pronta — call center informa o cliente" : ehMedida ? "✓ Encerrar este ticket de medida" : "✓ Finalizar atendimento";
   const ok = async () => {
     if (tx.trim().length < 3) { toast(passaCC ? "Escreva a solução / previsão para o call center passar ao cliente" : "Escreva o que foi resolvido / informado ao cliente"); return; }
     const feito = passaCC ? await ex(async () => { await A.adicionarNota(c.id, "Solução: " + tx.trim()); await A.mudarStatus(c.id, "concluida"); }, "Enviado ao call center para informar o cliente")
@@ -788,8 +863,9 @@ function FinalizarAtend({ c }: any) {
       {!abrir ? <button className="btn primary" onClick={() => setAbrir(true)}>{titulo}</button>
         : <div className="resp-box" style={{ borderColor: "var(--st-concluida)" }}><h4>{titulo}</h4>
           {c.tipo === "solicitacao_medida" && !(c.tratativa || {}).ordemMedida && <div className="hint" style={{ marginBottom: 8 }}>Não precisa abrir ordem de medida: se foi só uma tratativa (informação, dúvida, retorno), escreva o que foi feito e finalize. Use “📐 Encaminhar para medir” só quando o cliente precisar de medição.</div>}
+          {ehMedida && <div className="hint" style={{ marginBottom: 8 }}>Encerra <b>este</b> ticket, não a medida do cliente. É o caminho para fechar ticket repetido (dois na mesma venda) ou medida que não vai acontecer. Os outros tickets do cliente continuam como estão.</div>}
           <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: "0 0 8px" }}>{passaCC ? "O chamado vai para “Informar cliente”: o call center avisa o cliente e encerra." : "Encerra o atendimento. O texto fica no histórico do cliente."}</p>
-          <div className="field"><textarea value={tx} onChange={e => setTx(e.target.value)} placeholder={passaCC ? "Solução / previsão para o call center passar ao cliente" : "O que foi resolvido / informado ao cliente"} /></div>
+          <div className="field"><textarea value={tx} onChange={e => setTx(e.target.value)} placeholder={passaCC ? "Solução / previsão para o call center passar ao cliente" : ehMedida ? "Por que está encerrando: ticket repetido da venda X, cliente desistiu, medida já feita no outro ticket…" : "O que foi resolvido / informado ao cliente"} /></div>
           <div className="row" style={{ gap: 8, marginTop: 8 }}>
             <button className="btn primary sm" onClick={ok}>Confirmar</button>
             <button className="btn sm" onClick={() => setAbrir(false)}>Cancelar</button>
