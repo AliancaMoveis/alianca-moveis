@@ -1475,7 +1475,7 @@ const proximoDiaUtil = () => { const d = new Date(); d.setDate(d.getDate() + 1);
  *  conversa na Kommo para responder na mão e deixa marcar como lido — senão ele continuaria
  *  parecendo "sem resposta" para sempre. */
 function RespostaDoCliente({ c }: { c: any }) {
-  const { R, toast, recarregar } = useApp() as any;
+  const { R, toast, recarregar, setModal } = useApp() as any;
   const r = ck(c).respostaCliente || {};
   const [indo, setIndo] = useState("");
   const abrir = async () => {
@@ -1497,6 +1497,9 @@ function RespostaDoCliente({ c }: { c: any }) {
     <div style={{ margin: "4px 0 8px", fontStyle: "italic" }}>“{String(r.texto || "").slice(0, 400)}”</div>
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
       <button className="btn sm" disabled={!!indo} onClick={abrir}>{indo === "abrir" ? "Abrindo…" : "💬 Abrir conversa na Kommo"}</button>
+      {/* depois de ler, o atendente resolve ali mesmo: oferece data nova ou manda para outra etapa */}
+      <button className="btn sm" onClick={() => setModal(<ModalWhats c={c} inicial="retorno" />)}>📅 Enviar nova data</button>
+      <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>↔ Mover de etapa</button>
       <button className="btn sm" disabled={!!indo} onClick={lido}>{indo === "lido" ? "…" : "✓ Já respondi"}</button>
     </div>
   </div>;
@@ -1534,7 +1537,9 @@ function AvisarSemRetorno() {
     <div style={{ margin: "0 0 8px" }}>
       O aviso abaixo (“liberamos a data reservada e vamos sugerir outra”) é um modelo novo: <b>só sai depois que a Meta aprovar</b>. Até lá o botão avisa o motivo e ninguém é marcado como avisado.
     </div>
-    <button className="btn sm" disabled={indo} onClick={enviar}>{indo ? "Avisando…" : "📨 Avisar os " + l.length + " clientes"}</button>
+    <button className="btn sm" disabled={indo} onClick={() => {
+      if (confirm("Vai enviar a mensagem no WhatsApp de " + l.length + " cliente(s) de verdade.\n\nIsso não tem como desfazer. Confirma?")) enviar();
+    }}>{indo ? "Avisando…" : "📨 Avisar os " + l.length + " clientes"}</button>
     {feito && <div className="hint" style={{ marginTop: 8 }}>
       {feito.ok ? feito.ok + " avisado(s). " : ""}
       {feito.erros.length ? "Não saiu para: " + feito.erros.join(" · ") : ""}
