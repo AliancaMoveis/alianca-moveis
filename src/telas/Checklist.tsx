@@ -329,7 +329,10 @@ function CartaoCk({ c, aba }: any) {
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
         {g === "agendado" && k.agendadoPara && <DataGrande v={k.agendadoPara} />}
         <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>{c.cliente}
+          <div style={{ fontWeight: 700, fontSize: 15, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {/* o nome abre a ficha do cliente, em qualquer etapa do checklist */}
+            <button type="button" onClick={() => abrirDetalhe(c.id)} title="Abrir a ficha do cliente"
+              style={{ background: "none", border: 0, padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 3 }}>{c.cliente}</button>
             <span style={{ fontWeight: 700, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: "var(--surface-2)", border: "1px solid var(--line)" }}>Venda {c.pedido}</span>
             {/* na busca o cliente vem de qualquer etapa: diz logo em qual ele está */}
             {aba === "busca" && <span style={{ fontWeight: 800, fontSize: 12.5, padding: "1px 8px", borderRadius: 6, background: cor, color: "#fff" }}>{ETAPA_BUSCA[g] || g}{nome && nome !== (ETAPA_BUSCA[g] || g) ? " · " + nome : ""}</span>}
