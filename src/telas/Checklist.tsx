@@ -1518,6 +1518,7 @@ function AvisarSemRetorno() {
   const [indo, setIndo] = useState(false);
   const [feito, setFeito] = useState<{ ok: number; erros: string[] } | null>(null);
   useEffect(() => { A.ckSemRetornoPendentes(2).then(x => setL(x || [])).catch(() => setL([])); }, []);
+  const atrasados = (l || []).filter((x: any) => !x.noAutomatico).length;
   if (!R.podeChecklist() || l === null || !l.length) return null;
   const enviar = async () => {
     setIndo(true); let ok = 0; const erros: string[] = [];
@@ -1532,10 +1533,10 @@ function AvisarSemRetorno() {
   return <div className="alerta" style={{ marginTop: 14, background: "var(--warn-bg)" }}>
     <b>{l.length} cliente(s) sem responder há mais de 2 dias.</b>
     <div style={{ margin: "4px 0 8px" }}>
-      Em cada cliente, <b>Enviar mensagem</b> já manda a <b>nova data</b> — esse modelo está aprovado e entrega mesmo fora das 24h. O cliente volta para o fluxo normal: confirma, pede outra data ou avisa que está em obra.
+      Em cada cliente, <b>Enviar nova data</b> manda o modelo aprovado e entrega mesmo fora das 24h. O cliente volta para o fluxo normal: confirma, pede outra data ou avisa que está em obra.
     </div>
     <div style={{ margin: "0 0 8px" }}>
-      O aviso abaixo (“liberamos a data reservada e vamos sugerir outra”) é um modelo novo: <b>só sai depois que a Meta aprovar</b>. Até lá o botão avisa o motivo e ninguém é marcado como avisado.
+      {atrasados > 0 && <>Destes, <b>{atrasados}</b> já estavam parados antes de hoje. O aviso automático <b>não pega esses</b> — ele vale só para quem vencer os 2 dias daqui para frente. Os antigos saem só por este botão, quando a loja quiser.</>}
     </div>
     <button className="btn sm" disabled={indo} onClick={() => {
       if (confirm("Vai enviar a mensagem no WhatsApp de " + l.length + " cliente(s) de verdade.\n\nIsso não tem como desfazer. Confirma?")) enviar();
