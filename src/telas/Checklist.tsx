@@ -517,8 +517,9 @@ function DadosCk({ c }: any) {
         {it("Status", p.situacao)}
         {it("Vendedor", p.vendedor)}
         {it("Medidor", p.medidor || (p.minhaVisita ? "" : "—"))}
-        {it("Cupom", p.cupom)}
-        {it("Negociado", p.valor)}
+        {/* vindo do Exact, o número que chega é o bruto da venda (= cupom), não o negociado */}
+        {it("Cupom", p.cupom || (p.exact ? p.valor : ""))}
+        {it(p.exact && !p.cupom ? "Bruto" : "Negociado", p.valor)}
         {it("Tel.", tels.join(" / "))}
         <SeloMedidaVenda peq pedido={c.pedido} />
       </div>
@@ -599,7 +600,18 @@ type Ocup = { proj: string; ini: number; fim: number; cliente: string; aguardand
 /** duração do atendimento deste cliente (minutos) — a agenda oficial tem atendimentos de 1h a 10h */
 export const durCk = (c: any, cfg?: any) => Number(ck(c).duracaoMin) || (cfg?.duracaoMin) || 120;
 /** valor do cupom da venda (planilha do checklist) */
-export const cupomCk = (c: any) => { const v = String(ck(c).planilha?.cupom ?? ck(c).cupom ?? "").replace(/[^\d,.-]/g, ""); const n = parseFloat(v.replace(/\./g, "").replace(",", ".")); return isNaN(n) ? 0 : n; };
+/** valor do cupom da venda. Na planilha vem na coluna "Valor dos Cupons". Pela integração do Exact
+ *  não vem com esse nome: o que o Exact chama de "total" é o VALOR BRUTO da venda, que é o próprio
+ *  cupom — conferido em 152 de 152 vendas contra o bruto do relatório. Ele é gravado em `valor`,
+ *  por isso aqui serve de cupom quando o registro veio do Exact e não há cupom próprio. */
+export const cupomCk = (c: any) => {
+  const p = ck(c).planilha || {};
+  const bruto = p.cupom ?? ck(c).cupom ?? (p.exact ? p.valor : undefined);
+  const v = String(bruto ?? "").replace(/[^\d,.-]/g, "");
+  // "38000" e "38.000,00" convivem na base: só trata o ponto como milhar quando há vírgula decimal
+  const n = parseFloat(v.includes(",") ? v.replace(/\./g, "").replace(",", ".") : v);
+  return isNaN(n) ? 0 : n;
+};
 /** duração sugerida pelo valor do cupom: até 20 mil 1h · até 50 mil 2h · até 100 mil 4h · até 150 mil 5h · até 200 mil 6h · acima 8h */
 export const durPorValor = (v: number) => v <= 0 ? 0 : v <= 20000 ? 60 : v <= 50000 ? 120 : v <= 100000 ? 240 : v <= 150000 ? 300 : v <= 200000 ? 360 : 480;
 export const durSugeridaCk = (c: any) => { const cupom = cupomCk(c); return { cupom, min: durPorValor(cupom) || 120 }; };
