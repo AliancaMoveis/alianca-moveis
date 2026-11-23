@@ -835,7 +835,7 @@ function Miniatura({ a, c, onClick, style }: { a: any; c: any; onClick?: () => v
     {tag && <span className="pjtag" style={a.tipo === "pdf" ? { background: "#c23b3b" } : a.tipo === "promob" ? { background: "#284b8f" } : undefined}>{tag}</span>}
   </div>;
 }
-function Arquivo({ a, c, onVer }: { a: any; c: any; onVer: () => void }) {
+export function Arquivo({ a, c, onVer }: { a: any; c: any; onVer: () => void }) {
   const acao = a.tipo === "img" ? "ampliar" : a.tipo === "pdf" ? "abrir" : "⬇ baixar";
   const baixar = async () => { try { const u = await urlDe(a, c); const l = document.createElement("a"); l.href = u; l.download = a.nome; l.target = "_blank"; l.click(); } catch (e: any) { alert(e.message); } };
   return <div className="pjf" onClick={() => (a.tipo === "img" || a.tipo === "pdf" ? onVer() : baixar())} title={a.nome}>
@@ -843,7 +843,7 @@ function Arquivo({ a, c, onVer }: { a: any; c: any; onVer: () => void }) {
     <div className="pjfi"><span className="a">{acao}</span><b>{a.nome}</b><span>{[a.em ? ddmm(String(a.em)) : "", tam(a.tamanho), a.categoria && a.categoria !== "MEASURING" ? a.categoria.toLowerCase().replace("_", " ") : ""].filter(Boolean).join(" · ") || " "}</span></div>
   </div>;
 }
-function Visualizar({ a, c, lista, onFechar }: { a: any; c: any; lista?: any[]; onFechar: () => void }) {
+export function Visualizar({ a, c, lista, onFechar }: { a: any; c: any; lista?: any[]; onFechar: () => void }) {
   const [u, setU] = useState(""); const [erro, setErro] = useState("");
   // imagem: abre no visualizador de tela cheia, passando para o lado entre as fotos do mesmo grupo
   const fotos = (lista && lista.length ? lista : [a]).filter((x: any) => x.tipo === "img");

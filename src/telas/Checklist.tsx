@@ -9,7 +9,7 @@ import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, san
 import { Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
 import { SeloMedidaVenda } from "./Medidas";
-import { abrirTermo } from "./ProjetistaChecklist";
+import { Arquivo, Visualizar, abrirTermo } from "./ProjetistaChecklist";
 
 export const ETAPA_CK: Record<string, [string, string]> = {
   a_contatar: ["A contatar", "var(--primary)"], aguardando: ["Mensagem enviada · aguardando resposta", "var(--warn)"], outra_data: ["🔄 Pediu nova data", "var(--st-respondida)"],
@@ -380,6 +380,8 @@ function CartaoCk({ c, aba }: any) {
           {c.motivo && c.motivo !== "Venda encaminhada para o checklist" && <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 4 }}>“{String(c.motivo).slice(0, 160)}”</div>}
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: 420, justifyContent: "flex-end" }}>
+          {/* ver o projeto antes de marcar: sem isso a pessoa agenda sem saber o que o cliente comprou */}
+          <button className="btn sm" title="Imagens e arquivos da venda (orçamento, projeto, medição)" onClick={() => setModal(<ModalArquivosVenda c={c} />)}>🖼 Imagens da venda</button>
           {g === "agendado" && !k.confirmacao && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} inicial="confirmacao" />)}>📨 Enviar confirmação</button>}
           {g === "agendado" && k.confirmacao !== "confirmada" && <button className="btn sm" style={{ background: "var(--ok, #0f8a5f)", color: "#fff", borderColor: "var(--ok, #0f8a5f)", fontWeight: 700 }} onClick={() => executar(() => A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }), "Presença confirmada")}>✅ Confirmou presença</button>}
           {g === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Não pode vir</button>}
@@ -503,6 +505,43 @@ function DataGrande({ v }: { v: string }) {
 }
 
 // dados do cliente vindos da planilha (ou da inclusão manual)
+/** 🖼 Arquivos e imagens da venda, para quem agenda ver o projeto ANTES de marcar o horário.
+ *  Mesma busca que o projetista já usa (arquivos da venda no Exact + o que está no 360): sem isso
+ *  a pessoa marca no escuro, sem saber o tamanho do projeto nem o que falar com o cliente. */
+function ModalArquivosVenda({ c }: any) {
+  const { setModal } = useApp() as any;
+  const [arqs, setArqs] = useState<any>(null);
+  const [erro, setErro] = useState("");
+  useEffect(() => {
+    let vivo = true;
+    A.ckArquivos(c.id)
+      .then((d: any) => { if (vivo) setArqs(d); })
+      .catch((e: any) => { if (vivo) setErro(e.message || "Não consegui buscar os arquivos"); });
+    return () => { vivo = false; };
+  }, [c.id]);
+  // ao fechar o visualizador, volta para esta lista em vez de fechar tudo
+  const ver = (a: any, lista: any[]) => setModal(<Visualizar a={a} c={c} lista={lista} onFechar={() => setModal(<ModalArquivosVenda c={c} />)} />);
+  const bloco = (titulo: string, l: any[]) => l && l.length
+    ? <div style={{ marginBottom: 12 }}>
+        <div className="pp-tit">{titulo} ({l.length})</div>
+        <div className="files">{l.map((a: any, i: number) => <Arquivo key={String(a.fonte) + a.id + i} a={a} c={c} onVer={() => ver(a, l)} />)}</div>
+      </div>
+    : null;
+  const vazio = arqs && !arqs.venda.length && !arqs.medicao.length && !arqs.m360.length && !arqs.ck.length;
+  return <Modal titulo={"🖼 Arquivos da venda " + c.pedido + " · " + c.cliente} onFechar={() => setModal(null)}>
+    {erro ? <div className="hint">{erro}</div>
+      : !arqs ? <div className="hint">Buscando no Exact…</div>
+      : vazio ? <div className="hint">Nenhum arquivo encontrado para esta venda.</div>
+      : <>
+          {bloco("📄 Da venda (orçamento, projeto, imagens)", arqs.venda)}
+          {bloco("📐 Da medição", arqs.medicao)}
+          {bloco("📐 Medidas feitas no 360", arqs.m360)}
+          {bloco("📎 Do checklist", arqs.ck)}
+          {arqs.espelhoEm && <div className="hint">O Exact não respondeu agora — esta é a cópia guardada no 360 em {fmtDateTime(arqs.espelhoEm)}.</div>}
+        </>}
+  </Modal>;
+}
+
 function DadosCk({ c }: any) {
   const { R, st } = useApp() as any;
   const k = ck(c), p = k.planilha || {};
