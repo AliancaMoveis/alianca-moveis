@@ -8,6 +8,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const API = "https://alianca-api.ddnsking.com/api";
+/** o evento já não existe no Exact: 404, ou o 500 do Prisma dizendo que o registro sumiu.
+ *  Nos dois casos o horário já está livre — é sucesso, não erro, e o 360 precisa dar baixa.
+ *  Sem isso a reserva ficava órfã para sempre no 360 (13 casos em 23/11/2026). */
+const sumiu = (m: string) => /→ 404/.test(m) || /Record to delete does not exist/i.test(m);
 const json = (d: unknown, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { "Content-Type": "application/json" } });
 
 async function exact(token: string, metodo: string, rota: string, corpo?: unknown) {
@@ -244,7 +248,7 @@ Deno.serve(async (req: Request) => {
         }
         for (const e of ex) if (!(rp?.desejadas || []).some((d: any) => d.dia === e.dia)) {
           try { await exact(token, "DELETE", `/event/${e.id}`); feitos.push({ op: "excluir", id: e.id, start: e.start }); }
-          catch (x: any) { const m = String(x.message || x); if (/→ 404/.test(m)) feitos.push({ op: "excluir", id: e.id, start: e.start }); else erros.push(m); }
+          catch (x: any) { const m = String(x.message || x); if (sumiu(m)) feitos.push({ op: "excluir", id: e.id, start: e.start }); else erros.push(m); }
         }
         await sb.rpc("exact_reserva_ok", { p_id: b.id, p: { feitos, erros } });
         saida.reserva = { feitos, erros };
@@ -274,7 +278,8 @@ Deno.serve(async (req: Request) => {
           } catch (x: any) { erros.push(String(x.message || x)); }
         }
         for (const e of ex) if (!de.some(d => d.dia === e.dia)) {
-          try { await exact(token, "DELETE", `/event/${e.id}`); feitos.push({ op: "excluir", id: e.id }); } catch (x: any) { erros.push(String(x.message || x)); }
+          try { await exact(token, "DELETE", `/event/${e.id}`); feitos.push({ op: "excluir", id: e.id }); }
+          catch (x: any) { const m = String(x.message || x); if (sumiu(m)) feitos.push({ op: "excluir", id: e.id }); else erros.push(m); }
         }
         let eventos: any[] | null = null;
         if (feitos.length) { try { eventos = await lerEventos(); } catch { eventos = null; } }
