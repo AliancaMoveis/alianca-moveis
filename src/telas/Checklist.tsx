@@ -351,7 +351,7 @@ function CartaoCk({ c, aba }: any) {
           {g === "agendado" && !k.confirmacao && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} inicial="confirmacao" />)}>📨 Enviar confirmação</button>}
           {g === "agendado" && k.confirmacao !== "confirmada" && <button className="btn sm" style={{ background: "var(--ok, #0f8a5f)", color: "#fff", borderColor: "var(--ok, #0f8a5f)", fontWeight: 700 }} onClick={() => executar(() => A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }), "Presença confirmada")}>✅ Confirmou presença</button>}
           {g === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Não pode vir</button>}
-          {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>📨 Enviar mensagem</button>}
+          {c.status !== "concluida" && !(g === "agendado" && !k.confirmacao) && <button className="btn sm wa" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} />)}>{e === "sem_retorno" ? "📅 Enviar nova data" : "📨 Enviar mensagem"}</button>}
           {e === "aguardando" && k.proposta && c.status !== "concluida" && <button className="btn sm" style={venc ? { background: "#9a3412", color: "#fff", borderColor: "#9a3412", fontWeight: 700 } : undefined} onClick={liberar} title="Libera o horário oferecido e o cliente volta para A agendar">🔓 Liberar agenda</button>}
           {e === "aguardando" && k.proposta && c.status !== "concluida" && venc && <button className="btn sm" style={{ color: "#9a3412", borderColor: "#9a3412", fontWeight: 700 }} onClick={renovar} title={"Mantém o horário por mais " + segura + " dias"}>🔁 Renovar +{segura} dias</button>}
           {g === "agendar" && <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} inicial="espera" />)}>⏸ Aguardando</button>}
@@ -1475,7 +1475,7 @@ function AvisarSemRetorno() {
   const [l, setL] = useState<any[] | null>(null);
   const [indo, setIndo] = useState(false);
   const [feito, setFeito] = useState<{ ok: number; erros: string[] } | null>(null);
-  useEffect(() => { A.ckSemRetornoPendentes(3).then(x => setL(x || [])).catch(() => setL([])); }, []);
+  useEffect(() => { A.ckSemRetornoPendentes(2).then(x => setL(x || [])).catch(() => setL([])); }, []);
   if (!R.podeChecklist() || l === null || !l.length) return null;
   const enviar = async () => {
     setIndo(true); let ok = 0; const erros: string[] = [];
@@ -1488,7 +1488,7 @@ function AvisarSemRetorno() {
     else toast(erros[0] || "Nenhum aviso saiu");
   };
   return <div className="alerta" style={{ marginTop: 14, background: "var(--warn-bg)" }}>
-    <b>{l.length} cliente(s) sem responder há mais de 3 dias.</b>
+    <b>{l.length} cliente(s) sem responder há mais de 2 dias.</b>
     <div style={{ margin: "4px 0 8px" }}>
       Em cada cliente, <b>Enviar mensagem</b> já manda a <b>nova data</b> — esse modelo está aprovado e entrega mesmo fora das 24h. O cliente volta para o fluxo normal: confirma, pede outra data ou avisa que está em obra.
     </div>
