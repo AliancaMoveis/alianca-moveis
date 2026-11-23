@@ -204,6 +204,78 @@ function FilaCallcenter() {
   );
 }
 
+/**
+ * Pedir nova medição de uma medida que JÁ FOI APROVADA.
+ *
+ * Quem usa: a Supervisão de Medidas. O projetista do checklist é quem costuma descobrir que
+ * falta alguma coisa, mas não é ele que reabre — reabrir muda a agenda de um medidor, e isso
+ * é de quem responde pela agenda.
+ *
+ * O que muda de fato: a medida sai de "aprovada" e volta para "aguardando medição" marcada
+ * como urgente, e o checklist daquela venda PERDE o selo de medida aprovada — porque, de
+ * fato, não há mais medida oficial de pé até alguém medir de novo.
+ */
+function ModalReabrir({ c, fechar }: { c: any; fechar: () => void }) {
+  const { R, recarregar } = useApp() as any;
+  const [motivo, setMotivo] = useState("");
+  const [medidor, setMedidor] = useState<string>(c.medidorId || "");
+  const [data, setData] = useState("");
+  const [indo, setIndo] = useState(false);
+  const [erro, setErro] = useState("");
+  const atual = R.nomeUser(c.medidorId || "") || "sem medidor";
+
+  const confirmar = async () => {
+    if (motivo.trim().length < 10) { setErro("Explique o que falta — quem for medir precisa saber o que conferir."); return; }
+    if (!medidor) { setErro("Escolha quem vai medir."); return; }
+    setIndo(true); setErro("");
+    try {
+      const r = await A.medidaReabrir(c.id, motivo.trim(), medidor, data || null);
+      await recarregar?.();
+      alert("Nova medição solicitada para " + (r?.medidor || "o medidor") + "."
+        + (r?.checklist ? "\n\nO checklist " + r.checklist + " ficou SEM medida aprovada até a nova medição." : ""));
+      fechar();
+    } catch (e: any) { setErro(e.message || "Não consegui reabrir"); }
+    finally { setIndo(false); }
+  };
+
+  return <Modal titulo="🔁 Pedir nova medição" onFechar={fechar}>
+    <div className="alerta" style={{ margin: "0 0 12px", background: "var(--warn-bg)", borderColor: "var(--warn)" }}>
+      <b>O que isso faz:</b> tira esta medida de <b>aprovada</b> e manda de volta para <b>aguardando medição</b>, marcada como
+      <b> urgente</b>. O medidor recebe aviso no celular com o que falta. E o checklist desta venda <b>deixa de ter medida
+      aprovada</b> até a nova medição ser aprovada — o projetista vai ver isso na ficha dele.
+      <div style={{ marginTop: 6 }}>Use quando o checklist achou que falta medida. Não serve para corrigir observação: para isso, edite a medida.</div>
+    </div>
+
+    <div className="field"><label>Cliente</label><div><b>{c.cliente}</b> · venda {c.pedido || "—"} · medida {c.id}</div></div>
+
+    <div className="field"><label>O que falta medir? <span className="req-star">*</span></label>
+      <textarea rows={3} value={motivo} onChange={e => setMotivo(e.target.value)}
+        placeholder="Ex.: falta a medida do nicho do micro-ondas e a altura do forro na cozinha" />
+      <div className="hint">É este texto que aparece para o medidor no aplicativo. Seja específico: ele vai medir só o que estiver escrito aqui.</div>
+    </div>
+
+    <div className="field"><label>Quem vai medir</label>
+      <select value={medidor} onChange={e => setMedidor(e.target.value)}>
+        {c.medidorId && <option value={c.medidorId}>{atual} (quem mediu antes)</option>}
+        {R.medidores().filter((u: any) => u.id !== c.medidorId).map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+      </select>
+      <div className="hint">Por padrão volta para quem mediu — ele conhece a casa. Troque se fizer sentido.</div>
+    </div>
+
+    <div className="field"><label>Data da nova medição (se já combinou)</label>
+      <input type="datetime-local" value={data} onChange={e => setData(e.target.value)} />
+      <div className="hint">Pode deixar em branco e combinar depois.</div>
+    </div>
+
+    {erro && <div className="alerta" style={{ background: "var(--danger-bg)", borderColor: "var(--danger)" }}>⚠️ {erro}</div>}
+
+    <div className="row" style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+      <button className="btn primary" disabled={indo} onClick={confirmar}>{indo ? "Enviando…" : "🔁 Pedir nova medição"}</button>
+      <button className="btn ghost" disabled={indo} onClick={fechar}>Cancelar</button>
+    </div>
+  </Modal>;
+}
+
 // ---------- listas da Supervisão de Medidas e "Medidas para fazer" (consultor / medidor) ----------
 const ABAS_MD: Record<string, [string, string]> = {
   pendentes: ["Pendentes para medir", "Medidas a programar: direcione para um medidor (Cesar, Gilberto) ou para um consultor externo, com data e endereço."],
@@ -298,6 +370,7 @@ function ListaMedidas({ aba }: { aba: string }) {
   // colunas da lista: o cabeçalho e as linhas saem desta mesma lista, para nunca desalinhar
   const souEu = aba === "minhas" || aba === "minhasfeitas";
   const podeSup = R.ehSupMedidas();
+  const [reabrir, setReabrir] = useState<any>(null);
   const rotData = aba === "agendadas" ? "Data da medição" : aba === "aprovados" ? "Aprovada em" : aba === "analise" || aba === "minhasfeitas" ? "Mediu em" : "Entrada";
   const cols: { k: string; t: string; w: string; dir?: boolean; cel: (c: any) => any }[] = [
     { k: "cli", t: "Cliente", w: "minmax(0,1.6fr)", cel: (c: any) => { const m = (c.tratativa && c.tratativa.medida) || {};
@@ -347,13 +420,19 @@ function ListaMedidas({ aba }: { aba: string }) {
       {aba === "minhas" && <span className="pill" style={{ background: "var(--st-concluida)", color: "#fff" }}>R$ 40</span>}
       {(aba === "analise" || aba === "no360") && podeSup && <button className="btn primary sm" onClick={e => { e.stopPropagation(); aprovar(c); }}>✅ Aprovar</button>}
       {(aba === "pendentes" || aba === "agendadas") && podeSup && c.medidorId &&
-        <button className="btn sm" title="Avisa no celular de quem vai medir que a medida está atrasada" onClick={e => { e.stopPropagation(); cobrar(c); }}>⏰ Cobrar</button>}</> },
+        <button className="btn sm" title="Avisa no celular de quem vai medir que a medida está atrasada" onClick={e => { e.stopPropagation(); cobrar(c); }}>⏰ Cobrar</button>}
+      {/* o checklist percebe que falta medida, mas quem reabre é quem responde pela agenda do medidor */}
+      {aba === "aprovados" && podeSup &&
+        <button className="btn sm" title="Pedir nova medição desta mesma venda: volta para aguardando medição, urgente" onClick={e => { e.stopPropagation(); setReabrir(c); }}>🔁 Nova medição</button>}
+      {R.etapaMedida(c) === "agendada" && (c.tratativa?.medida?.reabertura || c.urgente) &&
+        <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 700 }} title={c.tratativa?.medida?.refazer || ""}>⚠️ MEDIR URGENTE</span>}</> },
   ];
   const gt = cols.map(x => x.w).join(" ");
 
   return (
     <section className="view active">
       <div className="view-head"><div><h2>📐 {t}</h2><p>{d}</p></div></div>
+      {reabrir && <ModalReabrir c={reabrir} fechar={() => setReabrir(null)} />}
       <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
         <span className="pill">{lista.length} cliente(s)</span>
         {aba === "aprovados" && <div className="chips" style={{ margin: 0 }}>{([["", "Todas"], ["no360", "📎 Medidas no 360"], ["visita", "📷 Visita do consultor"], ["exact", "📷 Fotos no Exact"], ["fora", "🗂 Sem foto em lugar nenhum"]] as [any, string][]).map(([k, l]) =>

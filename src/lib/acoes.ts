@@ -45,6 +45,12 @@ export const A = {
   medidaRealizada: (id: string, medidas: string, obs: string) => rpc("medida_realizada", { p_id: id, p_medidas: medidas || "", p_obs: obs || "" }),
   medidaContato: (id: string, data: string | null, obs = "") => rpc("medida_contato", { p_id: id, p_data: data ? (data.length === 10 ? data + "T09:00" : data) : null, p_obs: obs }),
   medidaRefazer: (id: string, motivo: string) => rpc("medida_refazer", { p_id: id, p_motivo: motivo }),
+  /**
+   * Reabre uma medida JÁ APROVADA (só Supervisão de Medidas / Gestão).
+   * Volta para aguardando medição, marcada urgente, e o checklist perde o "medida aprovada".
+   */
+  medidaReabrir: (id: string, motivo: string, medidor?: string | null, data?: string | null) =>
+    rpc<any>("medida_reabrir", { p_id: id, p_motivo: motivo, p_medidor: medidor || null, p_data: data || null }),
   /** devolve a medida com a lista do que está faltando (vira "Confirmação de medida" para quem mede) */
   medidaDevolver: (id: string, itens: string[], motivo: string) => rpc("medida_devolver", { p_id: id, p_itens: itens, p_motivo: motivo }),
   medidaFaltandoMarcar: (id: string, idx: number, ok: boolean) => rpc("medida_faltando_marcar", { p_id: id, p_idx: idx, p_ok: ok }),
