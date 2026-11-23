@@ -403,6 +403,9 @@ export const A = {
    * dispara o modelo. A resposta do cliente — qualquer uma — abre a janela de 24h, e o
    * webhook manda contrato e imagens sozinho.
    */
+  /** telefone novo descoberto no atendimento: fica salvo no cliente e passa a aparecer na lista */
+  ckTelefoneIncluir: (id: string, telefone: string, por = "") =>
+    rpc<{ ok: true; ja: boolean; telefone: string }>("ck_telefone_incluir", { p_chamado: id, p_telefone: telefone, p_por: por }),
   /** marca que alguém leu (e vai responder) a mensagem que o cliente mandou */
   ckRespostaLida: (id: string, por = "") => rpc("ck_resposta_lida", { p_chamado: id, p_por: por }),
   /** abre a conversa do cliente na Kommo, para responder na mão */

@@ -27,6 +27,13 @@ export const ck = (c: any) => (c.tratativa && c.tratativa.checklist) || {};
 export const etapaCk = (c: any) => ck(c).etapa || (c.status === "concluida" ? "realizado" : "a_contatar");
 /** O cliente escreveu alguma coisa que o robô não soube classificar (não foi "confirmo", "outra data"
  *  nem "em obra") e ninguém leu ainda. Ele NÃO é "sem resposta": respondeu, e precisa de gente. */
+/** Quantas vezes já mandamos e o cliente não respondeu. O contador é o mesmo que a liberação
+ *  automática de reserva incrementa a cada ciclo. */
+export const tentativasCk = (c: any) => Number(ck(c).semRetorno?.tentativas || 0);
+/** 3 ciclos sem resposta: parar de insistir no WhatsApp e ligar. */
+export const precisaLigar = (c: any) =>
+  c.status !== "concluida" && etapaCk(c) === "sem_retorno" && tentativasCk(c) >= 3 && !respondeuManual(c);
+
 export const respondeuManual = (c: any) => {
   if (c.status === "concluida") return false;
   const k = ck(c), r = k.respostaCliente;
@@ -146,7 +153,8 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       a_contatar: ["Ainda não contatados", c => G("agendar")(c) && etapaCk(c) === "a_contatar"],
       msg: ["Mensagem enviada · aguardando resposta", c => G("agendar")(c) && etapaCk(c) === "aguardando"],
       respondeu: ["💬 Respondeu · ler e responder", c => G("agendar")(c) && respondeuManual(c)],
-      sem_retorno: ["📨 Enviada · sem resposta", c => G("agendar")(c) && etapaCk(c) === "sem_retorno" && !respondeuManual(c)],
+      ligar: ["📞 Ligar · 3 tentativas sem resposta", c => G("agendar")(c) && precisaLigar(c)],
+      sem_retorno: ["📨 Enviada · sem resposta", c => G("agendar")(c) && etapaCk(c) === "sem_retorno" && !respondeuManual(c) && !precisaLigar(c)],
       nova_data: ["🔄 Pediram nova data", c => G("agendar")(c) && etapaCk(c) === "outra_data"],
       vencido: ["⚠️ Prazo vencido", c => G("agendar")(c) && reservaVencida(c, cfgAgenda(st))],
       todos: ["Todos a agendar", G("agendar")],
@@ -340,6 +348,9 @@ function CartaoCk({ c, aba }: any) {
               : k.exactPend && Date.now() - +new Date(k.exactPend) > 120e3 ? <span className="pill" style={{ background: "var(--warn)", color: "#fff", fontWeight: 800 }} title="A alteração ainda não foi confirmada pelo Exact">⏳ enviando ao Exact</span> : null}
             {Array.isArray(k.outrasVendas) && k.outrasVendas.length > 0 && <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 800 }} title="A planilha trouxe outra venda deste mesmo cliente — não foi criado outro checklist. Se for duplicidade, nada a fazer; se for venda nova, faça o checklist junto.">👥 outra venda: {k.outrasVendas.join(", ")}</span>}
             {e === "aguardando" && <span>oferecido {fmtDateTime(k.proposta)} · {k.contatos || 1}º contato · há {diasDesde(k.ultimoContato)}d</span>}
+            {precisaLigar(c) && <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 800 }}
+              title={"Já mandamos " + tentativasCk(c) + " vezes pelo WhatsApp e o cliente não respondeu nenhuma. Ligue para ele."}>
+              📞 LIGAR · {tentativasCk(c)} tentativas sem resposta</span>}
             {respondeuManual(c) && <RespostaDoCliente c={c} />}
             {/* já foi abordado e não respondeu: mostra o que foi oferecido para ninguém repetir a mesma data */}
             {e === "sem_retorno" && <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 700 }}
@@ -1541,7 +1552,8 @@ function AvisarSemRetorno() {
       Em cada cliente, <b>Enviar nova data</b> manda o modelo aprovado e entrega mesmo fora das 24h. O cliente volta para o fluxo normal: confirma, pede outra data ou avisa que está em obra.
     </div>
     <div style={{ margin: "0 0 8px" }}>
-      {atrasados > 0 && <>Destes, <b>{atrasados}</b> já estavam parados antes de hoje. O aviso automático <b>não pega esses</b> — ele vale só para quem vencer os 2 dias daqui para frente. Os antigos saem só por este botão, quando a loja quiser.</>}
+      {atrasados > 0 && <>Destes, <b>{atrasados}</b> já estavam parados antes de hoje. O aviso automático <b>não pega esses</b> — ele vale só para quem vencer os 2 dias daqui para frente. Os antigos saem só por este botão, quando a loja quiser.<br /></>}
+      O aviso vai até a <b>3ª tentativa</b>. Depois disso o cliente sai desta lista e aparece em <b>📞 Ligar</b> — quem ignorou três mensagens não resolve com uma quarta.
     </div>
     <button className="btn sm" disabled={indo} onClick={() => {
       if (confirm("Vai enviar a mensagem no WhatsApp de " + l.length + " cliente(s) de verdade.\n\nIsso não tem como desfazer. Confirma?")) enviar();
@@ -1564,7 +1576,9 @@ export function ModalWhats({ c, inicial }: any) {
   const primeira = e === "agendado" || k.proposta ? null : sugestoes(st, c.id, 1, undefined, Number(k.duracaoMin) || durSugeridaCk(c).min)[0];
   const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : k.proposta) || (primeira && primeira.slot) || proximoDiaUtil()).slice(0, 16));
   const [proj, setProj] = useState<string>((e === "agendado" ? k.projetista : k.propostaProjetista) || (primeira && primeira.livres[0]) || "");
-  const tels = [c.telefone, k.telefone2].filter((t: string) => t && t.replace(/\D/g, "").length >= 10);
+  const telsSalvos: string[] = Array.isArray(k.telefones) ? k.telefones : [];
+  const [novos, setNovos] = useState<string[]>([]);
+  const tels = [c.telefone, k.telefone2, ...telsSalvos, ...novos].filter((t: string) => t && t.replace(/\D/g, "").length >= 10);
   const [tel, setTel] = useState(tels[0] || "");
   const rem = primeiroNome(R.me()?.nome || "");
   const [txt, setTxt] = useState(""); const [editado, setEditado] = useState(false);
@@ -1622,7 +1636,22 @@ export function ModalWhats({ c, inicial }: any) {
     <Modal titulo={"WhatsApp · " + c.cliente + (cidadeCk(c) ? " · 📍 " + cidadeCk(c) : "")} onFechar={fechar}>
       <div className="grid">
         <div className="field"><label>Mensagem</label><select value={tipo} onChange={ev => { setTipo(ev.target.value); setEditado(false); }}>{Object.entries(MODELOS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
-        <div className="field"><label>Telefone</label>{tels.length > 1 ? <select value={tel} onChange={ev => setTel(ev.target.value)}>{tels.map((t: string) => <option key={t} value={t}>{t}</option>)}</select> : <input value={tel} onChange={ev => setTel(ev.target.value)} placeholder="DDD + número" />}</div>
+        <div className="field"><label>Telefone</label>
+          {tels.length > 1 ? <select value={tel} onChange={ev => setTel(ev.target.value)}>{tels.map((t: string) => <option key={t} value={t}>{t}</option>)}</select>
+            : <input value={tel} onChange={ev => setTel(ev.target.value)} placeholder="DDD + número" />}
+          {/* telefone novo que o cliente passou no atendimento: fica salvo na ficha, não só nesta mensagem */}
+          <button type="button" className="lk" style={{ textTransform: "none", letterSpacing: 0, marginTop: 4 }} onClick={async () => {
+            const n = prompt("Telefone novo do cliente (DDD + número):", "");
+            if (!n) return;
+            try {
+              const r = await A.ckTelefoneIncluir(c.id, n, R.me()?.nome || "");
+              setNovos(l => l.includes(r.telefone) ? l : [...l, r.telefone]);
+              setTel(r.telefone);
+              toast(r.ja ? "Esse telefone já estava na ficha — selecionado" : "Telefone salvo na ficha do cliente");
+              recarregar?.();
+            } catch (e: any) { toast(e.message); }
+          }}>＋ incluir telefone</button>
+        </div>
         <div className="field"><label>{tipo === "confirmacao" ? "Data agendada" : "Data e horário oferecidos"} <span className="req-star">*</span></label><input type="datetime-local" value={data} disabled={tipo === "cobranca"} onChange={ev => { setData(ev.target.value); setEditado(false); }} /></div>
         {comData && <div className="field"><label>Projetista que vai atender <span className="req-star">*</span> <span className="hint">(não vai na mensagem)</span></label><select value={proj} onChange={ev => setProj(ev.target.value)}><option value="">Selecione…</option>{projs.map(n => <option key={n} value={n}>{n}</option>)}</select></div>}
         {comData && <div className="field"><label>Tempo que trava a agenda <span className="hint">(não vai na mensagem)</span></label>
