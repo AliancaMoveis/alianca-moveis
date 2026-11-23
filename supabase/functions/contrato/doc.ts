@@ -231,4 +231,3 @@ ${tit ? bloco(tit.assinatura, tit.selfie, "Assinatura do titular da compra — "
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${incompleto ? "INCOMPLETO_" : ""}Contrato_${esc(d.cliente.split(" ")[0])}_${esc(d.venda)}</title><style>${CSS}</style></head><body><img class="marca" src="${LOGO}" alt="">
 ${pTermo}${pGeral}${pAmb}${pAss}</body></html>`;
 }
-
