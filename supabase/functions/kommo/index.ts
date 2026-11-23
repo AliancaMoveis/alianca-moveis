@@ -12,6 +12,7 @@
 //   enviar       — grava os campos no lead e dispara o bot que manda a mensagem
 //   mensagem     — manda um texto livre (só vale dentro das 24h da Meta)
 //   liberacao    — pergunta por modelo aprovado se pode mandar os documentos (vale fora das 24h)
+//   agenda_liberada — avisa que a data reservada foi liberada por falta de retorno (modelo aprovado, fora das 24h)
 
 const FUNIL_PRE = 13398119;         // VENDAS E AGENDAMENTO
 const FUNIL_CK = 13550523;          // Pós Venda Proj. / Checklist
@@ -352,6 +353,44 @@ Deno.serve(async (req) => {
       });
       const ok = run.st >= 200 && run.st < 300;
       await registrarEvento({ chamado_id: it.id, tipo: ok ? "enviado" : "falhou", modelo: "liberacao",
+        por: String(b.por || ""), erro: ok ? null : `a Kommo recusou o disparo (${run.st})` });
+      return json(ok ? { ok: true, lead_id: g.lead_id } : { ok: false, erro: `a Kommo recusou o disparo (${run.st})` });
+    }
+
+    // agenda_liberada: o cliente não respondeu a mensagem do agendamento. Avisa que a data
+    // reservada está sendo liberada e que vamos sugerir outra. Sai FORA das 24h, então precisa
+    // de modelo aprovado pela Meta — o mesmo caminho da liberação de documentos.
+    if (acao === "agenda_liberada") {
+      const it = { id: b.chamado, cliente: b.cliente, telefone: b.telefone, pedido: b.pedido };
+      if (!it.id) return json({ erro: "faltou o chamado" }, 400);
+
+      let bot = 0;
+      try { bot = Number(await segredo("kommo_bot_agenda_liberada")); } catch { /* ainda não configurado */ }
+      if (!bot) return json({ ok: false, erro: "o modelo de liberação da agenda ainda está em análise na Meta — assim que ela aprovar, o aviso passa a sair sozinho" }, 200);
+
+      const g = await garantirLead(it);
+      if (!g.ok) {
+        await registrarEvento({ chamado_id: it.id, tipo: "falhou", modelo: "agenda_liberada", por: String(b.por || ""), erro: g.motivo });
+        return json({ ok: false, erro: g.motivo }, 200);
+      }
+      const up = await kommo(`/api/v4/leads/${g.lead_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ custom_fields_values: [
+          { field_id: CF_PEDIDO, values: [{ value: String(b.pedido || "") }] },
+          { field_id: CF_ATENDENTE, values: [{ value: String(b.por || "") }] },
+          { field_id: CF_CHECKLIST, values: [{ value: String(it.id) }] },
+        ] }),
+      });
+      if (up.st !== 200) {
+        const erro = `não consegui gravar os dados no lead (${up.st})`;
+        await registrarEvento({ chamado_id: it.id, tipo: "falhou", modelo: "agenda_liberada", por: String(b.por || ""), erro });
+        return json({ ok: false, erro }, 200);
+      }
+      const run = await kommo(`/api/v4/bots/${bot}/run`, {
+        method: "POST", body: JSON.stringify({ entity_id: g.lead_id, entity_type: "leads" }),
+      });
+      const ok = run.st >= 200 && run.st < 300;
+      await registrarEvento({ chamado_id: it.id, tipo: ok ? "enviado" : "falhou", modelo: "agenda_liberada",
         por: String(b.por || ""), erro: ok ? null : `a Kommo recusou o disparo (${run.st})` });
       return json(ok ? { ok: true, lead_id: g.lead_id } : { ok: false, erro: `a Kommo recusou o disparo (${run.st})` });
     }

@@ -403,6 +403,17 @@ export const A = {
    * dispara o modelo. A resposta do cliente — qualquer uma — abre a janela de 24h, e o
    * webhook manda contrato e imagens sozinho.
    */
+  /** quem recebeu a mensagem do agendamento e não respondeu há mais de N dias */
+  ckSemRetornoPendentes: (dias = 3) => rpc<any[]>("ck_sem_retorno_pendentes", { p_dias: dias }),
+  /** avisa o cliente que a data reservada foi liberada e que vamos sugerir outra.
+   *  Só registra no 360 se a Kommo confirmar o envio: senão o cliente sumiria da lista sem ter sido avisado. */
+  ckSemRetornoAvisar: async (c: { id: string; cliente: string; telefone: string; pedido?: string | null }, por = "") => {
+    const { data, error } = await sb.functions.invoke("kommo", { body: { acao: "agenda_liberada", chamado: c.id, cliente: c.cliente, telefone: c.telefone, pedido: c.pedido || null, por } });
+    if (error) throw new Error(error.message || "Não consegui falar com a Kommo");
+    if (!data?.ok) throw new Error(data?.erro || "A Kommo não confirmou o envio");
+    await rpc("ck_sem_retorno_avisado", { p_chamado: c.id, p_por: por });
+    return data as { ok: true; lead_id: number };
+  },
   ckLiberacaoPedir: async (c: { id: string; cliente: string; telefone: string; pedido?: string | null }) => {
     const docs = await rpc<any[]>("ck_doc_liberacao_pedir", { p_chamado: c.id });
     try {

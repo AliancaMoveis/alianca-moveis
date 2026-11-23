@@ -282,6 +282,7 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
           {cs.map((c: any) => <CartaoCk key={c.id} c={c} aba={aba} />)}
         </div>) :
       lista.length ? lista.map((c: any) => <CartaoCk key={c.id} c={c} aba={aba} />) : <div className="empty">{todos.length ? "Nenhum cliente neste filtro." : "Nenhum cliente ainda — importe a planilha do sistema interno."}</div>}
+      {f === "sem_retorno" && <AvisarSemRetorno />}
       {R.ehGestao() && lista.length > 1 && <div style={{ marginTop: 12 }}><button className="btn danger sm" onClick={() => setModal(<ConfirmaExcluir ids={lista.map((c: any) => c.id)} rotulo={`os ${lista.length} clientes deste filtro`} forte />)}>🗑 Excluir os {lista.length} clientes deste filtro</button></div>}
       </>}
     </section>
@@ -1462,11 +1463,54 @@ function ModalHorarios() {
 
 const proximoDiaUtil = () => { const d = new Date(); d.setDate(d.getDate() + 1); while ([0, 6].includes(d.getDay())) d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T10:00`; };
 
+/** Aviso de liberação da agenda para quem não respondeu.
+ *  O cliente recebeu a mensagem do agendamento e ficou em silêncio. Passados 3 dias a loja avisa
+ *  que a data reservada foi liberada e que vai sugerir outra — e aí, pela própria aba, manda a
+ *  NOVA DATA (modelo já aprovado), que devolve o cliente ao fluxo inteiro: aceita, pede outra
+ *  data ou diz que está em obra. O aviso sai fora das 24h da Meta, então depende de modelo
+ *  aprovado: enquanto a Meta não liberar, a Kommo recusa e o 360 mostra o motivo, sem marcar
+ *  ninguém como avisado. */
+function AvisarSemRetorno() {
+  const { R, toast, recarregar } = useApp() as any;
+  const [l, setL] = useState<any[] | null>(null);
+  const [indo, setIndo] = useState(false);
+  const [feito, setFeito] = useState<{ ok: number; erros: string[] } | null>(null);
+  useEffect(() => { A.ckSemRetornoPendentes(3).then(x => setL(x || [])).catch(() => setL([])); }, []);
+  if (!R.podeChecklist() || l === null || !l.length) return null;
+  const enviar = async () => {
+    setIndo(true); let ok = 0; const erros: string[] = [];
+    for (const c of l) {
+      try { await A.ckSemRetornoAvisar({ id: c.id, cliente: c.cliente, telefone: c.telefone, pedido: c.pedido }, R.me()?.nome || ""); ok++; }
+      catch (e: any) { erros.push(c.cliente + ": " + (e.message || "não enviou")); if (erros.length >= 3) break; }
+    }
+    setIndo(false); setFeito({ ok, erros });
+    if (ok) { toast(ok + " cliente(s) avisado(s)"); recarregar?.(); }
+    else toast(erros[0] || "Nenhum aviso saiu");
+  };
+  return <div className="alerta" style={{ marginTop: 14, background: "var(--warn-bg)" }}>
+    <b>{l.length} cliente(s) sem responder há mais de 3 dias.</b>
+    <div style={{ margin: "4px 0 8px" }}>
+      Em cada cliente, <b>Enviar mensagem</b> já manda a <b>nova data</b> — esse modelo está aprovado e entrega mesmo fora das 24h. O cliente volta para o fluxo normal: confirma, pede outra data ou avisa que está em obra.
+    </div>
+    <div style={{ margin: "0 0 8px" }}>
+      O aviso abaixo (“liberamos a data reservada e vamos sugerir outra”) é um modelo novo: <b>só sai depois que a Meta aprovar</b>. Até lá o botão avisa o motivo e ninguém é marcado como avisado.
+    </div>
+    <button className="btn sm" disabled={indo} onClick={enviar}>{indo ? "Avisando…" : "📨 Avisar os " + l.length + " clientes"}</button>
+    {feito && <div className="hint" style={{ marginTop: 8 }}>
+      {feito.ok ? feito.ok + " avisado(s). " : ""}
+      {feito.erros.length ? "Não saiu para: " + feito.erros.join(" · ") : ""}
+    </div>}
+  </div>;
+}
+
 export function ModalWhats({ c, inicial }: any) {
   const { R, st, setModal, toast, recarregar } = useApp() as any;
   const k = ck(c), e = etapaCk(c);
   const projs: string[] = cfgAgenda(st).projetistas;
-  const [tipo, setTipo] = useState(inicial || (e === "agendado" ? "confirmacao" : e === "aguardando" || e === "sem_resposta" ? "cobranca" : ["em_obras", "outra_data", "espera"].includes(e) ? "retorno" : "primeiro"));
+  // "sem_retorno" (mensagem enviada e o cliente não respondeu) pede NOVA DATA, não primeiro contato:
+  // o cliente já foi contatado, e a nova data é modelo aprovado pela Meta — entrega fora das 24h.
+  // Antes a condição testava "sem_resposta", que não é o nome da etapa: caía em "primeiro".
+  const [tipo, setTipo] = useState(inicial || (e === "agendado" ? "confirmacao" : e === "sem_retorno" ? "retorno" : e === "aguardando" ? "cobranca" : ["em_obras", "outra_data", "espera"].includes(e) ? "retorno" : "primeiro"));
   const primeira = e === "agendado" || k.proposta ? null : sugestoes(st, c.id, 1, undefined, Number(k.duracaoMin) || durSugeridaCk(c).min)[0];
   const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : k.proposta) || (primeira && primeira.slot) || proximoDiaUtil()).slice(0, 16));
   const [proj, setProj] = useState<string>((e === "agendado" ? k.projetista : k.propostaProjetista) || (primeira && primeira.livres[0]) || "");
