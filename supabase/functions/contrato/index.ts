@@ -182,9 +182,22 @@ Deno.serve(async (req: Request) => {
       // O contrato só fica pronto (e só vai para o checklist e para o Exact) com as duas assinaturas.
       if (k.titular_nome) {
         const tok = hex(18);
+        // gera JÁ o documento com a assinatura do representante, marcado INCOMPLETO em todas as
+        // páginas. Antes não existia documento nenhum até o titular assinar, e a loja ficava sem
+        // nada do que foi conferido — às vezes precisando liberar o cliente (caso do Elton, 23/11).
+        let pathParcial: string | null = null;
+        try {
+          const htmlParcial = contratoHtml(dados, resp, { nome, cpf, quando: agoraBR(), ip, ua, hash: k.doc_hash || "",
+            assinatura: b.assinatura, selfie: b.selfie, projetista: k.criado_por_nome || dados.projetista, titular: null, parcial: true }, await logoEmbutido());
+          pathParcial = base + "-PARCIAL.html";
+          await adm.storage.from("checklist").upload(pathParcial, new Blob([htmlParcial], { type: "text/html" }), { contentType: "text/html; charset=utf-8", upsert: true });
+        } catch (x: any) {
+          pathParcial = null;
+          await adm.from("exact_log").insert({ tipo: "contrato", chamado_id: k.chamado_id, ok: false, detalhe: "parcial: " + String(x?.message || x).slice(0, 300) });
+        }
         await adm.from("ck_contratos").update({ status: "aguardando_titular", nome_assinante: nome, cpf,
           assinatura_path: base + "-assinatura.png", selfie_path: base + "-selfie.jpg",
-          assinado_em: new Date().toISOString(), ip, user_agent: ua,
+          assinado_em: new Date().toISOString(), ip, user_agent: ua, parcial_html_path: pathParcial,
           resposta: { ...resp, alteracoes, quandoBR: agoraBR() },
           titular_token: tok, expira_em: new Date(Date.now() + 3 * 86400e3).toISOString() }).eq("id", k.id);
         if (k.chamado_id !== TESTE) await adm.from("historico").insert({ chamado_id: k.chamado_id, quem_nome: nome,
@@ -264,13 +277,39 @@ Deno.serve(async (req: Request) => {
     if (b.acao === "status") {
       const { data: k } = await adm.from("ck_contratos").select("*").eq("chamado_id", ctx.id).neq("status", "cancelado").order("criado_em", { ascending: false }).limit(1).maybeSingle();
       if (!k) return json({ ok: true, contrato: null });
-      let url = "", selfie = "";
+      let url = "", selfie = "", urlParcial = "";
       if (k.status === "assinado") {
         const a = await adm.storage.from("checklist").createSignedUrl(k.assinado_html_path, 3600); url = a.data?.signedUrl || "";
         const s = await adm.storage.from("checklist").createSignedUrl(k.selfie_path, 3600); selfie = s.data?.signedUrl || "";
       }
+      // aguardando o titular: entrega o documento parcial (marcado INCOMPLETO) e a selfie de quem
+      // já assinou, para a loja ver e guardar o que foi conferido enquanto a 2ª assinatura não vem
+      if (k.status === "aguardando_titular") {
+        // quem assinou antes desta funcionalidade não tem o documento parcial: monta agora, uma vez,
+        // a partir do que já está guardado (dados da venda, resposta, assinatura e selfie)
+        if (!k.parcial_html_path && String(k.html_path || "").endsWith(".json") && k.assinatura_path && k.selfie_path) {
+          try {
+            const { data: f } = await adm.storage.from("checklist").download(k.html_path);
+            if (f) {
+              const dd: ContratoDados = JSON.parse(await f.text());
+              const assDU = await comoDataUrl(adm, k.assinatura_path, "image/png");
+              const selDU = await comoDataUrl(adm, k.selfie_path, "image/jpeg");
+              const htmlP = contratoHtml(dd, k.resposta || null, { nome: k.nome_assinante || "", cpf: k.cpf || "",
+                quando: k.resposta?.quandoBR || new Date(k.assinado_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+                ip: k.ip || "", ua: k.user_agent || "", hash: k.doc_hash || "", assinatura: assDU, selfie: selDU,
+                projetista: k.criado_por_nome, titular: null, parcial: true }, await logoEmbutido());
+              const pp = `${k.chamado_id}/contrato-${k.id}-PARCIAL.html`;
+              await adm.storage.from("checklist").upload(pp, new Blob([htmlP], { type: "text/html" }), { contentType: "text/html; charset=utf-8", upsert: true });
+              await adm.from("ck_contratos").update({ parcial_html_path: pp }).eq("id", k.id);
+              k.parcial_html_path = pp;
+            }
+          } catch { /* sem o parcial a tela segue mostrando o resto */ }
+        }
+        if (k.parcial_html_path) { const a = await adm.storage.from("checklist").createSignedUrl(k.parcial_html_path, 3600); urlParcial = a.data?.signedUrl || ""; }
+        if (k.selfie_path) { const s = await adm.storage.from("checklist").createSignedUrl(k.selfie_path, 3600); selfie = s.data?.signedUrl || ""; }
+      }
       return json({ ok: true, contrato: { token: k.token, status: new Date(k.expira_em) < new Date() && k.status === "pendente" ? "expirado" : k.status, criado: k.criado_em, expira: k.expira_em,
-        nome: k.nome_assinante, assinado_em: k.assinado_em, exact: k.exact, url, selfie, alteracoes: k.resposta?.alteracoes || [],
+        nome: k.nome_assinante, assinado_em: k.assinado_em, exact: k.exact, url, urlParcial, selfie, alteracoes: k.resposta?.alteracoes || [],
         // titular da compra: quem é, se já assinou e o link para ele assinar
         titular: k.titular_nome || "", tokenTitular: k.titular_token || "", titularAssinadoEm: k.titular_assinado_em || null,
         representante: k.repr_nome || "", reprTelefone: k.repr_telefone || "", telefoneTitular: k.titular_telefone || "" } });

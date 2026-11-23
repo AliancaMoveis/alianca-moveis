@@ -232,7 +232,9 @@ export default function ProjetistaChecklist() {
   const carregar = () => {
     if (!proj) return;
     setErro("");
-    return A.ckProjetistaAgenda(proj, somaDias(hj, -45), somaDias(hj, 90))   // mesma janela da Agenda geral, senão o cliente clicado lá pode não ser achado aqui.then(l => setLista(l || [])).catch((e: any) => { setErro(e.message); setLista([]); });
+    // mesma janela da Agenda geral, senão o cliente clicado lá pode não ser achado aqui
+    return A.ckProjetistaAgenda(proj, somaDias(hj, -45), somaDias(hj, 90))
+      .then(l => setLista(l || [])).catch((e: any) => { setErro(e.message); setLista([]); });
   };
   useEffect(() => { setLista(null); carregar(); }, [proj]);
   useEffect(() => {
@@ -1504,7 +1506,18 @@ function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs
         <div className="hint" style={{ margin: "8px 0", wordBreak: "break-all" }}>{linkTitular}</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(linkTitular); toast("Link do titular copiado"); } catch { prompt("Copie o link:", linkTitular); } }}>📋 Copiar link do titular</button>
+          {/* o documento com a assinatura do representante, marcado INCOMPLETO em todas as páginas:
+              a loja precisa ver e guardar o que já foi conferido enquanto a 2ª assinatura não vem */}
+          {ct.urlParcial && <button className="btn sm" onClick={async () => {
+            const w = window.open("", "_blank"); if (!w) { toast("Libere as janelas (pop-up) do navegador"); return; }
+            w.document.write("<p style='font:16px system-ui;padding:30px'>Abrindo…</p>");
+            try { const h = await (await fetch(ct.urlParcial)).text(); w.document.open(); w.document.write(h); w.document.close(); }
+            catch { w.close(); toast("Não foi possível abrir o documento"); }
+          }}>📄 Ver o que já foi assinado (incompleto)</button>}
         </div>
+        {ct.urlParcial && <div className="hint" style={{ marginTop: 6 }}>
+          Esse documento sai marcado <b>INCOMPLETO</b> em todas as páginas e <b>não vale como contrato assinado</b> — serve para a loja ver e guardar o que {ct.nome} conferiu. O contrato válido só existe com as duas assinaturas.
+        </div>}
         <EnviarLinkWhats c={c} telPadrao={c.telefone || c.telefone2 || ""} assunto="contrato-titular" toast={toast}
           texto={`Olá, ${primeiroNome(cap(c.cliente))}! Aqui está o link para você assinar o contrato do checklist do seu projeto da Aliança Móveis.\n\n${linkTitular}`} />
         <div className="hint" style={{ marginTop: 8 }}>⏳ Aguardando a assinatura do titular… · link vale até {fmtDateTime(ct.expira)}</div>

@@ -22,7 +22,10 @@ export type ContratoDados = {
 export type RespostaContrato = { nome: string; cpf: string; termos: TermoAmb[]; materiaisOk: boolean[]; geral: boolean[]; imagensOk: boolean[] };
 export type AssinaturaContrato = { nome: string; cpf: string; quando: string; ip: string; ua: string; hash: string; assinatura: string; selfie: string; projetista?: string;
   /** quando quem conferiu e assinou NÃO é o titular da compra: a assinatura do titular, que autoriza a representação */
-  titular?: { nome: string; cpf: string; quando: string; ip: string; ua: string; assinatura: string; selfie: string } | null };
+  titular?: { nome: string; cpf: string; quando: string; ip: string; ua: string; assinatura: string; selfie: string } | null;
+  /** o representante já assinou e o titular AINDA NÃO: documento incompleto, marcado como tal em
+   *  todas as páginas. Serve para a loja ver e guardar o que já foi conferido, nunca como contrato pronto. */
+  parcial?: boolean };
 
 export const LINHAS_TERMO: [keyof TermoAmb, string][] = [["estrutura", "Estrutura"], ["portas", "Portas"], ["envoltorio", "Envoltório"], ["paineis", "Painéis"]];
 export const AMORT: [keyof TermoAmb, string][] = [["corredicas", "Corrediças"], ["dobradicas", "Dobradiças"]];
@@ -153,7 +156,8 @@ export function contratoHtml(d: ContratoDados, r?: RespostaContrato | null, a?: 
   const nome = a?.nome || r?.nome || "";
   const cpf = a?.cpf || r?.cpf || "";
   const cab = (t: string) => `<div class="hd"><div class="l"><img src="${LOGO}" alt="Aliança"><div><b>ALIANÇA MÓVEIS</b><div>Checklist do projeto final · ${esc(d.cliente.toUpperCase())}</div></div></div><div class="r"><b>${t}</b><br>Venda <b>${esc(d.venda)}</b></div></div>`;
-  const rodape = `<div class="foot"><span>ALIANÇA 360 · venda ${esc(d.venda)}${assinado ? " · documento " + esc(a!.hash.slice(0, 16)) : ""}</span><span>${assinado ? "Assinado eletronicamente — ver última página" : "Rubrica: ________"}</span></div>`;
+  const incompleto = !!(a && a.parcial);
+  const rodape = `<div class="foot"><span>ALIANÇA 360 · venda ${esc(d.venda)}${assinado ? " · documento " + esc(a!.hash.slice(0, 16)) : ""}</span><span>${incompleto ? "INCOMPLETO — falta a assinatura do titular" : assinado ? "Assinado eletronicamente — ver última página" : "Rubrica: ________"}</span></div>`;
 
   // 1) termo de ciência do material
   const termos = d.ambientes.map((amb, i) => {
@@ -196,8 +200,12 @@ ${assinado ? `<div class="ok">☑ O cliente visualizou as imagens do projeto des
     const alts = d.ambientes.flatMap((amb, i) => diferencasTermo(amb.termo, r!.termos[i]).map(x => `Ambiente ${i + 1} · ${amb.nome} — ${x}`));
     const tit = a!.titular || null;
     const repr = !!d.representante;
-    pAss = `<div class="pg quebra">${cab("ASSINATURA ELETRÔNICA")}<h2>CONTRATO ASSINADO ELETRONICAMENTE</h2>
-<p>${repr
+    const parcial = !!a!.parcial;
+    pAss = `<div class="pg quebra">${cab(parcial ? "ASSINATURA INCOMPLETA" : "ASSINATURA ELETRÔNICA")}<h2>${parcial ? "DOCUMENTO INCOMPLETO — FALTA A ASSINATURA DO TITULAR" : "CONTRATO ASSINADO ELETRONICAMENTE"}</h2>
+${parcial ? `<div class="info" style="border:2px solid #9a3412;background:#fff4ed;color:#7c2d12;font-weight:700"><p>Este documento NÃO está concluído. ${esc(a!.nome)} conferiu e assinou como representante, mas <b>${esc(d.cliente)}</b>, titular da compra, ainda não assinou. Até a segunda assinatura, este documento serve apenas como registro do que já foi conferido — não vale como contrato assinado e não libera a produção.</p></div>` : ""}
+<p>${parcial
+      ? `O projeto foi conferido no checklist por <b>${esc(a!.nome)}</b>, que assinou na qualidade de <b>representante</b> de <b>${esc(d.cliente)}</b>, titular da compra. O representante conferiu e confirmou os materiais de cada ambiente, marcou "Sim" em cada item do termo geral e visualizou as imagens do projeto. <b>A assinatura do titular da compra ainda está pendente.</b>`
+      : repr
       ? `O projeto foi conferido no checklist por <b>${esc(a!.nome)}</b>, que assinou na qualidade de <b>representante</b> de <b>${esc(d.cliente)}</b>, titular da compra. O representante conferiu e confirmou os materiais de cada ambiente, marcou "Sim" em cada item do termo geral e visualizou as imagens do projeto. O titular da compra autorizou a representação e assinou este mesmo documento. As duas assinaturas foram feitas eletronicamente, cada uma confirmada com uma foto (selfie) tirada no momento da assinatura.`
       : `O(a) cliente abaixo leu este documento, conferiu e confirmou os materiais de cada ambiente, marcou "Sim" em cada item do termo geral, visualizou as imagens do projeto e assinou eletronicamente, confirmando com uma foto (selfie) tirada no momento da assinatura.`}</p>
 <table><tr><td style="width:34%">Cliente / venda</td><td><b>${esc(d.cliente)}</b> · venda ${esc(d.venda)}</td></tr>
@@ -218,9 +226,9 @@ ${repr ? `<tr><td>Titular da compra</td><td><b>${esc(tit ? tit.nome : d.cliente)
 ${alts.length ? `<h3>Alterações feitas pelo cliente no termo do material</h3><div class="info">${alts.map(x => `<p>• ${esc(x)}</p>`).join("")}</div>` : `<p class="rub">O material foi definido pelo projetista e confirmado pelo cliente, sem alterações.</p>`}
 ${bloco(a!.assinatura, a!.selfie, repr ? "Assinatura do representante — " + a!.nome : "Assinatura do cliente — " + a!.nome)}
 ${tit ? bloco(tit.assinatura, tit.selfie, "Assinatura do titular da compra — " + tit.nome) : ""}
-<div class="foot"><span>ALIANÇA 360 · venda ${esc(d.venda)}</span><span>${repr ? "Duas assinaturas eletrônicas com selfie" : "Assinatura eletrônica com selfie"}</span></div></div>`;
+<div class="foot"><span>ALIANÇA 360 · venda ${esc(d.venda)}</span><span>${parcial ? "INCOMPLETO — falta a assinatura do titular" : repr ? "Duas assinaturas eletrônicas com selfie" : "Assinatura eletrônica com selfie"}</span></div></div>`;
   }
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contrato_${esc(d.cliente.split(" ")[0])}_${esc(d.venda)}</title><style>${CSS}</style></head><body><img class="marca" src="${LOGO}" alt="">
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${incompleto ? "INCOMPLETO_" : ""}Contrato_${esc(d.cliente.split(" ")[0])}_${esc(d.venda)}</title><style>${CSS}</style></head><body><img class="marca" src="${LOGO}" alt="">
 ${pTermo}${pGeral}${pAmb}${pAss}</body></html>`;
 }
 
