@@ -3,7 +3,7 @@ import { SelRespMkt } from "../comp/RespMkt";
 import { BC, docValido, enderecoTxt, fmtTel } from "../lib/baseClientes";
 import { useApp } from "../estado";
 import { A, ACEITA_ANEXO, enviarArquivos, enviarFotos, prepararArquivos } from "../lib/acoes";
-import { PV_SITUACAO, PV_TIPOS, fmtDateTime, inicial, mesmaPessoa, soDigitos, telefonesInvalidos } from "../lib/regras";
+import { PV_SITUACAO, PV_TIPOS, fmtDate, fmtDateTime, inicial, mesmaPessoa, soDigitos, telefonesInvalidos } from "../lib/regras";
 import { EditFab } from "./Cadastros";
 import { BotaoWhats, CampoTelefones } from "../comp/Whats";
 import { cfgAgenda } from "./Checklist";
@@ -85,6 +85,11 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
   const ehFab = f.tipo === "prazo_fabrica";
   // CPF/CNPJ que está na base de clientes → preenche só o cadastro (nome, telefone, endereço). Vendedor e valores não entram.
   const [baseCli, setBaseCli] = useState<any>(null);
+  // vendas do cliente e a última montagem feita, pelo CPF: escolher a venda é melhor que digitar,
+  // e em retorno do montador já dá para vir marcado quem montou e quem agendou
+  const [cliVen, setCliVen] = useState<any[] | null>(null);
+  const [cliMont, setCliMont] = useState<any>(null);
+  const [verTodas, setVerTodas] = useState(false);
   const docDig = soDigitos(f.clienteDoc);
   useEffect(() => {
     setBaseCli(null);
@@ -96,6 +101,24 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
     }).catch(() => {});
     return () => { vivo = false; };
   }, [docDig, ehMkt]);
+  useEffect(() => {
+    setCliVen(null); setCliMont(null); setVerTodas(false);
+    if (ehMkt || !docValido(docDig)) return;
+    let vivo = true;
+    A.clienteParaSolicitacao(docDig).then((d: any) => {
+      if (!vivo || !d) return;
+      setCliVen(d.vendas || []); setCliMont(d.montagem || null);
+      if (d.nome) setF((x: any) => (x.cliente.trim() ? x : { ...x, cliente: d.nome }));
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, [docDig, ehMkt]);
+  // pré-preenche quem montou e quem agendou, sem passar por cima do que já foi escolhido
+  useEffect(() => {
+    if (f.tipo !== "retorno_montador" || !cliMont) return;
+    setF((x: any) => ({ ...x,
+      rmMontador: x.rmMontador || cliMont.montadorId || "",
+      rmAtendente: x.rmAtendente || cliMont.operadoraId || "" }));
+  }, [f.tipo, cliMont]);
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -208,6 +231,19 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
           {!ehMkt && baseCli && <div className="field full"><div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--st-concluida-bg, rgba(15,138,95,.08))", border: "1px solid var(--st-concluida, #0f8a5f)", fontSize: 13.5 }}>
             📇 Cliente na base{baseCli.compras ? <> — já comprou <b>{baseCli.compras} {baseCli.compras === 1 ? "vez" : "vezes"}</b>{baseCli.ultimaCompra ? <>, última compra em <b>{new Date(baseCli.ultimaCompra).toLocaleDateString("pt-BR")}</b></> : null}</> : null}. Nome, telefone e endereço preenchidos pelo cadastro — confira com o cliente.</div></div>}
           {!ehMkt && (baseCli || f.endereco) && <div className="field full"><label>Endereço do cliente</label><input name="endereco" value={f.endereco} onChange={set("endereco")} placeholder="Rua, número, bairro, cidade" /></div>}
+          {/* vendas do cliente: escolher é melhor que digitar o número de cabeça, e a data vem junto */}
+          {!ehMkt && cliVen && cliVen.length > 0 && <div className="field full">
+            <label>Vendas deste cliente <span className="hint">clique para usar como nº da venda</span></label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {(verTodas ? cliVen : cliVen.slice(0, 4)).map((v: any) => <button key={v.numero} type="button"
+                className={"chip" + (f.pedido === String(v.numero) ? " on" : "")}
+                title={[v.situacao, v.vendedor].filter(Boolean).join(" · ")}
+                onClick={() => setF((x: any) => ({ ...x, pedido: String(v.numero), dataVenda: v.data ? String(v.data).slice(0, 10) : x.dataVenda }))}>
+                <b>{v.numero}</b>{v.data ? " · " + fmtDate(String(v.data).slice(0, 10)) : ""}</button>)}
+              {!verTodas && cliVen.length > 4 && <button type="button" className="chip" onClick={() => setVerTodas(true)}>ver mais {cliVen.length - 4}</button>}
+              {verTodas && cliVen.length > 4 && <button type="button" className="chip" onClick={() => setVerTodas(false)}>mostrar menos</button>}
+            </div>
+          </div>}
           {!ehMkt && <div className="field" id="fieldPedido"><label>Nº venda {rapido ? <span className="hint">(opcional)</span> : <span className="req-star">*</span>}</label><input name="pedido" required={!rapido} placeholder="Ex.: 48213" value={f.pedido} onChange={set("pedido")} /></div>}
           {!ehMkt && <div className="field" id="fieldDataVenda"><label>Data da venda</label><input name="dataVenda" type="date" value={f.dataVenda} onChange={set("dataVenda")} /></div>}
           {ehFab && <div className="field" id="fieldPedidoFabrica"><label>Nº do nosso pedido na fábrica <span className="hint">(opcional)</span></label><input name="pedidoFabrica" placeholder="Se souber" value={f.pedidoFabrica} onChange={set("pedidoFabrica")} /></div>}
@@ -240,9 +276,11 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
           {f.tipo === "retorno_montador" && <div className="field"><label>Montador <span className="req-star">*</span></label>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}><select style={{ flex: 1 }} value={f.rmMontador} onChange={set("rmMontador")}><option value="">Selecione…</option>{(st.montadores || []).filter((m: any) => m.ativo).map((m: any) => <option key={m.id} value={m.id}>{m.nome}</option>)}<option value="saiu">🚪 Montador saiu (não está mais na loja)</option></select>
               {(() => { const m = (st.montadores || []).find((x: any) => x.id === f.rmMontador); return m ? <BotaoWhats tel={m.telefone} /> : null; })()}</div>
-            {f.rmMontador === "saiu" && <input style={{ marginTop: 6 }} value={f.rmSaiuNome} onChange={set("rmSaiuNome")} placeholder="Nome do montador que saiu (se souber)" />}</div>}
+            {f.rmMontador === "saiu" && <input style={{ marginTop: 6 }} value={f.rmSaiuNome} onChange={set("rmSaiuNome")} placeholder="Nome do montador que saiu (se souber)" />}
+            {cliMont && cliMont.montadorId && <span className="hint" style={{ marginTop: 4 }}>Veio da última montagem: {cliMont.os} de {fmtDate(cliMont.data)}. Troque se não for essa.</span>}</div>}
           {f.tipo === "retorno_montador" && <div className="field"><label>Atendente da montagem <span className="req-star">*</span> <span className="hint">(fica como pendência dela)</span></label>
-            <select value={f.rmAtendente} onChange={set("rmAtendente")}><option value="">Selecione…</option>{st.usuarios.filter((u: any) => u.ativo && (u.setores || []).includes("montagem")).map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select></div>}
+            <select value={f.rmAtendente} onChange={set("rmAtendente")}><option value="">Selecione…</option>{st.usuarios.filter((u: any) => u.ativo && (u.setores || []).includes("montagem")).map((u: any) => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>
+            {cliMont && cliMont.operadora && !cliMont.operadoraId && <span className="hint" style={{ marginTop: 4 }}>Quem agendou no Exact foi <b>{cliMont.operadora}</b>, que não está no setor de Montagem do 360 — escolha quem vai responder.</span>}</div>}
           {pvMont && <div className="field"><label>Montador <span className="req-star">*</span></label>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}><select style={{ flex: 1 }} value={f.pvMontador} onChange={set("pvMontador")}><option value="">Selecione…</option>{(st.montadores || []).filter((m: any) => m.ativo).map((m: any) => <option key={m.id} value={m.id}>{m.nome}{m.regiao ? " · " + m.regiao : ""}</option>)}</select>
               {(() => { const m = (st.montadores || []).find((x: any) => x.id === f.pvMontador); return m ? <BotaoWhats tel={m.telefone} /> : null; })()}</div>

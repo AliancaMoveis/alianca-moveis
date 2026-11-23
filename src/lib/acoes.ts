@@ -36,6 +36,9 @@ export const A = {
   montagemPessoa: (id: string, quem: "montador" | "operadora", valor = "") => rpc<any>("chamado_montagem_pessoa", { p_id: id, p_quem: quem, p_valor: valor }),
   // só ACRESCENTA telefone na ficha do cliente: nunca apaga nem troca o que já estava
   telefoneIncluir: (id: string, telefone: string) => rpc<any>("chamado_telefone_incluir", { p_id: id, p_telefone: telefone }),
+  // pelo CPF: nome, as vendas do cliente (da mais nova para a mais velha) e a última montagem feita,
+  // para a tela de nova solicitação oferecer a venda em vez de pedir para digitar
+  clienteParaSolicitacao: (doc: string) => rpc<any>("cliente_para_solicitacao", { p_doc: doc }),
   definirCanalAnuncio: (id: string, canal: string) => rpc("definir_canal_anuncio", { p_id: id, p_canal: canal }),
   salvarTratativa: (id: string, campos: any) => rpc("salvar_tratativa", { p_id: id, p_campos: campos }),
   alternarMarcacao: (id: string, campo: string) => rpc("alternar_marcacao", { p_id: id, p_campo: campo }),
