@@ -107,17 +107,21 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
     }
     return n;
   });
-  // trocou o CPF: limpa o que veio do CPF anterior antes de buscar o novo
+  // trocou o CPF: limpa o que veio do CPF anterior antes de buscar o novo.
+  // ATENÇÃO à ordem: o setF é enfileirado e só roda depois, então a comparação tem que ser contra
+  // uma CÓPIA tirada agora. Zerar o auto.current antes fazia a comparação cair no vazio e nada
+  // era limpo — era este o motivo de a tela continuar com o cliente anterior.
   useEffect(() => {
+    const anterior = auto.current;
+    auto.current = {};
     setF((x: any) => {
       const n: any = { ...x }; let mudou = false;
       for (const k of CAMPOS_DO_CPF) {
         const v = String(x[k] ?? "");
-        if (v && v === String(auto.current[k] ?? "")) { n[k] = ""; mudou = true; }
+        if (v && v === String(anterior[k] ?? "")) { n[k] = ""; mudou = true; }
       }
       return mudou ? n : x;
     });
-    auto.current = {};
   }, [docDig]);
   useEffect(() => {
     setBaseCli(null);
