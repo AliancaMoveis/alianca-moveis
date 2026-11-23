@@ -1152,6 +1152,18 @@ export function Sugestoes({ valor, onPick, excluirId, projetista, durMin }: { va
 // ---------- calendário: DIA por projetista (padrão do sistema interno), semana e mês ----------
 const H_FIM = 19, F_ALMOCO = 0.35;
 const almocoH = (h: number) => h >= 13 && h < 15;
+/** Clique no cliente dentro da agenda. O projetista do checklist vai direto para a tela de
+ *  trabalho dele (a área do projetista), e não para a ficha: ele não mexe na agenda, e o que
+ *  ele precisa ali é o checklist do cliente — inclusive de cliente de colega. O setor Checklist
+ *  e a Gestão continuam abrindo a ficha completa. */
+function useCliqueNaAgenda() {
+  const { abrirDetalhe, irPara, R } = useApp() as any;
+  return (id: string) => {
+    if (R.temAcesso("projetista_checklist") && !R.podeChecklist()) irPara("projetista_ck", { abrirCk: id });
+    else abrirDetalhe(id);
+  };
+}
+
 export function Calendario({ soLeitura, fonte }: { soLeitura?: boolean; fonte?: any[] } = {}) {
   const [modo, setModo] = useState<string>("dia");
   return (
@@ -1168,7 +1180,8 @@ export function Calendario({ soLeitura, fonte }: { soLeitura?: boolean; fonte?: 
 /** `soLeitura`: o projetista vê a agenda de todos para se achar, mas não arrasta nem estica nada —
  *  quem mexe na agenda é o setor Checklist. */
 function CalendarioDia({ soLeitura, fonte }: { soLeitura?: boolean; fonte?: any[] } = {}) {
-  const { st, R: Rg, abrirDetalhe } = useApp() as any;
+  const { st, R: Rg } = useApp() as any;
+  const abrirDaAgenda = useCliqueNaAgenda();
   // `fonte`: o projetista não lê os chamados de checklist direto (a permissão é do setor Checklist),
   // então a agenda dele vem pronta do servidor e entra por aqui, no mesmo desenho.
   const base: any[] = fonte || st.chamados;
@@ -1310,7 +1323,7 @@ function CalendarioDia({ soLeitura, fonte }: { soLeitura?: boolean; fonte?: any[
                 const compacto = alt < 84, mini = alt < 44;
                 const w = 100 / (x.lanes || 1), conf = k.confirmacao;
                 return (
-                  <div key={x.c.id + ":" + (x.extra ?? -1)} onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + (x.tipo === "ag" && (x.extra ?? -1) < 0 ? " — arraste para outro horário ou projetista" : (x.extra ?? -1) >= 0 ? " — dia adicional (altere na ficha do cliente)" : "")}
+                  <div key={x.c.id + ":" + (x.extra ?? -1)} onClick={() => abrirDaAgenda(x.c.id)} title={x.c.cliente + (x.tipo === "ag" && (x.extra ?? -1) < 0 ? " — arraste para outro horário ou projetista" : (x.extra ?? -1) >= 0 ? " — dia adicional (altere na ficha do cliente)" : "")}
                     draggable={!soLeitura && x.tipo === "ag" && (x.extra ?? -1) < 0} onDragStart={e => { e.dataTransfer.setData("text/plain", x.c.id); e.dataTransfer.effectAllowed = "move"; pega.current = e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top; }}
                     style={{ position: "absolute", zIndex: 2, top: top + 1, height: alt, left: `calc(${(x.lane || 0) * w}% + 3px)`, width: `calc(${w}% - 6px)`, overflow: "hidden", cursor: "pointer",
                       borderRadius: 4, padding: "4px 6px", fontSize: 11.5, lineHeight: 1.3, color: x.tipo === "ag" ? "#fff" : x.venc ? "#7c2d12" : "#6b4a00",
@@ -1335,7 +1348,8 @@ function CalendarioDia({ soLeitura, fonte }: { soLeitura?: boolean; fonte?: any[
 
 // ---------- calendário (semana / mês) ----------
 function CalendarioSemanaMes({ modo: modo0, onModo, fonte }: { modo: "semana" | "mes"; onModo: (m: string) => void; fonte?: any[] }) {
-  const { st, R: Rg, abrirDetalhe } = useApp() as any;
+  const { st, R: Rg } = useApp() as any;
+  const abrirDaAgenda = useCliqueNaAgenda();
   const cfg = cfgAgenda(st); _projs = cfg.projetistas;
   const modo = modo0; const setModo = (m: any) => onModo(m);
   const [ref, setRef] = useState(hoje());
@@ -1356,7 +1370,7 @@ function CalendarioSemanaMes({ modo: modo0, onModo, fonte }: { modo: "semana" | 
   const diasSemana = Array.from({ length: 7 }, (_, i) => { const d = new Date(seg); d.setDate(seg.getDate() + i); return d; }).filter(d => diaComAgenda(cfg, isoDia(d)) || (porDia[isoDia(d)] || []).length);
   const horas = Array.from(new Set([...cfg.horarios, ...diasSemana.flatMap(d => (porDia[isoDia(d)] || []).map((x: any) => x.quando.slice(11, 16)))])).sort();
   const Ev = ({ x, compacto }: any) => (
-    <div onClick={() => abrirDetalhe(x.c.id)} title={x.c.cliente + " · venda " + x.c.pedido + (x.proj ? " · " + x.proj : "")}
+    <div onClick={() => abrirDaAgenda(x.c.id)} title={x.c.cliente + " · venda " + x.c.pedido + (x.proj ? " · " + x.proj : "")}
       style={{ cursor: "pointer", borderRadius: 7, padding: compacto ? "2px 6px" : "5px 7px", marginBottom: 4, fontSize: compacto ? 11.5 : 12.5, lineHeight: 1.25,
         background: x.tipo === "ag" ? corProj(x.proj) : x.venc ? "repeating-linear-gradient(45deg,#ffedd5,#ffedd5 6px,#fed7aa 6px,#fed7aa 12px)" : "#ffe8a3", color: x.tipo === "ag" ? "#fff" : x.venc ? "#7c2d12" : "#6b4a00", border: x.tipo === "ag" ? "none" : x.venc ? "2px dashed #9a3412" : "1.5px dashed " + (x.proj ? corProj(x.proj) : "var(--warn)"),
         outline: x.enc ? "2.5px solid var(--danger)" : undefined, outlineOffset: x.enc ? 1 : undefined,

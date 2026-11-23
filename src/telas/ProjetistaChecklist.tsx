@@ -232,7 +232,7 @@ export default function ProjetistaChecklist() {
   const carregar = () => {
     if (!proj) return;
     setErro("");
-    return A.ckProjetistaAgenda(proj, somaDias(hj, -45), somaDias(hj, 60)).then(l => setLista(l || [])).catch((e: any) => { setErro(e.message); setLista([]); });
+    return A.ckProjetistaAgenda(proj, somaDias(hj, -45), somaDias(hj, 90))   // mesma janela da Agenda geral, senão o cliente clicado lá pode não ser achado aqui.then(l => setLista(l || [])).catch((e: any) => { setErro(e.message); setLista([]); });
   };
   useEffect(() => { setLista(null); carregar(); }, [proj]);
   useEffect(() => {
