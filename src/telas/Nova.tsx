@@ -105,7 +105,8 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
     setCliVen(null); setCliMont(null); setVerTodas(false);
     if (ehMkt || !docValido(docDig)) return;
     let vivo = true;
-    A.clienteParaSolicitacao(docDig).then((d: any) => {
+    // o nome digitado é reserva para achar a montagem quando a venda é mais antiga que o relatório
+    A.clienteParaSolicitacao(docDig, f.cliente || "").then((d: any) => {
       if (!vivo || !d) return;
       setCliVen(d.vendas || []); setCliMont(d.montagem || null);
       if (d.nome) setF((x: any) => (x.cliente.trim() ? x : { ...x, cliente: d.nome }));

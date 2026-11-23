@@ -61,5 +61,5 @@ end $$;
 revoke all on function public.cliente_para_solicitacao(text, text) from public, anon;
 grant execute on function public.cliente_para_solicitacao(text, text) to authenticated;
 
--- operadoraId em montagem_do_cliente, para a tela poder pré-selecionar a atendente da montagem:
--- ver a versão completa da função em 0252; aqui só o acréscimo dos dois ids resolvidos.
+-- montagem_do_cliente ganhou operadoraId junto do montadorId, para a tela poder pré-selecionar a
+-- atendente da montagem e não só mostrar o nome dela. Versão completa da função em 0252.
