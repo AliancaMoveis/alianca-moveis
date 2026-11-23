@@ -14,6 +14,7 @@ import { abrirTermo } from "./ProjetistaChecklist";
 export const ETAPA_CK: Record<string, [string, string]> = {
   a_contatar: ["A contatar", "var(--primary)"], aguardando: ["Mensagem enviada · aguardando resposta", "var(--warn)"], outra_data: ["🔄 Pediu nova data", "var(--st-respondida)"],
   sem_retorno: ["📨 Enviada · sem resposta", "var(--danger)"],
+  respondeu: ["💬 Respondeu · ler e responder", "var(--st-respondida)"],
   em_obras: ["Aguardando · obra", "var(--st-tratativa)"], sem_resposta: ["Aguardando · sem resposta", "var(--danger)"], espera: ["Aguardando", "var(--st-tratativa)"],
   agendado: ["Agendado", "var(--st-concluida)"], realizado: ["Checklist realizado", "var(--st-concluida)"], desistiu: ["Encerrado sem checklist", "var(--ink-faint)"],
 };
@@ -27,8 +28,12 @@ export const etapaCk = (c: any) => ck(c).etapa || (c.status === "concluida" ? "r
 /** O cliente escreveu alguma coisa que o robô não soube classificar (não foi "confirmo", "outra data"
  *  nem "em obra") e ninguém leu ainda. Ele NÃO é "sem resposta": respondeu, e precisa de gente. */
 export const respondeuManual = (c: any) => {
-  const r = ck(c).respostaCliente;
-  return !!r && r.tipo === "outro" && !r.lidoEm && c.status !== "concluida";
+  if (c.status === "concluida") return false;
+  const k = ck(c), r = k.respostaCliente;
+  // a etapa própria vale por si: a reserva venceu e o cliente tinha escrito, então ele não é
+  // "sem resposta". A marca da resposta cobre quem ainda nem chegou a vencer a reserva.
+  if (k.etapa === "respondeu" && !(r && r.lidoEm)) return true;
+  return !!r && r.tipo === "outro" && !r.lidoEm;
 };
 const hoje = () => hojeISO();
 /** cliente pediu encaixe: aceitou a data, mas quer ser antecipado se abrir vaga */
@@ -1500,7 +1505,7 @@ function RespostaDoCliente({ c }: { c: any }) {
       {/* depois de ler, o atendente resolve ali mesmo: oferece data nova ou manda para outra etapa */}
       <button className="btn sm" onClick={() => setModal(<ModalWhats c={c} inicial="retorno" />)}>📅 Enviar nova data</button>
       <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>↔ Mover de etapa</button>
-      <button className="btn sm" disabled={!!indo} onClick={lido}>{indo === "lido" ? "…" : "✓ Já respondi"}</button>
+      <button className="btn sm" disabled={!!indo} onClick={lido} title="Tira da lista e devolve o cliente para a fila de nova data">{indo === "lido" ? "…" : "✓ Já respondi"}</button>
     </div>
   </div>;
 }
