@@ -8,6 +8,8 @@ import { EditFab } from "./Cadastros";
 import { BotaoWhats, CampoTelefones } from "../comp/Whats";
 import { cfgAgenda } from "./Checklist";
 
+// campos que o CPF preenche: trocando de cliente, o que veio do CPF anterior sai (ver `auto` abaixo)
+const CAMPOS_DO_CPF = ["cliente", "telefone", "endereco", "pedido", "dataVenda", "rmMontador", "rmAtendente"];
 const VAZIO: any = { evVendedor: "", evComprado: "", evLancado: "", rmMontador: "", rmSaiuNome: "", rmAtendente: "", pvSituacao: "", pvProjetista: "", pvProjOutro: false, pvOrigem: "cliente", pvPeca: "", pvMontador: "", pvParado: false, pvTipo: "", tipo: "", cliente: "", clienteDoc: "", telefone: "", pedido: "", dataVenda: "", pedidoFabrica: "", produto: "", fabrica: "", prazoTatico: "", slaManual: "", motivo: "", email: "", consultorId: "", dataVisita: "", endereco: "" };
 type NovoAnexo = { tipo: "img" | "link" | "video" | "pdf"; nome: string; url: string; blob?: Blob };
 
@@ -91,13 +93,39 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
   const [cliMont, setCliMont] = useState<any>(null);
   const [verTodas, setVerTodas] = useState(false);
   const docDig = soDigitos(f.clienteDoc);
+  // Pesquisando um CPF atrás do outro, o que o CPF ANTERIOR preencheu tem que sair — senão fica o
+  // nome de um cliente com o CPF e a venda de outro. Mas o que a pessoa digitou à mão tem que
+  // ficar. Para saber a diferença, guardamos o que fomos nós que escrevemos em cada campo:
+  // valor igual ao que escrevemos = nosso, pode trocar; valor diferente = foi digitado, não se mexe.
+  const auto = useRef<Record<string, string>>({});
+  const preencher = (campos: Record<string, string>) => setF((x: any) => {
+    const n: any = { ...x };
+    for (const [k, val] of Object.entries(campos)) {
+      if (!val) continue;
+      const atual = String(x[k] ?? "").trim();
+      if (!atual || atual === String(auto.current[k] ?? "")) { n[k] = val; auto.current[k] = val; }
+    }
+    return n;
+  });
+  // trocou o CPF: limpa o que veio do CPF anterior antes de buscar o novo
+  useEffect(() => {
+    setF((x: any) => {
+      const n: any = { ...x }; let mudou = false;
+      for (const k of CAMPOS_DO_CPF) {
+        const v = String(x[k] ?? "");
+        if (v && v === String(auto.current[k] ?? "")) { n[k] = ""; mudou = true; }
+      }
+      return mudou ? n : x;
+    });
+    auto.current = {};
+  }, [docDig]);
   useEffect(() => {
     setBaseCli(null);
     if (ehMkt || !docValido(docDig)) return;
     let vivo = true;
     BC.porDoc(docDig).then(b => { if (!vivo || !b) return; setBaseCli(b);
       const tels = [b.telefone1, b.telefone2].filter(Boolean).map(fmtTel).join(" / ");
-      setF((x: any) => ({ ...x, cliente: x.cliente.trim() ? x.cliente : b.nome, telefone: String(x.telefone || "").replace(/\D/g, "").length >= 10 ? x.telefone : tels, endereco: x.endereco || enderecoTxt(b) }));
+      preencher({ cliente: b.nome, telefone: tels, endereco: enderecoTxt(b) });
     }).catch(() => {});
     return () => { vivo = false; };
   }, [docDig, ehMkt]);
@@ -109,16 +137,14 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
     A.clienteParaSolicitacao(docDig, f.cliente || "").then((d: any) => {
       if (!vivo || !d) return;
       setCliVen(d.vendas || []); setCliMont(d.montagem || null);
-      if (d.nome) setF((x: any) => (x.cliente.trim() ? x : { ...x, cliente: d.nome }));
+      if (d.nome) preencher({ cliente: d.nome });
     }).catch(() => {});
     return () => { vivo = false; };
   }, [docDig, ehMkt]);
   // pré-preenche quem montou e quem agendou, sem passar por cima do que já foi escolhido
   useEffect(() => {
     if (f.tipo !== "retorno_montador" || !cliMont) return;
-    setF((x: any) => ({ ...x,
-      rmMontador: x.rmMontador || cliMont.montadorId || "",
-      rmAtendente: x.rmAtendente || cliMont.operadoraId || "" }));
+    preencher({ rmMontador: cliMont.montadorId || "", rmAtendente: cliMont.operadoraId || "" });
   }, [f.tipo, cliMont]);
 
   async function enviar(e: React.FormEvent) {
@@ -239,7 +265,10 @@ export default function Nova({ escopo, pvFixo, pronto, prefill }: { escopo: "cc"
               {(verTodas ? cliVen : cliVen.slice(0, 4)).map((v: any) => <button key={v.numero} type="button"
                 className={"chip" + (f.pedido === String(v.numero) ? " on" : "")}
                 title={[v.situacao, v.vendedor].filter(Boolean).join(" · ")}
-                onClick={() => setF((x: any) => ({ ...x, pedido: String(v.numero), dataVenda: v.data ? String(v.data).slice(0, 10) : x.dataVenda }))}>
+                onClick={() => { const dt = v.data ? String(v.data).slice(0, 10) : "";
+                  // marca como vindo do CPF: trocando de cliente, esta venda sai junto
+                  auto.current.pedido = String(v.numero); if (dt) auto.current.dataVenda = dt;
+                  setF((x: any) => ({ ...x, pedido: String(v.numero), dataVenda: dt || x.dataVenda })); }}>
                 <b>{v.numero}</b>{v.data ? " · " + fmtDate(String(v.data).slice(0, 10)) : ""}</button>)}
               {!verTodas && cliVen.length > 4 && <button type="button" className="chip" onClick={() => setVerTodas(true)}>ver mais {cliVen.length - 4}</button>}
               {verTodas && cliVen.length > 4 && <button type="button" className="chip" onClick={() => setVerTodas(false)}>mostrar menos</button>}
