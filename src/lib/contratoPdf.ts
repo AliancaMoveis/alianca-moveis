@@ -31,28 +31,43 @@ function medir(src: string): Promise<{ w: number; h: number }> {
 export async function pdfDoContrato(html: string, aoAndar?: (feitas: number, total: number) => void): Promise<Blob> {
   const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import("jspdf"), import("html2canvas")]);
 
-  // desenha o contrato fora da tela, na largura real da folha, para o html2canvas medir certo
-  const caixa = document.createElement("div");
-  caixa.setAttribute("aria-hidden", "true");
-  caixa.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;background:#fff;z-index:-1";
-  const corpo = html.replace(/^[\s\S]*?<body[^>]*>/i, "").replace(/<\/body>[\s\S]*$/i, "");
-  const estilo = (html.match(/<style[^>]*>([\s\S]*?)<\/style>/i) || [])[1] || "";
-  caixa.innerHTML = `<style>${estilo}</style>${corpo}`;
-  document.body.appendChild(caixa);
+  // O contrato assinado é um documento HTML COMPLETO, com o <style> dele e regras que valem
+  // para o documento inteiro (a começar por `body{font:9.6pt/1.35 Arial}`, que define o tamanho
+  // de tudo). Antes o código arrancava o <body> e enfiava o miolo dentro da tela do 360: ali o
+  // CSS do contrato e o do aplicativo se misturavam, a folha era diagramada com uma largura e
+  // fotografada com outra, e o texto saía cortado no meio da palavra na direita (venda 1318542).
+  // Agora o documento é aberto num quadro próprio, isolado, exatamente como foi assinado.
+  const quadro = document.createElement("iframe");
+  quadro.setAttribute("aria-hidden", "true");
+  quadro.setAttribute("tabindex", "-1");
+  // 794px = 210mm a 96dpi: a folha A4 inteira, para a .pg (186mm) caber com folga e nao ser espremida
+  quadro.style.cssText = "position:fixed;left:0;top:0;width:794px;height:1123px;border:0;opacity:0;pointer-events:none;z-index:-1";
+  document.body.appendChild(quadro);
 
   try {
-    // aguarda as imagens embutidas desenharem, senão a folha sai em branco
-    const imgs = Array.from(caixa.querySelectorAll("img"));
-    await Promise.all(imgs.map(i => i.complete ? null : new Promise(r => { i.onload = i.onerror = () => r(null); })));
-    await new Promise(r => setTimeout(r, 120));
+    const d = quadro.contentDocument!;
+    d.open(); d.write(html); d.close();
+    await new Promise(r => { if (d.readyState === "complete") r(null); else quadro.onload = () => r(null); });
 
-    const folhas = Array.from(caixa.querySelectorAll<HTMLElement>(".pg"));
-    const alvos = folhas.length ? folhas : [caixa];
+    // aguarda as imagens embutidas desenharem, senão a folha sai em branco
+    const imgs = Array.from(d.querySelectorAll("img"));
+    await Promise.all(imgs.map(i => i.complete ? null : new Promise(r => { i.onload = i.onerror = () => r(null); })));
+    await new Promise(r => setTimeout(r, 150));
+
+    const folhas = Array.from(d.querySelectorAll<HTMLElement>(".pg"));
+    const alvos = folhas.length ? folhas : [d.body];
     const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
 
     for (let i = 0; i < alvos.length; i++) {
       aoAndar?.(i, alvos.length);
-      const cv = await html2canvas(alvos[i], { scale: 2, backgroundColor: "#fff", useCORS: true, logging: false });
+      // largura/altura explícitas: sem isso o html2canvas usa a janela do 360, que não é a
+      // janela onde a folha está desenhada, e corta a direita
+      const cv = await html2canvas(alvos[i], {
+        scale: 2, backgroundColor: "#fff", useCORS: true, logging: false,
+        width: alvos[i].scrollWidth, height: alvos[i].scrollHeight,
+        windowWidth: quadro.clientWidth, windowHeight: Math.max(quadro.clientHeight, alvos[i].scrollHeight),
+        scrollX: 0, scrollY: 0,
+      });
       const img = cv.toDataURL("image/jpeg", 0.86);
       if (i) doc.addPage();
       // A folha `.pg` tem 186mm — a A4 menos as margens do @page (10mm 12mm). Antes isso era
@@ -67,7 +82,7 @@ export async function pdfDoContrato(html: string, aoAndar?: (feitas: number, tot
     }
     aoAndar?.(alvos.length, alvos.length);
     return doc.output("blob");
-  } finally { caixa.remove(); }
+  } finally { quadro.remove(); }
 }
 
 /**
