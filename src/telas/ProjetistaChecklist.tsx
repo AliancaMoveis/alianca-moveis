@@ -13,6 +13,7 @@ import { lerListagemArquivo, type LinhaListagem, type Listagem } from "../lib/li
 import { ambienteDaListagem, financeiroHtml, impressaoHtml, termoHtml, FICHA_AMBIENTE, type AmbTermo, type DadosFinanceiro, type DadosTermo, type Eletro, type Mat } from "../lib/termoChecklist";
 import { FotoViewer } from "../comp/Fotos";
 import { Modal } from "../comp/Modal";
+import { BotaoConversa } from "../comp/Conversa";
 import { blobParaJpeg, pdfParaImagens, qrDataUrl } from "../lib/contratoUtil";
 import { contratoHtml, faltaNoTermo, termoVazio, type ContratoDados, type TermoAmb } from "../lib/contratoDoc";
 import TermoMaterial from "../comp/TermoMaterial";
@@ -416,7 +417,9 @@ function LinhaCliente({ e, hj, segura, todos, onAbrir }: { e: any; hj: string; s
     </div>
     <div className="pjacts">
       <button className="btn sm" style={{ background: "var(--primary,#284b8f)", color: "#fff", borderColor: "var(--primary,#284b8f)" }} onClick={onAbrir}>{e.reserva ? "👁 Ver" : feito(c) ? "📂 Abrir" : "📋 Fazer checklist"}</button>
-      {tel && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }} onClick={() => abrirWhats("https://wa.me/" + tel)}>💬 WhatsApp</button>}
+      {/* o projetista não tem o WhatsApp do checklist no aparelho dele: abrir wa.me mandaria
+          do número pessoal. Aqui ele conversa pelo número da loja, com a janela de 24h à vista. */}
+      {tel && <BotaoConversa c={c} rotulo="💬 WhatsApp" />}
     </div>
   </div>;
 }
@@ -433,6 +436,7 @@ function fmtDoc(x: any) {
 }
 function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; erro: string; c: any }) {
   const [verNeg, setVerNeg] = useState(false);
+  const [verTeto, setVerTeto] = useState(false);
   if (carregando) return <div className="body" style={{ gridTemplateColumns: "1fr" }}><div className="empty">Buscando os dados da venda no Exact…</div></div>;
   if (!d) return <div className="body" style={{ gridTemplateColumns: "1fr" }}><div className="note">Não foi possível trazer os dados da venda do Exact{erro ? " (" + erro + ")" : ""}. Confira se a venda {c.pedido} já tem ticket de checklist no Exact.</div></div>;
   const v = d.venda || {}, cl = d.cliente || {}, ps: any[] = d.produtos || [];
@@ -446,6 +450,12 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
   const neg = (n: number | null | undefined) => verNeg ? brl(n) : oculto;
   const Olho = () => <button type="button" onClick={() => setVerNeg(v => !v)} title={verNeg ? "Ocultar os valores negociados" : "Mostrar os valores negociados"}
     style={{ background: "none", border: 0, cursor: "pointer", fontSize: 13, padding: "0 4px", opacity: .85 }}>{verNeg ? "🙈" : "👁"}</button>;
+  // O teto também nasce oculto. A tela fica virada para o cliente durante o checklist, e um
+  // número grande em destaque é lido como "o valor que eu tenho para gastar" — não é: é o
+  // limite interno de conferência. O projetista abre quando precisa e fecha depois.
+  const OlhoTeto = () => <button type="button" onClick={() => setVerTeto(x => !x)}
+    title={verTeto ? "Ocultar o teto" : "Mostrar o teto (valor de conferência interna)"}
+    style={{ background: "none", border: 0, cursor: "pointer", fontSize: 15, padding: "0 6px", opacity: .9, color: "#fff", verticalAlign: "middle" }}>{verTeto ? "🙈" : "👁"}</button>;
   return <div className="body" style={{ gridTemplateColumns: "minmax(0,1fr) 320px" }}>
     <style>{`.pj .pjv-card{display:block;border:1px solid var(--pj-l);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--pj-bg,#fff)}.pj .pjv-card h4{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--pj-s)}
 .pj .pjv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 18px}@media (max-width:900px){.pj .pjv-grid{grid-template-columns:1fr}}
@@ -473,7 +483,8 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
       </div>
     </div>
     <div>
-      <div className="pjv-teto"><small>Teto para o projeto final (valor bruto)</small><b>{brl(teto)}</b>
+      <div className="pjv-teto"><small>Teto para o projeto final (valor bruto)</small>
+        <b>{verTeto ? brl(teto) : oculto}<OlhoTeto /></b>
         <div>{nCupom ? "Valor bruto dos cupons de planejado" + (nPronta ? " (sem a linha pronta)" : "") : "Valor bruto da venda"} — é o valor que se compara com o orçamento do Promob. O projeto final do checklist não pode passar disso; se o cliente pedir mudanças que aumentem o valor, a diferença precisa ser cobrada.</div>
         <div className="pjv-neg">Valor negociado: <b>{neg(nCupom ? tetoCupons : v.negociado)}</b> <Olho />{v.descontoPct != null ? " · desconto " + String(v.descontoPct).replace(".", ",") + " %" : ""}</div></div>
       <div className="box"><h4>Resumo</h4><div className="hist">
@@ -620,7 +631,8 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
             <div style={{ gridColumn: "1/-1" }}>📍 <b>{endereco(c) || arqs?.dados?.cliente?.endereco || (arqs === null ? "…" : "endereço não encontrado")}</b></div>
           </div></div>
         <div className="acts">
-          {tels[0] && <button className="btn sm" style={{ background: "var(--wa,#1fa855)", color: "#fff", borderColor: "var(--wa,#1fa855)" }} onClick={() => abrirWhats("https://wa.me/" + sanitizeWhats(tels[0]))}>💬 WhatsApp</button>}
+          {/* conversa pelo número da loja, não pelo celular do projetista */}
+          {tels[0] && <BotaoConversa c={c} rotulo="💬 WhatsApp" />}
           {reserva ? <span className="selo" style={{ background: "#faf1df", color: "#8a5d00" }}>⏳ Reserva · aguardando o cliente</span>
             : e5 ? <><span className="selo" style={{ background: "#e6f4e9", color: "#3f8f4f" }}>✅ Realizado · {fmtDateTime(t0.finalizadoEm)}</span>
               <button className="btn sm" disabled={!!ocupado} title="Volta o checklist para ajustes (gerar contrato de novo, corrigir ambientes). O contrato assinado continua guardado."

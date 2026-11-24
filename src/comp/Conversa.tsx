@@ -11,6 +11,8 @@ import { useEffect, useRef, useState } from "react";
 import { A } from "../lib/acoes";
 import { useApp } from "../estado";
 
+const ENTER_CHAVE = "ck.conversa.enterEnvia";
+
 const hhmm = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -30,6 +32,11 @@ export function Conversa({ c, onFechar, onModelo }: { c: any; onFechar: () => vo
   const [erro, setErro] = useState("");
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
+  // a preferência fica no aparelho de cada uma: quem digita rápido quer Enter, quem escreve
+  // textos longos prefere o botão. Ligado por padrão, que é o hábito do WhatsApp.
+  const [enterEnvia, setEnterEnvia] = useState(() => {
+    try { return localStorage.getItem(ENTER_CHAVE) !== "0"; } catch { return true; }
+  });
   const fim = useRef<HTMLDivElement>(null);
 
   const carregar = async () => {
@@ -102,14 +109,27 @@ export function Conversa({ c, onFechar, onModelo }: { c: any; onFechar: () => vo
       </div>
 
       {aberta ? (
-        <div style={{ borderTop: "1px solid #E4E2DB", background: "#fff", padding: 10, display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={2}
-            placeholder="Escreva para o cliente…" disabled={enviando}
-            onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); enviar(); } }}
-            style={{ flex: 1, resize: "none", border: "1px solid #D5D2C9", borderRadius: 12, padding: "8px 10px", font: "14px Inter,system-ui,sans-serif" }} />
-          <button className="btn primary" disabled={enviando || !texto.trim()} onClick={enviar}>
-            {enviando ? "Enviando…" : "Enviar"}
-          </button>
+        <div style={{ borderTop: "1px solid #E4E2DB", background: "#fff", padding: 10 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={2}
+              placeholder="Escreva para o cliente…" disabled={enviando}
+              onKeyDown={e => {
+                if (e.key !== "Enter") return;
+                // Enter manda quando a pessoa escolheu isso; Shift+Enter sempre quebra linha,
+                // como no WhatsApp. Ctrl+Enter continua mandando dos dois jeitos.
+                if (e.shiftKey) return;
+                if (enterEnvia || e.ctrlKey || e.metaKey) { e.preventDefault(); enviar(); }
+              }}
+              style={{ flex: 1, resize: "none", border: "1px solid #D5D2C9", borderRadius: 12, padding: "8px 10px", font: "14px Inter,system-ui,sans-serif" }} />
+            <button className="btn primary" disabled={enviando || !texto.trim()} onClick={enviar}>
+              {enviando ? "Enviando…" : "Enviar"}
+            </button>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 7, fontSize: 12, color: "#5F6670", cursor: "pointer" }}>
+            <input type="checkbox" checked={enterEnvia}
+              onChange={e => { setEnterEnvia(e.target.checked); try { localStorage.setItem(ENTER_CHAVE, e.target.checked ? "1" : "0"); } catch { /* sem localStorage, vale só nesta sessão */ } }} />
+            Enviar com Enter <span style={{ opacity: .75 }}>(Shift+Enter quebra linha)</span>
+          </label>
         </div>
       ) : (
         <div style={{ borderTop: "1px solid #E4E2DB", background: "#fff", padding: 10, fontSize: 12.5, color: "#5F6670" }}>
