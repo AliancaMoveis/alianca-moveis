@@ -1,6 +1,6 @@
 // Termo de ciência do material de um ambiente (Estrutura / Portas / Envoltório / Painéis + corrediças e dobradiças).
 // Usado pelo projetista (etapa 2) e pelo cliente na assinatura online (que pode corrigir o que veio do sistema).
-import { AMORT, AMORT_ROT, LINHAS_TERMO, MAT_ROT, matTexto, type Amort, type LinhaTermo, type MatT, type TermoAmb } from "../lib/contratoDoc";
+import { AMORT, AMORT_ROT, LINHAS_TERMO, MAT_OUTRO_LIBERADO, MAT_ROT, matTexto, type Amort, type LinhaTermo, type MatT, type TermoAmb } from "../lib/contratoDoc";
 
 const COR = { pri: "#284b8f", l: "#d5dae2", s: "#5a6270", alt: "#9b1c1c", altbg: "#fdf1f1" };
 
@@ -35,7 +35,8 @@ export default function TermoMaterial({ v, orig, onChange, compacto, sugCores, s
       return <div key={k} style={{ display: "grid", gridTemplateColumns: compacto ? "84px auto 1fr" : "1fr", gap: compacto ? 8 : 6, alignItems: "center", paddingBottom: compacto ? 0 : 8, borderBottom: compacto ? 0 : "1px solid #eef0f2" }}>
         <b style={{ fontSize: compacto ? 13 : 15 }}>{rot}{(mudouMat || mudouCor) && !compacto ? <span style={{ color: COR.alt, fontSize: 12, fontWeight: 700 }}> · alterado</span> : null}</b>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {(["MDP", "MDF", "OUTRO", "NAO"] as MatT[]).map(m => <button key={String(m)} type="button" style={btn(l.mat === m, mudouMat)} onClick={() => setLinha(k, { ...l, mat: l.mat === m && compacto ? null : m })}>{MAT_ROT[String(m)]}</button>)}
+          {(["MDP", "MDF", "OUTRO", "NAO"] as MatT[]).filter(m => m !== "OUTRO" || MAT_OUTRO_LIBERADO || l.mat === "OUTRO")
+            .map(m => <button key={String(m)} type="button" style={btn(l.mat === m, mudouMat)} onClick={() => setLinha(k, { ...l, mat: l.mat === m && compacto ? null : m })}>{MAT_ROT[String(m)]}</button>)}
           {/* com OUTRO o material é escrito: vidro, alumínio, espelho… */}
           {l.mat === "OUTRO" && <input value={l.matTxt || ""} onChange={e => setLinha(k, { ...l, matTxt: e.target.value })} placeholder="Qual material?"
             style={{ width: compacto ? 110 : 150, boxSizing: "border-box", fontSize: compacto ? 13 : 15, padding: compacto ? "4px 8px" : "8px 10px", borderRadius: 8,
