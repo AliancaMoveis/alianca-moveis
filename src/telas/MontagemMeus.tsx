@@ -53,6 +53,15 @@ export default function MontagemMeus() {
         <Kpi n={assist} l="Assistência" />
         <Kpi n={canc} l="Cancelados / rejeitados (não contam)" />
       </div>
+      {/* o valor vem do servidor pela MESMA conta do fechamento oficial: mostrar um número
+          diferente do que cai no fim do mês seria pior do que não mostrar nada */}
+      {r.paga && <div className="card" style={{ marginTop: 14, background: "var(--st-concluida-bg,#eef7f0)", borderColor: "var(--st-concluida,#2f7a3f)" }}>
+        <div style={{ fontSize: 12.5, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: .4, fontWeight: 700 }}>A receber no período</div>
+        <div style={{ fontSize: 30, fontWeight: 800, margin: "2px 0" }}>
+          {Number(r.aReceber || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+        </div>
+        <div style={{ fontSize: 12.5 }}>{val.length} agendamento{val.length === 1 ? "" : "s"} × {Number(r.valorUnit || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Cancelados e rejeitados não entram. O valor fecha quando a Gestão fecha o período.</div>
+      </div>}
       <p className="hint" style={{ margin: "8px 0 0" }}>Nome no Exact: <b>{r.lider}</b>{r.atualizado ? " · relatório do Exact atualizado em " + new Date(r.atualizado).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}. Os números mudam quando a Gestão envia um relatório novo.</p>
       {porDia.length > 0 && <div className="card" style={{ marginTop: 14 }}><h3 style={{ marginTop: 0 }}>Por dia</h3>
         <div className="mm-dias">{porDia.map(([d, n]) => <div key={d}><span>{br(d).slice(0, 5)}</span><i style={{ width: (n / mx * 100) + "%" }} /><b>{n}</b></div>)}</div></div>}
