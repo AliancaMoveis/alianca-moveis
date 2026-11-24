@@ -127,13 +127,40 @@ export function Conversa({ c, onFechar, onModelo }: { c: any; onFechar: () => vo
   );
 }
 
+/**
+ * A janela de 24h calculada direto do cartão, sem ir ao servidor: o banco grava
+ * `respostaCliente.em` a cada resposta do cliente, qualquer que seja o tipo. É isso que
+ * permite acender o botão nos 142 cartões da lista sem 142 consultas.
+ * (Uma exceção conhecida: quando a resposta libera os documentos, o webhook entrega e sai
+ * antes de passar por aqui, então o cartão pode mostrar a luz laranja por engano até a
+ * próxima mensagem. O painel, esse, sempre mostra o estado certo, porque pergunta ao banco.)
+ */
+export function janelaCk(c: any): { aberta: boolean; fechaEm: string | null } {
+  const em = c?.tratativa?.checklist?.respostaCliente?.em;
+  if (!em) return { aberta: false, fechaEm: null };
+  const fecha = new Date(+new Date(em) + 24 * 3600e3);
+  return { aberta: +fecha > Date.now(), fechaEm: fecha.toISOString() };
+}
+
 /** Botão que abre a conversa. Substitui o "Abrir conversa na Kommo": mesmo lugar, mesmo gesto,
- *  só que sem jogar a pessoa para fora do sistema. */
+ *  só que sem jogar a pessoa para fora do sistema.
+ *  A borda acesa diz, antes de clicar, se dá para escrever: verde a janela está aberta,
+ *  laranja está fechada e só sai modelo aprovado. */
 export function BotaoConversa({ c, rotulo = "💬 Conversa com o cliente", onModelo }:
   { c: any; rotulo?: string; onModelo?: () => void }) {
   const [aberto, setAberto] = useState(false);
+  const j = janelaCk(c);
+  const falta = restante(j.fechaEm);
   return <>
-    <button className="btn sm" onClick={ev => { ev.stopPropagation(); setAberto(true); }}>{rotulo}</button>
+    <button className="btn sm" onClick={ev => { ev.stopPropagation(); setAberto(true); }}
+      title={j.aberta
+        ? `Janela de 24h aberta${falta ? " · fecha em " + falta : ""} — dá para escrever o que quiser`
+        : "Janela de 24h fechada — só sai modelo aprovado"}
+      style={j.aberta
+        ? { borderColor: "#1AA06D", boxShadow: "0 0 0 2px rgba(26,160,109,.28), 0 0 9px 1px rgba(26,160,109,.45)" }
+        : { borderColor: "#E07A1F", boxShadow: "0 0 0 2px rgba(224,122,31,.25), 0 0 9px 1px rgba(224,122,31,.40)" }}>
+      {rotulo}
+    </button>
     {aberto && <Conversa c={c} onFechar={() => setAberto(false)} onModelo={onModelo} />}
   </>;
 }
