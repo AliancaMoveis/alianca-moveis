@@ -320,8 +320,10 @@ Deno.serve(async (req) => {
         method: "POST", body: JSON.stringify({ entity_id: g.lead_id, entity_type: "leads" }),
       });
       const ok = run.st >= 200 && run.st < 300;
+      // guarda o TEXTO que saiu: é o que a conversa dentro do 360 mostra. Sem isso a pessoa
+      // via só "Mensagem enviada" e precisava abrir a Kommo para lembrar o que escreveu.
       await registrarEvento({ chamado_id: it.id, tipo: ok ? "enviado" : "falhou", modelo: String(b.assunto || "documento"),
-        por: String(b.por || ""), erro: ok ? null : `a Kommo recusou o disparo (${run.st})` });
+        texto, por: String(b.por || ""), erro: ok ? null : `a Kommo recusou o disparo (${run.st})` });
       return json(ok
         ? { ok: true, lead_id: g.lead_id, contato_id: g.contato_id, origem: g.origem }
         : { ok: false, erro: `a Kommo recusou o disparo (${run.st})` });
@@ -336,7 +338,9 @@ Deno.serve(async (req) => {
 
       let bot = 0;
       try { bot = Number(await segredo("kommo_bot_liberacao")); } catch { /* ainda não configurado */ }
-      if (!bot) return json({ ok: false, erro: "o modelo de liberação ainda está em análise na Meta — assim que ela aprovar, o pedido passa a sair sozinho" }, 200);
+      // o modelo está aprovado pela Meta (24/11/2026). Se cai aqui, falta ligar o bot no nosso
+      // lado — a mensagem antiga culpava a Meta e escondeu o problema de verdade por semanas.
+      if (!bot) return json({ ok: false, erro: "o envio dos documentos ainda não está ligado na Kommo (falta a chave kommo_bot_liberacao) — avise a gestão" }, 200);
 
       const g = await garantirLead(it);
       if (!g.ok) {
@@ -375,7 +379,7 @@ Deno.serve(async (req) => {
 
       let bot = 0;
       try { bot = Number(await segredo("kommo_bot_agenda_liberada")); } catch { /* ainda não configurado */ }
-      if (!bot) return json({ ok: false, erro: "o modelo de liberação da agenda ainda está em análise na Meta — assim que ela aprovar, o aviso passa a sair sozinho" }, 200);
+      if (!bot) return json({ ok: false, erro: "o aviso de agenda liberada ainda não está ligado na Kommo (falta a chave kommo_bot_agenda_liberada) — avise a gestão" }, 200);
 
       const g = await garantirLead(it);
       if (!g.ok) {
