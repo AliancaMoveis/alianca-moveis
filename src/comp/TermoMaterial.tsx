@@ -1,6 +1,6 @@
 // Termo de ciência do material de um ambiente (Estrutura / Portas / Envoltório / Painéis + corrediças e dobradiças).
 // Usado pelo projetista (etapa 2) e pelo cliente na assinatura online (que pode corrigir o que veio do sistema).
-import { AMORT, AMORT_ROT, LINHAS_TERMO, MAT_ROT, type Amort, type LinhaTermo, type MatT, type TermoAmb } from "../lib/contratoDoc";
+import { AMORT, AMORT_ROT, LINHAS_TERMO, MAT_ROT, matTexto, type Amort, type LinhaTermo, type MatT, type TermoAmb } from "../lib/contratoDoc";
 
 const COR = { pri: "#284b8f", l: "#d5dae2", s: "#5a6270", alt: "#9b1c1c", altbg: "#fdf1f1" };
 
@@ -13,7 +13,7 @@ export default function TermoMaterial({ v, orig, onChange, compacto, sugCores, s
       return <div key={k} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "center", padding: "7px 0", borderBottom: "1px solid #eef0f2" }}>
         <b style={{ fontSize: 15 }}>{rot}</b>
         <span style={{ fontSize: 15, textAlign: "right" }}>{l?.mat === "NAO" ? <span style={{ color: COR.s }}>não se aplica</span>
-          : <>{MAT_ROT[String(l?.mat || "")] || "—"}{l?.cor ? <> · <b>{l.cor}</b></> : null}</>}</span></div>; })}
+          : <>{matTexto(l) || "—"}{l?.cor ? <> · <b>{l.cor}</b></> : null}</>}</span></div>; })}
     {AMORT.map(([k, rot]) => { const a = v[k] as Amort;
       return <div key={k} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "center", padding: "7px 0" }}>
         <b style={{ fontSize: 15 }}>{rot}</b><span style={{ fontSize: 15 }}>{AMORT_ROT[String(a || "")] || "—"}</span></div>; })}
@@ -29,17 +29,22 @@ export default function TermoMaterial({ v, orig, onChange, compacto, sugCores, s
     {sugCores && sugCores.length > 0 && <datalist id={lista}>{sugCores.map(s => <option key={s} value={s} />)}</datalist>}
     {LINHAS_TERMO.map(([k, rot]) => {
       const l = v[k] as LinhaTermo, o = orig?.[k] as LinhaTermo | undefined;
-      const mudouMat = !!o && (o.mat || null) !== (l.mat || null);
+      // trocar só o texto do OUTRO (de "vidro" para "alumínio") também é alteração de material
+      const mudouMat = !!o && ((o.mat || null) !== (l.mat || null) || String(o.matTxt || "").trim() !== String(l.matTxt || "").trim());
       const mudouCor = !!o && String(o.cor || "").trim() !== String(l.cor || "").trim();
       return <div key={k} style={{ display: "grid", gridTemplateColumns: compacto ? "84px auto 1fr" : "1fr", gap: compacto ? 8 : 6, alignItems: "center", paddingBottom: compacto ? 0 : 8, borderBottom: compacto ? 0 : "1px solid #eef0f2" }}>
         <b style={{ fontSize: compacto ? 13 : 15 }}>{rot}{(mudouMat || mudouCor) && !compacto ? <span style={{ color: COR.alt, fontSize: 12, fontWeight: 700 }}> · alterado</span> : null}</b>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {(["MDP", "MDF", "NAO"] as MatT[]).map(m => <button key={String(m)} type="button" style={btn(l.mat === m, mudouMat)} onClick={() => setLinha(k, { ...l, mat: l.mat === m && compacto ? null : m })}>{MAT_ROT[String(m)]}</button>)}
+          {(["MDP", "MDF", "OUTRO", "NAO"] as MatT[]).map(m => <button key={String(m)} type="button" style={btn(l.mat === m, mudouMat)} onClick={() => setLinha(k, { ...l, mat: l.mat === m && compacto ? null : m })}>{MAT_ROT[String(m)]}</button>)}
+          {/* com OUTRO o material é escrito: vidro, alumínio, espelho… */}
+          {l.mat === "OUTRO" && <input value={l.matTxt || ""} onChange={e => setLinha(k, { ...l, matTxt: e.target.value })} placeholder="Qual material?"
+            style={{ width: compacto ? 110 : 150, boxSizing: "border-box", fontSize: compacto ? 13 : 15, padding: compacto ? "4px 8px" : "8px 10px", borderRadius: 8,
+              border: "1.5px solid " + (String(l.matTxt || "").trim() ? (compacto ? "rgba(128,140,160,.45)" : COR.l) : COR.alt), background: compacto ? "transparent" : "#fff", color: compacto ? "inherit" : "#1a1d21" }} />}
         </div>
         {l.mat === "NAO" ? <span style={{ color: COR.s, fontSize: 13 }}>—</span>
           : <input value={l.cor} list={sugCores ? lista : undefined} onChange={e => setLinha(k, { ...l, cor: e.target.value })} placeholder={"Cor de " + rot.toLowerCase()}
             style={{ width: "100%", boxSizing: "border-box", fontSize: compacto ? 13 : 16, padding: compacto ? "4px 8px" : "10px 12px", borderRadius: 8, border: "1.5px solid " + (mudouCor ? COR.alt : compacto ? "rgba(128,140,160,.45)" : COR.l), background: compacto ? "transparent" : mudouCor ? COR.altbg : "#fff", color: compacto ? "inherit" : "#1a1d21" }} />}
-        {!compacto && o && (mudouMat || mudouCor) && <span style={{ fontSize: 12, color: COR.alt }}>No sistema estava: {MAT_ROT[o.mat || ""] || "em branco"}{o.cor ? " · " + o.cor : ""}</span>}
+        {!compacto && o && (mudouMat || mudouCor) && <span style={{ fontSize: 12, color: COR.alt }}>No sistema estava: {matTexto(o) || "em branco"}{o.cor ? " · " + o.cor : ""}</span>}
       </div>;
     })}
     {AMORT.map(([k, rot]) => {

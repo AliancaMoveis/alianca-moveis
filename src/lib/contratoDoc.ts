@@ -2,8 +2,12 @@
 // Segue o papel da loja: 1) Termo de ciência do material (por ambiente) · 2) Geral (29 itens "Sim") · 3) Imagens do projeto · 4) Assinatura.
 // Arquivo sem dependências: é copiado também para a função "contrato" do Supabase (supabase/functions/contrato/doc.ts).
 
-export type MatT = "MDP" | "MDF" | "NAO" | null;
-export type LinhaTermo = { mat: MatT; cor: string };
+// "OUTRO" existe porque nem toda porta é de madeira: vidro, alumínio, espelho. Antes só havia
+// MDP/MDF/Não contém, então nessas o projetista deixava o material em branco e o contrato
+// travava na assinatura — e o cliente não podia corrigir, porque ali o termo é só leitura.
+// Com OUTRO ele escreve o material em matTxt.
+export type MatT = "MDP" | "MDF" | "OUTRO" | "NAO" | null;
+export type LinhaTermo = { mat: MatT; cor: string; matTxt?: string };
 export type Amort = "com" | "sem" | "nao" | null;
 export type TermoAmb = { estrutura: LinhaTermo; portas: LinhaTermo; envoltorio: LinhaTermo; paineis: LinhaTermo; corredicas: Amort; dobradicas: Amort };
 export type ImgContrato = { nome: string; src: string };
@@ -29,7 +33,10 @@ export type AssinaturaContrato = { nome: string; cpf: string; quando: string; ip
 
 export const LINHAS_TERMO: [keyof TermoAmb, string][] = [["estrutura", "Estrutura"], ["portas", "Portas"], ["envoltorio", "Envoltório"], ["paineis", "Painéis"]];
 export const AMORT: [keyof TermoAmb, string][] = [["corredicas", "Corrediças"], ["dobradicas", "Dobradiças"]];
-export const MAT_ROT: Record<string, string> = { MDP: "MDP", MDF: "MDF", NAO: "Não contém" };
+export const MAT_ROT: Record<string, string> = { MDP: "MDP", MDF: "MDF", OUTRO: "Outro", NAO: "Não contém" };
+/** material de uma linha em texto: com OUTRO, vale o que o projetista escreveu */
+export const matTexto = (l?: LinhaTermo | null) =>
+  l?.mat === "OUTRO" ? String(l.matTxt || "").trim() || "Outro" : MAT_ROT[String(l?.mat || "")] || "";
 export const AMORT_ROT: Record<string, string> = { com: "Com amortecedor", sem: "Sem amortecedor", nao: "Não contém" };
 
 export const INFO_TECNICAS = [
@@ -82,7 +89,13 @@ export const termoVazio = (): TermoAmb => ({ estrutura: { mat: null, cor: "" }, 
 /** o que ainda falta preencher no termo de um ambiente */
 export function faltaNoTermo(t: TermoAmb): string[] {
   const f: string[] = [];
-  for (const [k, rot] of LINHAS_TERMO) { const l = t[k] as LinhaTermo; if (!l?.mat) f.push(rot); else if (l.mat !== "NAO" && !String(l.cor || "").trim()) f.push("cor de " + rot.toLowerCase()); }
+  for (const [k, rot] of LINHAS_TERMO) {
+    const l = t[k] as LinhaTermo;
+    if (!l?.mat) { f.push(rot); continue; }
+    // com OUTRO, o material é o texto escrito: sem ele a linha continua incompleta
+    if (l.mat === "OUTRO" && !String(l.matTxt || "").trim()) { f.push("material de " + rot.toLowerCase()); continue; }
+    if (l.mat !== "NAO" && !String(l.cor || "").trim()) f.push("cor de " + rot.toLowerCase());
+  }
   for (const [k, rot] of AMORT) if (!t[k]) f.push(rot);
   return f;
 }
@@ -91,7 +104,8 @@ export function diferencasTermo(orig: TermoAmb, fim: TermoAmb): string[] {
   const out: string[] = [];
   for (const [k, rot] of LINHAS_TERMO) {
     const a = orig[k] as LinhaTermo, b = fim[k] as LinhaTermo;
-    if ((a?.mat || null) !== (b?.mat || null)) out.push(`${rot}: ${MAT_ROT[a?.mat || ""] || "em branco"} → ${MAT_ROT[b?.mat || ""] || "em branco"}`);
+    if ((a?.mat || null) !== (b?.mat || null) || String(a?.matTxt || "").trim() !== String(b?.matTxt || "").trim())
+      out.push(`${rot}: ${matTexto(a) || "em branco"} → ${matTexto(b) || "em branco"}`);
     if (String(a?.cor || "").trim() !== String(b?.cor || "").trim() && b?.mat !== "NAO") out.push(`Cor de ${rot.toLowerCase()}: ${String(a?.cor || "").trim() || "em branco"} → ${String(b?.cor || "").trim() || "em branco"}`);
   }
   for (const [k, rot] of AMORT) if ((orig[k] || null) !== (fim[k] || null)) out.push(`${rot}: ${AMORT_ROT[String(orig[k] || "")] || "em branco"} → ${AMORT_ROT[String(fim[k] || "")] || "em branco"}`);
@@ -136,9 +150,13 @@ const bloco = (assinatura: string, selfie: string, rotulo: string) => `<div styl
 <div style="flex:1;text-align:center"><img src="${esc(assinatura)}" style="max-width:100%;max-height:110px;border-bottom:1px solid #111" alt=""><div style="font-size:9pt;margin-top:3px">${esc(rotulo)}</div></div>
 <div style="width:135px;text-align:center"><img src="${esc(selfie)}" style="width:135px;height:170px;object-fit:cover;border-radius:6px;border:1px solid #999" alt=""><div style="font-size:8pt;margin-top:3px">Selfie no momento da assinatura</div></div></div>`;
 function celMat(l: LinhaTermo, orig?: LinhaTermo) {
-  const ops = (["MDP", "MDF", "NAO"] as const).map(m => `<span class="op">${bx(l?.mat === m)}${MAT_ROT[m]}</span>`).join("");
-  const mudou = orig && ((orig.mat || null) !== (l?.mat || null) || (String(orig.cor || "").trim() !== String(l?.cor || "").trim() && l?.mat !== "NAO"));
-  return `<td>${ops}${mudou ? `<span class="alt">alterado pelo cliente na assinatura (era: ${esc(MAT_ROT[orig!.mat || ""] || "em branco")}${orig!.cor ? " · " + esc(orig!.cor) : ""})</span>` : ""}</td><td class="cor">${l?.mat === "NAO" ? "—" : esc(l?.cor || "") || "&nbsp;"}</td>`;
+  // no papel, OUTRO aparece com o material escrito ao lado: "☑ Outro: Vidro"
+  const ops = (["MDP", "MDF", "OUTRO", "NAO"] as const).map(m =>
+    `<span class="op">${bx(l?.mat === m)}${MAT_ROT[m]}${m === "OUTRO" && l?.mat === "OUTRO" && String(l.matTxt || "").trim() ? ": " + esc(String(l.matTxt).trim()) : ""}</span>`).join("");
+  const mudou = orig && ((orig.mat || null) !== (l?.mat || null)
+    || String(orig.matTxt || "").trim() !== String(l?.matTxt || "").trim()
+    || (String(orig.cor || "").trim() !== String(l?.cor || "").trim() && l?.mat !== "NAO"));
+  return `<td>${ops}${mudou ? `<span class="alt">alterado pelo cliente na assinatura (era: ${esc(matTexto(orig) || "em branco")}${orig!.cor ? " · " + esc(orig!.cor) : ""})</span>` : ""}</td><td class="cor">${l?.mat === "NAO" ? "—" : esc(l?.cor || "") || "&nbsp;"}</td>`;
 }
 function celAmort(v: Amort, orig?: Amort) {
   const mudou = orig !== undefined && (orig || null) !== (v || null);
