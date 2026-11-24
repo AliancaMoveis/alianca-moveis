@@ -5,6 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { agendaPlanilha, dataPlanilha, lerXlsx } from "../lib/planilha";
+// Primeiro contato e nova data saem pela Kommo, com modelo aprovado. A confirmação é a ÚNICA
+// que ainda abre o WhatsApp, e é temporário: o bot dela na Kommo manda texto livre, que só chega
+// se o cliente falou nas últimas 24h. Trocar agora seria perder uma confirmação que hoje sempre
+// chega. Assim que o bot da confirmação usar o modelo 99518 (aprovado e parado), isto sai daqui.
 import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats, waTexto } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
@@ -90,7 +94,11 @@ const dataLonga = (v: string) => { if (!v) return "(data)"; const d = parseData(
 const nomeCli = (c: any) => primeiroNome(String(c.cliente || "").toLowerCase().replace(/(^|\s)\S/g, s => s.toUpperCase()));
 export const fmtTel = (t: string) => { const d = String(t || "").replace(/\D/g, ""); return d.length === 11 ? `(${d.slice(0, 2)}) ${d[2]}-${d.slice(3, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : t; };
 
-export const MODELOS: Record<string, string> = { primeiro: "Primeiro contato (com data)", cobranca: "Cliente não respondeu", retorno: "Retorno (obra / outra data)", confirmacao: "Confirmação de presença (agendado)" };
+// Todo contato do checklist sai pela Kommo, por modelo aprovado pela Meta. Não existe mais
+// "abrir o WhatsApp da atendente": o número do checklist é um só e é o da Kommo.
+// A "cobrança" de texto livre saiu — não faz parte do processo: quem não responde recebe o
+// aviso de agenda liberada e volta para a fila de nova data, até a 3ª tentativa, que vira ligação.
+export const MODELOS: Record<string, string> = { primeiro: "Primeiro contato (com data)", retorno: "Nova data", confirmacao: "Confirmação de presença (agendado)" };
 /** Texto EXATO dos modelos aprovados pela Meta (99542 e 99588) — é isso que sai pela Kommo. */
 export function modeloAprovado(tipo: string, c: any, data: string, remetente: string) {
   const n = nomeCli(c), quando = dataLonga(data), pedido = c.pedido || "";
@@ -106,7 +114,6 @@ export function modeloAprovado(tipo: string, c: any, data: string, remetente: st
 export function mensagemCk(tipo: string, c: any, data: string, remetente: string) {
   const n = nomeCli(c), quando = dataLonga(data);
   const ola = `Olá, ${n}! Tudo bem?\n\nAqui é ${remetente}, da Aliança Móveis.`;
-  if (tipo === "cobranca") return `${ola} Estou passando para saber se você viu minha mensagem sobre a revisão final do seu projeto (checklist).\n\nAinda tenho disponível *${quando}*. Fica bom para você? Se preferir outro dia ou horário, é só me dizer.\n\nLembrando que o ambiente precisa estar pronto para a montagem, sem obra e com os acabamentos finalizados.`;
   if (tipo === "retorno") return `${ola} Conforme combinamos, estou retomando o contato sobre a revisão final do seu projeto (checklist).\n\nA obra do ambiente já foi finalizada? Se sim, tenho disponível *${quando}*. Fica bom para você?`;
   if (tipo === "confirmacao") return `${ola} Passando para confirmar a revisão final do seu projeto (checklist), agendada para *${quando}*.\n\nPor favor, responda esta mensagem confirmando a sua presença.\n\nLembrando que o ambiente precisa estar pronto para a montagem, sem obra e com os acabamentos finalizados.\n\nAté lá!`;
   return `${ola} Seu projeto de móveis planejados está na etapa de revisão final (checklist), que fazemos antes de enviar o pedido para a fábrica.\n\nTenho um horário disponível para *${quando}*. Podemos confirmar?\n\nAntes, preciso que você me confirme se o ambiente já está pronto para a montagem: sem obra ou reforma em andamento e com piso, pintura, gesso e elétrica finalizados.\n\nSe ainda estiver em obra, me diga a previsão de término que agendamos para depois. Assim garantimos que as medidas dos móveis fiquem certinhas.\n\nFico no aguardo!`;
@@ -1637,9 +1644,17 @@ export function ModalWhats({ c, inicial }: any) {
   // Antes a condição testava "sem_resposta", que não é o nome da etapa: caía em "primeiro".
   // quem RESPONDEU pede nova data, não primeiro contato: é o modelo 99588, o único aprovado
   // para esse caso, e é ele que abre o campo de escolher a data
-  const [tipo, setTipo] = useState(inicial || (e === "agendado" ? "confirmacao" : e === "sem_retorno" ? "retorno" : e === "aguardando" ? "cobranca" : ["em_obras", "outra_data", "espera", "respondeu"].includes(e) ? "retorno" : "primeiro"));
-  const primeira = e === "agendado" || k.proposta ? null : sugestoes(st, c.id, 1, undefined, Number(k.duracaoMin) || durSugeridaCk(c).min)[0];
-  const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : k.proposta) || (primeira && primeira.slot) || proximoDiaUtil()).slice(0, 16));
+  // quem está aguardando resposta e volta para a fila recebe NOVA DATA, não um texto livre:
+  // é a mesma mensagem de quando o cliente pede outra data (modelo 99588).
+  const [tipo, setTipo] = useState(inicial || (e === "agendado" ? "confirmacao" : e === "sem_retorno" ? "retorno" : ["aguardando", "em_obras", "outra_data", "espera", "respondeu"].includes(e) ? "retorno" : "primeiro"));
+  // A proposta pendente é a data que o cliente NÃO respondeu. Antes ela voltava pré-preenchida
+  // aqui, então a atendente reoferecia exatamente o horário já ignorado. Agora ela aparece em
+  // destaque como recusada e o campo já vem com uma SUGESTÃO NOVA, diferente dela.
+  const recusadaIso = e === "agendado" ? "" : String(k.proposta || "").slice(0, 16);
+  const recusada = recusadaIso ? dataLonga(recusadaIso) : "";
+  const sugs = e === "agendado" ? [] : sugestoes(st, c.id, 3, undefined, Number(k.duracaoMin) || durSugeridaCk(c).min);
+  const primeira = sugs.find(s => String(s.slot).slice(0, 16) !== recusadaIso) || sugs[0] || null;
+  const [data, setData] = useState<string>(String((e === "agendado" ? k.agendadoPara : "") || (primeira && primeira.slot) || proximoDiaUtil()).slice(0, 16));
   const [proj, setProj] = useState<string>((e === "agendado" ? k.projetista : k.propostaProjetista) || (primeira && primeira.livres[0]) || "");
   const telsSalvos: string[] = Array.isArray(k.telefones) ? k.telefones : [];
   const [novos, setNovos] = useState<string[]>([]);
@@ -1649,10 +1664,11 @@ export function ModalWhats({ c, inicial }: any) {
   const [txt, setTxt] = useState(""); const [editado, setEditado] = useState(false);
   const [encaixe, setEncaixe] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  // primeiro contato e nova data saem pela Kommo, com modelo aprovado: texto travado
-  const peloKommo = tipo === "primeiro" || tipo === "retorno";
-  const texto = peloKommo ? modeloAprovado(tipo, c, data, rem) : editado ? txt : mensagemCk(tipo, c, data, rem);
-  const comData = peloKommo;
+  // sai pela Kommo com modelo aprovado: texto travado. Só a confirmação ainda não (ver o import).
+  const peloKommo = tipo !== "confirmacao";
+  // a confirmação é do horário já agendado, então não abre escolha de data nem reserva agenda
+  const comData = tipo !== "confirmacao";
+  const texto = comData ? modeloAprovado(tipo, c, data, rem) : mensagemCk(tipo, c, data, rem);
   // tempo que trava a agenda (não vai na mensagem): padrão pelo valor do cupom
   const sug = durSugeridaCk(c);
   const [dur, setDur] = useState<number>(Number(k.duracaoMin) || sug.min);
@@ -1668,34 +1684,38 @@ export function ModalWhats({ c, inicial }: any) {
     if (tipo !== "confirmacao" && !data) { toast("Escolha a data e o horário oferecidos"); return; }
     if (comData && !proj) { toast("Escolha o projetista que vai atender (o cliente não vê)"); return; }
     if (comData && (conflitosProj(st, data, proj, c.id, dur).length || confExtras.length) && !encaixe) { toast("Esse horário já tem cliente com " + proj + " — marque “Confirmo o encaixe” ou escolha outro horário/projetista"); return; }
-    // Primeiro contato sai pelo número do checklist, pela Kommo. O horário só é
-    // reservado depois que a Kommo confirma o envio: se falhar, o cliente continua
-    // na fila com o motivo, em vez de ficar com um horário preso à toa.
-    if (peloKommo) {
-      setEnviando(true);
+    // Tudo sai pelo número do checklist, pela Kommo. O horário só é reservado depois que a
+    // Kommo aceita o disparo: falhando, o cliente continua na fila com o motivo, em vez de
+    // ficar com um horário preso à toa.
+    // ATENÇÃO ao vocabulário: a Kommo aceitar o disparo NÃO é o cliente ter recebido. Quem
+    // confirma entrega é a resposta do cliente ou a varredura. Por isso aqui se fala em
+    // "disparado", nunca em "enviado" — foi tratar os dois como a mesma coisa que fez a tela
+    // mostrar sucesso enquanto 100 clientes não recebiam nada.
+    // confirmação: segue abrindo o WhatsApp até o bot dela usar o modelo aprovado (ver o import)
+    if (!peloKommo) {
       try {
-        await A.kommoEnviar({ chamado: c.id, cliente: c.cliente, telefone: n, pedido: c.pedido, atendente: rem, data: dataLonga(data),
-          modelo: tipo === "retorno" ? "nova_data" : "primeiro" });
-      } catch (x: any) { setEnviando(false); toast("Não enviou: " + x.message); return; }
-      try {
-        await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj, encaixe, texto, duracaoMin: dur, diasExtras: extras });
-      } catch (x: any) { setEnviando(false); toast("Mensagem enviada, mas não registrou: " + x.message); return; }
-      // fecha e avisa ANTES de recarregar: a recarga demora, e deixar a tela aberta
-      // com o botão livre faz a pessoa achar que não foi e mandar de novo para o cliente
-      fechar();
-      toast(tipo === "retorno"
-        ? "✅ Nova data enviada pelo WhatsApp do checklist — horário reservado"
-        : "✅ Mensagem enviada pelo WhatsApp do checklist — horário reservado");
-      recarregar();
+        await A.checklistRegistrar(c.id, k.confirmacao === "confirmada" ? { acao: "nota", texto } : { acao: "confirmacao_enviada", texto });
+      } catch (x: any) { toast(x.message); return; }
+      abrirWhats(waTexto(n, texto));
+      await recarregar(); fechar();
+      toast(k.confirmacao === "confirmada" ? "WhatsApp aberto — mensagem salva no cliente" : "Confirmação registrada — cliente em “Aguardando confirmação de presença”");
       return;
     }
+    setEnviando(true);
     try {
-      if (comData) await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj, encaixe, texto, duracaoMin: dur, diasExtras: extras });
-      else if (tipo === "cobranca") await A.checklistRegistrar(c.id, { acao: "cobranca", texto });
-      else if (tipo === "confirmacao" && e === "agendado") await A.checklistRegistrar(c.id, k.confirmacao === "confirmada" ? { acao: "nota", texto } : { acao: "confirmacao_enviada", texto });
-    } catch (x: any) { toast(x.message); return; }
-    abrirWhats(waTexto(n, texto));
-    await recarregar(); fechar(); toast(tipo === "confirmacao" ? (k.confirmacao === "confirmada" ? "WhatsApp aberto — mensagem salva no cliente" : "Confirmação enviada — cliente em “Aguardando confirmação de presença”") : "Contato registrado — quando o cliente responder, registre o resultado");
+      await A.kommoEnviar({ chamado: c.id, cliente: c.cliente, telefone: n, pedido: c.pedido, atendente: rem,
+        data: dataLonga(data), modelo: tipo === "retorno" ? "nova_data" : "primeiro" });
+    } catch (x: any) { setEnviando(false); toast("Não disparou: " + x.message); return; }
+    try {
+      await A.checklistRegistrar(c.id, { acao: "mensagem", data, projetista: proj, encaixe, texto, duracaoMin: dur, diasExtras: extras });
+    } catch (x: any) { setEnviando(false); toast("Mensagem disparada, mas não registrou: " + x.message); return; }
+    // fecha e avisa ANTES de recarregar: a recarga demora, e deixar a tela aberta com o botão
+    // livre faz a pessoa achar que não foi e mandar de novo para o cliente
+    fechar();
+    toast(tipo === "retorno"
+      ? "📨 Nova data disparada pelo WhatsApp do checklist — horário reservado"
+      : "📨 Mensagem disparada pelo WhatsApp do checklist — horário reservado");
+    recarregar();
   }
   return (
     <Modal titulo={"WhatsApp · " + c.cliente + (cidadeCk(c) ? " · 📍 " + cidadeCk(c) : "")} onFechar={fechar}>
@@ -1717,7 +1737,14 @@ export function ModalWhats({ c, inicial }: any) {
             } catch (e: any) { toast(e.message); }
           }}>＋ incluir telefone</button>
         </div>
-        <div className="field"><label>{tipo === "confirmacao" ? "Data agendada" : "Data e horário oferecidos"} <span className="req-star">*</span></label><input type="datetime-local" value={data} disabled={tipo === "cobranca"} onChange={ev => { setData(ev.target.value); setEditado(false); }} /></div>
+        {/* a data que o cliente não respondeu fica à vista: sem isso a atendente oferece de novo
+            o mesmo horário que já foi recusado ou ignorado */}
+        {recusada && <div className="field full" style={{ background: "var(--bg-2, rgba(255,255,255,.04))", borderLeft: "3px solid var(--danger)", padding: "8px 10px", borderRadius: 6 }}>
+          <label style={{ color: "var(--danger)", marginBottom: 2 }}>O cliente não respondeu a esta data</label>
+          <b style={{ fontSize: 14 }}>{recusada}</b>
+          <span className="hint">Ofereça um horário diferente deste.</span>
+        </div>}
+        <div className="field"><label>{tipo === "confirmacao" ? "Data agendada" : "Data e horário oferecidos"} <span className="req-star">*</span></label><input type="datetime-local" value={data} onChange={ev => { setData(ev.target.value); setEditado(false); }} /></div>
         {comData && <div className="field"><label>Projetista que vai atender <span className="req-star">*</span> <span className="hint">(não vai na mensagem)</span></label><select value={proj} onChange={ev => setProj(ev.target.value)}><option value="">Selecione…</option>{projs.map(n => <option key={n} value={n}>{n}</option>)}</select></div>}
         {comData && <div className="field"><label>Tempo que trava a agenda <span className="hint">(não vai na mensagem)</span></label>
           <select value={dur} onChange={ev => { setDur(Number(ev.target.value)); setEncaixe(false); }}>{Array.from(new Set([60, 120, 180, 240, 300, 360, 420, 480, dur])).sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}{m === sug.min && sug.cupom ? " · sugerido" : ""}</option>)}</select>
@@ -1736,9 +1763,7 @@ export function ModalWhats({ c, inicial }: any) {
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
         <button className="btn primary" disabled={enviando} onClick={enviar}>
-          {peloKommo
-            ? (enviando ? "Enviando…" : "📨 Enviar mensagem pelo WhatsApp do checklist")
-            : "Abrir WhatsApp" + (tipo === "confirmacao" ? "" : " e registrar o contato")}
+          {!peloKommo ? "Abrir WhatsApp" : enviando ? "Disparando…" : "📨 Disparar pelo WhatsApp do checklist"}
         </button>
         <button className="btn ghost" disabled={enviando} onClick={fechar}>Cancelar</button>
       </div>

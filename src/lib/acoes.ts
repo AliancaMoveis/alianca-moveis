@@ -351,7 +351,7 @@ export const A = {
    * modelo aprovado. Só devolve ok quando a Kommo aceitou — é isso que autoriza
    * o 360 a reservar o horário.
    */
-  kommoEnviar: async (p: { chamado: string; cliente: string; telefone: string; pedido?: string | null; atendente: string; data: string; modelo?: "primeiro" | "nova_data" }) => {
+  kommoEnviar: async (p: { chamado: string; cliente: string; telefone: string; pedido?: string | null; atendente: string; data: string; modelo?: "primeiro" | "nova_data" | "confirmacao" }) => {
     const { data, error } = await sb.functions.invoke("kommo", { body: { acao: "enviar", ...p } });
     if (error) throw new Error(error.message || "Não consegui falar com a Kommo");
     if (!data?.ok) throw new Error(data?.erro || "A Kommo não confirmou o envio");

@@ -245,24 +245,33 @@ Deno.serve(async (req) => {
         return json({ ok: false, erro: `não consegui gravar os dados no lead (${up.st})` }, 200);
       }
 
-      // dois modelos aprovados: o primeiro contato e a nova data pedida pelo cliente.
-      // Cada um tem o seu bot na Kommo; o 360 diz qual usar.
-      const novaData = b.modelo === "nova_data";
+      // Três modelos aprovados, um bot cada na Kommo; o 360 diz qual usar.
+      // Os cinco modelos do checklist estão APROVADOS pela Meta (conferido em 24/11/2026):
+      // quando falta bot aqui é configuração nossa, não análise da Meta. A mensagem antiga
+      // culpava a Meta e por isso o problema ficou meses escondido.
+      const qual = b.modelo === "nova_data" ? "retorno" : b.modelo === "confirmacao" ? "confirmacao" : "primeiro";
+      const CHAVE: Record<string, string> = {
+        retorno: "kommo_bot_novadata", confirmacao: "kommo_bot_confirmacao", primeiro: "kommo_bot_primeiro",
+      };
       let bot = 0;
-      try { bot = Number(await segredo(novaData ? "kommo_bot_novadata" : "kommo_bot_primeiro")); } catch { /* ainda não configurado */ }
+      try { bot = Number(await segredo(CHAVE[qual])); } catch { /* ainda não configurado */ }
       if (!bot) {
-        const motivo = novaData
-          ? "o modelo de nova data ainda está em análise na Meta — assim que ela aprovar, o envio passa a funcionar sozinho"
-          : "o modelo do primeiro contato não está configurado na Kommo";
+        const motivo = `o bot do modelo "${qual}" não está configurado na Kommo (falta a chave ${CHAVE[qual]})`;
         await salvarVinculo(String(it.id), { contato_id: g.contato_id, lead_id: g.lead_id, origem: g.origem, contatos: (g as any).contatos || null, envio_status: "falhou", envio_em: new Date().toISOString(), envio_erro: motivo });
-        await registrarEvento({ chamado_id: it.id, tipo: "falhou", modelo: novaData ? "retorno" : "primeiro", por: String(b.atendente || ""), erro: motivo });
+        await registrarEvento({ chamado_id: it.id, tipo: "falhou", modelo: qual, por: String(b.atendente || ""), erro: motivo });
         return json({ ok: false, erro: motivo }, 200);
       }
+      // ATENÇÃO: o 200 daqui é a Kommo ACEITAR o disparo, não o cliente ter recebido.
+      // O salesbot só escreve em conversa que já existe; para contato novo ele roda, devolve 200
+      // e não entrega nada — conferido em 24/11/2026: 100 clientes nessa situação, 5% de resposta
+      // contra 70% de quem já tinha conversa. A correção é o bot ter create_chat_if_not_exists
+      // na Kommo (é o que os bots de Transmissão têm e os nossos não tinham).
+      // Por isso o status gravado aqui significa DISPARADO, e a tela fala assim.
       const run = await kommo(`/api/v4/bots/${bot}/run`, {
         method: "POST", body: JSON.stringify({ entity_id: g.lead_id, entity_type: "leads" }),
       });
       const ok = run.st >= 200 && run.st < 300;
-      // o card da Kommo acompanha o 360: mensagem enviada = aguardando confirmação
+      // o card da Kommo acompanha o 360: mensagem disparada = aguardando confirmação
       if (ok) await kommo(`/api/v4/leads/${g.lead_id}`, { method: "PATCH", body: JSON.stringify({ pipeline_id: FUNIL_CK, status_id: ETAPA_CK_AGUARDANDO }) });
       await salvarVinculo(String(it.id), {
         contato_id: g.contato_id, lead_id: g.lead_id, origem: g.origem, contatos: (g as any).contatos || null,
@@ -270,7 +279,7 @@ Deno.serve(async (req) => {
         envio_erro: ok ? null : `a Kommo recusou o disparo (${run.st})`,
         envio_data_oferecida: String(b.data || ""),
       });
-      await registrarEvento({ chamado_id: it.id, tipo: ok ? "enviado" : "falhou", modelo: novaData ? "retorno" : "primeiro",
+      await registrarEvento({ chamado_id: it.id, tipo: ok ? "enviado" : "falhou", modelo: qual,
         por: String(b.atendente || ""), data_oferecida: String(b.data || ""), erro: ok ? null : `a Kommo recusou o disparo (${run.st})` });
       return json(ok
         ? { ok: true, lead_id: g.lead_id, contato_id: g.contato_id, origem: g.origem }
