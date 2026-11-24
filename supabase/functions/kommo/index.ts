@@ -2,7 +2,7 @@
 //
 // Autenticação, dois caminhos:
 //   x-360-segredo         — chamadas internas (banco, cron), conferido contra segredos.kommo_segredo
-//   Authorization: Bearer — JWT do usuário do 360; só passa quem tem pode_checklist()
+//   Authorization: Bearer — JWT do usuário do 360; só passa quem tem pode_ck_falar()
 // O token da Kommo vem do banco (segredos.kommo_token), nunca do código.
 //
 // Ações:
@@ -56,14 +56,19 @@ async function segredo(chave: string): Promise<string> {
   return d[0].valor as string;
 }
 
-/** Deixa passar chamada interna (segredo) ou usuário do 360 com permissão de checklist. */
+/**
+ * Deixa passar chamada interna (segredo) ou usuário do 360 que pode falar com o cliente
+ * do checklist. O gate é pode_ck_falar(), não pode_checklist(): o setor do projetista é
+ * 'projetista_checklist', que não é 'checklist', e era isso que barrava os projetistas de
+ * mandar o contrato e de responder pela conversa dentro do 360.
+ */
 async function autorizado(req: Request): Promise<boolean> {
   try {
     if (req.headers.get("x-360-segredo") === await segredo("kommo_segredo")) return true;
   } catch { /* segue para o JWT */ }
   const auth = req.headers.get("Authorization") || "";
   if (!auth.startsWith("Bearer ")) return false;
-  const r = await fetch(`${SB()}/rest/v1/rpc/pode_checklist`, {
+  const r = await fetch(`${SB()}/rest/v1/rpc/pode_ck_falar`, {
     method: "POST", headers: { apikey: ANON, Authorization: auth, "Content-Type": "application/json" }, body: "{}",
   });
   if (r.status !== 200) return false;
