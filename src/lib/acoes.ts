@@ -430,7 +430,7 @@ export const A = {
    * Traz só o que passou pelo 360 — o que alguém digitou na mão dentro da Kommo não aparece.
    */
   ckConversa: (id: string) => rpc<{
-    cliente: string; telefone: string; pedido: string | null; parcial: boolean;
+    cliente: string; telefone: string; pedido: string | null; parcial: boolean; outrosPedidos: number;
     mensagens: { de: "cliente" | "loja"; texto: string; em: string; por?: string }[];
     janela: { aberta: boolean; ultimaDoCliente: string | null; fechaEm: string | null };
   }>("ck_conversa", { p_chamado: id }),

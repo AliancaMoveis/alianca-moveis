@@ -93,6 +93,8 @@ export function Conversa({ c, onFechar, onModelo }: { c: any; onFechar: () => vo
         ))}
         {v?.parcial && !!v.mensagens.length && (
           <div style={{ fontSize: 11, color: "#5F6670", textAlign: "center", padding: "2px 10px" }}>
+            {v.outrosPedidos > 0 && <>Esta é a conversa do telefone, então inclui {v.outrosPedidos === 1
+              ? "mais um pedido deste mesmo número" : `mais ${v.outrosPedidos} pedidos deste mesmo número`}.<br /></>}
             Aqui aparece o que passou pelo 360. Mensagem digitada à mão dentro da Kommo não entra nesta lista.
           </div>
         )}
