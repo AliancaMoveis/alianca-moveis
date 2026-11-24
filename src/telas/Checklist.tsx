@@ -12,6 +12,7 @@ import { agendaPlanilha, dataPlanilha, lerXlsx } from "../lib/planilha";
 import { abrirWhats, fmtDate, fmtDateTime, hojeISO, parseData, primeiroNome, sanitizeWhats, waTexto } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
+import { BotaoConversa } from "../comp/Conversa";
 import { SeloMedidaVenda } from "./Medidas";
 import { Arquivo, Visualizar, abrirTermo } from "./ProjetistaChecklist";
 
@@ -396,6 +397,8 @@ function CartaoCk({ c, aba }: any) {
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: 420, justifyContent: "flex-end" }}>
           {/* ver o projeto antes de marcar: sem isso a pessoa agenda sem saber o que o cliente comprou */}
           <button className="btn sm" title="Imagens e arquivos da venda (orçamento, projeto, medição)" onClick={() => setModal(<ModalArquivosVenda c={c} />)}>🖼 Imagens da venda</button>
+          {/* a conversa com o cliente vale em qualquer etapa: a agendar, aguardando ou já agendado */}
+          {c.status !== "concluida" && <BotaoConversa c={c} rotulo="💬 Conversa" onModelo={() => setModal(<ModalWhats c={c} inicial={g === "agendado" ? "confirmacao" : "retorno"} />)} />}
           {g === "agendado" && !k.confirmacao && <button className="btn sm" style={{ background: "var(--wa)", color: "#fff", borderColor: "var(--wa)" }} onClick={() => setModal(<ModalWhats c={c} inicial="confirmacao" />)}>📨 Enviar confirmação</button>}
           {g === "agendado" && k.confirmacao !== "confirmada" && <button className="btn sm" style={{ background: "var(--ok, #0f8a5f)", color: "#fff", borderColor: "var(--ok, #0f8a5f)", fontWeight: 700 }} onClick={() => executar(() => A.checklistRegistrar(c.id, { acao: "presenca_confirmada" }), "Presença confirmada")}>✅ Confirmou presença</button>}
           {g === "agendado" && c.status !== "concluida" && <button className="btn sm" style={{ background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }} onClick={() => setModal(<ModalNaoPodeVir c={c} />)}>🚫 Não pode vir</button>}
@@ -1571,14 +1574,6 @@ function RespostaDoCliente({ c }: { c: any }) {
   const { R, toast, recarregar, setModal } = useApp() as any;
   const r = ck(c).respostaCliente || {};
   const [indo, setIndo] = useState("");
-  const abrir = async () => {
-    setIndo("abrir");
-    try {
-      const v = await A.ckKommoConversa(c.id);
-      if (!v?.leadId) { toast("Este cliente ainda não tem conversa vinculada na Kommo"); return; }
-      window.open("https://aliancamoveis.kommo.com/leads/detail/" + v.leadId, "_blank", "noopener");
-    } catch (e: any) { toast(e.message); } finally { setIndo(""); }
-  };
   const lido = async () => {
     setIndo("lido");
     try { await A.ckRespostaLida(c.id, R.me()?.nome || ""); toast("Marcado como lido"); recarregar?.(); }
@@ -1589,7 +1584,8 @@ function RespostaDoCliente({ c }: { c: any }) {
     <b>💬 O cliente respondeu{r.em ? " em " + fmtDateTime(r.em) : ""}:</b>
     <div style={{ margin: "4px 0 8px", fontStyle: "italic" }}>“{String(r.texto || "").slice(0, 400)}”</div>
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-      <button className="btn sm" disabled={!!indo} onClick={abrir}>{indo === "abrir" ? "Abrindo…" : "💬 Abrir conversa na Kommo"}</button>
+      {/* a conversa acontece aqui dentro agora; a Kommo deixa de ser parada obrigatória */}
+      <BotaoConversa c={c} onModelo={() => setModal(<ModalWhats c={c} inicial="retorno" />)} />
       {/* depois de ler, o atendente resolve ali mesmo: oferece data nova ou manda para outra etapa */}
       <button className="btn sm" onClick={() => setModal(<ModalWhats c={c} inicial="retorno" />)}>📅 Enviar nova data</button>
       <button className="btn sm" onClick={() => setModal(<ModalResultado c={c} />)}>↔ Mover de etapa</button>

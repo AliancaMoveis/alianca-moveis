@@ -423,6 +423,17 @@ export const A = {
   ckRespostaLida: (id: string, por = "") => rpc("ck_resposta_lida", { p_chamado: id, p_por: por }),
   /** abre a conversa do cliente na Kommo, para responder na mão */
   ckKommoConversa: (id: string) => rpc<{ leadId: number | null; contatoId: number | null } | null>("ck_kommo_conversa", { p_chamado: id }),
+  /**
+   * A conversa do cliente para mostrar dentro do 360: o que ele escreveu, o que o sistema
+   * enviou, e se a janela de 24h da Meta está aberta (que é o que decide se dá para escrever
+   * texto livre ou se só sai modelo aprovado).
+   * Traz só o que passou pelo 360 — o que alguém digitou na mão dentro da Kommo não aparece.
+   */
+  ckConversa: (id: string) => rpc<{
+    cliente: string; telefone: string; pedido: string | null; parcial: boolean;
+    mensagens: { de: "cliente" | "loja"; texto: string; em: string; por?: string }[];
+    janela: { aberta: boolean; ultimaDoCliente: string | null; fechaEm: string | null };
+  }>("ck_conversa", { p_chamado: id }),
   /** quem recebeu a mensagem do agendamento e não respondeu há mais de N dias */
   ckSemRetornoPendentes: (dias = 3) => rpc<any[]>("ck_sem_retorno_pendentes", { p_dias: dias }),
   /** avisa o cliente que a data reservada foi liberada e que vamos sugerir outra.
