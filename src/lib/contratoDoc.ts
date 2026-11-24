@@ -34,11 +34,10 @@ export type AssinaturaContrato = { nome: string; cpf: string; quando: string; ip
 export const LINHAS_TERMO: [keyof TermoAmb, string][] = [["estrutura", "Estrutura"], ["portas", "Portas"], ["envoltorio", "Envoltório"], ["paineis", "Painéis"]];
 export const AMORT: [keyof TermoAmb, string][] = [["corredicas", "Corrediças"], ["dobradicas", "Dobradiças"]];
 export const MAT_ROT: Record<string, string> = { MDP: "MDP", MDF: "MDF", OUTRO: "Outro", NAO: "Não contém" };
-/** TRAVA TEMPORÁRIA: o botão "Outro" só aparece depois que a função "contrato" for republicada
- *  com esta mesma versão do arquivo. Enquanto o servidor não conhecer OUTRO, ele gera o documento
- *  assinado sem marcar o material — num contrato isso é inaceitável. Virar para true no mesmo
- *  deploy em que a função subir. */
-export const MAT_OUTRO_LIBERADO = false;
+/** O botão "Outro" só pode aparecer com a função "contrato" do Supabase rodando ESTA versão do
+ *  arquivo — senão o documento assinado sai sem o material marcado. Liberado em 24/11/2026,
+ *  junto com a publicação da função. Se um dia a função voltar atrás, isto volta para false. */
+export const MAT_OUTRO_LIBERADO = true;
 /** material de uma linha em texto: com OUTRO, vale o que o projetista escreveu */
 export const matTexto = (l?: LinhaTermo | null) =>
   l?.mat === "OUTRO" ? String(l.matTxt || "").trim() || "Outro" : MAT_ROT[String(l?.mat || "")] || "";
