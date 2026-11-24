@@ -156,7 +156,9 @@ async function mandarDocumentos(chamado: string, lib: any, lead_id: number | nul
 
     const nome = String(lib.cliente || "").trim().split(/\s+/)[0] || "";
     const texto = `Perfeito${nome ? ", " + nome : ""}! Aqui estão os documentos do seu projeto da Aliança Móveis`
-      + (lib.pedido ? ` — venda ${lib.pedido}` : "") + `.\n\n${linhas.join("\n\n")}\n\nOs links ficam disponíveis por 30 dias.`;
+      + (lib.pedido ? ` — venda ${lib.pedido}` : "") + `.\n\n${linhas.join("\n\n")}\n\n`
+      + `📥 Abra cada link e toque no botão de baixar para guardar o arquivo no seu celular — `
+      + `assim ele fica com você para sempre. Os links em si saem do ar depois de 30 dias.`;
 
     const cf = Number(await segredo("kommo_cf_mensagem")), bot = Number(await segredo("kommo_bot_mensagem"));
     if (!cf || !bot) return "envio de mensagem livre não configurado";

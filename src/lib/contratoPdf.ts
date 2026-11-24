@@ -11,6 +11,8 @@
 export type ImgAmb = { ambiente: string; nome: string; src: string };
 
 const A4 = { w: 210, h: 297 };
+/** as mesmas margens do @page do contrato (10mm 12mm): é para dentro delas que a folha vai */
+const MARGEM = { x: 12, y: 10 };
 
 /** mede uma imagem (data URL) sem depender de rede */
 function medir(src: string): Promise<{ w: number; h: number }> {
@@ -53,10 +55,15 @@ export async function pdfDoContrato(html: string, aoAndar?: (feitas: number, tot
       const cv = await html2canvas(alvos[i], { scale: 2, backgroundColor: "#fff", useCORS: true, logging: false });
       const img = cv.toDataURL("image/jpeg", 0.86);
       if (i) doc.addPage();
-      // encaixa a folha na página mantendo a proporção (o CSS do contrato já é A4)
-      const prop = cv.height / cv.width;
-      const larg = A4.w, alt = Math.min(A4.h, larg * prop);
-      doc.addImage(img, "JPEG", 0, (A4.h - alt) / 2, larg, alt, undefined, "FAST");
+      // A folha `.pg` tem 186mm — a A4 menos as margens do @page (10mm 12mm). Antes isso era
+      // esticado para os 210mm da folha inteira a partir do x=0: o conteúdo encostava nas duas
+      // bordas e o lado direito saía cortado na tela e na impressão. E a altura usava Math.min,
+      // que espremia a página quando ela passava de 297mm, em vez de reduzir junto com a largura.
+      // Agora a imagem é encaixada DENTRO das margens, com a mesma escala nos dois eixos.
+      const maxL = A4.w - MARGEM.x * 2, maxA = A4.h - MARGEM.y * 2;
+      const esc = Math.min(maxL / cv.width, maxA / cv.height);
+      const larg = cv.width * esc, alt = cv.height * esc;
+      doc.addImage(img, "JPEG", (A4.w - larg) / 2, (A4.h - alt) / 2, larg, alt, undefined, "FAST");
     }
     aoAndar?.(alvos.length, alvos.length);
     return doc.output("blob");
