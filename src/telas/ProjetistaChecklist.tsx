@@ -1753,13 +1753,15 @@ function DocsDoCliente({ c, t0, ass, arqs, toast, recarregar }: { c: any; t0: an
     {passo && <div className="hint" style={{ marginTop: 6 }}>⏳ {passo}</div>}
 
     {/* Fora da janela de 24h da Meta, texto livre não chega. Então o 360 pergunta por modelo
-        aprovado; a resposta do cliente abre a janela e o envio sai sozinho, com os documentos
-        que foram travados no momento do pedido. */}
+        aprovado; a resposta do cliente abre a janela e o envio sai sozinho — com o que estiver
+        na ficha NO MOMENTO DO ENVIO, não com o que havia quando pedimos. Se o projetista
+        refizer o contrato enquanto o cliente não responde, vai o refeito. */}
     {docs.length > 0 && (() => {
       const lib = t0?.liberacao;
-      if (lib?.status === "aguardando") return <div className="note" style={{ marginTop: 10 }}>
-        ⏳ <b>Aguardando o cliente responder.</b> Pedimos a liberação em {fmtDateTime(lib.em)}{lib.por ? " · por " + lib.por : ""}.
-        Assim que ele responder <b>qualquer coisa</b>, o 360 manda {(lib.docs || []).length === 1 ? "o documento" : "os dois documentos"} sozinho.
+      const dias = lib?.em ? Math.floor((Date.now() - +new Date(lib.em)) / 864e5) : 0;
+      if (lib?.status === "aguardando") return <div className="note" style={{ marginTop: 10, ...(dias >= 3 ? { borderColor: "var(--danger)" } : {}) }}>
+        {dias >= 3 ? "📞 " : "⏳ "}<b>{dias >= 3 ? "O cliente não respondeu — ligue para ele." : "Aguardando o cliente responder."}</b> Pedimos a liberação em {fmtDateTime(lib.em)}{lib.por ? " · por " + lib.por : ""}{dias >= 3 ? ", há " + dias + " dias" : ""}.
+        Assim que ele responder <b>qualquer coisa</b>, o 360 manda {docs.length === 1 ? "o documento" : "os " + docs.length + " documentos"} sozinho.
       </div>;
       if (lib?.status === "enviado") return <div className="note" style={{ marginTop: 10 }}>✅ O cliente liberou e os documentos já foram enviados pelo WhatsApp do checklist.</div>;
       return null;
