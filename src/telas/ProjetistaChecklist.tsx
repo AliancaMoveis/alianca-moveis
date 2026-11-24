@@ -1636,6 +1636,22 @@ function DocsDoCliente({ c, t0, ass, arqs, toast, recarregar }: { c: any; t0: an
     if (!tel) { toast("Este cliente está sem telefone na ficha"); return; }
     setIndo("e" + tipo);
     try {
+      // A JANELA DECIDE, ANTES DE MANDAR. Isto era um try/catch: mandava o link e, se
+      // falhasse, perguntava ao cliente se podia mandar. Só que kommoMensagem NÃO falha
+      // quando a Meta bloqueia — ela devolve sucesso assim que a Kommo aceita o disparo,
+      // e aceitar não é entregar. Resultado: com a janela fechada o link ia para o vazio,
+      // a tela dizia "Enviado" e a pergunta de autorização nunca saía (caso do Jacy,
+      // venda 1313716, 24/11 17:33 — cliente que nunca tinha escrito).
+      let janelaAberta = true;
+      try { janelaAberta = !!(await A.ckConversa(c.id))?.janela?.aberta; } catch { /* sem resposta, tenta mandar */ }
+      if (!janelaAberta) {
+        const r = await A.ckLiberacaoPedir({ id: c.id, cliente: c.cliente, telefone: tel, pedido: venda });
+        setErro(e => ({ ...e, [tipo]: "" }));
+        await recarregar?.();
+        toast("O cliente não fala com a gente há mais de um dia — perguntei se posso mandar. Assim que ele responder qualquer coisa, " + (r.docs.length > 1 ? "os documentos vão" : "o documento vai") + " sozinho.");
+        return;
+      }
+
       const r = await A.ckContratoAbrir(c.id, d.path);
       const link = r.urlBaixar || r.url;
       const txt = tipo === "contrato"
