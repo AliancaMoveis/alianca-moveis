@@ -161,18 +161,22 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
     agendar: {
       hoje: ["Para fazer hoje", aFazerHoje],
       a_contatar: ["Ainda não contatados", c => G("agendar")(c) && etapaCk(c) === "a_contatar"],
-      msg: ["Mensagem enviada · aguardando resposta", c => G("agendar")(c) && etapaCk(c) === "aguardando"],
+      // quem respondeu em texto livre e ainda não foi respondido fica SÓ em "ler e responder":
+      // aparecer também aqui fazia a pessoa achar que já tinha sido atendido e a mensagem do
+      // cliente nunca ser lida. Mesma regra que "sem resposta" e "ligar" já aplicam.
+      msg: ["Mensagem enviada · aguardando resposta", c => G("agendar")(c) && etapaCk(c) === "aguardando" && !respondeuManual(c)],
       respondeu: ["💬 Respondeu · ler e responder", c => G("agendar")(c) && respondeuManual(c)],
       ligar: ["📞 Ligar · 3 tentativas sem resposta", c => G("agendar")(c) && precisaLigar(c)],
       sem_retorno: ["📨 Enviada · sem resposta", semResposta],
       sr1: ["↳ 1ª tentativa", c => semResposta(c) && tentativasCk(c) <= 1],
       sr2: ["↳ 2ª tentativa", c => semResposta(c) && tentativasCk(c) === 2],
-      nova_data: ["🔄 Pediram nova data", c => G("agendar")(c) && etapaCk(c) === "outra_data"],
+      nova_data: ["🔄 Pediram nova data", c => G("agendar")(c) && etapaCk(c) === "outra_data" && !respondeuManual(c)],
       vencido: ["⚠️ Prazo vencido", c => G("agendar")(c) && reservaVencida(c, cfgAgenda(st))],
       todos: ["Todos a agendar", G("agendar")],
     },
     aguardando: {
       todos: ["Todos aguardando", G("aguardando")],
+      respondeu: ["💬 Respondeu · ler e responder", c => G("aguardando")(c) && respondeuManual(c)],
       retornar: ["Retornar hoje / atrasados", c => G("aguardando")(c) && retornoVencido(c)],
       obra: ["🚧 Obra / reforma", c => G("aguardando")(c) && chaveMotivo(c) === "obra"],
       sem_resposta: ["📵 Sem resposta", c => G("aguardando")(c) && chaveMotivo(c) === "sem_resposta"],
@@ -184,6 +188,9 @@ export default function Checklist({ aba = "agendar" }: { aba?: string }) {
       hoje: ["Hoje", c => G("agendado")(c) && diaAg(c) === hoje()],
       semana: ["Próximos 7 dias", c => G("agendado")(c) && diaAg(c) >= hoje() && diaAg(c) <= somaDias(hoje(), 7)],
       passados: ["Data passou · marcar realizado", c => G("agendado")(c) && diaAg(c) < hoje()],
+      // o cliente escreve depois de já estar agendado e isso não tinha aba nenhuma aqui: a
+      // mensagem dele ficava só no selo do cartão, invisível para quem trabalha por aba
+      respondeu: ["💬 Respondeu · ler e responder", c => G("agendado")(c) && respondeuManual(c)],
       encerrados: ["Realizados / encerrados", G("encerrado")],
     },
     confirmar: {
