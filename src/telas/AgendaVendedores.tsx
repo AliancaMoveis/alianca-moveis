@@ -1,4 +1,6 @@
-// 👔 Vendedores — para os gerentes: todos os vendedores com os atendimentos marcados na loja hoje e nos próximos dias.
+// 👔 Vendedores — para os gerentes: todos os vendedores com os atendimentos marcados na loja,
+// de hoje em diante e SEM TETO de data: o gerente precisa enxergar dezembro em novembro para
+// cruzar com férias e folga. Antes a tela parava em hoje + 6 dias e o resto sumia sem aviso.
 // Clique no vendedor para ver os clientes dele, dia a dia (mesma base da agenda da loja de quem coordena).
 import { useMemo, useState } from "react";
 import { SeloVinda } from "../comp/Situacao";
@@ -8,18 +10,18 @@ import { SeloFreela } from "../comp/SelVendedor";
 
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const maisDias = (iso: string, n: number) => { const d = parseData(iso + "T12:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
-const N_DIAS = 7;
 
 const ROT: Record<string, string> = { marketing: "Marketing", externo: "Externo", porta: "🚪 Porta" };
 
 export default function AgendaVendedores({ movel = false }: { movel?: boolean }) {
   const { R, st, abrirDetalhe } = useApp() as any;
   const hoje = hojeISO();
-  const dias = useMemo(() => Array.from({ length: N_DIAS }, (_, i) => maisDias(hoje, i)), [hoje]);
   const [sel, setSel] = useState<string>(""); const [q, setQ] = useState("");
   // mesma base da agenda da loja de quem coordena (gerente e Gestão veem todos os clientes da loja)
   const todos = useMemo(() => (st.chamados || []).filter((c: any) => (R.domMarketing(c) || R.ehPorta(c)) && c.dataLoja && R.podeVer(c))
-    .map((c: any) => ({ ...c, _dia: String(c.dataLoja).slice(0, 10) })).filter((c: any) => c._dia >= dias[0] && c._dia <= dias[N_DIAS - 1]), [st.chamados, dias.join()]);
+    .map((c: any) => ({ ...c, _dia: String(c.dataLoja).slice(0, 10) })).filter((c: any) => c._dia >= hoje), [st.chamados, hoje]);
+  // os dias vêm do que está marcado, não de uma janela fixa: dia sem ninguém não vira seção
+  const dias = useMemo(() => Array.from(new Set<string>([hoje, ...todos.map((c: any) => c._dia)])).sort(), [todos, hoje]);
   const origem = (c: any) => (c.tipo === "porta" || (c.tratativa && c.tratativa.porta)) ? "porta" : R.ehDireto(c) ? "marketing" : "externo";
   const vendedores: any[] = R.projetistas();
   const doVend = (id: string) => todos.filter(x => x.atendenteId === id);
@@ -32,7 +34,7 @@ export default function AgendaVendedores({ movel = false }: { movel?: boolean })
   const escolhido = sel === "__fila" ? { id: "__fila", nome: "Sem vendedor (fila)" } : vendedores.find(v => v.id === sel);
   const clientes = sel === "__fila" ? sem : sel ? doVend(sel) : [];
   return <section className={movel ? "vd-movel" : "view active"}>
-    {movel ? <div className="mv-sec">👔 Vendedores · hoje e próximos {N_DIAS - 1} dias</div> : <div className="view-head"><div><h2>👔 Vendedores</h2><p>Todos os vendedores e os clientes marcados na loja para cada um — hoje e nos próximos {N_DIAS - 1} dias. Clique no vendedor para ver os atendimentos.</p></div></div>}
+    {movel ? <div className="mv-sec">👔 Vendedores · de hoje em diante</div> : <div className="view-head"><div><h2>👔 Vendedores</h2><p>Todos os vendedores e os clientes marcados na loja para cada um, <b>de hoje em diante, sem limite de data</b> — inclusive meses à frente. Clique no vendedor para ver os atendimentos.</p></div></div>}
         <div className="vd-wrap">
       {!(movel && sel) && <div className="vd-lista">
         <input type="search" placeholder="🔎 Buscar vendedor" value={q} onChange={e => setQ(e.target.value)} />
@@ -48,7 +50,7 @@ export default function AgendaVendedores({ movel = false }: { movel?: boolean })
         {movel && <button type="button" className="btn ghost sm" style={{ marginBottom: 8 }} onClick={() => setSel("")}>‹ Todos os vendedores</button>}
         {!escolhido ? <div className="empty" style={{ padding: 30 }}>Escolha um vendedor na lista para ver os atendimentos.</div> : <>
           <h3 style={{ margin: "0 0 4px" }}>{escolhido.nome}</h3>
-          <p className="hint" style={{ margin: "0 0 12px" }}>{clientes.length ? clientes.length + " atendimento(s) marcado(s) de hoje a " + fmtDate(dias[N_DIAS - 1]).slice(0, 5) : "Nenhum atendimento marcado de hoje a " + fmtDate(dias[N_DIAS - 1]).slice(0, 5) + "."}</p>
+          <p className="hint" style={{ margin: "0 0 12px" }}>{clientes.length ? clientes.length + " atendimento(s) marcado(s), de hoje até " + fmtDate(dias[dias.length - 1]) : "Nenhum atendimento marcado de hoje em diante."}</p>
           {dias.map(d => { const l = clientes.filter(x => x._dia === d).sort((a, b) => String(a.dataLoja).localeCompare(String(b.dataLoja)));
             if (!l.length && d !== hoje) return null;
             return <div key={d} className="vd-dia"><div className="vd-dia-t">{tit(d)} <small>{l.length} cliente{l.length === 1 ? "" : "s"}</small></div>
