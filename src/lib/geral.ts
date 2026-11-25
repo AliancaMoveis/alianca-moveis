@@ -1,6 +1,6 @@
 // Visão geral da Gestão: a faixa "Precisa de você agora" e os 5 cartões (Call center, Agendamentos, Externos,
 // Checklist, Vendas). Uma conta só, usada no computador (Dashboard) e no celular (Painel) — os números batem.
-import { fmtMoeda, isoLocal, pagamentosVenda, parseData, parseMoeda, vendaContaVolume } from "./regras";
+import { fmtMoeda, isoLocal, pagamentosVenda, parseData, valorVendaPeriodo, vendaContaVolume } from "./regras";
 import { ck, etapaCk, grupoCk, reservaVencida, querEnc, aConfirmar, cfgAgenda } from "../telas/Checklist";
 
 const FIM_TXT = (t: string) => t.startsWith("Status → Concluída") || t.startsWith("✓ Atendimento finalizado");
@@ -82,7 +82,12 @@ export function calcGeral(R: any, st: any, de: string, ate: string) {
 
   // ----- vendas -----
   const vendasPer = mk.filter((c: any) => vendaContaVolume(c.venda) && pagamentosVenda(c.venda).some((p: any) => dentro(p.data + "T12:00")));
-  const valorPer = vendasPer.reduce((s: number, c: any) => s + parseMoeda(c.venda.valor), 0);
+  // Valor do cartão = SÓ o que entrou dentro do período, igual ao "Vendido efetivado" do painel.
+  // Antes somava c.venda.valor, que é o valor INTEIRO da venda do cliente (todos os nºs, de
+  // qualquer mês, promissória não paga incluída). Como a contagem de vendas já era a do período,
+  // o cartão mostrava 209 vendas com um valor que não era o das 209 — e não havia lista nenhuma
+  // que fechasse com aquele número.
+  const valorPer = vendasPer.reduce((s: number, c: any) => s + valorVendaPeriodo(c.venda, de, ate), 0);
   const vendasAConf = mk.filter((c: any) => c.venda && c.venda.status === "registrada");
   const veValor = R.ehGestao() || R.mySetores().includes("gerente_loja");
 
