@@ -442,12 +442,15 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
   const v = d.venda || {}, cl = d.cliente || {}, ps: any[] = d.produtos || [];
   const cupom = ehCupomPlanejado;
   const { teto, nCupom, nPronta } = tetoVenda(d);
+  // o Exact não mandou o desconto: o negociado é desconhecido, e o teto mostrado é só o bruto
+  const semDesconto = v.descontoPct == null;
   const soma = (k: string, f?: (p: any) => boolean) => ps.filter(f || (() => true)).reduce((t, p) => t + (Number(p[k]) || 0), 0);
   const tetoCupons = soma("negociado", p => cupom(p.nome));
   const linha = (r: string, val: ReactNode) => <div className="pjv-l"><span>{r}</span><b>{val}</b></div>;
   // o valor negociado fica oculto: aparece só quando o projetista clica no olho (o bruto e os percentuais continuam à vista)
   const oculto = "•••••••";
-  const neg = (n: number | null | undefined) => verNeg ? brl(n) : oculto;
+  // negociado nulo = o Exact não deu o desconto. Diz isso, em vez de repetir o bruto.
+  const neg = (n: number | null | undefined) => n == null ? "não informado pelo Exact" : verNeg ? brl(n) : oculto;
   const Olho = () => <button type="button" onClick={() => setVerNeg(v => !v)} title={verNeg ? "Ocultar os valores negociados" : "Mostrar os valores negociados"}
     style={{ background: "none", border: 0, cursor: "pointer", fontSize: 13, padding: "0 4px", opacity: .85 }}>{verNeg ? "🙈" : "👁"}</button>;
   // O teto também nasce oculto. A tela fica virada para o cliente durante o checklist, e um
@@ -483,13 +486,17 @@ function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; e
       </div>
     </div>
     <div>
-      <div className="pjv-teto"><small>Teto para o projeto final (valor bruto)</small>
+      <div className="pjv-teto" style={semDesconto ? { borderColor: "var(--warn)" } : undefined}><small>Teto para o projeto final (valor bruto)</small>
         <b>{verTeto ? brl(teto) : oculto}<OlhoTeto /></b>
+        {/* Sem o desconto não há teto confiável: o bruto é o valor de tabela, não o que o cliente pagou. */}
+        {semDesconto && <div style={{ background: "var(--warn)", color: "#fff", borderRadius: 6, padding: "6px 8px", margin: "6px 0", fontWeight: 700, fontSize: 12.5 }}>
+          ⚠️ Teto NÃO confirmado — o Exact não informou o desconto desta venda. Este valor é o bruto (tabela), não o que o cliente pagou.
+          Confira o valor negociado no Exact antes de liberar o projeto.</div>}
         <div>{nCupom ? "Valor bruto dos cupons de planejado" + (nPronta ? " (sem a linha pronta)" : "") : "Valor bruto da venda"} — é o valor que se compara com o orçamento do Promob. O projeto final do checklist não pode passar disso; se o cliente pedir mudanças que aumentem o valor, a diferença precisa ser cobrada.</div>
-        <div className="pjv-neg">Valor negociado: <b>{neg(nCupom ? tetoCupons : v.negociado)}</b> <Olho />{v.descontoPct != null ? " · desconto " + String(v.descontoPct).replace(".", ",") + " %" : ""}</div></div>
+        <div className="pjv-neg">Valor negociado: <b>{neg(semDesconto ? null : nCupom ? tetoCupons : v.negociado)}</b> <Olho />{v.descontoPct != null ? " · desconto " + String(v.descontoPct).replace(".", ",") + " %" : ""}</div></div>
       <div className="box"><h4>Resumo</h4><div className="hist">
         <div>Bruto <b>{brl(v.bruto)}</b></div><div>Desconto <b>{v.descontoPct == null ? "—" : String(v.descontoPct).replace(".", ",") + " %"}</b></div><div>Negociado <b>{neg(v.negociado)}</b> <Olho /></div>
-        {nPronta > 0 && <div>Linha pronta (negociado) <b>{neg(soma("negociado", p => !cupom(p.nome)))}</b></div>}</div></div>
+        {nPronta > 0 && <div>Linha pronta (negociado) <b>{neg(semDesconto ? null : soma("negociado", p => !cupom(p.nome)))}</b></div>}</div></div>
       <div className="hint">🔒 Valores só para conferência interna do checklist. Não aparecem na impressão nem em nada que vai para o cliente.</div>
     </div>
   </div>;
