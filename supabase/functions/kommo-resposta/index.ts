@@ -255,6 +255,13 @@ Deno.serve(async (req) => {
     chamado = await rpc("kommo_chamado_por_contato", { p_lead: lead_id, p_contato: contato_id });
     if (!chamado && contato_id) {
       for (const f of await fonesDoContato(contato_id)) {
+        // Primeiro a autorização de documento pendente. As duas buscas acima partem de
+        // kommo_vinculo, que só a ação de agendamento grava — então o cliente que só
+        // recebeu o pedido de liberação NUNCA era encontrado, e o documento ficava parado
+        // na ficha com ele achando que ia receber. Esta busca não depende de vínculo nem
+        // da etapa de agendamento: se há autorização aberta para este telefone, é dele.
+        chamado = await rpc("kommo_chamado_por_liberacao", { p_fone: f });
+        if (chamado) { como = "liberacao"; break; }
         chamado = await rpc("kommo_chamado_por_telefone", { p_fone: f });
         if (chamado) { como = "telefone"; break; }
       }
