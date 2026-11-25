@@ -115,9 +115,11 @@ export default function ConfirmacaoVendas() {
   const lancadas = useMemo(() => {
     const m = new Map<string, { status: string; id: string; cliente: string }>();
     (st.chamados || []).forEach((c: any) => itensVenda(c.venda).forEach((i: any) => {
-      if (i.tipo === "pagamento" || !i.numero) return;
-      const k = String(i.numero);
-      if (!m.has(k) || i.status === "efetivada") m.set(k, { status: String(i.status || ""), id: c.id, cliente: c.cliente || "" });
+      // SÓ efetivada. "registrada" é a venda que o vendedor lançou e ESPERA a aprovação da
+      // Gestão — é justamente o que tem que aparecer para conferir; escondê-la junto com as
+      // já contadas sumiu com 54 clientes da fila. "cancelada" também não conta como lançada.
+      if (i.tipo === "pagamento" || !i.numero || i.status !== "efetivada") return;
+      m.set(String(i.numero), { status: "efetivada", id: c.id, cliente: c.cliente || "" });
     }));
     return m;
   }, [st.chamados]);
