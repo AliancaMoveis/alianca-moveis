@@ -6,7 +6,7 @@ import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
 import { col, lerArquivo, mesmoNome, tira } from "./Medidas";
-import { tipoPlanilha, type Linha } from "../lib/cruzarVendas";
+import { tipoPlanilha, endMv, endEx, cruzaEnd, type Linha, type End } from "../lib/cruzarVendas";
 import { camposExact, ehVendedor, incluidoPorChecklist } from "../lib/vendaExact";
 import { baixarXlsx } from "../lib/planilha";
 import { STATUS_CLIENTE, fmtDate, fmtMoeda, itensVenda } from "../lib/regras";
@@ -19,9 +19,18 @@ const nomeK = (s: string) => { const t = toks(s); return t.length >= 2 ? t[0] + 
 const num = (s: string) => { const n = Number(String(s || "").replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
 const isoBr = (s: string) => { const m = String(s || "").match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + "-" + m[2] + "-" + m[1] : ""; };
 
-type Como = "venda" | "telefone" | "nome";
-const COMO: Record<Como, [string, string]> = { venda: ["🧾 nº da venda", "#0f8a5f"], telefone: ["📞 telefone", "#0f8a5f"], nome: ["👤 só o nome", "#b8802a"] };
-type Res = { ex: Linha; n: string; data: string; sit: string; vend: string; valor: number; cands: { c: any; como: Como }[]; sel: number; vendU: any | null };
+type Como = "venda" | "telefone" | "end_ok" | "end_casa" | "end_sem" | "end_dif" | "end_conflito" | "nome";
+const COMO: Record<Como, [string, string]> = {
+  venda: ["🧾 nº da venda", "#0f8a5f"],
+  telefone: ["📞 telefone", "#0f8a5f"],
+  end_ok: ["🏠 endereço e complemento iguais", "#0f8a5f"],
+  end_casa: ["🏠 casa na rua", "#0f8a5f"],
+  end_sem: ["🏠 endereço, sem complemento de um lado", "#b8802a"],
+  end_dif: ["🏢 mesmo prédio, unidade diferente", "#c2410c"],
+  end_conflito: ["⚠️ casa de um lado, apartamento do outro", "#c2410c"],
+  nome: ["👤 só o nome", "#b8802a"],
+};
+type Res = { ex: Linha; n: string; data: string; sit: string; vend: string; valor: number; cands: { c: any; como: Como; mais: Como[] }[]; sel: number; vendU: any | null };
 
 export default function EncontrarVendas360() {
   const { R, st, toast, abrirDetalhe, executar, recarregar } = useApp() as any;
@@ -90,23 +99,38 @@ export default function EncontrarVendas360() {
     const linhas = arqs.flatMap(a => a.linhas); if (!linhas.length) return [];
     const base = st.chamados.filter((c: any) => R.domMarketing(c));
     const porTel: Record<string, any[]> = {}, porNum: Record<string, any[]> = {}, porNome: Record<string, any[]> = {};
+    // índice de endereço: a chave é o número do imóvel, porque número diferente nunca casa.
+    // A rua, a cidade e o complemento são conferidos depois, em cruzaEnd.
+    const porEnd: Record<string, { c: any; e: End }[]> = {};
     const add = (m: Record<string, any[]>, k: string, c: any) => { if (k && !(m[k] || []).includes(c)) (m[k] = m[k] || []).push(c); };
     base.forEach((c: any) => {
       String(c.telefone || "").split(/[\/,;]| e /).forEach((t: string) => add(porTel, k8(t), c));
       if (c.venda) [c.venda.numero, ...itensVenda(c.venda).map((i: any) => i.numero)].forEach((n: any) => add(porNum, so(String(n || "")), c));
       add(porNome, nomeK(c.cliente), c);
+      const e = endMv(String(c.endereco || ""));
+      if (e) (porEnd[e.num] = porEnd[e.num] || []).push({ c, e });
     });
     const vistos = new Set<string>(); const out: Res[] = [];
     linhas.forEach(ex => {
       const n = so(col(ex, "ID")); if (!n || vistos.has(n)) return; vistos.add(n);
-      const cands: { c: any; como: Como }[] = [];
-      const push = (c: any, como: Como) => { if (!cands.some(x => x.c.id === c.id)) cands.push({ c, como }); };
+      const cands: { c: any; como: Como; mais: Como[] }[] = [];
+      // Quando o mesmo cliente aparece por mais de um caminho, o primeiro (mais forte) manda
+      // e os outros entram em "mais": dois caminhos independentes batendo é quase certeza.
+      const push = (c: any, como: Como) => {
+        const ja = cands.find(x => x.c.id === c.id);
+        if (ja) { if (ja.como !== como && !ja.mais.includes(como)) ja.mais.push(como); return; }
+        cands.push({ c, como, mais: [] });
+      };
       (porNum[n] || []).forEach(c => push(c, "venda"));
       [col(ex, "ClienteTel1"), col(ex, "ClienteTel2")].forEach(t => (porTel[k8(t)] || []).forEach(c => push(c, "telefone")));
+      // endereço: o que faltava. É o caminho que acha a venda feita no nome de terceiro,
+      // com outro telefone, que é justamente a que some hoje.
+      const eEx = endEx(col(ex, "Orçamento", "Endereço", "Endereco"));
+      if (eEx) (porEnd[eEx.num] || []).forEach(({ c, e }) => { const g = cruzaEnd(eEx, e); if (g) push(c, g); });
       (porNome[nomeK(col(ex, "Cliente"))] || []).forEach(c => push(c, "nome"));
       const data = isoBr(col(ex, "DataSituação", "IncluidaEm"));
-      const ord = { venda: 0, telefone: 1, nome: 2 } as const;
-      cands.sort((a, b) => ord[a.como] - ord[b.como] || Number(!!b.c.venda) - Number(!!a.c.venda) || String(b.c.dataLoja || b.c.criadoEm).localeCompare(String(a.c.dataLoja || a.c.criadoEm)));
+      const ord = { venda: 0, telefone: 1, end_ok: 2, end_casa: 3, end_sem: 4, end_dif: 5, end_conflito: 6, nome: 7 } as const;
+      cands.sort((a, b) => ord[a.como] - ord[b.como] || b.mais.length - a.mais.length || Number(!!b.c.venda) - Number(!!a.c.venda) || String(b.c.dataLoja || b.c.criadoEm).localeCompare(String(a.c.dataLoja || a.c.criadoEm)));
       const vend = col(ex, "Vendedor").trim();
       out.push({ ex, n, data, sit: col(ex, "SituaçãoVenda").trim(), vend, valor: num(col(ex, "ValorTotaRecebido")) || num(col(ex, "ValorTotal")), cands, sel: 0, vendU: acharVend(vend) });
     });
@@ -265,6 +289,8 @@ export default function EncontrarVendas360() {
                 <td style={td}><b>{col(r.ex, "Cliente")}</b><div className="hint">{[col(r.ex, "ClienteTel1"), col(r.ex, "ClienteTel2")].filter(Boolean).join(" · ")}</div><div className="hint" style={{ maxWidth: 260 }}>{col(r.ex, "Orçamento")}</div></td>
                 {aba !== "nada" && c && <>
                   <td style={td}><span className="pill" style={{ background: COMO[cm.como][1], color: "#fff", fontSize: 11 }}>{COMO[cm.como][0]}</span>
+                    {/* dois caminhos independentes batendo no mesmo cliente é quase certeza — vale dizer */}
+                    {!!cm.mais?.length && <span className="pill" style={{ background: "#0f8a5f", color: "#fff", fontSize: 11, marginLeft: 4 }}>+ {cm.mais.map(m => COMO[m][0].replace(/^\S+\s/, "")).join(" + ")}</span>}
                     <div><a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(c.id); }}><b>{c.cliente}</b></a> <span className="hint">{c.id}</span></div>
                     <div className="hint">{c.telefone || ""} · {STATUS_CLIENTE[R.statusClienteDe(c)] || ""}{c.dataLoja ? " · loja " + fmtDate(c.dataLoja) : c.dataVisita ? " · visita " + fmtDate(c.dataVisita) : ""}</div>
                     {pagadorSalvo(r) ? <div className="hint" style={{ color: "var(--st-concluida)", fontWeight: 700 }}>🧾 cliente comprador: {col(r.ex, "Cliente")}</div> : nomeDif(r) && (

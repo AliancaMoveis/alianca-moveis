@@ -16,6 +16,8 @@ const COMO: Record<Achado["como"], [string, string, string]> = {
   venda: ["🧾 Nº da venda no cadastro", "var(--st-concluida, #0f8a5f)", "O nº da venda está escrito no nome do cadastro do Minha Visita"],
   telefone: ["📞 Telefone", "var(--st-concluida, #0f8a5f)", "O telefone da venda é o mesmo do cadastro no Minha Visita"],
   end_ok: ["🏠 Endereço + complemento", "var(--st-concluida, #0f8a5f)", "Mesma rua, número e cidade — bloco/apto/casa também conferem"],
+  end_casa: ["🏠 Casa na rua", "var(--st-concluida, #0f8a5f)", "Mesma rua, número e cidade, e os dois lados são casa/sobrado — a rua e o número já identificam a família, mesmo que a venda esteja em outro nome ou telefone"],
+  end_conflito: ["⚠️ Casa × apartamento", "var(--danger)", "Mesma rua e número, mas um lado está como casa e o outro como apartamento — algum dos dois cadastros está errado"],
   end_sem: ["🏠 Endereço (sem complemento)", "var(--warn)", "Mesma rua, número e cidade — um dos lados não tem bloco/apto/casa para comparar"],
   end_dif: ["⚠️ Endereço, complemento diferente", "var(--danger)", "Mesma rua e número, mas bloco/apto/casa diferentes — provavelmente outro morador do mesmo prédio/condomínio"],
 };

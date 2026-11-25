@@ -2,7 +2,7 @@
 // 1º pelo telefone (8 últimos dígitos); 2º pelo endereço (rua + número + cidade), comparando o complemento (bloco/apto/casa).
 export type Linha = Record<string, string>;
 export type End = { rua: string[]; num: string; cidade: string[]; comp: string; compNums: number[] };
-export type Achado = { mv: Linha; como: "telefone" | "venda" | "end_ok" | "end_sem" | "end_dif"; end: End | null; mesmoNome: boolean };
+export type Achado = { mv: Linha; como: "telefone" | "venda" | "end_ok" | "end_casa" | "end_sem" | "end_dif" | "end_conflito"; end: End | null; mesmoNome: boolean };
 export type ResVenda = { ex: Linha; end: End | null; achados: Achado[]; melhor: Achado | null };
 
 const T = (s: string) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/'/g, "").replace(/\s+/g, " ").trim();
@@ -44,12 +44,47 @@ function parecido(A: string[], B: string[], min = 0.6) {
   return A.some(a => a.length >= 4 && B.some(b => tm(a, b))) && k / Math.min(A.length, B.length) >= min;
 }
 const subconj = (a: number[], b: number[]) => a.every(x => b.includes(x));
-/** complemento: confere (mesmos nºs de bloco/apto/casa), diferente, ou sem como comparar */
-function comparaComp(a: End, b: End): "end_ok" | "end_sem" | "end_dif" {
-  if (!a.compNums.length || !b.compNums.length) return "end_sem";
+
+/**
+ * De que natureza é o complemento. É a distinção que decide tudo:
+ * CASA/SOBRADO não identificam ninguém — só dizem que é casa, e aí a rua + o número
+ * já apontam a família (64% da base está assim, "CASA" sozinha aparece 16 mil vezes).
+ * AP/BL/TORRE são o contrário: sem a unidade, rua + número é um prédio inteiro, e o
+ * candidato pode ser o vizinho de porta.
+ */
+export function tipoComp(s: string): "casa" | "apto" | "" {
+  const t = T(s);
+  if (!t) return "";
+  if (/\b(AP|APT|APTO|APARTAMENTO|BL|BLOCO|TORRE|ED|EDIF|EDIFICIO|COND|CONDOMINIO)\b/.test(t)) return "apto";
+  if (/\b(CASA|CS|SOBRADO|SOB|SB|CHACARA|SITIO|FUNDOS|FRENTE|TERREO|RESIDENCIA)\b/.test(t)) return "casa";
+  return "";
+}
+
+export type GrauEnd = "end_ok" | "end_casa" | "end_sem" | "end_dif" | "end_conflito";
+
+/** o complemento confere, é casa dos dois lados, falta de um lado, diverge, ou se contradiz */
+function comparaComp(a: End, b: End): GrauEnd {
+  const ta = tipoComp(a.comp), tb = tipoComp(b.comp);
+  if (ta && tb && ta !== tb) return "end_conflito";               // casa de um lado, apartamento do outro
+  if (ta === "casa" && tb === "casa" && !a.compNums.length && !b.compNums.length) return "end_casa";
+  if (!a.compNums.length || !b.compNums.length) return "end_sem"; // um dos dois não diz a unidade
   return subconj(a.compNums, b.compNums) || subconj(b.compNums, a.compNums) ? "end_ok" : "end_dif";
 }
-const ORDEM = { telefone: 0, venda: 1, end_ok: 2, end_sem: 3, end_dif: 4 } as const;
+
+/**
+ * Os dois endereços são do mesmo imóvel? Devolve o grau, ou null quando nem vale olhar.
+ * Número da casa diferente nunca casa: rua igual com número diferente é outro imóvel.
+ */
+export function cruzaEnd(a: End | null, b: End | null): GrauEnd | null {
+  if (!a || !b || a.num !== b.num) return null;
+  if (!parecido(a.rua, b.rua)) return null;
+  if (a.cidade.length && b.cidade.length && !parecido(a.cidade, b.cidade, 0.5)
+      && !(a.cidade.length === 1 && b.cidade.some(x => tm(x, a.cidade[0])))) return null;
+  return comparaComp(a, b);
+}
+
+// a ordem da prioridade: nº da venda, telefone, endereço (do mais forte ao mais fraco), nome
+const ORDEM = { venda: 0, telefone: 1, end_ok: 2, end_casa: 3, end_sem: 4, end_dif: 5, end_conflito: 6 } as const;
 
 const so = (s: string) => (s || "").replace(/\D/g, "");
 const chave = (s: string) => { const d = so(s); return d.length >= 8 ? d.slice(-8) : ""; };
