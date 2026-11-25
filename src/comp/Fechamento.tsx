@@ -102,6 +102,25 @@ async function lerFech(ciclo?: string, uid?: string) {
   return (data || []) as { ciclo: string; usuario_id: string; dados: Fech; gerado_em: string; gerado_por: string }[];
 }
 
+/** O ciclo do período já foi fechado pela Gestão (foto gravada que vai para o Financeiro)?
+ *  Serve para nunca chamar de "a receber" um valor que ainda pode mudar: enquanto o ciclo está
+ *  aberto o número é PREVISÃO — venda pode ser cancelada, corrigida ou entrar depois.
+ *  fechado: null = carregando · false = aberto (ou o período nem é um ciclo) · true = fechado. */
+export function useCicloFechado(de: string, ate: string) {
+  const ym = cicloExato(de, ate);
+  const [f, setF] = useState<any[] | null>(null);
+  useEffect(() => { let vivo = true; setF(null); if (!ym) return; lerFech(ym).then(l => vivo && setF(l)).catch(() => vivo && setF([])); return () => { vivo = false; }; }, [ym]);
+  const fechado = !ym ? false : f === null ? null : f.length > 0;
+  return { ym, fechado, em: f && f[0] ? f[0].gerado_em : "" };
+}
+
+/** rótulo honesto para o total de pagamento, conforme o ciclo esteja aberto ou fechado */
+export function rotuloPagamento(fechado: boolean | null) {
+  return fechado === true
+    ? { l: "Total a receber (ciclo fechado)", cor: "var(--st-concluida)" }
+    : { l: "Previsto — ainda não fechado", cor: "var(--warn)" };
+}
+
 // ---------- Gestão (no Financeiro, com o período = um ciclo) ----------
 export function FechamentoGestao({ de, ate, pessoas }: { de: string; ate: string; pessoas: any[] }) {
   const { R, executar: ex } = useApp() as any;

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCicloFechado } from "../comp/Fechamento";
 import { useApp } from "../estado";
 import { PainelConsultor, PainelLoja, PainelVendedor } from "./DashLoja";
 import ConsultaProduto from "./ConsultaProduto";
@@ -77,6 +78,8 @@ export default function Dashboard() {
 
   const ehCons = R.ehConsultorExterno();
   const r = ehCons ? R.extratoConsultor(R.currentUserId, de, ate) : null;
+  // enquanto o ciclo nao fecha, o numero do consultor e PREVISAO, nunca "a receber"
+  const { fechado: cicloFechadoOk } = useCicloFechado(de, ate);
   const pendCons = ehCons ? st.chamados.filter((c: any) => c.consultorId === R.currentUserId && c.venda && ["registrada", "promissoria"].includes(c.venda.status)).length : 0;
 
   const ccTix = vis.filter((c: any) => c.setorDestino === "callcenter");
@@ -206,7 +209,7 @@ export default function Dashboard() {
             <div className="kpis" style={{ marginBottom: 0 }}>
               <Kpi n={r.visitas.length} l="Visitas pagas" /><Kpi n={fmtMoeda(r.pagamentoVisitas)} l="Pagamento por visitas" />
               <Kpi n={r.vendas.length} l="Vendas efetivadas" /><Kpi n={fmtMoeda(r.totalVendido)} l="Valor vendido" />
-              <Kpi n={fmtMoeda(r.comissao)} l={`Comissão (${R.cfg().comissaoPct}%)`} /><Kpi n={fmtMoeda(r.total)} l="Total a receber" cor="var(--st-concluida)" />
+              <Kpi n={fmtMoeda(r.comissao)} l={`Comissão (${R.cfg().comissaoPct}%)`} /><Kpi n={fmtMoeda(r.total)} l={cicloFechadoOk === true ? "Total a receber · ciclo fechado" : "Previsto no período (ainda não fechado)"} cor={cicloFechadoOk === true ? "var(--st-concluida)" : "var(--warn)"} />
             </div>
             <div style={{ marginTop: 12 }}>
               {pendCons > 0 && <div style={{ fontSize: 12.5, color: "var(--warn)", marginBottom: 6 }}>{pendCons} venda(s) sem comissão ainda (aguardando confirmação ou em promissória).</div>}

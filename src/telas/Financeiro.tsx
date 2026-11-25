@@ -5,7 +5,7 @@ import { STATUS_CLIENTE, TIPO_REEMBOLSO, fmtDate, fmtDateTime, fmtMoeda, parseMo
 import { valorPendente, promAbertas, vendasDoPeriodo } from "../lib/regras";
 import { Kpi } from "./Dashboard";
 import { PromissoriasAbertas } from "../comp/VendaValidar";
-import { FechamentoGestao, FechamentoMeu } from "../comp/Fechamento";
+import { FechamentoGestao, FechamentoMeu, rotuloPagamento, useCicloFechado } from "../comp/Fechamento";
 import { hojeISO } from "../lib/regras";
 import { brCurto, cicloDe, cicloDoMes, diasAte, nomeCiclo, somaMes, ultimoFechado } from "../lib/ciclo";
 import RecuperacaoCk from "./RecuperacaoCk";
@@ -75,7 +75,7 @@ function VisitasDoCiclo({ de, ate, pessoas }: { de: string; ate: string; pessoas
   </div>;
 }
 /** Painel simples do que o consultor/medidor gerou no período: visitas × R$, comissão das vendas, auxílio, reembolsos e total */
-function MeuCiclo({ r, de, ate, nome }: { r: any; de: string; ate: string; nome?: string }) {
+function MeuCiclo({ r, de, ate, nome, fechado }: { r: any; de: string; ate: string; nome?: string; fechado?: boolean | null }) {
   const { R } = useApp() as any;
   const valor = Number(R.cfg().pagamentoVisita) || 0, pct = Number(R.cfg().comissaoPct) || 0;
   const ym = de && ate ? cicloDe(ate) : ""; const ehCiclo = !!ym && cicloDoMes(ym)[0] === de && cicloDoMes(ym)[1] === ate;
@@ -90,7 +90,9 @@ function MeuCiclo({ r, de, ate, nome }: { r: any; de: string; ate: string; nome?
       {bloco("💰", "Comissão das vendas", fmtMoeda(r.comissao), pct + "% de " + fmtMoeda(r.totalVendido) + " (" + r.vendas.length + " venda" + (r.vendas.length === 1 ? "" : "s") + ")")}
       {r.auxilio > 0 && bloco("🗓", "Auxílio fixo", fmtMoeda(r.auxilio), "pago dia " + r.datasAuxilio.map((d: string) => d.slice(8) + "/" + d.slice(5, 7)).join(", "))}
       {r.totalReembolsos > 0 && bloco("🧾", "Reembolsos", fmtMoeda(r.totalReembolsos), r.reembolsos.length + " aprovado(s)")}
-      {bloco("✅", "Total previsto", fmtMoeda(r.total), "a confirmar no fechamento", "var(--st-concluida)")}
+      {fechado === true
+        ? bloco("🔒", "Total do ciclo", fmtMoeda(r.total), "ciclo fechado — já foi para o financeiro", "var(--st-concluida)")
+        : bloco("⏳", "Total previsto", fmtMoeda(r.total), "o ciclo ainda não fechou — este valor pode mudar", "var(--warn)")}
     </div>
     {r.comissaoFutura > 0 && <div className="hint" style={{ marginTop: 8 }}>🧾 Comissão futura: {fmtMoeda(r.comissaoFutura)} em promissórias — entra no ciclo em que forem pagas.</div>}
   </div>;
@@ -272,6 +274,9 @@ function FinConsultor() {
   const consultores = st.usuarios.filter(u => u.somenteAtribuidos && ((u.setores || []).includes("consultor_externo") || (u.setores || []).includes("medidas")));
   const { pagamentoVisita, comissaoPct: pct } = R.cfg();
   const alvo = souGestor ? cons : R.currentUserId;
+  // enquanto o ciclo nao fecha, nada aqui e "a receber" -- e previsao
+  const { fechado: cicloFechadoOk } = useCicloFechado(de, ate);
+  const rotPg = rotuloPagamento(cicloFechadoOk);
   let sub = souGestor ? "Visitas, medidas, comissão e reembolsos de cada consultor e medidor. Filtre por período." : "Suas visitas, medidas, vendas, comissão e reembolsos.";
   const cab = (
     <>
@@ -313,7 +318,7 @@ function FinConsultor() {
     const qtPagtoProm = resumos.reduce((s, x) => s + x.r.qtdPagtoProm, 0);
     return (
       <section className="view active" id="view-financeiro">{cab}
-        <div className="kpis" id="finKpis"><Kpi n={totVisitas + extraVis} l="Visitas pagas" /><Kpi n={totMed} l="Medidas feitas" /><Kpi n={totVendas} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(totVendido)} l="Base do pagamento (recebido)" /><Kpi fs={22} n={fmtMoeda(totComissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(totReemb)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(totAux)} l="Auxílio fixo (dia 15)" /><Kpi fs={22} n={fmtMoeda(totGeral)} l="Total a receber" cor="var(--st-concluida)" /></div>
+        <div className="kpis" id="finKpis"><Kpi n={totVisitas + extraVis} l="Visitas pagas" /><Kpi n={totMed} l="Medidas feitas" /><Kpi n={totVendas} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(totVendido)} l="Base do pagamento (recebido)" /><Kpi fs={22} n={fmtMoeda(totComissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(totReemb)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(totAux)} l="Auxílio fixo (dia 15)" /><Kpi fs={22} n={fmtMoeda(totGeral)} l={rotPg.l} cor={rotPg.cor} /></div>
         <Conciliacao face={totFace} qtFace={qtFace} promFace={totPromFace} promAberta={totPromAberta} qtPromAberta={qtPromAberta}
           pagtoProm={totPagtoProm} qtPagtoProm={qtPagtoProm} base={totVendido} qtBase={totVendas} pct={pct} comissao={totComissao} de={de} ate={ate} />
         <VisitasDoCiclo de={de} ate={ate} pessoas={consultores} />
@@ -321,7 +326,7 @@ function FinConsultor() {
         <FechamentoGestao de={de} ate={ate} pessoas={consultores} />
         <PromissoriasAbertas titulo="Promissórias em aberto (comissão futura)" />
         <div id="finResumoTodos" className="panel"><h3>Por consultor <span className="hint" style={{ marginLeft: 6 }}>clique para ver o extrato</span></h3>
-          {resumos.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Nome</th><th>Visitas pagas</th><th>Medidas</th><th>Vendas efetivadas</th><th>Valor vendido</th><th>Visitas + medidas</th><th>Comissão ({pct}%)</th><th>Reembolsos</th><th>Auxílio (dia 15)</th><th>Valor a receber</th></tr></thead>
+          {resumos.length ? <div style={{ overflowX: "auto" }}><table className="dl-tab"><thead><tr><th>Nome</th><th>Visitas pagas</th><th>Medidas</th><th>Vendas efetivadas</th><th>Valor vendido</th><th>Visitas + medidas</th><th>Comissão ({pct}%)</th><th>Reembolsos</th><th>Auxílio (dia 15)</th><th>{cicloFechadoOk === true ? "Valor a receber" : "Previsto"}</th></tr></thead>
             <tbody>{resumos.sort((a, b) => b.r.total - a.r.total || b.r.totalVendido - a.r.totalVendido).map(({ u, r }) => (
               <tr key={u.id} onClick={() => setCons(u.id)} style={{ cursor: "pointer" }}><td><b>{u.nome}</b>{(u.setores || []).includes("medidas") ? <span className="pill" style={{ marginLeft: 6 }}>medidor</span> : null}</td><td>{r.qtdVisitas}{r.oficial && r.oficial.papel !== "medidor" ? <span title="nº oficial do ciclo" style={{ color: "var(--st-concluida)" }}> ✓</span> : null}</td><td>{r.qtdMedidas}{r.oficial && r.oficial.papel === "medidor" ? <span title="nº oficial do ciclo" style={{ color: "var(--st-concluida)" }}> ✓</span> : null}</td><td>{r.vendas.length}</td><td style={{ fontWeight: 700 }}>{fmtMoeda(r.totalVendido)}</td><td>{fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)}</td><td>{fmtMoeda(r.comissao)}</td><td>{fmtMoeda(r.totalReembolsos)}</td><td>{fmtMoeda(r.auxilio)}</td><td style={{ fontWeight: 800, color: "var(--st-concluida)" }}>{fmtMoeda(r.total)}</td></tr>))}</tbody>
             {semUsuario.map((v: any) => <tbody key={"su" + v.id}><tr><td><b>{v.pessoa}</b> <span className="pill" style={{ marginLeft: 6 }}>{v.papel}</span> <span className="hint">sem usuário no 360</span></td><td>{v.papel !== "medidor" ? v.visitas + " ✓" : 0}</td><td>{v.papel === "medidor" ? v.visitas + " ✓" : 0}</td><td>—</td><td>—</td><td>{fmtMoeda(v.visitas * valVis)}</td><td>—</td><td>—</td><td>—</td><td style={{ fontWeight: 800, color: "var(--st-concluida)" }}>{fmtMoeda(v.visitas * valVis)}</td></tr></tbody>)}
@@ -340,8 +345,8 @@ function FinConsultor() {
   return (
     <section className="view active" id="view-financeiro">{cab}
       <AtividadesConsultor uid={alvo} de={de} ate={ate} />
-      <MeuCiclo r={r} de={de} ate={ate} nome={souGestor ? R.nomeUser(alvo) : undefined} />
-      <div className="kpis" id="finKpis"><Kpi n={r.qtdVisitas} l={"Visitas pagas" + (r.oficial && r.oficial.papel !== "medidor" ? " (oficial)" : "")} /><Kpi n={r.qtdMedidas} l={"Medidas feitas" + (r.oficial && r.oficial.papel === "medidor" ? " (oficial)" : "")} /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas com pagamento" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" />{r.auxilio > 0 && <Kpi fs={22} n={fmtMoeda(r.auxilio)} l={"Auxílio fixo · pago dia " + r.datasAuxilio.map((d: string) => d.slice(8) + "/" + d.slice(5, 7)).join(", ")} />}<Kpi fs={22} n={fmtMoeda(r.total)} l={"Previsão a receber no período (a confirmar)"} cor="var(--st-concluida)" /><Kpi fs={22} n={fmtMoeda(r.comissaoFutura)} l={`Comissão futura (${r.pendentes.length} em promissória)`} cor="var(--warn)" /></div>
+      <MeuCiclo r={r} de={de} ate={ate} nome={souGestor ? R.nomeUser(alvo) : undefined} fechado={cicloFechadoOk} />
+      <div className="kpis" id="finKpis"><Kpi n={r.qtdVisitas} l={"Visitas pagas" + (r.oficial && r.oficial.papel !== "medidor" ? " (oficial)" : "")} /><Kpi n={r.qtdMedidas} l={"Medidas feitas" + (r.oficial && r.oficial.papel === "medidor" ? " (oficial)" : "")} /><Kpi fs={22} n={fmtMoeda(r.pagamentoVisitas + r.pagamentoMedidas)} l="Visitas + medidas" /><Kpi n={r.vendas.length} l="Vendas com pagamento" /><Kpi fs={22} n={fmtMoeda(r.comissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(r.totalReembolsos)} l="Reembolsos aprovados" />{r.auxilio > 0 && <Kpi fs={22} n={fmtMoeda(r.auxilio)} l={"Auxílio fixo · pago dia " + r.datasAuxilio.map((d: string) => d.slice(8) + "/" + d.slice(5, 7)).join(", ")} />}<Kpi fs={22} n={fmtMoeda(r.total)} l={cicloFechadoOk === true ? "Total a receber · ciclo fechado e enviado ao financeiro" : "Previsão a receber (ainda não fechado — pode mudar)"} cor={cicloFechadoOk === true ? "var(--st-concluida)" : "var(--warn)"} /><Kpi fs={22} n={fmtMoeda(r.comissaoFutura)} l={`Comissão futura (${r.pendentes.length} em promissória)`} cor="var(--warn)" /></div>
       <PrevisaoCiclos ids={[alvo]} />
       <FechamentoMeu uid={alvo} />
       <div id="finDetalheWrap"><div className="panel-grid">
