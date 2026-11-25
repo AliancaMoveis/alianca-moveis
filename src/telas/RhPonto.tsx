@@ -24,7 +24,6 @@ export default function RhPonto() {
     if (!de && d.cartoes.length) { setDe(d.cartoes.map(c => c.periodo_de).sort()[0]); setAte(d.cartoes.map(c => c.periodo_ate).sort().pop() || ""); }
   }).catch(e => setErro(e.message));
   useEffect(() => { rec(); }, []);
-  if (!podeRh(R.currentUserId)) return <section className="view active"><div className="empty">Só o Bruno e a Patrícia (RH) veem esta tela.</div></section>;
 
   const subir = async (fs: FileList) => {
     const files = Array.from(fs); const probs: string[] = []; let novos = 0, atualizados = 0;
@@ -78,6 +77,10 @@ export default function RhPonto() {
   };
 
   const tot = (f: (x: any) => number) => linhas.reduce((s, x) => s + f(x), 0);
+  // a guarda fica DEPOIS de todos os hooks: acima deles o render bloqueado registraria menos
+  // hooks que o liberado e o React derrubaria a tela (erro #310).
+  if (!podeRh(R.currentUserId)) return <section className="view active"><div className="empty">Só o Bruno e a Patrícia (RH) veem esta tela.</div></section>;
+
   return (
     <section className="view active">
       <div className="view-head"><div><h2>🕐 RH · Folha ponto</h2><p>Envie os cartões ponto em PDF (pode selecionar todos de uma vez — o sistema separa por funcionário pelo nome e CPF do cabeçalho). Reenviar o mesmo período não duplica, só atualiza.</p></div></div>

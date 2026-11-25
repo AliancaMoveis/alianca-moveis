@@ -24,7 +24,6 @@ export default function RhConsultaDia() {
     if (d.length) { const ds = Array.from(new Set(d.map(x => x.data))).sort(); if (!dia) setDia(ds[ds.length - 1]); if (!de) setDe(ds[0]); if (!ate) setAte(ds[ds.length - 1]); }
   }).catch(e => setErro(e.message));
   useEffect(() => { rec(); }, []);
-  if (!podeRh(R.currentUserId)) return <section className="view active"><div className="empty">Só o Bruno e a Patrícia (RH) veem esta tela.</div></section>;
 
   const subir = async (fs: FileList) => {
     const files = Array.from(fs); let ok = 0; const probs: string[] = []; let ultimo = "";
@@ -67,6 +66,10 @@ export default function RhConsultaDia() {
     ["Nº folha", "Nome", "Batidas", "Falta batida?", "Extras", "Faltas", "Dia"],
     trab.map(x => [x.folha, x.nome, (x.batidas || []).join(" "), faltaBatida(x) ? "SIM — corrigir manualmente" : "", x.extras ? hm(x.extras) : "", x.faltas ? hm(x.faltas) : "", br(dia) + " (" + diaSem(dia) + ")"]),
     br(dia));
+
+  // a guarda fica DEPOIS de todos os hooks: acima deles o render bloqueado registraria menos
+  // hooks que o liberado e o React derrubaria a tela (erro #310).
+  if (!podeRh(R.currentUserId)) return <section className="view active"><div className="empty">Só o Bruno e a Patrícia (RH) veem esta tela.</div></section>;
 
   return (
     <section className="view active">

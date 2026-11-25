@@ -264,6 +264,19 @@ export default function ProjetistaChecklist() {
   const [q, setQ] = useState("");
   const [verAgenda, setVerAgenda] = useState(false);
   const [fechDia, setFechDia] = useState(false);
+  // A lista vem leve: sem o termo inteiro e sem o histórico (eram 92% de uma resposta de 4 MB,
+  // que o gateway cortava no meio e derrubava a tela). Ao abrir o cliente, busca os dois.
+  // ATENÇÃO: estes dois hooks têm que ficar AQUI, acima dos "return" antecipados lá embaixo.
+  // Embaixo deles o render de "Carregando…" registrava menos hooks que o render seguinte e o
+  // React derrubava a tela inteira (erro #310).
+  const [ficha, setFicha] = useState<any>(null);
+  useEffect(() => {
+    setFicha(null);
+    if (!sel) return;
+    let vivo = true;
+    A.ckProjetistaFicha(sel).then((f: any) => { if (vivo) setFicha(f); }).catch(() => { /* a ficha abre com o que já tem */ });
+    return () => { vivo = false; };
+  }, [sel]);
   const abrir = (id: string) => { sujo.current = false; setSel(id); window.scrollTo({ top: 0 }); };
   const voltar = () => { if (sujo.current && !confirm("Há alterações no checklist que não foram salvas. Voltar para a lista mesmo assim?")) return; sujo.current = false; ultimoAberto.current = null; setSel(null); carregar(); };
 
@@ -277,16 +290,6 @@ export default function ProjetistaChecklist() {
   const achado = sel ? (lista || []).find(c => c.id === sel) : null;
   if (achado) ultimoAberto.current = achado;
   const base = achado || (sel ? ultimoAberto.current : null);
-  // A lista vem leve: sem o termo inteiro e sem o histórico (eram 92% de uma resposta de 4 MB,
-  // que o gateway cortava no meio e derrubava a tela). Ao abrir o cliente, busca os dois.
-  const [ficha, setFicha] = useState<any>(null);
-  useEffect(() => {
-    setFicha(null);
-    if (!sel) return;
-    let vivo = true;
-    A.ckProjetistaFicha(sel).then((f: any) => { if (vivo) setFicha(f); }).catch(() => { /* a ficha abre com o que já tem */ });
-    return () => { vivo = false; };
-  }, [sel]);
   const atual = base && ficha && ficha.id === base.id
     ? { ...base, termo: ficha.termo ?? base.termo, historico: ficha.historico ?? base.historico }
     : base;

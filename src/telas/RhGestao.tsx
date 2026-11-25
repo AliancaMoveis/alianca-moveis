@@ -28,7 +28,6 @@ export default function RhGestao() {
     listarFerias().then(setFerias).catch(() => null);
   }, []);
   useEffect(() => { listarLanc(mes).then(setLancs).catch(() => setLancs([])); }, [mes]);
-  if (!podeRh(R.currentUserId)) return <section className="view active"><div className="empty">Só o Bruno e a Patrícia (RH) veem esta tela.</div></section>;
 
   const linhas = useMemo(() => {
     if (!funcs || !ponto) return [];
@@ -62,6 +61,10 @@ export default function RhGestao() {
     <button className={aba === "valores" ? "on" : ""} onClick={() => setAba("valores")}>⚙ Valores e regras</button>
   </div>;
   const mesInput = <div className="field"><label>Mês</label><input type="month" value={mes} onChange={e => setMes(e.target.value)} /></div>;
+
+  // a guarda fica DEPOIS de todos os hooks: acima deles o render bloqueado registraria menos
+  // hooks que o liberado e o React derrubaria a tela (erro #310).
+  if (!podeRh(R.currentUserId)) return <section className="view active"><div className="empty">Só o Bruno e a Patrícia (RH) veem esta tela.</div></section>;
 
   return (
     <section className="view active">
