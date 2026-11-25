@@ -473,7 +473,13 @@ export function criarRegras(state: Estado, currentUserId: string) {
   // gerente de loja não vê valores de venda (o banco também não devolve)
   /** remover anexo/foto: só quem anexou, a Gestão e as supervisões (o banco confere de novo) */
   // só quem enviou o anexo ou a Gestão; vendedor nunca apaga anexo (o banco confere igual)
-  const podeRemoverAnexo = (a: any) => !!a && (ehGestao() || (!!a.criadoPor && a.criadoPor === currentUserId && !mySetores().includes("atendente_cliente")));
+  /** Apagar anexo: a Gestão em qualquer lugar; quem subiu, o próprio; e a supervisão de
+   *  medidas nas fichas que são trabalho dela (medida e checklist) — foto errada ou repetida
+   *  do medidor ela resolve na hora, sem passar pela Gestão. Sem a ficha em mãos, só as duas
+   *  regras antigas valem: ninguém ganha permissão por falta de contexto. */
+  const podeRemoverAnexo = (a: any, c?: any) => !!a && (ehGestao()
+    || (!!a.criadoPor && a.criadoPor === currentUserId && !mySetores().includes("atendente_cliente"))
+    || (mySetores().includes("medidas_supervisao") && !!c && (c.tipo === "medidas" || c.tipo === "checklist")));
   const podeVerValor = (c: Chamado) => ehGestao() || (c.atendenteId && c.atendenteId === currentUserId) || (c.consultorId && c.consultorId === currentUserId);
   const ehConsultorExterno = () => mySetores().includes("consultor_externo");
   const ehPosvenda = () => mySetores().includes("posvenda");

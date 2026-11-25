@@ -629,7 +629,7 @@ function Anexar({ c }: any) {
       <div className="mv-bloco-t">Planta, fotos e vídeos {qtd ? <small>({qtd} anexado{qtd > 1 ? "s" : ""})</small> : c.consultorId && !(c.tratativa && c.tratativa.realizada) ? <small>(anexe na visita)</small> : <small style={{ color: "#b07a00" }}>⚠️ sem anexo</small>}</div>
       {qtd > 0 && <div className="mv-anx-g">{anexos.map((a: any) => <div key={a.id} className="mv-anx-i">
         {a.tipo === "img" ? <FotoAnexo a={a} onClick={() => openImg(imgs, imgs.indexOf(a))} /> : <a className="arq" href={a.url} target="_blank" rel="noopener">{a.tipo === "pdf" ? "📄" : a.tipo === "video" ? "🎬" : "🔗"}</a>}
-        {R.podeRemoverAnexo(a) && <button className="mv-anx-del" title="Apagar" onClick={() => apagar(a)}>🗑</button>}</div>)}</div>}
+        {R.podeRemoverAnexo(a, c) && <button className="mv-anx-del" title="Apagar" onClick={() => apagar(a)}>🗑</button>}</div>)}</div>}
       {imgs.length > 1 && <button type="button" className="mv-grande" style={{ margin: "8px 0" }} disabled={!!status} onClick={async () => { setStatus("Preparando " + imgs.length + " fotos…"); try { const m = await baixarTodasFotos(imgs, c.cliente); if (m) toast(m); } finally { setStatus(""); } }}>⬇ Baixar todas as fotos ({imgs.length})</button>}
       {status ? <div className="mv-status">{status}</div> : pend.length ? <PreviaEnvio movel itens={pend} aceita={ACEITA_ANEXO} remover={i => setPend(p => p.filter((_, j) => j !== i))} enviar={enviar} cancelar={() => setPend([])} mais={escolher} /> : <div className="mv-2">
         <label className="mv-grande">📷 Tirar foto<input type="file" accept="image/*" capture="environment" hidden onChange={e => { escolher(e.target.files); e.target.value = ""; }} /></label>

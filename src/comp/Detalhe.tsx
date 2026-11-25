@@ -588,7 +588,7 @@ function Destaque({ c, anexar }: any) {
             <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)" }}>Planta, fotos e vídeos do consultor ({imgs.length + links.length})</div>
             {imgs.length > 0 && <button className="btn sm" onClick={() => abrirGaleria(c.id, anexar)}>Ver e baixar</button>}
           </div>
-          <div className="thumbs">{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><FotoAnexo a={a} className="thumb" onClick={() => openImg(imgs, i)} />{anexar && R.podeRemoverAnexo(a) && <button className="rm2" title="Apagar foto" onClick={() => apagarFoto(a)}>✕</button>}</span>)}
+          <div className="thumbs">{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><FotoAnexo a={a} className="thumb" onClick={() => openImg(imgs, i)} />{anexar && R.podeRemoverAnexo(a, c) && <button className="rm2" title="Apagar foto" onClick={() => apagarFoto(a)}>✕</button>}</span>)}
             {links.map((a: any, i: number) => <a key={"l" + i} className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{a.tipo === "pdf" ? "📄 " + (a.nome.length > 22 ? "PDF" : a.nome) : a.tipo === "video" ? "🎬 vídeo" : "🔗 link"}</a>)}</div>
         </div>
       ) : R.semAnexo(c) ? <div className="aviso-anexo" style={{ marginTop: 12 }}>⚠️ <b>Sem anexo.</b> Nenhuma planta ou foto do cliente — {c.consultorId ? "o consultor precisa anexar" : "anexe a planta ou fotos"} antes do atendimento na loja.</div>
@@ -689,10 +689,10 @@ function Anexos({ c, editavel }: any) {
   return (
     <div className="resp-box"><h4>Anexos{lista.length ? " — planta, vídeos e links (" + lista.length + ")" : ""}</h4>
       {mostrarFotos && imgs.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-        <div className="thumbs" style={{ flex: 1 }}>{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><FotoAnexo a={a} className="thumb" onClick={() => openImg(imgs, i)} />{editavel && R.podeRemoverAnexo(a) && <button className="rm2" title="Apagar foto" onClick={() => apagar(a)}>✕</button>}</span>)}</div>
+        <div className="thumbs" style={{ flex: 1 }}>{imgs.map((a: any, i: number) => <span key={a.id || i} className="thumb-del"><FotoAnexo a={a} className="thumb" onClick={() => openImg(imgs, i)} />{editavel && R.podeRemoverAnexo(a, c) && <button className="rm2" title="Apagar foto" onClick={() => apagar(a)}>✕</button>}</span>)}</div>
         <button className="btn sm" onClick={() => abrirGaleria(c.id, editavel)}>Ver e baixar</button></div>}
       {lista.length ? <div className="thumbs" id="dThumbs">{lista.map((a: any) => (
-        <div className="thumb-wrap" key={a.id}><a className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{icone(a)} {a.tipo === "link" ? (a.nome.length > 22 ? "link" : a.nome) : (a.nome.length > 26 ? a.nome.slice(0, 24) + "…" : a.nome)}</a>{editavel && R.podeRemoverAnexo(a) && <button className="rm" title="Apagar" onClick={() => apagar(a)}>×</button>}</div>
+        <div className="thumb-wrap" key={a.id}><a className="att-link" href={a.url} target="_blank" rel="noopener" title={a.nome}>{icone(a)} {a.tipo === "link" ? (a.nome.length > 22 ? "link" : a.nome) : (a.nome.length > 26 ? a.nome.slice(0, 24) + "…" : a.nome)}</a>{editavel && R.podeRemoverAnexo(a, c) && <button className="rm" title="Apagar" onClick={() => apagar(a)}>×</button>}</div>
       ))}</div> : (presale ? <span style={{ color: "var(--ink-faint)", fontSize: 12.5 }}>As fotos aparecem no quadro acima. Aqui ficam plantas em PDF, vídeos e links.</span> : (!imgs.length ? <span style={{ color: "var(--ink-faint)", fontSize: 12.5 }}>Nenhum anexo ainda.</span> : null))}
       {editavel && pend.length > 0 && !enviando && <PreviaEnvio itens={pend} aceita={ACEITA_ANEXO} remover={i => setPend(p => p.filter((_, j) => j !== i))} enviar={enviarPend} cancelar={() => setPend([])} mais={addArquivos} />}
       {editavel && <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
