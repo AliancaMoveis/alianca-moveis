@@ -149,6 +149,12 @@ export default function ConfirmacaoVendas() {
     return Object.entries(m).sort((a, b) => b[0].localeCompare(a[0]));
   })();
   const mesNome = (k: string) => { const [a, b] = k.split("-"); return b ? ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][Number(b) - 1] + "/" + a.slice(2) : k; };
+  /** vendas do mesmo cliente caídas no mesmo dia — candidatas a ser uma venda só, partida em vários números */
+  const mesmoDia = (l: Item[]): [string, Item[]][] => {
+    const m: Record<string, Item[]> = {};
+    l.forEach(x => { const d = String(x.data || "").slice(0, 10); if (d) (m[d] = m[d] || []).push(x); });
+    return Object.entries(m).filter(([, v]) => v.length > 1).sort((a, b) => b[0].localeCompare(a[0]));
+  };
   const gruposVis = (() => { let n = 0; const out: typeof grupos = []; for (const g of grupos) { if (n >= lim) break; out.push(g); n += g.l.length; } return out; })();
   // resumo por consultor (respeita período, origem e vendedor; não o filtro de consultor, para poder trocar de consultor)
   const resCons = (() => { const m: Record<string, { p: number; vp: number; v: number }> = {};
@@ -312,7 +318,18 @@ export default function ConfirmacaoVendas() {
                 💰 Entrou de fato (efetivadas): <b>{brl(rcli.ef)}</b>{rcli.rs > 0 && <> · Combinado nas reservas: <b>{brl(rcli.rs)}</b> · <span style={{ color: "var(--warn)" }}>Falta receber (sugestão — conferir): <b>{brl(rcli.falta)}</b></span></>}
                 <span> · a soma de vendas conta só o que entrou de fato</span></div>}
               {ja.length > 0 && <div className="cv-ja">📌 Já lançado no 360: {ja.map((i: any) => <span key={i.numero + i.status} className={"cv-jai " + i.status}>{i.numero} · {brl(i.valor)} · {i.status === "registrada" ? "a confirmar" : i.status}</span>)}</div>}
-              {pg.length > 1 && <button className="btn primary sm" style={{ marginLeft: 10 }} onClick={async () => { if (!confirm(`Validar as ${pg.length} vendas de ${c0 ? c0.cliente : g.l[0].ex_cliente} (${brl(pg.reduce((s, x) => s + Number(x.valor), 0))})?`)) return; for (const x of pg) await decidir(x, "validar"); }}>✅ Validar as {pg.length} deste cliente</button>}
+              {/* O Exact abre um número por ambiente ou por forma de pagamento. Duas vendas do
+                  mesmo cliente no MESMO dia costumam ser a mesma venda partida — validar as duas
+                  paga a comissão duas vezes. Em 25/11/2026 eram 33 clientes e R$ 1 mi nessa situação. */}
+              {mesmoDia(pg).map(([d, l]) => <div key={d} style={{ marginTop: 4, color: "var(--warn)", fontWeight: 700, fontSize: 12 }}>
+                ⚠️ {l.length} vendas deste cliente no mesmo dia ({fmtDate(d)}): {l.map(i => i.numero).join(", ")} · {brl(l.reduce((s, i) => s + Number(i.valor), 0))}
+                <span style={{ fontWeight: 400 }}> — confira no Exact se não é a mesma venda dividida em vários números antes de validar as duas</span></div>)}
+              {pg.length > 1 && <button className="btn primary sm" style={{ marginLeft: 10 }} onClick={async () => {
+                const dup = mesmoDia(pg);
+                // validar em lote é justamente onde a venda partida vira comissão dobrada: avisa antes
+                const aviso = dup.length ? `\n\nATENÇÃO: ${dup.map(([d, l]) => `${l.length} delas são do mesmo dia (${fmtDate(d)}): ${l.map(i => i.numero).join(", ")}`).join("; ")}.\nSe for a mesma venda dividida em vários números, validar todas paga a comissão mais de uma vez.` : "";
+                if (!confirm(`Validar as ${pg.length} vendas de ${c0 ? c0.cliente : g.l[0].ex_cliente} (${brl(pg.reduce((s, x) => s + Number(x.valor), 0))})?${aviso}`)) return;
+                for (const x of pg) await decidir(x, "validar"); }}>✅ Validar as {pg.length} deste cliente</button>}
             </td></tr>}
             {g.l.map(x => { const c = chamado(x.chamado_id); const ed = valEd[x.numero]; const mudou = Number(x.valor) !== Number(x.valor_exact);
             const pendente = x.status === "pendente"; const vend = x.vendedor_id ? R.nomeUser(x.vendedor_id) : "";
