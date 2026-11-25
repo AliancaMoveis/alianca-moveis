@@ -122,6 +122,31 @@ export default function ConfirmacaoVendas() {
     return m;
   }, [st.chamados]);
   const jaLancada = (x: Item) => (x.status === "pendente" ? lancadas.get(x.numero) : undefined);
+  /** vendas já efetivadas de cada cliente, para achar a mesma venda com outro número */
+  const efetivadasDoCliente = useMemo(() => {
+    const m = new Map<string, { numero: string; valor: number }[]>();
+    (st.chamados || []).forEach((c: any) => itensVenda(c.venda).forEach((i: any) => {
+      if (i.tipo === "pagamento" || i.status !== "efetivada" || !i.numero) return;
+      (m.get(c.id) || m.set(c.id, []).get(c.id)!).push({ numero: String(i.numero), valor: Number(i.valor) || 0 });
+    }));
+    return m;
+  }, [st.chamados]);
+  const mesCorrente = new Date().toISOString().slice(0, 7);
+  /**
+   * O Exact às vezes refaz a venda com outro número e o valor quase igual. O cliente já tem
+   * a venda lançada e efetivada, e a "nova" é a mesma coisa — validar as duas paga em dobro.
+   * Caso real: Daniele Venski, 1314485 efetivada R$ 22.000 e 1314477 pendente R$ 21.910.
+   * Só vale para mês anterior: no mês corrente a Gestão está validando e quer ver tudo.
+   */
+  const provavelDup = (x: Item) => {
+    if (x.status !== "pendente" || !x.chamado_id) return undefined;
+    if (String(x.data || x.criado_em || "").slice(0, 7) >= mesCorrente) return undefined;
+    const v = Number(x.valor) || 0; if (v <= 0) return undefined;
+    return (efetivadasDoCliente.get(x.chamado_id) || []).find(i =>
+      i.numero !== x.numero && i.valor > 0 && Math.abs(i.valor - v) / Math.max(i.valor, v) <= 0.05);
+  };
+  /** fora do "a conferir": já lançada (mesmo nº) ou provável duplicata (outro nº, valor quase igual) */
+  const foraDaFila = (x: Item) => jaLancada(x) ? "lancada" : provavelDup(x) ? "dup" : "";
   const [verLancadas, setVerLancadas] = useState(false);
   const lancouVendedor = (x: Item) => x.fonte === "vendedor" || /lançada/i.test(x.motivo || "");
   const nomeVend = (x: Item) => (x.vendedor_id ? R.nomeUser(x.vendedor_id) : x.ex_vendedor) || "";
@@ -131,18 +156,18 @@ export default function ConfirmacaoVendas() {
   const doTipo = useMemo(() => todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === lancouVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (!fCons || nomeCons(x) === fCons) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim))), [todos, tipo, orig, fVend, fCons, per, ini, fim]);
   const busca = tira(q), dig = q.replace(/\D/g, "");
   const lista = doTipo.filter(x => (aba === "todas" || x.status === aba) && (!metodo || x.como === metodo)
-    && (verLancadas ? !!jaLancada(x) : !jaLancada(x))
+    && (verLancadas ? !!foraDaFila(x) : !foraDaFila(x))
     && (!q || tira([x.ex_cliente, x.cliente_ref, chamado(x.chamado_id)?.cliente || "", x.consultor_nome, x.ex_vendedor].join(" ")).includes(busca) || (dig.length >= 3 && (x.numero.includes(dig) || (x.ex_tel1 + x.ex_tel2).replace(/\D/g, "").includes(dig)))))
     .sort((a, b) => tira(a.ex_cliente).localeCompare(tira(b.ex_cliente)) || a.numero.localeCompare(b.numero));
   // agrupa as vendas do mesmo cliente (ordem alfabética do comprador)
   const grupos = (() => { const m = new Map<string, Item[]>(); lista.forEach(x => { const k = gkDe(x); const a = m.get(k); if (a) a.push(x); else m.set(k, [x]); });
     return Array.from(m.entries()).map(([k, l]) => ({ k, l, nome: tira(l[0].ex_cliente) })).sort((a, b) => a.nome.localeCompare(b.nome)); })();
-  const pend = doTipo.filter(x => x.status === "pendente" && !jaLancada(x));
-  const pendLancadas = doTipo.filter(x => !!jaLancada(x));
+  const pend = doTipo.filter(x => x.status === "pendente" && !foraDaFila(x));
+  const pendLancadas = doTipo.filter(x => !!foraDaFila(x));
   /** quanto está parado em cada mês de venda — é o que decide o que ainda dá para pagar neste comissionamento */
   const porMes = (() => {
     const m: Record<string, { n: number; v: number }> = {};
-    todos.filter(x => x.status === "pendente" && !jaLancada(x) && (!tipo || x.tipo === tipo)).forEach(x => {
+    todos.filter(x => x.status === "pendente" && !foraDaFila(x) && (!tipo || x.tipo === tipo)).forEach(x => {
       const k = String(x.data || x.criado_em || "").slice(0, 7) || "sem data";
       (m[k] = m[k] || { n: 0, v: 0 }).n++; m[k].v += Number(x.valor) || 0;
     });
@@ -278,8 +303,11 @@ export default function ConfirmacaoVendas() {
         <b>{mesNome(k)}</b><span>{x.n} a conferir · {brl(x.v)}</span><small>clique para ver só este mês</small></button>)}
     </div>}
     {pendLancadas.length > 0 && <div className="card" style={{ marginBottom: 10, borderColor: "var(--warn)", background: "var(--st-pendente-bg, #fff8e6)" }}>
-      <b>⚠️ {pendLancadas.length} venda(s) nesta fila já estão lançadas num cliente do 360</b>
-      <div className="hint" style={{ marginTop: 2 }}>Validar de novo contaria a comissão duas vezes, então elas ficam fora do "a conferir".</div>
+      <b>⚠️ {pendLancadas.length} venda(s) fora do "a conferir"</b>
+      <div className="hint" style={{ marginTop: 2 }}>
+        {pendLancadas.filter(x => jaLancada(x)).length} já estão lançadas no 360 com o mesmo número
+        {pendLancadas.some(x => provavelDup(x)) && <> · {pendLancadas.filter(x => provavelDup(x)).length} são de mês anterior e o cliente já tem uma venda efetivada de valor quase igual (provável a mesma venda com outro número)</>}
+        . Validar contaria a comissão duas vezes.</div>
       <div style={{ marginTop: 6 }}><button className={"btn sm" + (verLancadas ? " primary" : "")} onClick={() => { setVerLancadas(v => !v); setSel({}); }}>
         {verLancadas ? "← Voltar para as que faltam conferir" : "Ver as já lançadas"}</button></div>
     </div>}
@@ -335,6 +363,7 @@ export default function ConfirmacaoVendas() {
             const pendente = x.status === "pendente"; const vend = x.vendedor_id ? R.nomeUser(x.vendedor_id) : "";
             const cm = comoDe(x.como);
             const jl = jaLancada(x); // esta venda já está lançada num cliente — não pode validar de novo
+            const dup = !jl ? provavelDup(x) : undefined; // mesma venda com outro número
             const provavel = !c ? cli360(x) : null;
             return <Fragment key={x.numero}><tr className={"cv-l " + x.status + (sel[x.numero] ? " sel" : "") + (cab ? " nog" : "")}>
               <td style={td}><input type="checkbox" style={{ width: "auto" }} checked={!!sel[x.numero]} onChange={() => setSel(s => ({ ...s, [x.numero]: !s[x.numero] }))} /></td>
@@ -355,6 +384,8 @@ export default function ConfirmacaoVendas() {
                 {jl && <div style={{ color: "var(--warn)", fontWeight: 700, fontSize: 12, marginTop: 2 }}>
                   ⚠️ a venda {x.numero} já está lançada em <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(jl.id); }}>{jl.cliente || jl.id}</a>
                   {jl.status === "efetivada" ? " (efetivada)" : jl.status ? " (" + jl.status + ")" : ""} — validar aqui contaria a comissão duas vezes</div>}
+                {dup && <div style={{ color: "var(--warn)", fontWeight: 700, fontSize: 12, marginTop: 2 }}>
+                  ⚠️ provável a mesma venda: este cliente já tem a venda {dup.numero} efetivada por {brl(dup.valor)}, e esta é de {brl(Number(x.valor))} — confira no Exact antes de validar</div>}
                 {!cab && vendas360(c || provavel).length > 0 && <div className="cv-ja">📌 já tem no 360: {vendas360(c || provavel).map((i: any) => <span key={i.numero + i.status} className={"cv-jai " + i.status}>{i.numero} · {brl(i.valor)}</span>)}</div>}
                 {pendente && x.cands.length > 1 && <select style={{ fontSize: 12, marginTop: 4, maxWidth: 200 }} value={x.chamado_id || ""} onChange={e => editar(x, { chamado_id: e.target.value }, { chamado_id: e.target.value })}>
                   {x.cands.map(k => <option key={k.id} value={k.id}>{k.cliente} ({k.id}) · {comoDe(k.como)[0]}</option>)}</select>}

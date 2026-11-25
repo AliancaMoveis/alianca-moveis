@@ -142,7 +142,11 @@ export default function EncontrarVendas360() {
   const itemDe = (r: Res) => { const c = alvo(r); return c && c.venda ? itensVenda(c.venda).find((i: any) => so(String(i.numero)) === r.n && i.status !== "cancelada") || (so(String(c.venda.numero)) === r.n && c.venda.status !== "cancelada" ? { status: c.venda.status === "registrada" ? "registrada" : "efetivada" } : null) : null; };
   const estado = (r: Res): "ok" | "lancada" | "nova" => { const i: any = itemDe(r); return !i ? "nova" : i.status === "registrada" ? "lancada" : "ok"; };
   // checklist = marcado à mão OU incluído por "Checklist.<nome>" no Exact (pedido da fábrica, não é venda)
-  const ehCk = (r: Res) => !!ckl[r.n] || incluidoPorChecklist(col(r.ex, "Incluído por"));
+  // A planilha do Exact escreve esse cabeçalho de três jeitos. camposExact já lia os três e por
+  // isso o valor era gravado certo; aqui só se lia "Incluído por", então a trava não via os
+  // pedidos de fábrica e eles iam parar na Confirmação como se fossem venda nova — 61 deles,
+  // R$ 1,34 mi, o último em 16/11. Agora usa a mesma leitura do gravador.
+  const ehCk = (r: Res) => !!ckl[r.n] || incluidoPorChecklist(camposExact(r.ex).incluido_por);
   const vendEf = (r: Res) => r.vendU || (vendMan[r.n] ? vendedores.find((u: any) => u.id === vendMan[r.n]) || null : null);
   const vendDif = (r: Res) => { const c = alvo(r), v = vendEf(r); return !!(c && v && c.atendenteId && v.id !== c.atendenteId); };
   // quem comprou é outra pessoa (ex.: orçamento com a Maria, compra no nome do João): ao confirmar, ela vira o "cliente pagador"
