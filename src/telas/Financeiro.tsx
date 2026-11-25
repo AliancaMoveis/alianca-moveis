@@ -196,15 +196,28 @@ function VendasVendedores() {
   const aConfirmar = st.chamados.filter((c: any) => R.domMarketing(c) && c.venda && c.venda.status === "registrada" && (!alvo || c.atendenteId === alvo)).length;
   const ext = vendas.filter((c: any) => R.origemLoja(c) === "externo"), mkt = vendas.filter((c: any) => R.origemLoja(c) === "marketing");
   const soma = (arr: any[]) => arr.reduce((s, c) => s + parseMoeda(c.venda.valor), 0);
-  const temValor = vendas.some((c: any) => R.podeVerValor(c));
+  /**
+   * O vendedor não vê valor das próprias vendas — só quantas e quais clientes.
+   * Motivo: o nome do vendedor vem do Exact e às vezes vem errado; a Gestão corrige na
+   * confirmação, então enquanto a venda não está confirmada o total que o vendedor veria
+   * aqui não é o dele. Ver um número que depois muda gera cobrança em cima de dado errado.
+   * A Gestão continua vendo tudo. Para voltar a mostrar, é só apagar "&& !souVend" abaixo.
+   */
+  const temValor = vendas.some((c: any) => R.podeVerValor(c)) && !souVend;
   const val = (arr: any[]) => temValor ? fmtMoeda(soma(arr)) : "—";
   const Lista = ({ arr, vazio }: any) => arr.length ? arr.slice().sort((a: any, b: any) => String(b.venda.dataVenda || b.venda.quando).localeCompare(String(a.venda.dataVenda || a.venda.quando))).map((c: any) => (
-    <div className="fin-item" key={c.id} onClick={() => abrirDetalhe(c.id)} style={{ cursor: "pointer" }}><div><div className="nm">{c.cliente}</div><div className="sub">Venda nº {c.venda.numero} · {fmtDate(c.venda.dataVenda || c.venda.quando)}{!souVend ? " · " + R.nomeUser(c.atendenteId) : ""}{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : ""}</div></div>{R.podeVerValor(c) && c.venda.valor ? <div className="val">{"R$ " + c.venda.valor}</div> : null}</div>
+    <div className="fin-item" key={c.id} onClick={() => abrirDetalhe(c.id)} style={{ cursor: "pointer" }}><div><div className="nm">{c.cliente}</div><div className="sub">Venda nº {c.venda.numero} · {fmtDate(c.venda.dataVenda || c.venda.quando)}{!souVend ? " · " + R.nomeUser(c.atendenteId) : ""}{c.consultorId ? " · consultor " + R.nomeUser(c.consultorId) : ""}</div></div>{!souVend && R.podeVerValor(c) && c.venda.valor ? <div className="val">{"R$ " + c.venda.valor}</div> : null}</div>
   )) : <div className="empty" style={{ padding: "24px 10px" }}>{vazio}</div>;
   return (
     <section className="view active" id="view-financeiro">
       <div className="view-head"><div><h2>{souVend ? "Minhas vendas" : "Vendas dos vendedores"}</h2><p>Total das vendas vindas dos atendimentos, separado por origem: <b>consultores externos</b> e <b>marketing</b>.</p></div></div>
-      <div className="aviso-anexo" style={{ marginBottom: 14, background: "var(--primary-soft)", borderColor: "var(--primary)", color: "var(--primary)" }}><b>A comissão do vendedor (2%) é calculada no Tático, no usuário de cada vendedor</b> — não neste painel. Aqui não há pagamento por visita: só o total vendido.</div>
+      {souVend
+        ? <div className="aviso-anexo" style={{ marginBottom: 14, background: "var(--primary-soft)", borderColor: "var(--primary)", color: "var(--primary)" }}>
+            <b>Os valores estão temporariamente fora desta tela.</b> O nome do vendedor vem do Exact e em parte das vendas vem trocado; a Gestão está corrigindo uma a uma na confirmação.
+            Até isso terminar, o total aqui não seria o seu de verdade. Suas vendas e seus clientes continuam na lista abaixo.
+            <div style={{ marginTop: 4 }}>A sua comissão (2%) é calculada no <b>Tático</b>, no seu usuário — nunca foi calculada neste painel.</div>
+          </div>
+        : <div className="aviso-anexo" style={{ marginBottom: 14, background: "var(--primary-soft)", borderColor: "var(--primary)", color: "var(--primary)" }}><b>A comissão do vendedor (2%) é calculada no Tático, no usuário de cada vendedor</b> — não neste painel. Aqui não há pagamento por visita: só o total vendido.</div>}
       <div className="card" style={{ padding: "16px 18px", marginBottom: 16 }}><Periodos de={de} ate={ate} setDe={setDe} setAte={setAte} /><div className="grid">
         <div className="field"><label>De</label><input type="date" value={de} onChange={e => setDe(e.target.value)} /></div>
         <div className="field"><label>Até</label><input type="date" value={ate} onChange={e => setAte(e.target.value)} /></div>
