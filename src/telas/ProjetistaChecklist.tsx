@@ -122,7 +122,7 @@ export function abrirFinanceiro(c: any, r: any, ambientes: string[], projetista:
 }
 
 // ---------------- estilos (mesmo desenho dos mockups, com as cores do 360) ----------------
-const CSS = `
+export const CSS = `
 .pj .pjbusca{width:100%;padding:11px 14px;border:1px solid var(--pj-l);border-radius:12px;font:inherit;background:var(--pj-bg,#fff);color:inherit;margin-bottom:14px}
 .pj .pjkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}@media (max-width:800px){.pj .pjkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pj .pjkpi{background:var(--pj-bg,#fff);border:1px solid var(--pj-l);border-radius:14px;padding:16px 18px;cursor:pointer;box-shadow:0 1px 2px rgba(20,28,45,.05)}.pj .pjkpi b{display:block;font-size:28px;line-height:1.1}.pj .pjkpi span{color:var(--pj-s);font-size:13px}.pj .pjkpi.alerta b{color:#b42318}
@@ -434,7 +434,10 @@ function fmtDoc(x: any) {
   if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
   return d || "—";
 }
-function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; erro: string; c: any }) {
+/** Dados da venda vindos do Exact (cliente, venda, produtos, teto do projeto).
+ *  Exportado porque quem AGENDA o checklist precisa ver o mesmo que o projetista vê, antes
+ *  de marcar o horário — sem isso marca no escuro, sem saber o tamanho do projeto. */
+export function DadosVenda({ d, carregando, erro, c }: { d: any; carregando: boolean; erro: string; c: any }) {
   const [verNeg, setVerNeg] = useState(false);
   const [verTeto, setVerTeto] = useState(false);
   if (carregando) return <div className="body" style={{ gridTemplateColumns: "1fr" }}><div className="empty">Buscando os dados da venda no Exact…</div></div>;

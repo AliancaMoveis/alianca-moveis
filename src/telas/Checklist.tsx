@@ -14,7 +14,7 @@ import { Kpi } from "./Dashboard";
 import { Modal } from "../comp/Modal";
 import { BotaoConversa } from "../comp/Conversa";
 import { SeloMedidaVenda } from "./Medidas";
-import { Arquivo, Visualizar, abrirTermo } from "./ProjetistaChecklist";
+import { Arquivo, Visualizar, abrirTermo, DadosVenda, CSS as CSS_PJ } from "./ProjetistaChecklist";
 
 export const ETAPA_CK: Record<string, [string, string]> = {
   a_contatar: ["A contatar", "var(--primary)"], aguardando: ["Mensagem enviada · aguardando resposta", "var(--warn)"], outra_data: ["🔄 Pediu nova data", "var(--st-respondida)"],
@@ -525,10 +525,12 @@ function DataGrande({ v }: { v: string }) {
 /** 🖼 Arquivos e imagens da venda, para quem agenda ver o projeto ANTES de marcar o horário.
  *  Mesma busca que o projetista já usa (arquivos da venda no Exact + o que está no 360): sem isso
  *  a pessoa marca no escuro, sem saber o tamanho do projeto nem o que falar com o cliente. */
-function ModalArquivosVenda({ c }: any) {
+type AbaArq = "arquivos" | "dados";
+function ModalArquivosVenda({ c, aba = "arquivos" }: any) {
   const { setModal } = useApp() as any;
   const [arqs, setArqs] = useState<any>(null);
   const [erro, setErro] = useState("");
+  const [abaArq, setAbaArq] = useState<AbaArq>(aba);
   useEffect(() => {
     let vivo = true;
     A.ckArquivos(c.id)
@@ -537,7 +539,7 @@ function ModalArquivosVenda({ c }: any) {
     return () => { vivo = false; };
   }, [c.id]);
   // ao fechar o visualizador, volta para esta lista em vez de fechar tudo
-  const ver = (a: any, lista: any[]) => setModal(<Visualizar a={a} c={c} lista={lista} onFechar={() => setModal(<ModalArquivosVenda c={c} />)} />);
+  const ver = (a: any, lista: any[]) => setModal(<Visualizar a={a} c={c} lista={lista} onFechar={() => setModal(<ModalArquivosVenda c={c} aba={abaArq} />)} />);
   const bloco = (titulo: string, l: any[]) => l && l.length
     ? <div style={{ marginBottom: 12 }}>
         <div className="pp-tit">{titulo} ({l.length})</div>
@@ -545,8 +547,16 @@ function ModalArquivosVenda({ c }: any) {
       </div>
     : null;
   const vazio = arqs && !arqs.venda.length && !arqs.medicao.length && !arqs.m360.length && !arqs.ck.length;
-  return <Modal titulo={"🖼 Arquivos da venda " + c.pedido + " · " + c.cliente} onFechar={() => setModal(null)}>
-    {erro ? <div className="hint">{erro}</div>
+  return <Modal titulo={"🗂 Venda " + c.pedido + " · " + c.cliente} onFechar={() => setModal(null)}>
+    <style>{CSS_PJ}</style>
+    {/* mesma visão do projetista: quem agenda precisa saber o tamanho do projeto antes de marcar */}
+    <div className="chips" style={{ margin: "0 0 10px" }}>
+      {([["arquivos", "🖼 Arquivos e imagens"], ["dados", "🧾 Dados da venda"]] as [AbaArq, string][]).map(([k, l]) =>
+        <button key={k} className={"chip" + (abaArq === k ? " on" : "")} onClick={() => setAbaArq(k)}>{l}</button>)}
+    </div>
+    {abaArq === "dados"
+      ? <DadosVenda d={arqs?.dados} carregando={arqs === null && !erro} erro={erro} c={c} />
+      : erro ? <div className="hint">{erro}</div>
       : !arqs ? <div className="hint">Buscando no Exact…</div>
       : vazio ? <div className="hint">Nenhum arquivo encontrado para esta venda.</div>
       : <>
