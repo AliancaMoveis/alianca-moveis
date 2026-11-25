@@ -1,0 +1,12 @@
+-- Aplicar o agrupamento mexe nos PROPRIOS registros (faixa e comissao de cada um passam a
+-- ser a faixa do grupo). E o que faz o valor sair no pagamento normal, sem tocar em nenhum
+-- calculo de fechamento ou relatorio -- decisao da Gestao em 25/11/2026.
+-- O "antes" fica em ck_recup_grupo.antes, entao da para auditar e desfazer.
+--
+-- Travas: so Gestao aplica; recusa se algum registro ja foi decidido pelo financeiro;
+-- recusa se os checklists forem de projetistas diferentes.
+-- Conferido no caso real (Silvane, Maria Caroline, ALM-10244 + ALM-10644):
+-- aplicar levou de R$ 205,71 para R$ 278,88; desfazer devolveu R$ 205,71 e as faixas
+-- originais de 2% e 5%.
+-- O corpo vigente esta no banco: ck_recup_grupo_aplicar(text[],text) e
+-- ck_recup_grupo_desfazer(bigint).

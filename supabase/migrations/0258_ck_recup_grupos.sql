@@ -1,0 +1,6 @@
+-- Deteccao dos grupos: mesmo cliente + MESMO projetista, dentro do mes.
+-- Soma por PEDIDO distinto (o mesmo pedido aparece em mais de um chamado e contaria duas
+-- vezes). Chave em camadas porque so metade dos checklists tem CPF/CNPJ.
+-- Cria tambem ck_recup_grupo, o log do que foi agrupado (com o "antes", para desfazer).
+-- O corpo vigente esta no banco; esta migracao e o registro da decisao.
+-- Ver: ck_recup_grupos(date,date) e ck_recup_faixa(numeric).
