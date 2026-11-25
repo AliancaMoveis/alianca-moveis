@@ -424,6 +424,9 @@ function ListaMedidas({ aba }: { aba: string }) {
       {/* o checklist percebe que falta medida, mas quem reabre é quem responde pela agenda do medidor */}
       {aba === "aprovados" && podeSup &&
         <button className="btn sm" title="Pedir nova medição desta mesma venda: volta para aguardando medição, urgente" onClick={e => { e.stopPropagation(); setReabrir(c); }}>🔁 Nova medição</button>}
+      {(() => { const j = jaMedidoAntes(R, st, c); return j ? <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 800, whiteSpace: "normal", lineHeight: 1.25 }}
+        title={"Confira antes de mandar alguem medir: " + j.txt + (j.quem ? " (" + j.quem + ")" : "") + " — " + j.id}
+        onClick={e => { e.stopPropagation(); abrirDetalhe(j.id); }}>⚠️ JÁ MEDIDO — confira</span> : null; })()}
       {R.etapaMedida(c) === "agendada" && (c.tratativa?.medida?.reabertura || c.urgente) &&
         <span className="pill" style={{ background: "var(--danger)", color: "#fff", fontWeight: 700 }} title={c.tratativa?.medida?.refazer || ""}>⚠️ MEDIR URGENTE</span>}</> },
   ];
@@ -681,6 +684,29 @@ export function antesDaVenda(R: any, st: any, c: any): { visitado: boolean; foto
   vis.forEach((v: any) => { const n = v.consultorId ? R.nomeUser(v.consultorId) : ""; if (n && n !== "—" && !nomes.includes(n)) nomes.push(n); });
   const em = vis.map((v: any) => String(v.dataVisita || v.criadoEm || "")).filter(Boolean).sort().reverse()[0] || "";
   return { visitado: vis.length > 0, fotos: vis.reduce((s: number, v: any) => s + (v.anexos || []).filter((x: any) => x.tipo === "img").length, 0), nomes, em };
+}
+/** ⚠️ Esta medição já foi feita antes — não mande ninguém de novo.
+ *  Três redes, da mais forte para a mais fraca:
+ *   1. a integração do Exact marcou que existe medida do 360 na MESMA venda (tratativa.medida.ja360)
+ *   2. existe outra medida da mesma venda com origem do 360 (consultor, Minha Visita, pós-venda)
+ *   3. o mesmo cliente já foi visitado por um consultor (telefone, CPF ou nome)
+ *  As duas primeiras são pelo nº da VENDA — não erram. Endereço fica de fora de propósito. */
+export function jaMedidoAntes(R: any, st: any, c: any): { id: string; txt: string; quem: string } | null {
+  if (!c || c.tipo !== "medidas") return null;
+  if (!["pendente", "agendada"].includes(R.etapaMedida(c))) return null;
+  const acha = (id: string) => st.chamados.find((x: any) => x.id === id);
+  const m = c.tratativa?.medida || {};
+  if (m.ja360 && acha(m.ja360)) return { id: m.ja360, txt: "já existe medida do 360 nesta venda", quem: "" };
+  const irma = st.chamados.find((o: any) => o.tipo === "medidas" && o.id !== c.id && o.pedido && o.pedido === c.pedido
+    && ["consultor_360", "minha_visita", "360"].includes(String(o.tratativa?.medida?.origem || ""))
+    && String(o.tratativa?.medida?.etapa || "") !== "cancelada");
+  if (irma) return { id: irma.id, txt: "já existe medida do 360 nesta venda", quem: irma.medidorId ? R.nomeUser(irma.medidorId) : irma.tratativa?.medida?.consultorNome || "" };
+  // NÃO cruza por endereço: em condomínio a mesma rua e o mesmo nº são casas/apartamentos
+  // diferentes, e um aviso errado aqui faz a medida ser cancelada sem motivo. Só telefone,
+  // CPF e nome (achar360), que é o mesmo cruzamento que o resto do sistema já usa.
+  const vis = achar360(R, st, c).filter((v: any) => (v.anexos || []).some((a: any) => a.tipo === "img"));
+  if (vis.length) { const v = vis[0]; return { id: v.id, txt: "o consultor já visitou e fotografou esta casa", quem: v.consultorId ? R.nomeUser(v.consultorId) : "" }; }
+  return null;
 }
 /** a mesma venda já tem outra medida aprovada (medida oficial) — esta aqui virou trabalho repetido */
 export function jaAprovadaNaVenda(R: any, st: any, c: any): boolean {
