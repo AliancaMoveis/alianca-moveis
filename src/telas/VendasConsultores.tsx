@@ -6,8 +6,9 @@ import { Kpi } from "./Dashboard";
 import { baixarXlsx } from "../lib/planilha";
 import { competenciaItem, fmtDate, fmtMoeda, hojeISO, isoLocal, numerosVenda, parseData } from "../lib/regras";
 import RelConferenciaExternos from "./RelConferenciaExternos";
+import { cicloDe, cicloDoMes } from "../lib/ciclo";
 
-export type Per = "hoje" | "7d" | "mes" | "mesp" | "ano" | "outro";
+export type Per = "hoje" | "7d" | "mes" | "mesp" | "ano" | "ciclo" | "outro";
 export const PER: [Per, string][] = [["hoje", "Hoje"], ["7d", "Últimos 7 dias"], ["mes", "Este mês"], ["mesp", "Mês passado"], ["ano", "Este ano"], ["outro", "Escolher datas"]];
 const somaDias = (iso: string, n: number) => { const d = parseData(iso + "T12:00"); d.setDate(d.getDate() + n); return isoLocal(d); };
 export function faixa(p: Per, de: string, ate: string): [string, string] {
@@ -18,6 +19,9 @@ export function faixa(p: Per, de: string, ate: string): [string, string] {
   if (p === "mes") return [`${y}-${pad(m)}-01`, h];
   if (p === "mesp") { const py = m === 1 ? y - 1 : y, pm = m === 1 ? 12 : m - 1; return [`${py}-${pad(pm)}-01`, somaDias(`${y}-${pad(m)}-01`, -1)]; }
   if (p === "ano") return [`${y}-01-01`, h];
+  // ciclo de pagamento dos externos (29 de um mês a 28 do seguinte): é o período do Financeiro,
+  // para dar para comparar as duas telas sem ter que digitar data na mão
+  if (p === "ciclo") return cicloDoMes(cicloDe(h));
   return [de || h, ate || h];
 }
 
@@ -66,12 +70,13 @@ export default function VendasConsultores() {
   const escolhido = porCons.find(x => x.k === sel);
   return <section className="view active">
     <div className="view-head"><div><h2>💰 Vendas dos consultores</h2>
-      <p>Só as vendas: quantas, quanto e de quem, no período que você escolher. <b>Aprovadas</b> = já validadas pela Gestão. Clique num consultor para ver as vendas dele.</p></div>
+      <p>Só as vendas: quantas, quanto e de quem, no período que você escolher. <b>Aprovadas</b> = já validadas pela Gestão. Clique num consultor para ver as vendas dele.</p>
+      <p className="hint">Aqui é o <b>valor vendido</b>: a promissória entra pelo valor cheio, no dia da assinatura. O que o financeiro paga é o que <b>entrou em caixa</b> — por isso dá menos. Use o <b>ciclo de pagamento (29 a 28)</b> e veja a conta fechando em Gestão → Financeiro.</p></div>
       <button className="btn primary" onClick={() => setRel(!rel)}>📋 Relatório para conferência (29 a 28)</button></div>
     {rel && <RelConferenciaExternos fechar={() => setRel(false)} />}
 
     <div className="vc-filtros">
-      <div className="chips" style={{ margin: 0 }}>{PER.map(([k, l]) => <button key={k} className={"chip" + (per === k ? " on" : "")} onClick={() => setPer(k)}>{l}</button>)}</div>
+      <div className="chips" style={{ margin: 0 }}>{([...PER, ["ciclo", "🔁 Ciclo de pagamento (29 a 28)"]] as [Per, string][]).map(([k, l]) => <button key={k} className={"chip" + (per === k ? " on" : "")} onClick={() => setPer(k)}>{l}</button>)}</div>
       {per === "outro" && <span className="vc-datas"><input type="date" value={de} onChange={e => setDe(e.target.value)} /> até <input type="date" value={ate} onChange={e => setAte(e.target.value)} /></span>}
       <span className="hint">{fmtDate(ini)} a {fmtDate(fim)}</span>
     </div>

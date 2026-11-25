@@ -637,6 +637,24 @@ export function criarRegras(state: Estado, currentUserId: string) {
     // vendas lançadas só para a Gestão conferir (temp) não geram comissão
     const pagamentos = meusVend.flatMap(c => pagamentosVenda(c.venda).filter(p => !p.temp).map(p => ({ ...p, c }))).filter(p => dentroPeriodo(p.data, de, ate) || (!de && !ate));
     const vendas = meusVend.filter(c => pagamentos.some(p => p.c === c));
+    // ---------- encaixe com a tela "Vendas dos consultores" ----------
+    // Lá o número é o VALOR VENDIDO (de face): a promissória entra pelo valor cheio assinado.
+    // Aqui o número é a BASE DO PAGAMENTO: só o que entrou em dinheiro no período — venda à
+    // vista + parcela de promissória efetivamente paga. Os dois estão certos e medem coisas
+    // diferentes; estas linhas existem para a Gestão ver a ponte entre um e outro:
+    //   valor vendido − promissórias (face) + pagamentos de promissória = base do pagamento
+    const faceItens = meusVend.flatMap(c => numerosVenda(c.venda)
+      .filter((i: any) => i.status !== "registrada" && !i.temp)
+      .map((i: any) => ({ i, c, data: competenciaItem(i.dataVenda, i.decididoEm, i.registradoEm) })))
+      .filter(x => dentroPeriodo(x.data, de, ate) || (!de && !ate));
+    const totalFace = faceItens.reduce((s, x) => s + (Number(x.i.valor) || 0), 0);
+    const numsPagos = new Set(meusVend.flatMap(c => itensVenda(c.venda)
+      .filter((i: any) => i.tipo === "pagamento" && i.status === "efetivada").map((i: any) => String(i.numero))));
+    const promFace = faceItens.filter(x => x.i.tipo === "promissoria");
+    const promAberta = promFace.filter(x => !numsPagos.has(String(x.i.numero)));
+    const totalPromFace = promFace.reduce((s, x) => s + (Number(x.i.valor) || 0), 0);
+    const totalPromAberta = promAberta.reduce((s, x) => s + (Number(x.i.valor) || 0), 0);
+    const totalPagtoProm = pagamentos.filter((p: any) => p.tipo === "promissoria").reduce((s, p: any) => s + p.valor, 0);
     const { pagamentoVisita, comissaoPct: pct } = cfg();
     // ciclo com nº oficial lançado pela Gestão: o pagamento das visitas usa esse nº (consultor → visitas; medidor → medidas)
     const qtdVisitas = oficial && oficial.papel !== "medidor" ? oficial.visitas : visitas.length;
@@ -668,6 +686,7 @@ export function criarRegras(state: Estado, currentUserId: string) {
     const auxilio = datasAux.length * valAux;
     return { visitas, vendas, pagamentos, pendentes, comissaoFutura, pagamentoVisitas, totalVendido, comissao, medidas, pagamentoMedidas, reembolsos, totalReembolsos,
       qtdVisitas, qtdMedidas, oficial,
+      totalFace, qtdFace: faceItens.length, totalPromFace, totalPromAberta, qtdPromAberta: promAberta.length, totalPagtoProm, qtdPagtoProm: pagamentos.filter((p: any) => p.tipo === "promissoria").length,
       auxilio, datasAuxilio: datasAux, valorAuxilio: valAux, total: pagamentoVisitas + comissao + pagamentoMedidas + totalReembolsos + auxilio };
   }
 

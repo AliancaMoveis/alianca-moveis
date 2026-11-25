@@ -237,6 +237,32 @@ function VendasVendedores() {
   );
 }
 
+/** 🧮 Ponte entre "Vendas dos consultores" (valor vendido) e o que vai para o financeiro (recebido).
+ *  Existe porque os dois números são diferentes DE PROPÓSITO e ninguém conseguia explicar a diferença:
+ *  a promissória é venda no dia da assinatura, mas só vira comissão quando o cliente paga. */
+function Conciliacao({ face, qtFace, promFace, promAberta, qtPromAberta, pagtoProm, qtPagtoProm, base, qtBase, pct, comissao, de, ate }: any) {
+  if (!de || !ate) return null;
+  const linha = (rot: string, det: string, v: number, sinal: "" | "-" | "+" | "=") => (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "9px 0", borderTop: sinal === "=" ? "2px solid var(--line)" : "1px solid var(--line)" }}>
+      <span style={{ width: 18, fontWeight: 800, color: sinal === "-" ? "var(--danger)" : sinal === "+" ? "var(--st-concluida)" : "var(--muted)" }}>{sinal}</span>
+      <span style={{ flex: 1 }}><b>{rot}</b><span className="hint" style={{ display: "block" }}>{det}</span></span>
+      <b style={{ fontSize: sinal === "=" ? 19 : 16, whiteSpace: "nowrap", color: sinal === "=" ? "var(--st-concluida)" : undefined }}>{fmtMoeda(v)}</b>
+    </div>
+  );
+  return <div className="panel" style={{ borderLeft: "4px solid var(--primary)" }}>
+    <h3>🧮 Por que o valor vendido e o valor a pagar são diferentes</h3>
+    <p className="hint" style={{ marginTop: -4 }}>A tela <b>Vendas dos consultores</b> mostra o <b>valor vendido</b> (a promissória entra pelo valor cheio, no dia da assinatura).
+      O financeiro paga sobre o que <b>entrou em caixa</b>. Esta conta liga os dois — no mesmo período, {fmtDate(de)} a {fmtDate(ate)}.</p>
+    {linha("Valor vendido no período", qtFace + " venda" + (qtFace === 1 ? "" : "s") + " · é o número da tela Vendas dos consultores", face, "")}
+    {linha("Promissórias ainda não pagas", qtPromAberta + " promissória" + (qtPromAberta === 1 ? "" : "s") + " · é venda, mas o dinheiro não entrou — vira comissão quando o cliente pagar", promAberta, "-")}
+    {promFace - promAberta > 0.004 ? linha("Promissórias já quitadas (valor de face)", "sai o valor cheio e entra o que foi pago, logo abaixo", promFace - promAberta, "-") : null}
+    {linha("Pagamentos de promissória recebidos", qtPagtoProm + " pagamento" + (qtPagtoProm === 1 ? "" : "s") + " · inclui parcela de venda assinada em ciclo anterior", pagtoProm, "+")}
+    {linha("Base do pagamento", qtBase + " venda" + (qtBase === 1 ? "" : "s") + " · é o total do relatório que vai para o financeiro", base, "=")}
+    <div className="note" style={{ marginTop: 12 }}>Comissão de <b>{pct}%</b> sobre a base: <b>{fmtMoeda(comissao)}</b>.
+      O relatório <b>📋 Vendas dos externos (29 a 28)</b> fecha exatamente nesta base — se os dois não baterem, é erro e tem que ser olhado.</div>
+  </div>;
+}
+
 function FinConsultor() {
   const { R, st } = useApp();
   const souGestor = R.ehGestao();
@@ -276,9 +302,20 @@ function FinConsultor() {
     const totMed = resumos.reduce((s, x) => s + x.r.qtdMedidas, 0) + extraMed, totMedR = resumos.reduce((s, x) => s + x.r.pagamentoMedidas, 0) + extraMed * valVis, totReemb = resumos.reduce((s, x) => s + x.r.totalReembolsos, 0), totAux = resumos.reduce((s, x) => s + x.r.auxilio, 0);
     const totGeral = resumos.reduce((s, x) => s + x.r.total, 0) + (extraMed + extraVis) * valVis;
     const totVisitasR0 = totVisitasR + extraVis * valVis;
+    // ponte com a tela "Vendas dos consultores" (que mostra o VALOR VENDIDO, promissória pelo
+    // valor cheio). Aqui a base é o que entrou em dinheiro. Os dois números fecham assim:
+    const totFace = resumos.reduce((s, x) => s + x.r.totalFace, 0);
+    const totPromAberta = resumos.reduce((s, x) => s + x.r.totalPromAberta, 0);
+    const totPromFace = resumos.reduce((s, x) => s + x.r.totalPromFace, 0);
+    const totPagtoProm = resumos.reduce((s, x) => s + x.r.totalPagtoProm, 0);
+    const qtFace = resumos.reduce((s, x) => s + x.r.qtdFace, 0);
+    const qtPromAberta = resumos.reduce((s, x) => s + x.r.qtdPromAberta, 0);
+    const qtPagtoProm = resumos.reduce((s, x) => s + x.r.qtdPagtoProm, 0);
     return (
       <section className="view active" id="view-financeiro">{cab}
-        <div className="kpis" id="finKpis"><Kpi n={totVisitas + extraVis} l="Visitas pagas" /><Kpi n={totMed} l="Medidas feitas" /><Kpi n={totVendas} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(totVendido)} l="Valor vendido" /><Kpi fs={22} n={fmtMoeda(totComissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(totReemb)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(totAux)} l="Auxílio fixo (dia 15)" /><Kpi fs={22} n={fmtMoeda(totGeral)} l="Total a receber" cor="var(--st-concluida)" /></div>
+        <div className="kpis" id="finKpis"><Kpi n={totVisitas + extraVis} l="Visitas pagas" /><Kpi n={totMed} l="Medidas feitas" /><Kpi n={totVendas} l="Vendas efetivadas" /><Kpi fs={22} n={fmtMoeda(totVendido)} l="Base do pagamento (recebido)" /><Kpi fs={22} n={fmtMoeda(totComissao)} l={`Previsão de comissão (${pct}%)`} /><Kpi fs={22} n={fmtMoeda(totReemb)} l="Reembolsos aprovados" /><Kpi fs={22} n={fmtMoeda(totAux)} l="Auxílio fixo (dia 15)" /><Kpi fs={22} n={fmtMoeda(totGeral)} l="Total a receber" cor="var(--st-concluida)" /></div>
+        <Conciliacao face={totFace} qtFace={qtFace} promFace={totPromFace} promAberta={totPromAberta} qtPromAberta={qtPromAberta}
+          pagtoProm={totPagtoProm} qtPagtoProm={qtPagtoProm} base={totVendido} qtBase={totVendas} pct={pct} comissao={totComissao} de={de} ate={ate} />
         <VisitasDoCiclo de={de} ate={ate} pessoas={consultores} />
         <PrevisaoCiclos ids={consultores.filter(u => (u.setores || []).includes("consultor_externo")).map(u => u.id)} />
         <FechamentoGestao de={de} ate={ate} pessoas={consultores} />
