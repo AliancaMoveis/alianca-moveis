@@ -276,7 +276,20 @@ export default function ProjetistaChecklist() {
   // ele não vier, a ficha continua na tela com o que já estava carregado, avisando o motivo.
   const achado = sel ? (lista || []).find(c => c.id === sel) : null;
   if (achado) ultimoAberto.current = achado;
-  const atual = achado || (sel ? ultimoAberto.current : null);
+  const base = achado || (sel ? ultimoAberto.current : null);
+  // A lista vem leve: sem o termo inteiro e sem o histórico (eram 92% de uma resposta de 4 MB,
+  // que o gateway cortava no meio e derrubava a tela). Ao abrir o cliente, busca os dois.
+  const [ficha, setFicha] = useState<any>(null);
+  useEffect(() => {
+    setFicha(null);
+    if (!sel) return;
+    let vivo = true;
+    A.ckProjetistaFicha(sel).then((f: any) => { if (vivo) setFicha(f); }).catch(() => { /* a ficha abre com o que já tem */ });
+    return () => { vivo = false; };
+  }, [sel]);
+  const atual = base && ficha && ficha.id === base.id
+    ? { ...base, termo: ficha.termo ?? base.termo, historico: ficha.historico ?? base.historico }
+    : base;
   const foraDoFiltro = !!(sel && !achado && lista);
   // ---------- cliente aberto: ficha em tela cheia ----------
   if (atual) return (

@@ -370,6 +370,10 @@ export const A = {
   // área do projetista do checklist (agenda dele + termo de ciência a partir da listagem do Promob — sem valores)
   ckProjetistaEu: () => rpc<{ projetista: string | null; podeTodos: boolean; projetistas: string[] }>("ck_projetista_eu"),
   ckProjetistaAgenda: (proj: string | null, de: string, ate: string) => rpc<any[]>("ck_projetista_agenda", { p_proj: proj, p_de: de, p_ate: ate }),
+  /** termo completo + histórico de UM checklist: a lista vem leve (sem eles) e isto completa
+   *  a ficha quando o projetista abre o cliente. Sem isso a resposta da lista passava de 4 MB
+   *  e o gateway cortava o JSON no meio, derrubando a tela inteira. */
+  ckProjetistaFicha: (chamado: string) => rpc<any>("ck_projetista_ficha", { p_chamado: chamado }),
   /** acao: salvar · iniciar · impressao · assinado · realizado (realizado só com impressão + digitalizado assinado) */
   ckProjetistaSalvar: (id: string, p: any, acao: "salvar" | "iniciar" | "impressao" | "assinado" | "realizado" | "reabrir" = "salvar") => rpc("ck_projetista_salvar", { p_id: id, p, p_acao: acao }),
   /** arquivos da venda (Exact), fotos da medição (Exact + medidas do 360) e o que o checklist subiu — função checklist-arquivos */
