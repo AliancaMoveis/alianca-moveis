@@ -5,7 +5,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { Kpi } from "./Dashboard";
-import { fmtDate, fmtMoeda, itensPendentes, moedaDigitando, numerosVenda } from "../lib/regras";
+import { fmtDate, fmtMoeda, itensPendentes, itensVenda, moedaDigitando, numerosVenda } from "../lib/regras";
 import { tira } from "./Medidas";
 import { faixa, PER, type Per } from "./VendasConsultores";
 import { ehVendedor } from "../lib/vendaExact";
@@ -106,6 +106,23 @@ export default function ConfirmacaoVendas() {
     });
   }, [st.chamados, itens]);
   const todos = useMemo(() => [...(itens || []), ...doVend], [itens, doVend]);
+  /**
+   * Vendas que JÁ ESTÃO lançadas num cliente do 360, por nº.
+   * Elas continuam aparecendo aqui como "a conferir" e não têm nenhuma marca — validar de
+   * novo é comissão dobrada. Em 25/11/2026 eram 120 na fila, 77 já efetivadas.
+   * Ficam escondidas do "a conferir" e só aparecem no filtro próprio.
+   */
+  const lancadas = useMemo(() => {
+    const m = new Map<string, { status: string; id: string; cliente: string }>();
+    (st.chamados || []).forEach((c: any) => itensVenda(c.venda).forEach((i: any) => {
+      if (i.tipo === "pagamento" || !i.numero) return;
+      const k = String(i.numero);
+      if (!m.has(k) || i.status === "efetivada") m.set(k, { status: String(i.status || ""), id: c.id, cliente: c.cliente || "" });
+    }));
+    return m;
+  }, [st.chamados]);
+  const jaLancada = (x: Item) => (x.status === "pendente" ? lancadas.get(x.numero) : undefined);
+  const [verLancadas, setVerLancadas] = useState(false);
   const lancouVendedor = (x: Item) => x.fonte === "vendedor" || /lançada/i.test(x.motivo || "");
   const nomeVend = (x: Item) => (x.vendedor_id ? R.nomeUser(x.vendedor_id) : x.ex_vendedor) || "";
   const nomeCons = (x: Item) => (x.consultor_id ? R.nomeUser(x.consultor_id) : x.consultor_nome) || "";
@@ -114,12 +131,24 @@ export default function ConfirmacaoVendas() {
   const doTipo = useMemo(() => todos.filter(x => (!tipo || x.tipo === tipo) && (!orig || (orig === "vendedor") === lancouVendedor(x)) && (!fVend || nomeVend(x) === fVend) && (!fCons || nomeCons(x) === fCons) && (per === "todas" || (!!x.data && String(x.data).slice(0, 10) >= ini && String(x.data).slice(0, 10) <= fim))), [todos, tipo, orig, fVend, fCons, per, ini, fim]);
   const busca = tira(q), dig = q.replace(/\D/g, "");
   const lista = doTipo.filter(x => (aba === "todas" || x.status === aba) && (!metodo || x.como === metodo)
+    && (verLancadas ? !!jaLancada(x) : !jaLancada(x))
     && (!q || tira([x.ex_cliente, x.cliente_ref, chamado(x.chamado_id)?.cliente || "", x.consultor_nome, x.ex_vendedor].join(" ")).includes(busca) || (dig.length >= 3 && (x.numero.includes(dig) || (x.ex_tel1 + x.ex_tel2).replace(/\D/g, "").includes(dig)))))
     .sort((a, b) => tira(a.ex_cliente).localeCompare(tira(b.ex_cliente)) || a.numero.localeCompare(b.numero));
   // agrupa as vendas do mesmo cliente (ordem alfabética do comprador)
   const grupos = (() => { const m = new Map<string, Item[]>(); lista.forEach(x => { const k = gkDe(x); const a = m.get(k); if (a) a.push(x); else m.set(k, [x]); });
     return Array.from(m.entries()).map(([k, l]) => ({ k, l, nome: tira(l[0].ex_cliente) })).sort((a, b) => a.nome.localeCompare(b.nome)); })();
-  const pend = doTipo.filter(x => x.status === "pendente");
+  const pend = doTipo.filter(x => x.status === "pendente" && !jaLancada(x));
+  const pendLancadas = doTipo.filter(x => !!jaLancada(x));
+  /** quanto está parado em cada mês de venda — é o que decide o que ainda dá para pagar neste comissionamento */
+  const porMes = (() => {
+    const m: Record<string, { n: number; v: number }> = {};
+    todos.filter(x => x.status === "pendente" && !jaLancada(x) && (!tipo || x.tipo === tipo)).forEach(x => {
+      const k = String(x.data || x.criado_em || "").slice(0, 7) || "sem data";
+      (m[k] = m[k] || { n: 0, v: 0 }).n++; m[k].v += Number(x.valor) || 0;
+    });
+    return Object.entries(m).sort((a, b) => b[0].localeCompare(a[0]));
+  })();
+  const mesNome = (k: string) => { const [a, b] = k.split("-"); return b ? ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][Number(b) - 1] + "/" + a.slice(2) : k; };
   const gruposVis = (() => { let n = 0; const out: typeof grupos = []; for (const g of grupos) { if (n >= lim) break; out.push(g); n += g.l.length; } return out; })();
   // resumo por consultor (respeita período, origem e vendedor; não o filtro de consultor, para poder trocar de consultor)
   const resCons = (() => { const m: Record<string, { p: number; vp: number; v: number }> = {};
@@ -237,6 +266,17 @@ export default function ConfirmacaoVendas() {
       <Kpi n={pend.filter(x => comoDe(x.como)[1] !== "ok").length} l="🟡 Por endereço / nome — conferir" cor="var(--warn)" />
       <Kpi n={validHoje.length} l={"Validadas hoje · " + brl(validHoje.reduce((s, x) => s + Number(x.valor), 0))} cor="var(--st-concluida)" />
     </div>
+    {/* quanto está parado em cada mês: venda de mês passado validada agora entra no comissionamento deste mês */}
+    {porMes.length > 1 && <div className="ev-resumo" style={{ marginBottom: 10 }}>
+      {porMes.map(([k, x]) => <button key={k} className={"ev-res" + (per === "todas" && false ? " on" : "")} onClick={() => { setQ(""); setMetodo(""); setAba("pendente"); setPer("outro"); setPde(k + "-01"); setPate(new Date(Number(k.slice(0, 4)), Number(k.slice(5, 7)), 0).toISOString().slice(0, 10)); }}>
+        <b>{mesNome(k)}</b><span>{x.n} a conferir · {brl(x.v)}</span><small>clique para ver só este mês</small></button>)}
+    </div>}
+    {pendLancadas.length > 0 && <div className="card" style={{ marginBottom: 10, borderColor: "var(--warn)", background: "var(--st-pendente-bg, #fff8e6)" }}>
+      <b>⚠️ {pendLancadas.length} venda(s) nesta fila já estão lançadas num cliente do 360</b>
+      <div className="hint" style={{ marginTop: 2 }}>Validar de novo contaria a comissão duas vezes, então elas ficam fora do "a conferir".</div>
+      <div style={{ marginTop: 6 }}><button className={"btn sm" + (verLancadas ? " primary" : "")} onClick={() => { setVerLancadas(v => !v); setSel({}); }}>
+        {verLancadas ? "← Voltar para as que faltam conferir" : "Ver as já lançadas"}</button></div>
+    </div>}
 
     <div className="cv-barra">
       <div className="chips" style={{ margin: 0 }}>{ABAS.map(([k, l]) => <button key={k} className={"chip" + (aba === k ? " on" : "")} onClick={() => setAba(k)}>{l}<span className="n">{doTipo.filter(x => k === "todas" || x.status === k).length}</span></button>)}</div>
@@ -277,6 +317,7 @@ export default function ConfirmacaoVendas() {
             {g.l.map(x => { const c = chamado(x.chamado_id); const ed = valEd[x.numero]; const mudou = Number(x.valor) !== Number(x.valor_exact);
             const pendente = x.status === "pendente"; const vend = x.vendedor_id ? R.nomeUser(x.vendedor_id) : "";
             const cm = comoDe(x.como);
+            const jl = jaLancada(x); // esta venda já está lançada num cliente — não pode validar de novo
             const provavel = !c ? cli360(x) : null;
             return <Fragment key={x.numero}><tr className={"cv-l " + x.status + (sel[x.numero] ? " sel" : "") + (cab ? " nog" : "")}>
               <td style={td}><input type="checkbox" style={{ width: "auto" }} checked={!!sel[x.numero]} onChange={() => setSel(s => ({ ...s, [x.numero]: !s[x.numero] }))} /></td>
@@ -294,6 +335,9 @@ export default function ConfirmacaoVendas() {
                   : <b>{x.cliente_ref || "—"}</b>}
                 {x.como && <div><span className={"cv-como " + cm[1]} title={cm[2]}>{cm[0]}</span></div>}
                 {provavel && <div className="hint">no 360: <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(provavel.id); }}>{provavel.cliente}</a> ({provavel.id}){provavel.consultorId ? " · " + R.nomeUser(provavel.consultorId) : ""}</div>}
+                {jl && <div style={{ color: "var(--warn)", fontWeight: 700, fontSize: 12, marginTop: 2 }}>
+                  ⚠️ a venda {x.numero} já está lançada em <a href="#" onClick={e => { e.preventDefault(); abrirDetalhe(jl.id); }}>{jl.cliente || jl.id}</a>
+                  {jl.status === "efetivada" ? " (efetivada)" : jl.status ? " (" + jl.status + ")" : ""} — validar aqui contaria a comissão duas vezes</div>}
                 {!cab && vendas360(c || provavel).length > 0 && <div className="cv-ja">📌 já tem no 360: {vendas360(c || provavel).map((i: any) => <span key={i.numero + i.status} className={"cv-jai " + i.status}>{i.numero} · {brl(i.valor)}</span>)}</div>}
                 {pendente && x.cands.length > 1 && <select style={{ fontSize: 12, marginTop: 4, maxWidth: 200 }} value={x.chamado_id || ""} onChange={e => editar(x, { chamado_id: e.target.value }, { chamado_id: e.target.value })}>
                   {x.cands.map(k => <option key={k.id} value={k.id}>{k.cliente} ({k.id}) · {comoDe(k.como)[0]}</option>)}</select>}
