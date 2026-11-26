@@ -1,7 +1,7 @@
 // 💵 Financeiro do checklist: a comissão do projetista sobre a recuperação do projeto.
 // Substitui a planilha que era preenchida à mão (uma aba por mês, uma linha por cliente) e o papelzinho
 // que ia até o caixa. Duas visões:
-//   · Ciclo — o "mês" deles, que fecha todo dia 25 (26 a 25), com as colunas da planilha e os totais
+//   · Ciclo — o "mês" deles, que fecha todo dia 15 (16 a 15), com as colunas da planilha e os totais
 //   · Fechamento do dia — o que o projetista leva ao financeiro no fim do dia: cliente, venda e valores
 // O financeiro (a Regina, do caixa) corrige o valor do projeto final e aprova pela própria tela.
 import { useEffect, useMemo, useState } from "react";
