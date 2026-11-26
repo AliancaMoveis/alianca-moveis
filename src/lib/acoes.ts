@@ -328,6 +328,25 @@ export const A = {
   vendedorAssumir: (id: string) => rpc("vendedor_assumir", { p_id: id }),
   salvarMeusDados: (nomeCompleto: string, telefone: string) => rpc("salvar_meus_dados", { p_nome_completo: nomeCompleto, p_telefone: telefone }),
   checklistRegistrar: (id: string, p: any) => rpc("checklist_registrar", { p_id: id, p }),
+  /** Dados da venda no Tático para a tela de agendar em massa: data, situação (Efetivada /
+   *  Reserva com Promissória) e valor. O checklist não guarda nada disso — vem da base de vendas. */
+  ckVendasBase: async (numeros: string[]) => {
+    const out: Record<string, { data: string | null; situacao: string | null; endereco: string | null; valor: number | null; desconto: number | null }> = {};
+    const nums = Array.from(new Set(numeros.filter(Boolean)));
+    for (let k = 0; k < nums.length; k += 300) {
+      const q = await sb.from("base_clientes_vendas")
+        .select("num_venda,data_venda,situacao,valor_total,desconto,endereco_venda")
+        .in("num_venda", nums.slice(k, k + 300));
+      (q.data || []).forEach((x: any) => {
+        // mesma venda pode repetir na base; fica a com data mais recente
+        const ja = out[x.num_venda];
+        if (ja && ja.data && x.data_venda && ja.data >= x.data_venda) return;
+        out[x.num_venda] = { data: x.data_venda || null, situacao: x.situacao || null, endereco: x.endereco_venda || null,
+          valor: x.valor_total == null ? null : Number(x.valor_total), desconto: x.desconto == null ? null : Number(x.desconto) };
+      });
+    }
+    return out;
+  },
   // valores da venda para a folha do financeiro (total, recebido, desconto quando existe)
   checklistFinanceiro: (id: string) => rpc<any>("checklist_financeiro", { p_chamado: id }),
   checklistFinanceiroSalvar: (id: string, p: any) => rpc("checklist_financeiro_salvar", { p_chamado: id, p }),

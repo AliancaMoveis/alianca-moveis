@@ -12,17 +12,67 @@
 // O disparo é idêntico ao individual, cliente por cliente: primeiro a Kommo, e só se ela
 // aceitar é que o horário é reservado no 360. Falhou um, os outros seguem e o que falhou
 // aparece com o motivo.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import {
   ck, etapaCk, cfgAgenda, ocupacoes, livresNoHorario, atendeNoDia, diaComAgenda,
-  durSugeridaCk, cidadeCk, modeloAprovado,
+  durSugeridaCk, modeloAprovado,
 } from "./Checklist";
 
 /** tempo em palavras: 120 → "2 h" */
 const fmtDur = (m: number) => m >= 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) : "") : m + " min";
+const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const diaBR = (v?: string | null) => v ? String(v).slice(0, 10).split("-").reverse().join("/") : "—";
+/** "Reserva com Promissória" → promissória; "Efetivada" → efetivada */
+const tipoVenda = (s?: string | null) => {
+  const x = (s || "").toLowerCase();
+  if (x.includes("promiss")) return { l: "Promissória", cor: "var(--warn)", t: "Reserva com promissória — ainda não efetivada" };
+  if (x.includes("efetiv")) return { l: "Efetivada", cor: "var(--st-concluida)", t: "Venda efetivada" };
+  return { l: s || "—", cor: "var(--muted)", t: s || "Situação não encontrada na base de vendas" };
+};
+const cap = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, (x: string) => x.toUpperCase());
+/** Cidade · bairro do cliente, por três fontes em ordem de confiança.
+ *  O campo `local` do checklist só existe em quem passou pela medida (13 de 93 na fila), e era
+ *  por isso que a região aparecia em uns e em outros não. O endereço do chamado já vem formatado
+ *  "Rua X, 123 - compl · Bairro, Cidade-PR"; a base de vendas do Tático cobre o resto.
+ *  Só é usado para a atendente saber a distância — nunca para cruzar ou identificar cliente. */
+function regiao(c: any, endBase?: string | null): string {
+  const l = ck(c).local;
+  if (l?.cidade) return cap(String(l.cidade)) + (l.bairro ? " · " + cap(String(l.bairro)) : "");
+  const bruto = String(c.endereco || "");
+  if (bruto.includes("·")) {
+    const dep = bruto.split("·").pop()!.trim();            // "Bairro, Cidade-PR"
+    const virg = dep.lastIndexOf(",");
+    if (virg > 0) {
+      const bairro = dep.slice(0, virg).trim();
+      const cidade = dep.slice(virg + 1).replace(/-[A-Za-z]{2}\s*$/, "").trim();
+      if (cidade) return cap(cidade) + (bairro ? " · " + cap(bairro) : "");
+    }
+  }
+  const b = String(endBase || "");                          // "RUA X, 123, BAIRRO - CIDADE"
+  if (b.includes(" - ")) {
+    const fim = b.split(" - ").pop()!.trim();
+    const antes = b.slice(0, b.lastIndexOf(" - "));
+    const bairro = antes.includes(",") ? antes.split(",").pop()!.trim() : "";
+    if (fim) return cap(fim) + (bairro ? " · " + cap(bairro) : "");
+  }
+  return "";
+}
+/** todos os números do cliente, na ordem de preferência — mesma regra da tela individual */
+const telsDe = (c: any): string[] => {
+  const k = ck(c);
+  const salvos: string[] = Array.isArray(k.telefones) ? k.telefones : [];
+  return [c.telefone, k.telefone2, ...salvos].filter((t: string) => t && String(t).replace(/\D/g, "").length >= 10);
+};
+/** ambientes do pedido, quando o checklist já trouxe (na maioria ainda não vem) */
+const ambientesCk = (c: any): string[] => {
+  const k = ck(c);
+  const fonte = k.ambientes || k.planilha?.ambientes || (k.termo && k.termo.ambientes);
+  if (!Array.isArray(fonte)) return [];
+  return fonte.map((a: any) => String(typeof a === "string" ? a : (a?.nome || a?.ambiente || "")).trim()).filter(Boolean);
+};
 
 const isoDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
@@ -93,6 +143,8 @@ export default function ChecklistEmMassa() {
   const [indo, setIndo] = useState(false);
   const [feitos, setFeitos] = useState(0);
   const [busca, setBusca] = useState("");
+  // data e situação da venda vêm da base do Tático: o checklist não guarda isso
+  const [vb, setVb] = useState<Record<string, { data: string | null; situacao: string | null; endereco: string | null; valor: number | null; desconto: number | null }>>({});
   const LOTE = 10;
 
   // a fila: quem está em "a contatar", mais antigo primeiro
@@ -100,6 +152,17 @@ export default function ChecklistEmMassa() {
     .filter((c: any) => c.tipo === "checklist" && c.status !== "concluida" && etapaCk(c) === "a_contatar")
     .filter((c: any) => !busca.trim() || (c.cliente + " " + (c.pedido || "") + " " + (c.telefone || "")).toLowerCase().includes(busca.trim().toLowerCase()))
     .sort((a: any, b: any) => String(a.criadoEm || "").localeCompare(String(b.criadoEm || ""))), [st.chamados, busca]);
+
+  // busca uma vez os pedidos da fila inteira (são ~90, cabe numa consulta só)
+  const pedidos = useMemo(() => (st.chamados || [])
+    .filter((c: any) => c.tipo === "checklist" && c.status !== "concluida" && etapaCk(c) === "a_contatar")
+    .map((c: any) => c.pedido).filter(Boolean).join(","), [st.chamados]);
+  useEffect(() => {
+    if (!pedidos) return;
+    let vivo = true;
+    A.ckVendasBase(pedidos.split(",")).then((m: any) => { if (vivo) setVb(m); }).catch(() => { /* sem a base, a tela segue sem essas colunas */ });
+    return () => { vivo = false; };
+  }, [pedidos]);
 
   const montar = (ids: Set<string>) => {
     const cl = fila.filter((c: any) => ids.has(c.id));
@@ -130,9 +193,10 @@ export default function ChecklistEmMassa() {
     const rem = primeiroNome(R.me()?.nome || "");
     for (const l of prontas) {
       setLinhas(ls => ls.map(x => x.c.id === l.c.id ? { ...x, estado: "indo", msg: "" } : x));
-      const tel = sanitizeWhats(l.c.telefone || ck(l.c).telefone2 || "");
+      // o cliente pode ter mais de um número: tenta todos antes de desistir
+      const tel = telsDe(l.c).map(sanitizeWhats).find(Boolean) || "";
       if (!tel) {
-        setLinhas(ls => ls.map(x => x.c.id === l.c.id ? { ...x, estado: "erro", msg: "cliente sem telefone válido" } : x));
+        setLinhas(ls => ls.map(x => x.c.id === l.c.id ? { ...x, estado: "erro", msg: "nenhum telefone válido no cadastro" } : x));
         continue;
       }
       try {
@@ -196,7 +260,11 @@ export default function ChecklistEmMassa() {
       <div className="panel" style={{ overflowX: "auto" }}>
         <table className="tabela">
           <thead><tr>
-            <th style={{ width: 34 }}></th><th>Cliente</th><th>Venda</th><th>Tempo</th>
+            <th style={{ width: 34 }}></th><th>Cliente</th><th>Venda</th>
+            <th style={{ textAlign: "right" }}>Cupom</th>
+            <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Data da venda</th>
+            <th style={{ textAlign: "center" }}>Tipo</th>
+            <th style={{ textAlign: "center", padding: "0 14px" }}>Tempo</th>
             <th>Data sugerida</th><th>Hora</th><th>Projetista</th><th>Situação</th>
           </tr></thead>
           <tbody>
@@ -204,11 +272,22 @@ export default function ChecklistEmMassa() {
               const l = linhas.find(x => x.c.id === c.id);
               const marcado = sel.has(c.id);
               const sug = durSugeridaCk(c);
+              const v = vb[c.pedido] || {} as any;
+              const tv = tipoVenda(v.situacao);
+              const ambs = ambientesCk(c);
               return <tr key={c.id} style={marcado ? { background: "var(--pj-bg, #f6f8fc)" } : undefined}>
                 <td><input type="checkbox" checked={marcado} disabled={indo} onChange={() => marcar(c.id)} /></td>
-                <td><b>{c.cliente}</b>{cidadeCk(c) ? <span className="hint" style={{ display: "block" }}>📍 {cidadeCk(c)}</span> : null}</td>
+                <td><b>{c.cliente}</b>
+                  {(() => { const rg = regiao(c, v.endereco); return rg ? <span className="hint" style={{ display: "block" }}>📍 {rg}</span> : null; })()}
+                  {ambs.length ? <span className="hint" style={{ display: "block" }}>🏠 {ambs.join(", ")}</span> : null}</td>
                 <td>{c.pedido || "—"}</td>
-                <td>{fmtDur(Number(ck(c).duracaoMin) || sug.min)}{!ck(c).duracaoMin && sug.cupom ? <span className="hint" style={{ display: "block" }}>pelo cupom</span> : null}</td>
+                <td style={{ textAlign: "right", whiteSpace: "nowrap", fontWeight: 700 }}
+                  title={sug.cupom ? "Valor do cupom — é ele que define o tempo sugerido" : "Sem valor de cupom"}>
+                  {sug.cupom ? fmtBRL(sug.cupom) : <span className="hint" style={{ fontWeight: 400 }}>—</span>}</td>
+                <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{diaBR(v.data)}</td>
+                <td style={{ textAlign: "center" }}>
+                  <span className="pill" style={{ color: tv.cor, fontWeight: 700, whiteSpace: "nowrap" }} title={tv.t}>{tv.l}</span></td>
+                <td style={{ textAlign: "center", padding: "0 14px", whiteSpace: "nowrap" }}>{fmtDur(Number(ck(c).duracaoMin) || sug.min)}{!ck(c).duracaoMin && sug.cupom ? <span className="hint" style={{ display: "block" }}>pelo cupom</span> : null}</td>
                 <td>{l ? <input type="date" value={(l.slot || "").slice(0, 10)} disabled={indo}
                   onChange={e => mudar(c.id, "slot", e.target.value ? e.target.value + "T" + ((l.slot || "").slice(11, 16) || opcoesHora[0]) : "")} /> : <span className="hint">—</span>}</td>
                 <td>{l ? <select value={(l.slot || "").slice(11, 16)} disabled={indo || !l.slot}
@@ -229,7 +308,7 @@ export default function ChecklistEmMassa() {
                 </td>
               </tr>;
             })}
-            {!fila.length && <tr><td colSpan={8}><div className="empty">Ninguém na fila de “a contatar”.</div></td></tr>}
+            {!fila.length && <tr><td colSpan={11}><div className="empty">Ninguém na fila de “a contatar”.</div></td></tr>}
           </tbody>
         </table>
       </div>
