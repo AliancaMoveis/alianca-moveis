@@ -12,6 +12,7 @@ import { A } from "../lib/acoes";
 import { useApp } from "../estado";
 
 const ENTER_CHAVE = "ck.conversa.enterEnvia";
+const GRANDE_CHAVE = "ck.conversa.grande";
 
 const hhmm = (iso: string) => {
   const d = new Date(iso);
@@ -49,6 +50,9 @@ export function Conversa({ c, onFechar, onModelo, onJanela }:
     try { return localStorage.getItem(ENTER_CHAVE) !== "0"; } catch { return true; }
   });
   const fim = useRef<HTMLDivElement>(null);
+  // maximizar fica guardado no aparelho: quem gosta da conversa grande não reabre toda vez
+  const [grande, setGrande] = useState(() => { try { return localStorage.getItem(GRANDE_CHAVE) === "1"; } catch { return false; } });
+  const alternarTamanho = () => setGrande(g => { const n = !g; try { localStorage.setItem(GRANDE_CHAVE, n ? "1" : "0"); } catch { /* aparelho sem storage: vale só nesta sessão */ } return n; });
 
   const carregar = async () => {
     try {
@@ -61,6 +65,13 @@ export function Conversa({ c, onFechar, onModelo, onJanela }:
   };
   useEffect(() => { carregar(); /* eslint-disable-next-line */ }, [c.id]);
   useEffect(() => { fim.current?.scrollIntoView({ block: "end" }); }, [v]);
+  // Instalado como app no iPhone não existe botão "voltar" do navegador: sem isto, quem abre a
+  // conversa fica preso nela. Esc fecha no computador; tocar fora fecha no celular.
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") onFechar(); };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, [onFechar]);
 
   async function enviar() {
     const t = texto.trim();
@@ -82,13 +93,18 @@ export function Conversa({ c, onFechar, onModelo, onJanela }:
   const falta = restante(v?.janela?.fechaEm || null);
 
   return (
-    <div className="as-painel" role="dialog" aria-label={"Conversa com " + c.cliente}>
+    <>
+    <div className="as-fundo" onClick={onFechar} aria-hidden="true" />
+    <div className={"as-painel" + (grande ? " grande" : "")} role="dialog" aria-label={"Conversa com " + c.cliente}>
       <div className="as-topo">
         <div className="as-av">💬</div>
         <div className="as-tt">
           <b style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.cliente}</b>
           <span>{c.pedido ? "Venda " + c.pedido + " · " : ""}{c.telefone || "sem telefone"}</span>
         </div>
+        <button className="as-ic" onClick={alternarTamanho}
+          title={grande ? "Voltar ao tamanho normal" : "Maximizar a conversa"}
+          aria-label={grande ? "Voltar ao tamanho normal" : "Maximizar a conversa"}>{grande ? "⤡" : "⤢"}</button>
         <button className="as-ic" onClick={onFechar} title="Fechar">✕</button>
       </div>
 
@@ -162,6 +178,7 @@ export function Conversa({ c, onFechar, onModelo, onJanela }:
         </div>
       )}
     </div>
+    </>
   );
 }
 
