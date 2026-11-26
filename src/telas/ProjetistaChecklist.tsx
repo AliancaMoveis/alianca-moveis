@@ -138,6 +138,9 @@ export const CSS = `
 .pj .pjchip{background:var(--pj-bg);border:1px solid var(--pj-l);border-radius:999px;padding:5px 12px;font-weight:600;font-size:12.5px;white-space:nowrap}
 .pj .pjchip.b{background:var(--pj-soft);color:var(--pj-pri);border-color:transparent}.pj .pjchip.g{background:var(--pj-okbg);color:var(--pj-ok);border-color:transparent}.pj .pjchip.w{background:var(--pj-wbg);color:var(--pj-w);border-color:transparent}
 .pj .nav{display:inline-flex;align-items:center;border:1px solid var(--pj-l);border-radius:999px;background:var(--pj-bg);overflow:hidden}.pj .nav button{border:0;background:none;padding:5px 10px;font-weight:700;cursor:pointer;color:inherit}.pj .nav button:hover{background:var(--pj-bg2)}
+.pj .nav .pjdata{border:0;border-left:1px solid var(--pj-l);border-right:1px solid var(--pj-l);background:none;font:inherit;font-weight:700;color:inherit;padding:4px 8px;cursor:pointer;width:auto;min-width:0;border-radius:0}
+.pj .nav .pjdata:hover{background:var(--pj-bg2)}
+.pj .nav .pjdata::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.75}
 .pj .pjgrid{display:grid;grid-template-columns:330px 1fr;gap:16px;align-items:start}
 @media (max-width:1100px){.pj .pjgrid{grid-template-columns:1fr}.pj .body{grid-template-columns:1fr!important}}
 .pj .cardx{background:var(--pj-bg);border:1px solid var(--pj-l);border-radius:12px;box-shadow:0 1px 2px rgba(20,28,45,.05),0 4px 16px rgba(20,28,45,.06)}
@@ -357,7 +360,14 @@ export default function ProjetistaChecklist() {
         <button className={aba === "prox" ? "on" : ""} onClick={() => setAba("prox")}>Próximos ({proximos.length})</button>
         <button className={aba === "fin" ? "on" : ""} onClick={() => setAba("fin")}>A finalizar ({pendentes.length})</button>
         <button className={aba === "real" ? "on" : ""} onClick={() => setAba("real")}>Realizados ({realizados.length})</button>
-        {aba === "dia" && <span className="nav" style={{ marginLeft: 8 }}><button onClick={() => setDia(somaDias(dia, -1))} title="Dia anterior">◀</button><button onClick={() => setDia(hj)}>Hoje</button><button onClick={() => setDia(somaDias(dia, 1))} title="Próximo dia">▶</button></span>}
+        {aba === "dia" && <span className="nav" style={{ marginLeft: 8 }}>
+          <button onClick={() => setDia(somaDias(dia, -1))} title="Dia anterior">◀</button>
+          {/* calendário: para alcançar um dia distante sem clicar dia a dia na seta */}
+          <input type="date" className="pjdata" value={dia} max="2099-12-31"
+            title="Escolher a data no calendário"
+            onChange={e => { if (e.target.value) setDia(e.target.value); }} />
+          <button onClick={() => setDia(hj)} title="Voltar para hoje">Hoje</button>
+          <button onClick={() => setDia(somaDias(dia, 1))} title="Próximo dia">▶</button></span>}
         {aba === "dia" && naoRes.length > 0 && <span className="sub" style={{ marginLeft: 8 }}>{naoRes.filter(e => e.c.confirmacao === "confirmada").length} de {naoRes.length} com presença confirmada</span>}
       </div>
       </>}
@@ -548,7 +558,11 @@ function AgendaGeral({ eu }: { eu: string | null }) {
   const cor = (t: string) => t === "res" ? { background: "#ffe8a3", color: "#6b4a00", border: "1.5px dashed #c98a12" } : t === "feito" ? { background: "#e6f4e9", color: "#2f6f3c", border: "1px solid #9fc5a8" } : { background: "var(--primary,#284b8f)", color: "#fff", border: "0" };
   return <div>
     <div className="pjtop">
-      <span className="nav"><button onClick={() => setDia(somaDias(dia, -1))}>◀</button><button onClick={() => setDia(hj)}>Hoje</button><button onClick={() => setDia(somaDias(dia, 1))}>▶</button></span>
+      <span className="nav"><button onClick={() => setDia(somaDias(dia, -1))} title="Dia anterior">◀</button>
+        <input type="date" className="pjdata" value={dia} max="2099-12-31" title="Escolher a data no calendário"
+          onChange={e => { if (e.target.value) setDia(e.target.value); }} />
+        <button onClick={() => setDia(hj)} title="Voltar para hoje">Hoje</button>
+        <button onClick={() => setDia(somaDias(dia, 1))} title="Próximo dia">▶</button></span>
       <b>{dl}</b>
       <span className="pjchip b">{evs.filter(e => e.tipo !== "res").length} atendimento{evs.filter(e => e.tipo !== "res").length === 1 ? "" : "s"}</span>
       {evs.some(e => e.tipo === "res") && <span className="pjchip w">{evs.filter(e => e.tipo === "res").length} reserva(s)</span>}
