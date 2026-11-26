@@ -18,8 +18,10 @@ import { A } from "../lib/acoes";
 import { parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import {
   ck, etapaCk, cfgAgenda, ocupacoes, livresNoHorario, atendeNoDia, diaComAgenda,
-  durSugeridaCk, modeloAprovado, conflitosProj, bloqueiosEm, rotuloBloq,
+  durSugeridaCk, modeloAprovado, conflitosProj, bloqueiosEm, rotuloBloq, Sugestoes,
 } from "./Checklist";
+import { SeloMedidaVenda } from "./Medidas";
+import { Selo360 } from "../comp/Visita360";
 
 /** tempo em palavras: 120 → "2 h" */
 const fmtDur = (m: number) => m >= 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) : "") : m + " min";
@@ -112,9 +114,13 @@ function alocar(st: any, clientes: any[], jaEscolhidos: Linha[]): Linha[] {
   const cfg = cfgAgenda(st);
   const occ = ocupacoes(st);                       // o que já está ocupado no sistema
   const reserva: { proj: string; ini: number; fim: number }[] = [];  // o que esta rodada já tomou
-  // quem o usuário mexeu na mão mantém o horário dele e entra na reserva antes dos outros
+  // Data que já foi dada não muda mais. Antes, desmarcar um cliente fazia o alocador rodar de
+  // novo e reembaralhar a data de todo mundo que tinha ficado — a pessoa perdia o que já tinha
+  // conferido. Agora toda linha que já tem horário entra como FIXA (tenha sido escolhida à mão
+  // ou sugerida pelo sistema), e só quem acabou de ser marcado recebe data nova, encaixada nos
+  // buracos que sobraram.
   const fixos = new Map<string, Linha>();
-  jaEscolhidos.filter(l => l.manual && l.slot && l.proj).forEach(l => {
+  jaEscolhidos.filter(l => l.slot && l.proj).forEach(l => {
     fixos.set(l.c.id, l);
     const ini = +parseData(l.slot); reserva.push({ proj: l.proj, ini, fim: ini + l.dur * 6e4 });
   });
@@ -167,6 +173,7 @@ export default function ChecklistEmMassa() {
   const [indo, setIndo] = useState(false);
   const [feitos, setFeitos] = useState(0);
   const [busca, setBusca] = useState("");
+  const [verLivres, setVerLivres] = useState("");  // id da linha com o painel de horários livres aberto
   // data e situação da venda vêm da base do Tático: o checklist não guarda isso
   const [vb, setVb] = useState<Record<string, { data: string | null; situacao: string | null; endereco: string | null; valor: number | null; desconto: number | null }>>({});
   const LOTE = 10;
@@ -304,6 +311,7 @@ export default function ChecklistEmMassa() {
             <th style={{ textAlign: "right" }}>Cupom</th>
             <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Data da venda</th>
             <th style={{ textAlign: "center" }}>Tipo</th>
+            <th>Medida</th>
             <th style={{ textAlign: "center", padding: "0 14px" }}>Tempo</th>
             <th>Data sugerida</th><th>Hora</th><th>Projetista</th><th>Situação</th>
           </tr></thead>
@@ -328,13 +336,23 @@ export default function ChecklistEmMassa() {
                 <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{diaBR(v.data)}</td>
                 <td style={{ textAlign: "center" }}>
                   <span className="pill" style={{ color: tv.cor, fontWeight: 700, whiteSpace: "nowrap" }} title={tv.t}>{tv.l}</span></td>
+                <td style={{ minWidth: 190 }}>
+                  <span style={{ display: "inline-flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                    {c.pedido ? <SeloMedidaVenda pedido={c.pedido} peq /> : null}
+                    <Selo360 c={c} />
+                    {!c.pedido ? <span className="hint">—</span> : null}
+                  </span></td>
                 <td style={{ textAlign: "center", padding: "0 14px", whiteSpace: "nowrap" }}>
                   {l ? <select value={l.dur} disabled={indo} title="Tempo que o atendimento trava na agenda — mudar aqui muda a disponibilidade"
                     onChange={e => mudarDur(c.id, Number(e.target.value))}>
                     {[...new Set([60, 120, 180, 240, 300, 360, 480, l.dur])].sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}</option>)}
                   </select> : <>{fmtDur(Number(ck(c).duracaoMin) || sug.min)}{!ck(c).duracaoMin && sug.cupom ? <span className="hint" style={{ display: "block" }}>pelo cupom</span> : null}</>}</td>
-                <td>{l ? <input type="date" value={(l.slot || "").slice(0, 10)} disabled={indo}
-                  onChange={e => mudar(c.id, "slot", e.target.value ? e.target.value + "T" + ((l.slot || "").slice(11, 16) || opcoesHora[0]) : "")} /> : <span className="hint">—</span>}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{l ? <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
+                  <input type="date" value={(l.slot || "").slice(0, 10)} disabled={indo} style={{ width: 140 }}
+                    onChange={e => mudar(c.id, "slot", e.target.value ? e.target.value + "T" + ((l.slot || "").slice(11, 16) || opcoesHora[0]) : "")} />
+                  <button className="btn ghost sm" disabled={indo} title="Ver os horários realmente livres e escolher"
+                    onClick={() => setVerLivres(verLivres === c.id ? "" : c.id)}>📅</button>
+                </span> : <span className="hint">—</span>}</td>
                 <td>{l ? <select value={(l.slot || "").slice(11, 16)} disabled={indo || !l.slot}
                   onChange={e => mudar(c.id, "slot", (l.slot || "").slice(0, 10) + "T" + e.target.value)}>
                   {[...new Set([...opcoesHora, (l.slot || "").slice(11, 16)].filter(Boolean))].sort().map(h => <option key={h} value={h}>{h}</option>)}
@@ -363,7 +381,19 @@ export default function ChecklistEmMassa() {
                 </td>
               </tr>;
             })}
-            {!fila.length && <tr><td colSpan={11}><div className="empty">Ninguém na fila de “a contatar”.</div></td></tr>}
+            {/* o painel de horários livres é o MESMO do agendamento individual: mostra só o que
+                está realmente livre e, ao clicar, já traz o projetista que atende naquele horário */}
+            {linhas.filter(l => l.c.id === verLivres).map(l => <tr key={"sug-" + l.c.id}>
+              <td colSpan={12} style={{ background: "var(--pj-bg, #f6f8fc)", padding: "10px 14px" }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>Horários livres para {l.c.cliente} · {fmtDur(l.dur)}</div>
+                <Sugestoes valor={l.slot} excluirId={l.c.id} projetista={l.proj} durMin={l.dur}
+                  onPick={(v: string, pj: string) => {
+                    setLinhas(ls => ls.map(x => x.c.id === l.c.id ? { ...x, slot: v, proj: pj || x.proj, manual: true, encaixe: false, msg: "" } : x));
+                    setVerLivres("");
+                  }} />
+                <div className="hint" style={{ marginTop: 6 }}>Estes horários olham a agenda do sistema. Se outra linha desta mesma rodada já tiver pegado o horário, a linha avisa em vermelho depois da escolha.</div>
+              </td></tr>)}
+            {!fila.length && <tr><td colSpan={12}><div className="empty">Ninguém na fila de “a contatar”.</div></td></tr>}
           </tbody>
         </table>
       </div>
