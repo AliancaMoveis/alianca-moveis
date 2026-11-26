@@ -18,7 +18,7 @@ import { A } from "../lib/acoes";
 import { parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import {
   ck, etapaCk, cfgAgenda, ocupacoes, livresNoHorario, atendeNoDia, diaComAgenda,
-  durSugeridaCk, modeloAprovado, conflitosProj, bloqueiosEm, rotuloBloq, Sugestoes,
+  durSugeridaCk, modeloAprovado, conflitosProj, bloqueiosEm, rotuloBloq,
 } from "./Checklist";
 import { SeloMedidaVenda } from "./Medidas";
 import { Selo360 } from "../comp/Visita360";
@@ -79,6 +79,7 @@ const ambientesCk = (c: any): string[] => {
 const isoDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
 const dataLonga = (v: string) => { if (!v) return "(data)"; const d = parseData(v); return `${DIAS[d.getDay()]}, ${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}, às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`; };
+const diaCurto = (v: string) => { const d = parseData(v); return DIAS[d.getDay()].slice(0, 3) + " " + d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); };
 const curto = (v: string) => { if (!v) return "—"; const d = parseData(v); return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + v.slice(11, 16); };
 
 type Linha = { c: any; dur: number; slot: string; proj: string; manual: boolean; encaixe: boolean; estado: "" | "indo" | "ok" | "erro"; msg: string };
@@ -163,6 +164,79 @@ function alocar(st: any, clientes: any[], jaEscolhidos: Linha[]): Linha[] {
   // volta na ordem da fila (quem espera há mais tempo primeiro), não na ordem de alocação
   const pos = new Map(clientes.map((c, i) => [c.id, i]));
   return out.sort((a, b) => (pos.get(a.c.id) ?? 0) - (pos.get(b.c.id) ?? 0));
+}
+
+/** Todos os horários realmente livres para esta linha, dia a dia, já descontando o que as
+ *  OUTRAS linhas desta mesma rodada pegaram — o painel do agendamento individual não sabe
+ *  dessas, porque elas ainda não estão no banco. Devolve agrupado por dia, para rolar na tela. */
+function livresPara(st: any, l: Linha, outras: Linha[], dias = 60) {
+  const cfg = cfgAgenda(st), occ = ocupacoes(st, l.c.id);
+  const reserva = outras.filter(o => o.c.id !== l.c.id && o.slot && o.proj)
+    .map(o => { const i = +parseData(o.slot); return { proj: o.proj, ini: i, fim: i + o.dur * 6e4, cliente: o.c.cliente }; });
+  const agora = Date.now() + 2 * 36e5;
+  const out: { dia: string; slots: { slot: string; livres: string[] }[] }[] = [];
+  const base = new Date(); base.setHours(0, 0, 0, 0);
+  for (let i = 0; i < dias; i++) {
+    const d = new Date(base); d.setDate(base.getDate() + i);
+    const dia = isoDia(d);
+    if (!diaComAgenda(cfg, dia)) continue;
+    const slots: { slot: string; livres: string[] }[] = [];
+    for (const h of [...cfg.horarios].sort()) {
+      const slot = dia + "T" + h, tt = +parseData(slot);
+      if (tt < agora) continue;
+      const fim = tt + l.dur * 6e4;
+      const { livres } = livresNoHorario(st, slot, l.c.id, occ, l.dur);
+      const tomados = new Set(reserva.filter(r => r.ini < fim && tt < r.fim).map(r => r.proj));
+      const cand = livres.filter((p: string) => !tomados.has(p) && atendeNoDia(cfg, p, dia));
+      if (cand.length) slots.push({ slot, livres: cand });
+    }
+    if (slots.length) out.push({ dia, slots });
+  }
+  return out;
+}
+
+/** O painel que substitui o chute: mostra os dias que têm vaga e, em cada dia, os horários com
+ *  quem está livre. Um clique preenche data, hora e projetista de uma vez. */
+function EscolherHorario({ l, outras, onPick, onFechar }:
+  { l: Linha; outras: Linha[]; onPick: (slot: string, proj: string) => void; onFechar: () => void }) {
+  const { st } = useApp() as any;
+  const [soProj, setSoProj] = useState("");
+  const dias = useMemo(() => livresPara(st, l, outras), [st, l.dur, l.c.id, outras]);
+  const projs = useMemo(() => Array.from(new Set(dias.flatMap(d => d.slots.flatMap(s => s.livres)))).sort(), [dias]);
+  const vis = soProj ? dias.map(d => ({ ...d, slots: d.slots.filter(s => s.livres.includes(soProj)) })).filter(d => d.slots.length) : dias;
+  return <div>
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+      <b>Horários livres para {l.c.cliente} · atendimento de {fmtDur(l.dur)}</b>
+      <select value={soProj} onChange={e => setSoProj(e.target.value)} style={{ width: "auto" }}>
+        <option value="">Qualquer projetista</option>
+        {projs.map(p => <option key={p} value={p}>só {p}</option>)}
+      </select>
+      <button className="btn ghost sm" onClick={onFechar}>fechar</button>
+    </div>
+    {!vis.length
+      ? <div className="hint">Nenhum horário livre nos próximos 60 dias com esse tempo de atendimento. Diminua o tempo ou escolha outro projetista.</div>
+      : <div style={{ maxHeight: 300, overflowY: "auto", paddingRight: 6 }}>
+        {vis.map(d => {
+          const dd = parseData(d.dia + "T12:00");
+          return <div key={d.dia} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderTop: "1px solid var(--linha)" }}>
+            <span style={{ minWidth: 150, fontWeight: 700, fontSize: 13 }}>
+              {DIAS[dd.getDay()]}<br /><span style={{ fontWeight: 400, opacity: .8 }}>{dd.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span></span>
+            <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {d.slots.map(s => {
+                const escolhido = l.slot.slice(0, 16) === s.slot;
+                const pj = soProj || (l.proj && s.livres.includes(l.proj) ? l.proj : s.livres[0]);
+                return <button key={s.slot} type="button" className={"chip" + (escolhido ? " on" : "")}
+                  title={"Livres neste horário: " + s.livres.join(", ")}
+                  onClick={() => onPick(s.slot, pj)}>
+                  {s.slot.slice(11, 16)}
+                  <span style={{ display: "block", fontSize: 11, opacity: .8, fontWeight: 400 }}>
+                    {s.livres.length === 1 ? primeiroNome(s.livres[0]) : s.livres.length + " livres"}</span>
+                </button>;
+              })}
+            </span></div>;
+        })}
+      </div>}
+  </div>;
 }
 
 export default function ChecklistEmMassa() {
@@ -347,12 +421,12 @@ export default function ChecklistEmMassa() {
                     onChange={e => mudarDur(c.id, Number(e.target.value))}>
                     {[...new Set([60, 120, 180, 240, 300, 360, 480, l.dur])].sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}</option>)}
                   </select> : <>{fmtDur(Number(ck(c).duracaoMin) || sug.min)}{!ck(c).duracaoMin && sug.cupom ? <span className="hint" style={{ display: "block" }}>pelo cupom</span> : null}</>}</td>
-                <td style={{ whiteSpace: "nowrap" }}>{l ? <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
-                  <input type="date" value={(l.slot || "").slice(0, 10)} disabled={indo} style={{ width: 140 }}
-                    onChange={e => mudar(c.id, "slot", e.target.value ? e.target.value + "T" + ((l.slot || "").slice(11, 16) || opcoesHora[0]) : "")} />
-                  <button className="btn ghost sm" disabled={indo} title="Ver os horários realmente livres e escolher"
-                    onClick={() => setVerLivres(verLivres === c.id ? "" : c.id)}>📅</button>
-                </span> : <span className="hint">—</span>}</td>
+                <td style={{ whiteSpace: "nowrap" }}>{l
+                  ? <button className="btn sm" disabled={indo} style={{ minWidth: 148, justifyContent: "flex-start" }}
+                      title="Clique para ver todos os horários livres e escolher"
+                      onClick={() => setVerLivres(verLivres === c.id ? "" : c.id)}>
+                      📅 {l.slot ? diaCurto(l.slot) : "escolher data"}</button>
+                  : <span className="hint">—</span>}</td>
                 <td>{l ? <select value={(l.slot || "").slice(11, 16)} disabled={indo || !l.slot}
                   onChange={e => mudar(c.id, "slot", (l.slot || "").slice(0, 10) + "T" + e.target.value)}>
                   {[...new Set([...opcoesHora, (l.slot || "").slice(11, 16)].filter(Boolean))].sort().map(h => <option key={h} value={h}>{h}</option>)}
@@ -385,13 +459,11 @@ export default function ChecklistEmMassa() {
                 está realmente livre e, ao clicar, já traz o projetista que atende naquele horário */}
             {linhas.filter(l => l.c.id === verLivres).map(l => <tr key={"sug-" + l.c.id}>
               <td colSpan={12} style={{ background: "var(--pj-bg, #f6f8fc)", padding: "10px 14px" }}>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>Horários livres para {l.c.cliente} · {fmtDur(l.dur)}</div>
-                <Sugestoes valor={l.slot} excluirId={l.c.id} projetista={l.proj} durMin={l.dur}
-                  onPick={(v: string, pj: string) => {
-                    setLinhas(ls => ls.map(x => x.c.id === l.c.id ? { ...x, slot: v, proj: pj || x.proj, manual: true, encaixe: false, msg: "" } : x));
+                <EscolherHorario l={l} outras={linhas} onFechar={() => setVerLivres("")}
+                  onPick={(slot: string, pj: string) => {
+                    setLinhas(ls => ls.map(x => x.c.id === l.c.id ? { ...x, slot, proj: pj || x.proj, manual: true, encaixe: false, msg: "" } : x));
                     setVerLivres("");
                   }} />
-                <div className="hint" style={{ marginTop: 6 }}>Estes horários olham a agenda do sistema. Se outra linha desta mesma rodada já tiver pegado o horário, a linha avisa em vermelho depois da escolha.</div>
               </td></tr>)}
             {!fila.length && <tr><td colSpan={12}><div className="empty">Ninguém na fila de “a contatar”.</div></td></tr>}
           </tbody>
