@@ -401,7 +401,9 @@ export default function ChecklistEmMassa() {
             <th style={{ textAlign: "center" }}>Tipo</th>
             <th>Medida</th>
             <th style={{ textAlign: "center", padding: "0 14px" }}>Tempo</th>
-            <th>Data sugerida</th><th>Hora</th><th>Projetista</th><th>Situação</th>
+            <th style={{ whiteSpace: "nowrap" }}>Data sugerida</th>
+            <th style={{ whiteSpace: "nowrap", minWidth: 84 }}>Hora</th>
+            <th style={{ whiteSpace: "nowrap", minWidth: 140 }}>Projetista</th><th>Situação</th>
           </tr></thead>
           <tbody>
             {fila.map((c: any) => {
@@ -425,7 +427,7 @@ export default function ChecklistEmMassa() {
                 <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{diaBR(v.data)}</td>
                 <td style={{ textAlign: "center" }}>
                   <span className="pill" style={{ color: tv.cor, fontWeight: 700, whiteSpace: "nowrap" }} title={tv.t}>{tv.l}</span></td>
-                <td style={{ minWidth: 190 }}>
+                <td style={{ width: 210, maxWidth: 210 }}>
                   <span style={{ display: "inline-flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                     {c.pedido ? <SeloMedidaVenda pedido={c.pedido} peq /> : null}
                     <Selo360 c={c} />
@@ -440,13 +442,15 @@ export default function ChecklistEmMassa() {
                   ? <button className="btn sm" disabled={indo} style={{ minWidth: 148, justifyContent: "flex-start" }}
                       title="Clique para ver todos os horários livres e escolher"
                       onClick={() => setVerLivres(verLivres === c.id ? "" : c.id)}>
-                      📅 {l.slot ? diaCurto(l.slot) : "escolher data"}</button>
+                      📅 {l.slot ? diaCurto(l.slot) + " · " + l.slot.slice(11, 16) : "escolher data"}</button>
                   : <span className="hint">—</span>}</td>
-                <td>{l ? <select value={(l.slot || "").slice(11, 16)} disabled={indo || !l.slot}
+                <td style={{ whiteSpace: "nowrap" }}>{l ? <select value={(l.slot || "").slice(11, 16)} disabled={indo || !l.slot}
+                  style={{ minWidth: 80, width: "auto" }}
                   onChange={e => mudar(c.id, "slot", (l.slot || "").slice(0, 10) + "T" + e.target.value)}>
                   {[...new Set([...opcoesHora, (l.slot || "").slice(11, 16)].filter(Boolean))].sort().map(h => <option key={h} value={h}>{h}</option>)}
                 </select> : <span className="hint">—</span>}</td>
-                <td>{l ? <select value={l.proj} disabled={indo}
+                <td style={{ whiteSpace: "nowrap" }}>{l ? <select value={l.proj} disabled={indo}
+                  style={{ minWidth: 136, width: "auto" }}
                   onChange={e => mudar(c.id, "proj", e.target.value)}>
                   <option value="">escolher…</option>
                   {cfg.projetistas.map((p: string) => <option key={p} value={p}>{p}</option>)}
