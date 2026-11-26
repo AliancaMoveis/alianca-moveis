@@ -55,6 +55,7 @@ import { JuridicoContratos } from "./JuridicoContratos";
 import Consultores from "./Consultores";
 import { MensagensChecklist, ProdutividadeChecklist } from "./PainelChecklist";
 import RecuperacaoCk, { AgendaGeralProjetista, ValidacoesDoDia } from "./RecuperacaoCk";
+import ChecklistEmMassa from "./ChecklistEmMassa";
 import ProjetistaChecklist from "./ProjetistaChecklist";
 import BaseClientes from "./BaseClientes";
 import { SETORES_MENU } from "../lib/regras";
@@ -216,11 +217,12 @@ export default function Shell() {
             {atual === "ck_produtividade" && <ProdutividadeChecklist />}
             {atual === "ck_mensagens" && <MensagensChecklist />}
             {atual === "ck_recuperacao" && <RecuperacaoCk />}
+            {atual === "ck_massa" && <ChecklistEmMassa />}
             {atual === "ck_validacoes" && <ValidacoesDoDia />}
             {atual === "ck_agenda_geral" && <AgendaGeralProjetista />}
             {atual === "projetista_ck" && <ProjetistaChecklist />}
             {atual === "cli_base" && <BaseClientes />}
-            {(atual === "checklist" || (atual.startsWith("ck_") && !["ck_produtividade", "ck_mensagens", "ck_recuperacao", "ck_validacoes", "ck_agenda_geral"].includes(atual))) && <Checklist key={atual} aba={atual === "checklist" ? "agendar" : atual.slice(3)} />}
+            {(atual === "checklist" || (atual.startsWith("ck_") && !["ck_produtividade", "ck_mensagens", "ck_recuperacao", "ck_validacoes", "ck_agenda_geral", "ck_massa"].includes(atual))) && <Checklist key={atual} aba={atual === "checklist" ? "agendar" : atual.slice(3)} />}
             {atual.startsWith("md_") && <Medidas key={atual} aba={atual.slice(3)} />}
             {atual === "encontrar_vendas" && R.podeEncontrarVendas() && <EncontrarVendas />}
             {atual === "montagem_agend" && <MontagemAgend />}
