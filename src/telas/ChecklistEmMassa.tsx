@@ -356,8 +356,7 @@ export default function ChecklistEmMassa() {
     recarregar();
   }
 
-  const opcoesHora = [...cfg.horarios].sort();
-
+  
   return (
     <section className="view active">
       <div className="head">
@@ -395,15 +394,12 @@ export default function ChecklistEmMassa() {
       <div className="panel" style={{ overflowX: "auto" }}>
         <table className="tabela">
           <thead><tr>
-            <th style={{ width: 34 }}></th><th>Cliente</th><th>Venda</th>
-            <th style={{ textAlign: "right" }}>Cupom</th>
-            <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Data da venda</th>
-            <th style={{ textAlign: "center" }}>Tipo</th>
+            <th style={{ width: 34 }}></th><th>Cliente</th>
+            <th style={{ whiteSpace: "nowrap" }}>Venda</th>
             <th>Medida</th>
-            <th style={{ textAlign: "center", padding: "0 14px" }}>Tempo</th>
-            <th style={{ whiteSpace: "nowrap" }}>Data sugerida</th>
-            <th style={{ whiteSpace: "nowrap", minWidth: 84 }}>Hora</th>
-            <th style={{ whiteSpace: "nowrap", minWidth: 140 }}>Projetista</th><th>Situação</th>
+            <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Tempo</th>
+            <th style={{ whiteSpace: "nowrap" }}>Data e hora</th>
+            <th style={{ whiteSpace: "nowrap", minWidth: 132 }}>Projetista</th><th>Situação</th>
           </tr></thead>
           <tbody>
             {fila.map((c: any) => {
@@ -420,14 +416,14 @@ export default function ChecklistEmMassa() {
                   style={{ background: "none", border: 0, padding: 0, font: "inherit", fontWeight: 700, color: "var(--primary)", cursor: "pointer", textAlign: "left" }}>{c.cliente}</button>
                   {(() => { const rg = regiao(c, v.endereco); return rg ? <span className="hint" style={{ display: "block" }}>📍 {rg}</span> : null; })()}
                   {ambs.length ? <span className="hint" style={{ display: "block" }}>🏠 {ambs.join(", ")}</span> : null}</td>
-                <td>{c.pedido || "—"}</td>
-                <td style={{ textAlign: "right", whiteSpace: "nowrap", fontWeight: 700 }}
-                  title={sug.cupom ? "Valor do cupom — é ele que define o tempo sugerido" : "Sem valor de cupom"}>
-                  {sug.cupom ? fmtBRL(sug.cupom) : <span className="hint" style={{ fontWeight: 400 }}>—</span>}</td>
-                <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{diaBR(v.data)}</td>
-                <td style={{ textAlign: "center" }}>
-                  <span className="pill" style={{ color: tv.cor, fontWeight: 700, whiteSpace: "nowrap" }} title={tv.t}>{tv.l}</span></td>
-                <td style={{ width: 210, maxWidth: 210 }}>
+                <td style={{ whiteSpace: "nowrap", lineHeight: 1.45 }}>
+                  {c.pedido || "—"}
+                  <span style={{ display: "block", fontWeight: 700 }}
+                    title={sug.cupom ? "Valor do cupom — é ele que define o tempo sugerido" : "Sem valor de cupom"}>
+                    {sug.cupom ? fmtBRL(sug.cupom) : "—"}</span>
+                  <span className="hint" style={{ display: "block" }}>{diaBR(v.data)}</span>
+                  <span style={{ color: tv.cor, fontWeight: 700, fontSize: 12 }} title={tv.t}>{tv.l}</span></td>
+                <td style={{ width: 196, maxWidth: 196 }}>
                   <span style={{ display: "inline-flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                     {c.pedido ? <SeloMedidaVenda pedido={c.pedido} peq /> : null}
                     <Selo360 c={c} />
@@ -444,11 +440,7 @@ export default function ChecklistEmMassa() {
                       onClick={() => setVerLivres(verLivres === c.id ? "" : c.id)}>
                       📅 {l.slot ? diaCurto(l.slot) + " · " + l.slot.slice(11, 16) : "escolher data"}</button>
                   : <span className="hint">—</span>}</td>
-                <td style={{ whiteSpace: "nowrap" }}>{l ? <select value={(l.slot || "").slice(11, 16)} disabled={indo || !l.slot}
-                  style={{ minWidth: 80, width: "auto" }}
-                  onChange={e => mudar(c.id, "slot", (l.slot || "").slice(0, 10) + "T" + e.target.value)}>
-                  {[...new Set([...opcoesHora, (l.slot || "").slice(11, 16)].filter(Boolean))].sort().map(h => <option key={h} value={h}>{h}</option>)}
-                </select> : <span className="hint">—</span>}</td>
+
                 <td style={{ whiteSpace: "nowrap" }}>{l ? <select value={l.proj} disabled={indo}
                   style={{ minWidth: 136, width: "auto" }}
                   onChange={e => mudar(c.id, "proj", e.target.value)}>
@@ -475,7 +467,7 @@ export default function ChecklistEmMassa() {
               </tr>
               {/* o painel de disponíveis abre LOGO ABAIXO da linha clicada */}
               {l && verLivres === c.id && <tr>
-                <td colSpan={12} style={{ background: "var(--pj-bg, #f6f8fc)", padding: "10px 14px" }}>
+                <td colSpan={8} style={{ background: "var(--pj-bg, #f6f8fc)", padding: "10px 14px" }}>
                   <EscolherHorario l={l} outras={linhas} onFechar={() => setVerLivres("")}
                     onEditar={(slot: string, pj: string) => setLinhas(ls => ls.map(x => x.c.id === c.id ? { ...x, slot, proj: pj, manual: true, encaixe: false, msg: "" } : x))}
                     onPick={(slot: string, pj: string) => {
@@ -486,7 +478,7 @@ export default function ChecklistEmMassa() {
               </Fragment>;
             })}
 
-            {!fila.length && <tr><td colSpan={12}><div className="empty">Ninguém na fila de “a contatar”.</div></td></tr>}
+            {!fila.length && <tr><td colSpan={8}><div className="empty">Ninguém na fila de “a contatar”.</div></td></tr>}
           </tbody>
         </table>
       </div>
