@@ -537,16 +537,51 @@ export const A = {
 };
 
 // envio de fotos: comprime como o protótipo (máx. 1000px, JPEG 0,55) e guarda no Storage
+/** HEIC/HEIF pelo CONTEÚDO do arquivo, nunca pelo nome: a câmera Samsung em "Alta eficiência"
+ *  grava HEIC e o app nomeia ".jpg" com tipo "image/jpeg". O nome mente, os bytes não.
+ *  Formato ISO-BMFF: bytes 4..7 = "ftyp", 8..11 = a marca. */
+export async function ehHeic(b: Blob): Promise<boolean> {
+  try {
+    const c = new Uint8Array(await b.slice(0, 12).arrayBuffer());
+    if (c.length < 12) return false;
+    const txt = (i: number, n: number) => String.fromCharCode(...c.slice(i, i + n));
+    if (txt(4, 4) !== "ftyp") return false;
+    return ["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1"].includes(txt(8, 4).toLowerCase());
+  } catch { return false; }
+}
+/** HEIC → JPEG. A biblioteca só é baixada quando aparece um HEIC de verdade (import dinâmico),
+ *  então quem manda JPEG normal não paga nada por isso. */
+export async function heicParaJpeg(b: Blob, qualidade = 0.9): Promise<Blob | null> {
+  try {
+    const { heicTo } = await import("heic-to");
+    return await heicTo({ blob: b as any, type: "image/jpeg", quality: qualidade }) as Blob;
+  } catch { return null; }
+}
+
+// Tamanho e qualidade: o limite antigo (1000 px / 0,55) servia para foto de ambiente, mas
+// apagava número pequeno escrito à mão nas plantas e rascunhos de medida. Em 1400 px / 0,70 o
+// arquivo médio vai de ~110 KB para ~220 KB — dobra, não quadruplica, para não pesar no 4G de
+// quem está na casa do cliente nem no armazenamento.
+const FOTO_MAX = 1400, FOTO_Q = 0.70;
+
 export async function comprimir(file: File): Promise<Blob | null> {
   if (!(file.type.startsWith("image/") || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name))) return null;
-  const url = URL.createObjectURL(file);
+  // HEIC vira JPEG ANTES de qualquer coisa: o navegador do Android e o Edge não abrem HEIC,
+  // e sem isto o arquivo subia cru e a miniatura ficava quebrada para todo mundo.
+  let origem: Blob = file;
+  if (await ehHeic(file)) {
+    const j = await heicParaJpeg(file);
+    if (!j) return null;   // não deu: segue o caminho antigo (sobe o original)
+    origem = j;
+  }
+  const url = URL.createObjectURL(origem);
   try {
     const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-    const max = 1000; let w = img.width, h = img.height;
-    if (w > max || h > max) { const r = Math.min(max / w, max / h); w = Math.round(w * r); h = Math.round(h * r); }
+    let w = img.width, h = img.height;
+    if (w > FOTO_MAX || h > FOTO_MAX) { const r = Math.min(FOTO_MAX / w, FOTO_MAX / h); w = Math.round(w * r); h = Math.round(h * r); }
     const cv = document.createElement("canvas"); cv.width = w; cv.height = h; cv.getContext("2d")!.drawImage(img, 0, 0, w, h);
-    return await new Promise<Blob | null>(res => cv.toBlob(b => res(b), "image/jpeg", 0.55));
-  } catch { return null; } // formato que o navegador não abre (ex.: HEIC no Windows/Android): vai o arquivo original
+    return await new Promise<Blob | null>(res => cv.toBlob(b => res(b), "image/jpeg", FOTO_Q));
+  } catch { return null; } // formato que o navegador não abre: vai o arquivo original
   finally { URL.revokeObjectURL(url); }
 }
 // ---------- vídeos e PDFs ----------

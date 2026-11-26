@@ -120,15 +120,33 @@ export async function assinar(paths: string[]) {
 }
 /** foto quebrada na tela (URL vencida depois de horas com o 360 aberto): pede uma URL nova e recarrega a imagem */
 export function consertarFotosQuebradas() {
-  const tentou = new WeakSet<HTMLImageElement>();
+  // Duas tentativas por imagem:
+  //  1ª  o link assinado venceu → pede um novo.
+  //  2ª  o navegador não DECODIFICA o arquivo. É o caso do HEIC que a câmera Samsung em
+  //      "Alta eficiência" grava com nome .jpg: subiu cru e nenhum Android/Edge abre. Aqui
+  //      o arquivo é baixado, convertido para JPEG na hora e mostrado. Conserta o que já
+  //      está no armazenamento sem pedir para ninguém reenviar nada.
+  const tentativas = new WeakMap<HTMLImageElement, number>();
   document.addEventListener("error", (ev) => {
     const el = ev.target as HTMLImageElement;
-    if (!el || el.tagName !== "IMG" || tentou.has(el)) return;
+    if (!el || el.tagName !== "IMG") return;
+    const n = tentativas.get(el) || 0;
+    if (n >= 2) return;
     const m = (el.currentSrc || el.src || "").match(/\/object\/sign\/anexos\/([^?]+)/);
     if (!m) return;
-    tentou.add(el);
-    const path = decodeURIComponent(m[1]); cacheUrl.delete(path);
-    urlAnexo(path).then(u => { if (u) el.src = u; }).catch(() => null);
+    tentativas.set(el, n + 1);
+    const path = decodeURIComponent(m[1]);
+    if (n === 0) { cacheUrl.delete(path); urlAnexo(path).then(u => { if (u) el.src = u; }).catch(() => null); return; }
+    (async () => {
+      try {
+        const u = await urlAnexo(path); if (!u) return;
+        const b = await (await fetch(u)).blob();
+        const { ehHeic, heicParaJpeg } = await import("./acoes");
+        if (!(await ehHeic(b))) return;
+        const j = await heicParaJpeg(b, 0.85); if (!j) return;
+        el.src = URL.createObjectURL(j);
+      } catch { /* não deu: a imagem fica quebrada como estava */ }
+    })();
   }, true);
 }
 /** URL de um anexo na hora (quando a lista veio sem URL ou ela venceu) */
