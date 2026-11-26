@@ -15,6 +15,7 @@ import {
   LITORAL_TXT, litoralDe, EM_ATENDIMENTO, ETAPA_MEDIDA, itensVenda, competenciaItem, PV_DESFECHO, PV_ENCAMINHAR, PV_ORIGEM, PV_REEMB, PV_SITUACAO, pvPrazo, PV_RESP, PV_TIPOS, fmtMoeda, ORDEM, STATUS, STATUS_CLIENTE, VENDA_STATUS, estaAtrasado, fmtDate, fmtDateTime, fmtDT, hojeISO, isoLocal, mesmaPessoa, parseMoeda, situacaoPrazo,
 } from "../lib/regras";
 import { ScBadge } from "./Ticket";
+import { BotaoConversa } from "./Conversa";
 import { LinhasVenda, Promissorias, SeloVenda, ValidarVenda, conferirLinhas, linhasDoTipo, type Linha } from "./VendaValidar";
 import { SeloMedidaVenda, ondeMedida, origemMedida } from "../telas/Medidas";
 import { achar360, AprovarMedida, Galeria360 } from "./Visita360";
@@ -124,7 +125,8 @@ export default function Detalhe({ id }: { id: string }) {
             <Row k="CPF">{c.clienteDoc || "—"}</Row>
             {!ehFab && <Row k="Contato">{(() => { const tels = separarTelefones(c.telefone); const eu = R.nomeUser(R.currentUserId); const msg = c.tipo === "medidas" ? R.msgWhatsMedida(c) : msgWhatsCliente(c, eu ? eu.split(" ")[0] : "");
               return <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {tels.length ? tels.map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b><BotaoWhats tel={t} texto={msg} /></span>) : <span>{c.telefone || "—"}</span>}
+                {tels.length ? tels.map(t => <span key={t} style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><b>{t}</b></span>) : <span>{c.telefone || "—"}</span>}
+                <ConversasCliente c={c} />
                 <AddTelefone c={c} />
               </span>; })()}</Row>}
             {c.endereco ? <Row k="Endereço">{c.endereco}</Row> : null}
@@ -827,6 +829,29 @@ function MontagemFeita({ c }: any) {
       <div className="hint" style={{ marginTop: 8 }}>O vínculo automático usa só a <b>montagem de origem</b> (O.S. própria). Assistência e entrega aparecem aqui para consulta, mas não dizem quem montou o móvel.</div>
     </div> : <div className="hint" style={{ marginTop: 8 }}>Nenhuma montagem no histórico para este nome.</div>)}
   </div>;
+}
+
+// 💬 Os dois botões de conversa do cliente, lado a lado.
+// Antes o botão do contato abria o aplicativo do WhatsApp direto — e aí a mensagem saía do
+// celular de quem clicou, fora do histórico. Agora o atendimento tem os dois caminhos certos:
+// a conversa dentro do 360 (verde = janela de 24h aberta, laranja = fechada) e a mesma
+// conversa aberta na Kommo, para quem precisa ver o lead inteiro.
+function ConversasCliente({ c }: any) {
+  const [kommo, setKommo] = useState<{ url: string | null } | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    A.ckKommoConversa(c.id).then((k: any) => { if (vivo) setKommo(k || { url: null }); }).catch(() => { if (vivo) setKommo({ url: null }); });
+    return () => { vivo = false; };
+  }, [c.id]);
+  return <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+    <BotaoConversa c={c} rotulo="💬 Conversa 360" />
+    {kommo?.url
+      ? <button className="btn sm" title="Abrir a conversa deste cliente dentro da Kommo"
+          onClick={ev => { ev.stopPropagation(); window.open(kommo.url!, "_blank", "noopener"); }}>↗ Abrir no Kommo</button>
+      : <button className="btn sm" disabled
+          title={kommo ? "Este cliente ainda não tem conversa vinculada na Kommo" : "Procurando a conversa na Kommo…"}
+          style={{ opacity: .55 }}>↗ Abrir no Kommo</button>}
+  </span>;
 }
 
 // 📞 Adicionar telefone — a Supervisão de Medidas precisa cadastrar o número que o medidor

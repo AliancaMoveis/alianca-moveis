@@ -136,7 +136,7 @@ function alocar(st: any, clientes: any[], jaEscolhidos: Linha[]): Linha[] {
 }
 
 export default function ChecklistEmMassa() {
-  const { st, R, recarregar, toast } = useApp() as any;
+  const { st, R, recarregar, toast, abrirDetalhe } = useApp() as any;
   const cfg = cfgAgenda(st);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [linhas, setLinhas] = useState<Linha[]>([]);
@@ -277,7 +277,8 @@ export default function ChecklistEmMassa() {
               const ambs = ambientesCk(c);
               return <tr key={c.id} style={marcado ? { background: "var(--pj-bg, #f6f8fc)" } : undefined}>
                 <td><input type="checkbox" checked={marcado} disabled={indo} onChange={() => marcar(c.id)} /></td>
-                <td><b>{c.cliente}</b>
+                <td><button type="button" onClick={() => abrirDetalhe(c.id)} title="Abrir a ficha do cliente"
+                  style={{ background: "none", border: 0, padding: 0, font: "inherit", fontWeight: 700, color: "var(--primary)", cursor: "pointer", textAlign: "left" }}>{c.cliente}</button>
                   {(() => { const rg = regiao(c, v.endereco); return rg ? <span className="hint" style={{ display: "block" }}>📍 {rg}</span> : null; })()}
                   {ambs.length ? <span className="hint" style={{ display: "block" }}>🏠 {ambs.join(", ")}</span> : null}</td>
                 <td>{c.pedido || "—"}</td>
