@@ -17,16 +17,27 @@ const hhmm = (iso: string) => {
   const d = new Date(iso);
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 };
-/** quanto falta para a janela fechar, em palavras que servem para decidir ("faltam 3h") */
+/** quanto falta para a janela fechar, em palavras que servem para decidir ("faltam 3h")
+ *  Escrito com "min" no fim de propósito: "fecha em 22h29" era lido como o HORÁRIO 22:29,
+ *  e a janela de 24h parecia ser de 12. */
 function restante(fechaEm: string | null): string {
   if (!fechaEm) return "";
   const ms = +new Date(fechaEm) - Date.now();
   if (ms <= 0) return "";
   const h = Math.floor(ms / 3600e3), m = Math.round((ms % 3600e3) / 60e3);
-  return h >= 1 ? `${h}h${m ? String(m).padStart(2, "0") : ""}` : `${m} min`;
+  return h >= 1 ? `${h}h${m ? String(m).padStart(2, "0") + "min" : ""}` : `${m}min`;
+}
+/** o relógio de quando a janela fecha — some com qualquer dúvida sobre o tempo restante */
+function quandoFecha(fechaEm: string | null): string {
+  if (!fechaEm) return "";
+  const d = new Date(fechaEm), hoje = new Date();
+  const mesmoDia = d.toDateString() === hoje.toDateString();
+  const hh = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return mesmoDia ? `hoje às ${hh}` : `amanhã às ${hh}`;
 }
 
-export function Conversa({ c, onFechar, onModelo }: { c: any; onFechar: () => void; onModelo?: () => void }) {
+export function Conversa({ c, onFechar, onModelo, onJanela }:
+  { c: any; onFechar: () => void; onModelo?: () => void; onJanela?: (j: { aberta: boolean; fechaEm: string | null }) => void }) {
   const { R, toast, recarregar } = useApp() as any;
   const [v, setV] = useState<any>(null);
   const [erro, setErro] = useState("");
@@ -40,8 +51,13 @@ export function Conversa({ c, onFechar, onModelo }: { c: any; onFechar: () => vo
   const fim = useRef<HTMLDivElement>(null);
 
   const carregar = async () => {
-    try { setV(await A.ckConversa(c.id)); setErro(""); }
-    catch (e: any) { setErro(e.message || "Não consegui carregar a conversa"); }
+    try {
+      const d = await A.ckConversa(c.id);
+      setV(d); setErro("");
+      // devolve o estado REAL da janela para quem abriu o painel, para o botão não ficar
+      // laranja do lado de um painel que diz "janela aberta"
+      if (d?.janela) onJanela?.({ aberta: !!d.janela.aberta, fechaEm: d.janela.fechaEm || null });
+    } catch (e: any) { setErro(e.message || "Não consegui carregar a conversa"); }
   };
   useEffect(() => { carregar(); /* eslint-disable-next-line */ }, [c.id]);
   useEffect(() => { fim.current?.scrollIntoView({ block: "end" }); }, [v]);
@@ -83,7 +99,7 @@ export function Conversa({ c, onFechar, onModelo }: { c: any; onFechar: () => vo
         borderBottom: "1px solid #E4E2DB", fontWeight: 600,
       }}>
         {!v ? "Carregando…" : aberta
-          ? `🟢 Janela aberta${falta ? " · fecha em " + falta : ""} — dá para escrever o que quiser`
+          ? `🟢 Janela aberta — dá para escrever o que quiser${falta ? ` · ainda faltam ${falta}, fecha ${quandoFecha(v?.janela?.fechaEm || null)}` : ""}`
           : "🔴 Janela fechada — o WhatsApp só entrega modelo aprovado"}
       </div>
 
@@ -171,7 +187,12 @@ export function janelaCk(c: any): { aberta: boolean; fechaEm: string | null } {
 export function BotaoConversa({ c, rotulo = "💬 Conversa com o cliente", onModelo }:
   { c: any; rotulo?: string; onModelo?: () => void }) {
   const [aberto, setAberto] = useState(false);
-  const j = janelaCk(c);
+  // O cartão calcula a janela pelo que está na lista, que pode ser de antes da última resposta
+  // do cliente. O painel pergunta ao banco. Quando os dois discordavam na MESMA tela, o botão
+  // ficava laranja com o painel dizendo "janela aberta" do lado. Agora o painel avisa o estado
+  // real e ele manda: nunca mais laranja com a janela aberta.
+  const [real, setReal] = useState<{ aberta: boolean; fechaEm: string | null } | null>(null);
+  const j = real || janelaCk(c);
   const falta = restante(j.fechaEm);
   return <>
     <button className="btn sm" onClick={ev => { ev.stopPropagation(); setAberto(true); }}
@@ -183,6 +204,6 @@ export function BotaoConversa({ c, rotulo = "💬 Conversa com o cliente", onMod
         : { borderColor: "#E07A1F", boxShadow: "0 0 0 2px rgba(224,122,31,.25), 0 0 9px 1px rgba(224,122,31,.40)" }}>
       {rotulo}
     </button>
-    {aberto && <Conversa c={c} onFechar={() => setAberto(false)} onModelo={onModelo} />}
+    {aberto && <Conversa c={c} onFechar={() => setAberto(false)} onModelo={onModelo} onJanela={setReal} />}
   </>;
 }
