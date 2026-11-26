@@ -18,7 +18,7 @@ import { A } from "../lib/acoes";
 import { parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import {
   ck, etapaCk, cfgAgenda, ocupacoes, livresNoHorario, atendeNoDia, diaComAgenda,
-  durSugeridaCk, modeloAprovado,
+  durSugeridaCk, modeloAprovado, conflitosProj, bloqueiosEm, rotuloBloq,
 } from "./Checklist";
 
 /** tempo em palavras: 120 → "2 h" */
@@ -79,7 +79,31 @@ const DIAS = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quint
 const dataLonga = (v: string) => { if (!v) return "(data)"; const d = parseData(v); return `${DIAS[d.getDay()]}, ${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}, às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`; };
 const curto = (v: string) => { if (!v) return "—"; const d = parseData(v); return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + v.slice(11, 16); };
 
-type Linha = { c: any; dur: number; slot: string; proj: string; manual: boolean; estado: "" | "indo" | "ok" | "erro"; msg: string };
+type Linha = { c: any; dur: number; slot: string; proj: string; manual: boolean; encaixe: boolean; estado: "" | "indo" | "ok" | "erro"; msg: string };
+
+/** Mesma checagem da tela de agendamento individual, aplicada linha a linha enquanto a pessoa
+ *  mexe na data, no horário, no projetista ou no tempo. Acrescenta só uma verificação que lá
+ *  não existe: o choque com OUTRA linha desta mesma rodada, que ainda não está no banco. */
+function problemas(st: any, l: Linha, outras: Linha[]): { duro: string[]; leve: string[] } {
+  const duro: string[] = [], leve: string[] = [];
+  if (!l.slot || l.slot.length < 16) return { duro: ["sem data"], leve: [] };
+  if (!l.proj) return { duro: ["sem projetista"], leve: [] };
+  const cfg = cfgAgenda(st), dia = l.slot.slice(0, 10);
+  const ini = +parseData(l.slot), fim = ini + l.dur * 6e4;
+  if (ini < Date.now()) duro.push("data já passou");
+  if (!diaComAgenda(cfg, dia)) duro.push("dia sem agenda");
+  else if (!atendeNoDia(cfg, l.proj, dia)) duro.push(primeiroNome(l.proj) + " não atende neste dia");
+  bloqueiosEm(st, l.proj, ini, fim).forEach((b: any) => duro.push(rotuloBloq(b)));
+  conflitosProj(st, l.slot, l.proj, l.c.id, l.dur)
+    .forEach((o: any) => duro.push(primeiroNome(l.proj) + " já tem " + (o.cliente || "cliente") + " neste horário"));
+  outras.forEach(o => {
+    if (o.c.id === l.c.id || !o.slot || o.proj !== l.proj) return;
+    const oi = +parseData(o.slot);
+    if (oi < fim && ini < oi + o.dur * 6e4) duro.push("choca com " + o.c.cliente + " desta mesma rodada");
+  });
+  if (!cfg.horarios.includes(l.slot.slice(11, 16))) leve.push("horário fora da grade");
+  return { duro, leve };
+}
 
 /** Distribui os clientes nos horários livres, reservando dentro da própria rodada.
  *  Os de maior duração vêm primeiro: um atendimento de 8h só cabe em dia vazio, e se os
@@ -128,7 +152,7 @@ function alocar(st: any, clientes: any[], jaEscolhidos: Linha[]): Linha[] {
         break;
       }
     }
-    out.push({ c, dur, slot: achou?.slot || "", proj: achou?.proj || "", manual: false, estado: "", msg: achou ? "" : "sem horário livre em 90 dias" });
+    out.push({ c, dur, slot: achou?.slot || "", proj: achou?.proj || "", manual: false, encaixe: false, estado: "", msg: achou ? "" : "sem horário livre em 90 dias" });
   }
   // volta na ordem da fila (quem espera há mais tempo primeiro), não na ordem de alocação
   const pos = new Map(clientes.map((c, i) => [c.id, i]));
@@ -180,10 +204,24 @@ export default function ChecklistEmMassa() {
   const limpar = () => { setSel(new Set()); setLinhas([]); setFeitos(0); };
 
   const mudar = (id: string, campo: "slot" | "proj", v: string) => {
-    setLinhas(ls => ls.map(l => l.c.id === id ? { ...l, [campo]: v, manual: true, msg: "" } : l));
+    // mexeu em qualquer coisa, o "confirmo o encaixe" cai: o aviso tem que ser reconhecido de novo
+    setLinhas(ls => ls.map(l => l.c.id === id ? { ...l, [campo]: v, manual: true, encaixe: false, msg: "" } : l));
   };
+  const mudarDur = (id: string, min: number) => {
+    setLinhas(ls => ls.map(l => l.c.id === id ? { ...l, dur: min, manual: true, encaixe: false, msg: "" } : l));
+  };
+  const marcarEncaixe = (id: string, v: boolean) => {
+    setLinhas(ls => ls.map(l => l.c.id === id ? { ...l, encaixe: v } : l));
+  };
+  // recalculado a cada tecla: a linha reage igual à tela de agendamento
+  const probs = useMemo(() => {
+    const m: Record<string, { duro: string[]; leve: string[] }> = {};
+    linhas.forEach(l => { m[l.c.id] = problemas(st, l, linhas); });
+    return m;
+  }, [linhas, st]);
 
-  const prontas = linhas.filter(l => l.slot && l.proj && l.estado !== "ok");
+  const travadas = linhas.filter(l => l.estado !== "ok" && (probs[l.c.id]?.duro.length || 0) > 0 && !l.encaixe);
+  const prontas = linhas.filter(l => l.slot && l.proj && l.estado !== "ok" && !travadas.includes(l));
   const horas = linhas.reduce((s, l) => s + l.dur, 0) / 60;
 
   async function disparar() {
@@ -210,7 +248,7 @@ export default function ChecklistEmMassa() {
       try {
         // 2) registra e reserva, igual ao agendamento individual
         await A.checklistRegistrar(l.c.id, { acao: "mensagem", data: l.slot, projetista: l.proj,
-          encaixe: false, texto: modeloAprovado("primeiro", l.c, l.slot, rem), duracaoMin: l.dur, diasExtras: [] });
+          encaixe: l.encaixe, texto: modeloAprovado("primeiro", l.c, l.slot, rem), duracaoMin: l.dur, diasExtras: [] });
       } catch (e: any) {
         setLinhas(ls => ls.map(x => x.c.id === l.c.id ? { ...x, estado: "erro", msg: "disparou, mas não registrou: " + (e.message || "erro") } : x));
         continue;
@@ -247,6 +285,8 @@ export default function ChecklistEmMassa() {
         <b>{linhas.length} selecionado{linhas.length === 1 ? "" : "s"} · {horas.toFixed(1)}h de agenda</b>
         {linhas.some(l => !l.slot) && <span style={{ color: "var(--danger)", fontWeight: 700, marginLeft: 10 }}>
           ⚠️ {linhas.filter(l => !l.slot).length} sem horário livre</span>}
+        {travadas.length > 0 && <span style={{ color: "var(--danger)", fontWeight: 700, marginLeft: 10 }}>
+          ⚠️ {travadas.length} com conflito — marque “confirmo o encaixe” na linha ou mude a data</span>}
         <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button className="btn primary" onClick={disparar} disabled={indo || !prontas.length}>
             {indo ? `Disparando… ${feitos}/${prontas.length}` : `📨 Disparar ${prontas.length}`}</button>
@@ -288,7 +328,11 @@ export default function ChecklistEmMassa() {
                 <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>{diaBR(v.data)}</td>
                 <td style={{ textAlign: "center" }}>
                   <span className="pill" style={{ color: tv.cor, fontWeight: 700, whiteSpace: "nowrap" }} title={tv.t}>{tv.l}</span></td>
-                <td style={{ textAlign: "center", padding: "0 14px", whiteSpace: "nowrap" }}>{fmtDur(Number(ck(c).duracaoMin) || sug.min)}{!ck(c).duracaoMin && sug.cupom ? <span className="hint" style={{ display: "block" }}>pelo cupom</span> : null}</td>
+                <td style={{ textAlign: "center", padding: "0 14px", whiteSpace: "nowrap" }}>
+                  {l ? <select value={l.dur} disabled={indo} title="Tempo que o atendimento trava na agenda — mudar aqui muda a disponibilidade"
+                    onChange={e => mudarDur(c.id, Number(e.target.value))}>
+                    {[...new Set([60, 120, 180, 240, 300, 360, 480, l.dur])].sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}</option>)}
+                  </select> : <>{fmtDur(Number(ck(c).duracaoMin) || sug.min)}{!ck(c).duracaoMin && sug.cupom ? <span className="hint" style={{ display: "block" }}>pelo cupom</span> : null}</>}</td>
                 <td>{l ? <input type="date" value={(l.slot || "").slice(0, 10)} disabled={indo}
                   onChange={e => mudar(c.id, "slot", e.target.value ? e.target.value + "T" + ((l.slot || "").slice(11, 16) || opcoesHora[0]) : "")} /> : <span className="hint">—</span>}</td>
                 <td>{l ? <select value={(l.slot || "").slice(11, 16)} disabled={indo || !l.slot}
@@ -305,7 +349,17 @@ export default function ChecklistEmMassa() {
                   {l?.estado === "indo" && <span className="hint">enviando…</span>}
                   {l?.estado === "erro" && <span style={{ color: "var(--danger)", fontWeight: 700 }}>✖ {l.msg}</span>}
                   {l && !l.estado && !l.slot && <span style={{ color: "var(--danger)" }}>{l.msg || "sem horário"}</span>}
-                  {l && !l.estado && l.slot && <span className="hint">{curto(l.slot)}{l.manual ? " · escolhido à mão" : ""}</span>}
+                  {l && !l.estado && l.slot && (() => {
+                    const p = probs[c.id] || { duro: [], leve: [] };
+                    if (!p.duro.length && !p.leve.length) return <span style={{ color: "var(--st-concluida)", fontWeight: 700 }}>✓ livre</span>;
+                    return <span style={{ display: "inline-block" }}>
+                      {p.duro.map((x, i) => <span key={"d" + i} style={{ display: "block", color: "var(--danger)", fontWeight: 700, fontSize: 12.5 }}>⚠️ {x}</span>)}
+                      {p.leve.map((x, i) => <span key={"v" + i} style={{ display: "block", color: "var(--warn)", fontSize: 12.5 }}>• {x}</span>)}
+                      {p.duro.length ? <label style={{ display: "block", marginTop: 4, fontSize: 12, cursor: "pointer" }}>
+                        <input type="checkbox" checked={l.encaixe} disabled={indo} onChange={e => marcarEncaixe(c.id, e.target.checked)} /> confirmo o encaixe
+                      </label> : null}
+                    </span>;
+                  })()}
                 </td>
               </tr>;
             })}
