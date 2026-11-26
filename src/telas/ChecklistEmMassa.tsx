@@ -12,7 +12,7 @@
 // O disparo é idêntico ao individual, cliente por cliente: primeiro a Kommo, e só se ela
 // aceitar é que o horário é reservado no 360. Falhou um, os outros seguem e o que falhou
 // aparece com o motivo.
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useApp } from "../estado";
 import { A } from "../lib/acoes";
 import { parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
@@ -197,8 +197,8 @@ function livresPara(st: any, l: Linha, outras: Linha[], dias = 60) {
 
 /** O painel que substitui o chute: mostra os dias que têm vaga e, em cada dia, os horários com
  *  quem está livre. Um clique preenche data, hora e projetista de uma vez. */
-function EscolherHorario({ l, outras, onPick, onFechar }:
-  { l: Linha; outras: Linha[]; onPick: (slot: string, proj: string) => void; onFechar: () => void }) {
+function EscolherHorario({ l, outras, onPick, onEditar, onFechar }:
+  { l: Linha; outras: Linha[]; onPick: (slot: string, proj: string) => void; onEditar: (slot: string, proj: string) => void; onFechar: () => void }) {
   const { st } = useApp() as any;
   const [soProj, setSoProj] = useState("");
   const dias = useMemo(() => livresPara(st, l, outras), [st, l.dur, l.c.id, outras]);
@@ -212,6 +212,20 @@ function EscolherHorario({ l, outras, onPick, onFechar }:
         {projs.map(p => <option key={p} value={p}>só {p}</option>)}
       </select>
       <button className="btn ghost sm" onClick={onFechar}>fechar</button>
+    </div>
+    {/* a lista mostra o que está livre, mas a escolha nunca fica presa a ela: dá para marcar
+        qualquer data e horário na mão, e aí a linha avisa em vermelho se houver conflito */}
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8, fontSize: 13 }}>
+      <span className="hint">Ou escolha qualquer data:</span>
+      <input type="date" value={(l.slot || "").slice(0, 10)} style={{ width: 150 }}
+        onChange={e => { if (e.target.value) onEditar(e.target.value + "T" + ((l.slot || "").slice(11, 16) || cfgAgenda(st).horarios[0] || "09:00"), l.proj); }} />
+      <input type="time" value={(l.slot || "").slice(11, 16)} step={900} style={{ width: 110 }}
+        onChange={e => { if (e.target.value && l.slot) onEditar(l.slot.slice(0, 10) + "T" + e.target.value, l.proj); }} />
+      <select value={l.proj} onChange={e => { if (l.slot) onEditar(l.slot, e.target.value); }} style={{ width: "auto" }}>
+        <option value="">projetista…</option>
+        {cfgAgenda(st).projetistas.map((p: string) => <option key={p} value={p}>{p}</option>)}
+      </select>
+      <span className="hint">o aviso em vermelho continua valendo</span>
     </div>
     {!vis.length
       ? <div className="hint">Nenhum horário livre nos próximos 60 dias com esse tempo de atendimento. Diminua o tempo ou escolha outro projetista.</div>
@@ -397,7 +411,8 @@ export default function ChecklistEmMassa() {
               const v = vb[c.pedido] || {} as any;
               const tv = tipoVenda(v.situacao);
               const ambs = ambientesCk(c);
-              return <tr key={c.id} style={marcado ? { background: "var(--pj-bg, #f6f8fc)" } : undefined}>
+              return <Fragment key={c.id}>
+                <tr style={marcado ? { background: "var(--pj-bg, #f6f8fc)" } : undefined}>
                 <td><input type="checkbox" checked={marcado} disabled={indo} onChange={() => marcar(c.id)} /></td>
                 <td><button type="button" onClick={() => abrirDetalhe(c.id)} title="Abrir a ficha do cliente"
                   style={{ background: "none", border: 0, padding: 0, font: "inherit", fontWeight: 700, color: "var(--primary)", cursor: "pointer", textAlign: "left" }}>{c.cliente}</button>
@@ -453,18 +468,20 @@ export default function ChecklistEmMassa() {
                     </span>;
                   })()}
                 </td>
-              </tr>;
+              </tr>
+              {/* o painel de disponíveis abre LOGO ABAIXO da linha clicada */}
+              {l && verLivres === c.id && <tr>
+                <td colSpan={12} style={{ background: "var(--pj-bg, #f6f8fc)", padding: "10px 14px" }}>
+                  <EscolherHorario l={l} outras={linhas} onFechar={() => setVerLivres("")}
+                    onEditar={(slot: string, pj: string) => setLinhas(ls => ls.map(x => x.c.id === c.id ? { ...x, slot, proj: pj, manual: true, encaixe: false, msg: "" } : x))}
+                    onPick={(slot: string, pj: string) => {
+                      setLinhas(ls => ls.map(x => x.c.id === c.id ? { ...x, slot, proj: pj || x.proj, manual: true, encaixe: false, msg: "" } : x));
+                      setVerLivres("");
+                    }} />
+                </td></tr>}
+              </Fragment>;
             })}
-            {/* o painel de horários livres é o MESMO do agendamento individual: mostra só o que
-                está realmente livre e, ao clicar, já traz o projetista que atende naquele horário */}
-            {linhas.filter(l => l.c.id === verLivres).map(l => <tr key={"sug-" + l.c.id}>
-              <td colSpan={12} style={{ background: "var(--pj-bg, #f6f8fc)", padding: "10px 14px" }}>
-                <EscolherHorario l={l} outras={linhas} onFechar={() => setVerLivres("")}
-                  onPick={(slot: string, pj: string) => {
-                    setLinhas(ls => ls.map(x => x.c.id === l.c.id ? { ...x, slot, proj: pj || x.proj, manual: true, encaixe: false, msg: "" } : x));
-                    setVerLivres("");
-                  }} />
-              </td></tr>)}
+
             {!fila.length && <tr><td colSpan={12}><div className="empty">Ninguém na fila de “a contatar”.</div></td></tr>}
           </tbody>
         </table>
