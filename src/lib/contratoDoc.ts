@@ -13,6 +13,9 @@ export type TermoAmb = { estrutura: LinhaTermo; portas: LinhaTermo; envoltorio: 
 export type ImgContrato = { nome: string; src: string };
 export type AmbContrato = {
   nome: string; termo: TermoAmb;
+  /** eletros do ambiente com a dimensão de cada um — a dimensão é o que define o nicho, então
+   *  tem que estar no documento que o cliente assina, não só no termo avulso */
+  eletros?: { nome: string; dim: string }[];
   ficha?: [string, boolean | null][]; fichaObs?: string;
   itens?: { qtd: string; descricao: string; medidas: string }[];
   imagens: ImgContrato[];
@@ -189,6 +192,9 @@ export function contratoHtml(d: ContratoDados, r?: RespostaContrato | null, a?: 
 ${LINHAS_TERMO.map(([k, rot]) => `<tr><td><b>${rot}</b></td>${celMat(t[k] as LinhaTermo, o ? (o[k] as LinhaTermo) : undefined)}</tr>`).join("")}
 ${AMORT.map(([k, rot]) => `<tr><td><b>${rot}</b></td>${celAmort(t[k] as Amort, o ? (o[k] as Amort) : undefined)}</tr>`).join("")}
 ${amb.fichaObs ? `<tr><td><b>Observações</b></td><td colspan="2" class="cor">${esc(amb.fichaObs)}</td></tr>` : ""}
+${(() => { const el = (amb.eletros || []).filter(x => (x.nome || "").trim() || (x.dim || "").trim()); if (!el.length) return "";
+  return `<tr><th colspan="3" style="background:#f3f5f9">Eletros deste ambiente <i style="font-weight:400">— a dimensão é o que define o nicho</i></th></tr>`
+    + el.map(x => `<tr><td><b>${esc(x.nome) || "—"}</b></td><td colspan="2">${esc(x.dim) || "<i>dimensão não informada</i>"}</td></tr>`).join(""); })()}
 </table>${assinado ? `<div class="ok">☑ Materiais do ambiente ${i + 1} conferidos e confirmados pelo cliente.</div>` : ""}`;
   }).join("");
   const pTermo = `<div class="pg">${cab("TERMO DE CIÊNCIA DO MATERIAL")}${d.ambientes.length <= 1 ? `<img class="logo" src="${LOGO}" alt="Aliança">` : ""}<h2>TERMO DE CIÊNCIA DO MATERIAL UTILIZADO</h2>

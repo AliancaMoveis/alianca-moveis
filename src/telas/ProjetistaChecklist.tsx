@@ -274,7 +274,8 @@ export default function ProjetistaChecklist() {
     setFicha(null);
     if (!sel) return;
     let vivo = true;
-    A.ckProjetistaFicha(sel).then((f: any) => { if (vivo) setFicha(f); }).catch(() => { /* a ficha abre com o que já tem */ });
+    A.ckProjetistaFicha(sel).then((f: any) => { if (vivo) setFicha(f); })
+      .catch(() => { if (vivo) setFicha({ id: sel, falhou: true }); });
     return () => { vivo = false; };
   }, [sel]);
   const abrir = (id: string) => { sujo.current = false; setSel(id); window.scrollTo({ top: 0 }); };
@@ -290,7 +291,13 @@ export default function ProjetistaChecklist() {
   const achado = sel ? (lista || []).find(c => c.id === sel) : null;
   if (achado) ultimoAberto.current = achado;
   const base = achado || (sel ? ultimoAberto.current : null);
-  const atual = base && ficha && ficha.id === base.id
+  // A lista vem sem o termo. Os estados da ficha (ambientes, conferência, ferragens...) são
+  // semeados UMA vez, no mount. Se ela montasse antes do termo chegar, abriria com tudo vazio:
+  // "Ambientes não escritos", conferência desmarcada, e um Salvar por cima apagaria o trabalho.
+  // Por isso a ficha só monta depois que a busca termina — deu certo ou deu erro.
+  const fichaPronta = !!(base && ficha && ficha.id === base.id);
+  const termoCarregado = fichaPronta && !ficha.falhou;
+  const atual = fichaPronta
     ? { ...base, termo: ficha.termo ?? base.termo, historico: ficha.historico ?? base.historico }
     : base;
   const foraDoFiltro = !!(sel && !achado && lista);
@@ -303,7 +310,9 @@ export default function ProjetistaChecklist() {
         <span className="sub">{eu.podeTodos ? "Projetista: " + proj : "Minha agenda de checklist"}</span>
       </div>
       {foraDoFiltro && <div className="alert" style={{ marginBottom: 10 }}>⚠️ Este cliente não aparece no filtro atual{eu.podeTodos && proj !== "*" ? " (projetista " + proj + ")" : ""} — o checklist dele continua aberto aqui e pode ser preenchido normalmente.{eu.podeTodos && proj !== "*" && <> <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => { try { localStorage.setItem("a360-ck-proj", "*"); } catch { /* */ } setProj("*"); }}>Ver todos os projetistas</button></>}</div>}
-      <Ficha key={atual.id} c={atual} proj={proj} recarregar={carregar} setSujo={(v: boolean) => (sujo.current = v)} toast={toast} />
+      {fichaPronta
+        ? <Ficha key={atual.id} c={atual} proj={proj} recarregar={carregar} setSujo={(v: boolean) => (sujo.current = v)} toast={toast} termoCarregado={termoCarregado} />
+        : <div className="card" style={{ padding: 24, textAlign: "center" }}>Carregando a ficha de {atual.cliente}…</div>}
     </section>
   );
 
@@ -571,7 +580,7 @@ function AgendaGeral({ eu }: { eu: string | null }) {
 type Img = { fonte: string; id?: string; url?: string; path?: string; nome: string };
 type Amb = AmbTermo & { _k: string; origem?: string; escritoPor?: string; codigos?: string[]; ficha?: Record<string, boolean | null>; fichaObs?: string; obs?: string; imagens?: Img[]; listagens?: string[]; itensDe?: string | null; termo?: TermoAmb | null };
 
-function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; recarregar: () => any; setSujo: (v: boolean) => void; toast: (m: string) => void }) {
+function Ficha({ c, proj, recarregar, setSujo, toast, termoCarregado = true }: { c: any; proj: string; recarregar: () => any; setSujo: (v: boolean) => void; toast: (m: string) => void; termoCarregado?: boolean }) {
   const { R, setModal } = useApp() as any;
   const me = R?.me?.()?.nome ? primeiroNome(R.me().nome) : proj;
   const t0 = c.termo || {};
@@ -605,6 +614,8 @@ function Ficha({ c, proj, recarregar, setSujo, toast }: { c: any; proj: string; 
     ambientesConfirmados: confirmados, naoInclusos: naoInc, obs, ferragens, arquivos, listagem: meta, imagensProjeto: imgsProj.map(({ url, ...x }: any) => x), ...extra,
   });
   async function salvar(acao: "salvar" | "iniciar" | "impressao" | "assinado" | "realizado" | "reabrir" = "salvar", extra: any = {}, ok = "Checklist salvo") {
+    // sem o termo carregado os estados abaixo estao vazios e este salvar apagaria o que ja existe
+    if (!termoCarregado) { toast("A ficha deste cliente não carregou por completo. Atualize a tela antes de salvar — assim nada do que já foi preenchido se perde."); return false; }
     setOcupado(acao);
     try { await A.ckProjetistaSalvar(c.id, dados(extra), acao); setMudou(false); if (ok) toast(ok); await recarregar(); return true; }
     catch (e: any) { toast(e.message || "Não foi possível salvar"); return false; }
@@ -1433,6 +1444,8 @@ function Etapa3({ c, t0, ambs, proj, imgsProj = [], naoInc, obs, ferragens, arqs
       }
       // a listagem de itens não vai mais no contrato (pedido da loja): o documento fica no termo, no checklist e nas imagens
       ambientes.push({ nome: a.nome.trim(), termo: termoDoAmb(a, ferragens), ficha: fichaDe(a).map(([k, v]) => [k, v ?? null]), fichaObs: [a.fichaObs, a.obs].filter(Boolean).join(" — "),
+        // os eletros entram no contrato: a dimensão define o nicho, e o cliente tem que assinar sabendo qual é
+        eletros: (a.eletros || []).filter((x: any) => (x?.nome || "").trim() || (x?.dim || "").trim()),
         imagens: imgs });
     }
     return { dados: { venda: String(c.pedido || ""), cliente: String(c.cliente), endereco: endereco(c) || "—", vendedor: cap(c.vendedor || "") || "—", projetista: proj,
