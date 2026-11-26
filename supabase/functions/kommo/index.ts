@@ -19,6 +19,17 @@ const FUNIL_CK = 13550523;          // Pós Venda Proj. / Checklist
 const ETAPA_CK_FILA = 104552799;      // CHECKLIST — cliente entrou na fila, ainda a agendar
 const ETAPA_CK_AGUARDANDO = 114261095; // Aguardando confirmação — mensagem enviada
 const ETAPA_CK_ENTRADA = ETAPA_CK_FILA;
+/** etapa do checklist no 360 → etapa do funil na Kommo. Os ids são os mesmos que o webhook
+ *  das respostas (kommo-resposta) já usa; etapa sem equivalente fica de fora de propósito. */
+const ETAPA_POR_NOME: Record<string, number> = {
+  a_contatar: ETAPA_CK_FILA,
+  aguardando: ETAPA_CK_AGUARDANDO,
+  sem_retorno: ETAPA_CK_AGUARDANDO,
+  outra_data: 114261099,   // Cliente solicitou nova data
+  agendado: 106848191,     // Agendamento confirmado
+  em_obras: 106848195,     // Em obras
+  realizado: 106848223,    // Finalizado
+};
 const ETAPA_PRE_COMPROU = 105287587;
 
 // campos do lead que alimentam as variáveis do modelo aprovado
@@ -222,6 +233,25 @@ Deno.serve(async (req) => {
     }
 
     if (acao === "localizar") return json(await situacao(String(b.telefone || "")));
+
+    // mover a etapa do lead na Kommo junto com a etapa do 360. Até aqui só o webhook das
+    // respostas movia o funil; quando a atendente mudava a etapa na mão, a Kommo ficava para
+    // trás e o cliente aparecia num lugar no 360 e noutro na Kommo.
+    if (acao === "etapa") {
+      const chamado = String(b.chamado || ""), etapa = String(b.etapa || "");
+      if (!chamado || !etapa) return json({ erro: "faltou chamado ou etapa" }, 400);
+      const alvo = ETAPA_POR_NOME[etapa];
+      if (!alvo) return json({ ok: true, movido: false, motivo: "esta etapa do 360 não tem etapa equivalente na Kommo" });
+      const q = await fetch(`${SB()}/rest/v1/kommo_vinculo?chamado_id=eq.${encodeURIComponent(chamado)}&select=lead_id`, { headers: { apikey: SR(), Authorization: `Bearer ${SR()}` } });
+      const v = await q.json().catch(() => []);
+      const lead_id = Array.isArray(v) && v.length ? v[0].lead_id : null;
+      if (!lead_id) return json({ ok: true, movido: false, motivo: "este cliente ainda não tem conversa vinculada na Kommo" });
+      const { st } = await kommo(`/api/v4/leads/${lead_id}`, {
+        method: "PATCH", body: JSON.stringify({ pipeline_id: FUNIL_CK, status_id: alvo }),
+      });
+      if (st < 200 || st >= 300) return json({ erro: `a Kommo recusou mover o lead (${st})` }, 502);
+      return json({ ok: true, movido: true, lead_id, etapa: ETAPAS[alvo] || String(alvo) });
+    }
 
     // enviar: grava os campos no lead e dispara o bot que manda a mensagem aprovada.
     // Só devolve ok quando a Kommo aceitou o disparo — é isso que autoriza o 360

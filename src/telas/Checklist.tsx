@@ -654,7 +654,11 @@ export function ConfirmaExcluir({ ids, rotulo, forte }: { ids: string[]; rotulo:
 }
 
 // ---------- sugestão de dias e horários livres ----------
-export const AGENDA_PADRAO: any = { dias: [1, 2, 3, 4, 5], horarios: ["09:00", "11:00", "15:00", "17:00"], duracaoMin: 120, confirmarDias: 2, vagas: 1, seguraDias: 3, projetistas: ["Angela", "Silvane", "Cleberson", "Gislaine", "Juliana", "Rafael", "Eduardo", "Giovanni"] };
+export const AGENDA_PADRAO: any = { dias: [1, 2, 3, 4, 5], horarios: ["09:00", "11:00", "15:00", "17:00"], duracaoMin: 120, confirmarDias: 2, vagas: 1, seguraDias: 3,
+  // o atendimento do projetista vai até 18:20 e estica no máximo até 19:00; almoço 13:00–15:00,
+  // que nenhum atendimento atravessa. Sem isso, 4h às 11h "cabia" (comia o almoço) e 8h às 15h
+  // terminava às 23:00 — os dois aconteceram de verdade na agenda.
+  abre: "09:00", fecha: "19:00", almocoIni: "13:00", almocoFim: "15:00", projetistas: ["Angela", "Silvane", "Cleberson", "Gislaine", "Juliana", "Rafael", "Eduardo", "Giovanni"] };
 const CORES_PROJ = ["#2f6fd6", "#c2410c", "#0f8a5f", "#8b3fd1", "#b8860b", "#d6336c", "#0e7490", "#4d5b7c"];
 export const cfgAgenda = (st: any) => ({ ...AGENDA_PADRAO, ...(st.config.checklistAgenda || {}) });
 let _projs: string[] = AGENDA_PADRAO.projetistas;
@@ -730,12 +734,12 @@ export function ocupacoes(st: any, excluirId?: string): Ocup[] {
   st.chamados.forEach((c: any) => {
     if (c.tipo !== "checklist" || c.status === "concluida" || c.id === excluirId) return;
     const k = ck(c), e = etapaCk(c);
-    if (e === "agendado" && k.agendadoPara) atendimentos(c, cfg).forEach(a => { const ini = +parseData(a.slot); out.push({ proj: a.proj, ini, fim: ini + a.dur * 6e4, cliente: c.cliente, aguardando: false }); });
+    if (e === "agendado" && k.agendadoPara) atendimentos(c, cfg).forEach(a => { const ini = +parseData(a.slot); out.push({ proj: a.proj, ini, fim: ini + durRelogio(cfg, String(a.slot).slice(0, 16), a.dur) * 6e4, cliente: c.cliente, aguardando: false }); });
     // data oferecida segura o horário mesmo depois do prazo: vencida só sai da agenda quando alguém libera (ou renova)
     else if (e === "aguardando" && k.proposta) {
       const venc = diasDesde(k.ultimoContato) > cfg.seguraDias;
       [{ data: k.proposta, duracaoMin: durCk(c, cfg) }, ...(Array.isArray(k.propostaDiasExtras) ? k.propostaDiasExtras : [])].forEach((x: any) => {
-        const ini = +parseData(String(x.data).slice(0, 16)); out.push({ proj: k.propostaProjetista || "", ini, fim: ini + (Number(x.duracaoMin) || durCk(c, cfg)) * 6e4, cliente: c.cliente, aguardando: true, vencida: venc, id: c.id, dias: diasDesde(k.ultimoContato) }); });
+        const s16 = String(x.data).slice(0, 16), ini = +parseData(s16); out.push({ proj: k.propostaProjetista || "", ini, fim: ini + durRelogio(cfg, s16, Number(x.duracaoMin) || durCk(c, cfg)) * 6e4, cliente: c.cliente, aguardando: true, vencida: venc, id: c.id, dias: diasDesde(k.ultimoContato) }); });
     }
   });
   return out;
@@ -763,8 +767,45 @@ export function bloqueiosEm(st: any, proj: string, ini: number, fim: number) {
   return ((st.ckBloqueios || []) as any[]).filter(b => (!b.projetista || !proj || b.projetista === proj) && !(tf && !b.projetista && /feriado/i.test(b.motivo || "")) && +parseData(b.inicio) < fim && ini < +parseData(b.fim));
 }
 export const rotuloBloq = (b: any) => "🚫 " + b.motivo + (b.obs ? " — " + b.obs : "") + (b.projetista ? "" : " (todos)");
+const hm = (s: string) => { const [h, m] = String(s || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+const hhmm = (m: number) => Math.floor(m / 60) + ":" + String(Math.round(m) % 60).padStart(2, "0");
+/** Minuto do dia em que o atendimento REALMENTE acaba. O almoço não impede o atendimento: ele
+ *  pausa. Quem começa 11h com 4h de trabalho faz 11–13, para, e volta 15–17 — então ocupa o
+ *  projetista das 11 às 17, e é por isso que precisa estar livre também DEPOIS do almoço. */
+export function fimReal(cfg: any, iniMin: number, durMin: number): number {
+  const aI = hm(cfg.almocoIni || "13:00"), aF = hm(cfg.almocoFim || "15:00");
+  let fim = iniMin + (durMin || cfg.duracaoMin || 120);
+  if (aF > aI && iniMin < aI && fim > aI) fim += aF - aI;   // atravessou o almoço: empurra o fim
+  return fim;
+}
+/** Quantos minutos de relógio o atendimento segura o projetista (trabalho + almoço no meio). */
+export const durRelogio = (cfg: any, slot: string, durMin: number) =>
+  (slot || "").length < 16 ? (durMin || 120) : fimReal(cfg, hm(slot.slice(11, 16)), durMin) - hm(slot.slice(11, 16));
+/** O atendimento cabe no dia? Checa o expediente e o almoço, que a conta de ocupação não
+ *  enxerga — ela só compara com OUTROS atendimentos. Devolve o motivo, para a tela mostrar. */
+export function cabeNoDia(cfg: any, slot: string, durMin: number): { ok: boolean; motivo: string } {
+  if (!slot || slot.length < 16) return { ok: true, motivo: "" };
+  const ini = hm(slot.slice(11, 16));
+  const abre = hm(cfg.abre || "09:00"), fecha = hm(cfg.fecha || "19:00");
+  const aI = hm(cfg.almocoIni || "13:00"), aF = hm(cfg.almocoFim || "15:00");
+  if (ini < abre) return { ok: false, motivo: "começa antes das " + (cfg.abre || "09:00") };
+  if (aF > aI && ini >= aI && ini < aF) return { ok: false, motivo: "começa dentro do almoço (" + (cfg.almocoIni || "13:00") + "–" + (cfg.almocoFim || "15:00") + ")" };
+  const fim = fimReal(cfg, ini, durMin);
+  if (fim > fecha) return { ok: false, motivo: "terminaria " + hhmm(fim) + (fim > aI && ini < aI ? " (com a parada do almoço)" : "") + ", depois das " + (cfg.fecha || "19:00") };
+  return { ok: true, motivo: "" };
+}
+/** maior atendimento que cabe num dia (expediente menos o almoço) */
+export function maiorAtendimento(cfg: any): number {
+  const abre = hm(cfg.abre || "09:00"), fecha = hm(cfg.fecha || "19:00");
+  const aI = hm(cfg.almocoIni || "13:00"), aF = hm(cfg.almocoFim || "15:00");
+  return (fecha - abre) - (aF > aI ? aF - aI : 0);
+}
 export function livresNoHorario(st: any, slot: string, excluirId?: string, occ?: Ocup[], durMin?: number): { livres: string[]; ocupados: string[] } {
-  const cfg = cfgAgenda(st), dur = (durMin || cfg.duracaoMin || 120) * 6e4, t = +parseData(slot.slice(0, 16));
+  const cfg = cfgAgenda(st), m = durMin || cfg.duracaoMin || 120, t = +parseData(slot.slice(0, 16));
+  // tem que caber no expediente; e se pegar o almoço, o projetista fica preso até depois dele
+  const cabe = cabeNoDia(cfg, slot.slice(0, 16), m);
+  if (!cabe.ok) return { livres: [], ocupados: ["⛔ " + cabe.motivo] };
+  const dur = durRelogio(cfg, slot.slice(0, 16), m) * 6e4;
   const no = (occ || ocupacoes(st, excluirId)).filter(o => o.ini < t + dur && t < o.fim);
   const ocupadosProj = new Set(no.filter(o => o.proj).map(o => o.proj));
   // projetistas só para emergência (ex.: gerente de loja) não entram nas sugestões — só são escolhidos à mão
@@ -822,7 +863,9 @@ export function liberaveis(st: any, excluirId?: string, n = 12, durMin?: number,
 export function conflitosProj(st: any, slot: string, proj: string, excluirId?: string, durMin?: number) {
   if (!proj || (slot || "").length < 16) return [] as Ocup[];
   const ex = excluirId ? st.chamados.find((x: any) => x.id === excluirId) : null;
-  const dur = (durMin || (ex ? durCk(ex, cfgAgenda(st)) : cfgAgenda(st).duracaoMin || 120)) * 6e4, t = +parseData(slot.slice(0, 16));
+  const cfgC = cfgAgenda(st);
+  const m = durMin || (ex ? durCk(ex, cfgC) : cfgC.duracaoMin || 120);
+  const dur = durRelogio(cfgC, slot.slice(0, 16), m) * 6e4, t = +parseData(slot.slice(0, 16));
   return ocupacoes(st, excluirId).filter(o => o.proj === proj && o.ini < t + dur && t < o.fim);
 }
 /** aviso de encaixe: mesmo projetista com outro cliente no horário — só passa com a confirmação marcada */

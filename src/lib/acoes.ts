@@ -370,9 +370,25 @@ export const A = {
    * modelo aprovado. Só devolve ok quando a Kommo aceitou — é isso que autoriza
    * o 360 a reservar o horário.
    */
+  /** O supabase-js devolve "Edge Function returned a non-2xx status code" e engole o motivo que
+   *  a função escreveu no corpo. Quem lê a tela precisa do motivo, não do código. */
+  _motivoFn: async (error: any, padrao: string) => {
+    try {
+      const r = (error as any)?.context;
+      if (r && typeof r.json === "function") {
+        const d = await r.clone().json();
+        if (d?.erro) return String(d.erro);
+      }
+      if (r && typeof r.text === "function") {
+        const x = (await r.clone().text()).slice(0, 300);
+        if (x) return x;
+      }
+    } catch { /* sem corpo legível: fica o texto padrão */ }
+    return error?.message || padrao;
+  },
   kommoEnviar: async (p: { chamado: string; cliente: string; telefone: string; pedido?: string | null; atendente: string; data: string; modelo?: "primeiro" | "nova_data" | "confirmacao" }) => {
     const { data, error } = await sb.functions.invoke("kommo", { body: { acao: "enviar", ...p } });
-    if (error) throw new Error(error.message || "Não consegui falar com a Kommo");
+    if (error) throw new Error(await A._motivoFn(error, "Não consegui falar com a Kommo"));
     if (!data?.ok) throw new Error(data?.erro || "A Kommo não confirmou o envio");
     return data as { ok: true; lead_id: number; contato_id: number; origem: string };
   },
@@ -382,9 +398,17 @@ export const A = {
    */
   kommoMensagem: async (p: { chamado: string; cliente: string; telefone: string; pedido?: string | null; texto: string; por?: string; assunto?: string }) => {
     const { data, error } = await sb.functions.invoke("kommo", { body: { acao: "mensagem", ...p } });
-    if (error) throw new Error(error.message || "Não consegui falar com a Kommo");
+    if (error) throw new Error(await A._motivoFn(error, "Não consegui falar com a Kommo"));
     if (!data?.ok) throw new Error(data?.erro || "A Kommo não confirmou o envio");
     return data as { ok: true; lead_id: number };
+  },
+  /** Move a etapa do lead na Kommo junto com a do 360. Sem conversa vinculada, ou etapa sem
+   *  equivalente lá, devolve movido:false com o motivo — não é erro, é informação para a tela. */
+  kommoEtapa: async (p: { chamado: string; etapa: string }) => {
+    const { data, error } = await sb.functions.invoke("kommo", { body: { acao: "etapa", ...p } });
+    if (error) throw new Error(await A._motivoFn(error, "Não consegui falar com a Kommo"));
+    if (!data?.ok) throw new Error(data?.erro || "A Kommo não confirmou a mudança de etapa");
+    return data as { ok: true; movido: boolean; motivo?: string; etapa?: string };
   },
   // área do projetista do checklist (agenda dele + termo de ciência a partir da listagem do Promob — sem valores)
   ckProjetistaEu: () => rpc<{ projetista: string | null; podeTodos: boolean; projetistas: string[] }>("ck_projetista_eu"),

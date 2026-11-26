@@ -18,7 +18,7 @@ import { A } from "../lib/acoes";
 import { parseData, primeiroNome, sanitizeWhats } from "../lib/regras";
 import {
   ck, etapaCk, cfgAgenda, ocupacoes, livresNoHorario, atendeNoDia, diaComAgenda,
-  durSugeridaCk, modeloAprovado, conflitosProj, bloqueiosEm, rotuloBloq,
+  durSugeridaCk, modeloAprovado, conflitosProj, bloqueiosEm, rotuloBloq, cabeNoDia, durRelogio, maiorAtendimento,
 } from "./Checklist";
 import { SeloMedidaVenda } from "./Medidas";
 import { Selo360 } from "../comp/Visita360";
@@ -104,7 +104,9 @@ function problemas(st: any, l: Linha, outras: Linha[]): { duro: string[]; leve: 
   if (!l.slot || l.slot.length < 16) return { duro: ["sem data"], leve: [] };
   if (!l.proj) return { duro: ["sem projetista"], leve: [] };
   const cfg = cfgAgenda(st), dia = l.slot.slice(0, 10);
-  const ini = +parseData(l.slot), fim = ini + l.dur * 6e4;
+  const cabe = cabeNoDia(cfg, l.slot.slice(0, 16), l.dur);
+  if (!cabe.ok) duro.push(cabe.motivo);
+  const ini = +parseData(l.slot), fim = ini + durRelogio(cfg, l.slot.slice(0, 16), l.dur) * 6e4;
   if (ini < Date.now()) duro.push("data já passou");
   if (!diaComAgenda(cfg, dia)) duro.push("dia sem agenda");
   else if (!atendeNoDia(cfg, l.proj, dia)) duro.push(primeiroNome(l.proj) + " não atende neste dia");
@@ -114,7 +116,7 @@ function problemas(st: any, l: Linha, outras: Linha[]): { duro: string[]; leve: 
   outras.forEach(o => {
     if (o.c.id === l.c.id || !o.slot || o.proj !== l.proj) return;
     const oi = +parseData(o.slot);
-    if (oi < fim && ini < oi + o.dur * 6e4) duro.push("choca com " + o.c.cliente + " desta mesma rodada");
+    if (oi < fim && ini < oi + durRelogio(cfg, o.slot.slice(0, 16), o.dur) * 6e4) duro.push("choca com " + o.c.cliente + " desta mesma rodada");
   });
   if (!cfg.horarios.includes(l.slot.slice(11, 16))) leve.push("horário fora da grade");
   return { duro, leve };
@@ -135,7 +137,7 @@ function alocar(st: any, clientes: any[], jaEscolhidos: Linha[]): Linha[] {
   const fixos = new Map<string, Linha>();
   jaEscolhidos.filter(l => l.slot && l.proj).forEach(l => {
     fixos.set(l.c.id, l);
-    const ini = +parseData(l.slot); reserva.push({ proj: l.proj, ini, fim: ini + l.dur * 6e4 });
+    const ini = +parseData(l.slot); reserva.push({ proj: l.proj, ini, fim: ini + durRelogio(cfg, l.slot.slice(0, 16), l.dur) * 6e4 });
   });
 
   const ordem = [...clientes].sort((a, b) => durDoCupom(b).min - durDoCupom(a).min);
@@ -157,7 +159,8 @@ function alocar(st: any, clientes: any[], jaEscolhidos: Linha[]): Linha[] {
         const slot = dia + "T" + h;
         const t = +parseData(slot);
         if (t < agora) continue;
-        const fim = t + dur * 6e4;
+        if (!cabeNoDia(cfg, slot, dur).ok) continue;
+        const fim = t + durRelogio(cfg, slot, dur) * 6e4;
         const { livres } = livresNoHorario(st, slot, undefined, occ, dur);
         // tira quem esta rodada já comprometeu neste intervalo
         const tomados = new Set(reserva.filter(r => r.ini < fim && t < r.fim).map(r => r.proj));
@@ -184,7 +187,7 @@ function alocar(st: any, clientes: any[], jaEscolhidos: Linha[]): Linha[] {
 function livresPara(st: any, l: Linha, outras: Linha[], dias = 60) {
   const cfg = cfgAgenda(st), occ = ocupacoes(st, l.c.id);
   const reserva = outras.filter(o => o.c.id !== l.c.id && o.slot && o.proj)
-    .map(o => { const i = +parseData(o.slot); return { proj: o.proj, ini: i, fim: i + o.dur * 6e4, cliente: o.c.cliente }; });
+    .map(o => { const i = +parseData(o.slot); return { proj: o.proj, ini: i, fim: i + durRelogio(cfg, o.slot.slice(0, 16), o.dur) * 6e4, cliente: o.c.cliente }; });
   const agora = Date.now() + 2 * 36e5;
   const out: { dia: string; slots: { slot: string; livres: string[] }[] }[] = [];
   const base = new Date(); base.setHours(0, 0, 0, 0);
@@ -196,7 +199,8 @@ function livresPara(st: any, l: Linha, outras: Linha[], dias = 60) {
     for (const h of [...cfg.horarios].sort()) {
       const slot = dia + "T" + h, tt = +parseData(slot);
       if (tt < agora) continue;
-      const fim = tt + l.dur * 6e4;
+      if (!cabeNoDia(cfg, slot, l.dur).ok) continue;
+      const fim = tt + durRelogio(cfg, slot, l.dur) * 6e4;
       const { livres } = livresNoHorario(st, slot, l.c.id, occ, l.dur);
       const tomados = new Set(reserva.filter(r => r.ini < fim && tt < r.fim).map(r => r.proj));
       const cand = livres.filter((p: string) => !tomados.has(p) && atendeNoDia(cfg, p, dia));
@@ -240,7 +244,9 @@ function EscolherHorario({ l, outras, onPick, onEditar, onFechar }:
       <span className="hint">o aviso em vermelho continua valendo</span>
     </div>
     {!vis.length
-      ? <div className="hint">Nenhum horário livre nos próximos 60 dias com esse tempo de atendimento. Diminua o tempo ou escolha outro projetista.</div>
+      ? <div className="hint">{l.dur > maiorAtendimento(cfgAgenda(st))
+          ? "Um atendimento de " + fmtDur(l.dur) + " não cabe num dia só: o expediente dá no máximo " + fmtDur(maiorAtendimento(cfgAgenda(st))) + " (já descontado o almoço). Este cliente precisa ser agendado em dias seguidos, pela tela de agendamento individual."
+          : "Nenhum horário livre nos próximos 60 dias com esse tempo de atendimento. Diminua o tempo ou escolha outro projetista."}</div>
       : <div style={{ maxHeight: 300, overflowY: "auto", paddingRight: 6 }}>
         {vis.map(d => {
           const dd = parseData(d.dia + "T12:00");
