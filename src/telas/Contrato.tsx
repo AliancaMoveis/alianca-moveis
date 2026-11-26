@@ -14,8 +14,22 @@ function VerDocumento({ html, onFechar, autoPdf }: { html: string; onFechar: () 
   const ref = useRef<HTMLIFrameElement>(null);
   const imprimir = () => { const w = ref.current?.contentWindow; if (!w) return; try { w.focus(); w.print(); } catch { /* o navegador recusou */ } };
   // "Baixar em PDF": abre a caixa de impressão já no destino "Salvar como PDF" assim que o documento desenha
-  const pronto = () => { if (autoPdf) setTimeout(imprimir, 400); };
+  const [caiu, setCaiu] = useState(false);     // o blob não desenhou: volta para o modo antigo
+  const abriu = useRef(false);
+  const pronto = () => { abriu.current = true; if (autoPdf) setTimeout(imprimir, 400); };
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onFechar(); }; window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc); }, [onFechar]);
+  // O documento vai para o iframe por blob, não por srcDoc. Com srcDoc o HTML inteiro (com todas as
+  // imagens do projeto em base64) ficava vivo DUAS vezes: na string do React e na página do iframe.
+  // Em projeto com muitas imagens isso estoura a memória do Safari no iPhone, a aba cai e o cliente
+  // perde a assinatura no meio. Com blob o navegador segura o conteúdo uma vez só, e ao fechar o
+  // endereço é revogado — a memória volta na hora.
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    const u = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    setSrc(u); abriu.current = false; setCaiu(false);
+    const t = setTimeout(() => { if (!abriu.current) setCaiu(true); }, 2000);
+    return () => { clearTimeout(t); URL.revokeObjectURL(u); };
+  }, [html]);
   return <div style={{ position: "fixed", inset: 0, background: "rgba(16,20,26,.75)", zIndex: 9999, display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 12px", background: "#fff", borderBottom: "1px solid #e0e3e8" }}>
       <b style={{ fontSize: 15, marginRight: "auto" }}>Documento completo</b>
@@ -23,7 +37,9 @@ function VerDocumento({ html, onFechar, autoPdf }: { html: string; onFechar: () 
       <button type="button" onClick={onFechar} style={{ padding: "9px 14px", fontWeight: 800, fontSize: 14, color: "#284b8f", background: "#fff", border: "2px solid #284b8f", borderRadius: 10 }}>Fechar</button>
     </div>
     {autoPdf && <div style={{ padding: "8px 12px", background: "#e9eff9", color: "#284b8f", fontSize: 13, fontWeight: 600 }}>Na janela que abrir, escolha <b>Salvar como PDF</b> (no iPhone, toque em Compartilhar › Salvar em Arquivos).</div>}
-    <iframe ref={ref} srcDoc={html} title="Documento" onLoad={pronto} style={{ flex: 1, width: "100%", border: 0, background: "#fff" }} />
+    {caiu
+      ? <iframe ref={ref} srcDoc={html} title="Documento" onLoad={pronto} style={{ flex: 1, width: "100%", border: 0, background: "#fff" }} />
+      : <iframe ref={ref} src={src} title="Documento" onLoad={pronto} style={{ flex: 1, width: "100%", border: 0, background: "#fff" }} />}
   </div>;
 }
 
@@ -103,6 +119,40 @@ export default function Contrato() {
   const [enviei, setEnviei] = useState(false);
   const soLeitura = !!tit;
 
+  // ---------- não perder o preenchimento se a página cair ----------
+  // O Safari do iPhone derruba a aba por falta de memória quando o projeto tem muitas imagens.
+  // Antes, voltar significava refazer TUDO: nome, CPF, cada conferência de material, cada item do
+  // termo geral e a assinatura. Agora o preenchimento fica guardado no próprio aparelho, por
+  // contrato, e volta sozinho. A selfie fica de fora de propósito (é a parte mais pesada e é um
+  // toque só para refazer).
+  const chaveR = "a360-ct-" + token;
+  const restaurado = useRef(false);
+  useEffect(() => {
+    if (!d || restaurado.current) return;
+    restaurado.current = true;
+    try {
+      const s = JSON.parse(sessionStorage.getItem(chaveR) || "null");
+      if (!s) return;
+      if (s.nome) setNome(s.nome);
+      if (s.cpf) setCpf(s.cpf);
+      if (s.assin) setAssin(s.assin);
+      if (typeof s.autorizo === "boolean") setAutorizo(s.autorizo);
+      if (!tit) {
+        if (Array.isArray(s.matOk) && s.matOk.length === d.ambientes.length) setMatOk(s.matOk);
+        if (Array.isArray(s.imgOk) && s.imgOk.length === d.ambientes.length) setImgOk(s.imgOk);
+        if (Array.isArray(s.geral) && s.geral.length === CONDICOES_CONTRATO.length) setGeral(s.geral);
+        if (Array.isArray(s.termos) && s.termos.length === d.ambientes.length) setTermos(s.termos);
+      }
+      if (typeof s.passo === "number") setPasso(s.passo);
+      setMsg("Voltamos de onde você parou — confira antes de assinar.");
+    } catch { /* se não der para ler, começa limpo */ }
+  }, [d]);
+  useEffect(() => {
+    if (!d || !restaurado.current) return;
+    try { sessionStorage.setItem(chaveR, JSON.stringify({ nome, cpf, assin, autorizo, matOk, imgOk, geral, termos, passo })); }
+    catch { /* sem espaço: segue sem guardar */ }
+  }, [d, nome, cpf, assin, autorizo, matOk, imgOk, geral, termos, passo]);
+
   useEffect(() => {
     document.title = "Contrato · Aliança Móveis";
     if (!token) { setErro("Link inválido"); return; }
@@ -146,6 +196,7 @@ export default function Contrato() {
         ? await contratoApi({ acao: "assinar", token, titular: true, nome: nome.trim(), cpf: cpf.replace(/\D/g, ""), autorizo, assinatura: assin, selfie })
         : await contratoApi({ acao: "assinar", token, resposta: { nome: nome.trim(), cpf: cpf.replace(/\D/g, ""), termos, materiaisOk: matOk, geral, imagensOk: imgOk }, assinatura: assin, selfie });
       if (r.telefoneTitular) setTelTit(String(r.telefoneTitular));
+      try { sessionStorage.removeItem(chaveR); } catch { /* */ }
       setFeito({ nome: nome.trim(), em: new Date().toISOString(), teste: !!r.teste, url: r.url || "",
         aguardandoTitular: !!r.aguardandoTitular, titular: r.titular || "", tokenTitular: r.tokenTitular || "" });
       window.scrollTo(0, 0);
