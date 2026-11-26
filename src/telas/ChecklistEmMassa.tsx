@@ -23,6 +23,18 @@ import {
 import { SeloMedidaVenda } from "./Medidas";
 import { Selo360 } from "../comp/Visita360";
 
+/** Tempo do atendimento: QUEM MANDA É O CUPOM.
+ *  O checklist guarda um "duracaoMin" que, em quem foi disparado antes de o valor do Exact
+ *  chegar, ficou gravado no padrão de 2 h — 28 clientes da fila, todos do lote reiniciado em
+ *  24/11, somando 138 horas de agenda a menos do que o cupom pede. Gravação errada, não
+ *  escolha de ninguém. Então aqui a sugestão sai sempre do cupom; o valor gravado aparece ao
+ *  lado como aviso quando difere, e a pessoa continua trocando o tempo na linha se quiser. */
+function durDoCupom(c: any): { min: number; gravado: number | null; diverge: boolean } {
+  const sug = durSugeridaCk(c);
+  const gravado = Number(ck(c).duracaoMin) || null;
+  if (!sug.cupom) return { min: gravado || sug.min, gravado, diverge: false };
+  return { min: sug.min, gravado, diverge: !!gravado && gravado !== sug.min };
+}
 /** tempo em palavras: 120 → "2 h" */
 const fmtDur = (m: number) => m >= 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) : "") : m + " min";
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -126,14 +138,14 @@ function alocar(st: any, clientes: any[], jaEscolhidos: Linha[]): Linha[] {
     const ini = +parseData(l.slot); reserva.push({ proj: l.proj, ini, fim: ini + l.dur * 6e4 });
   });
 
-  const ordem = [...clientes].sort((a, b) => durSugeridaCk(b).min - durSugeridaCk(a).min);
+  const ordem = [...clientes].sort((a, b) => durDoCupom(b).min - durDoCupom(a).min);
   const out: Linha[] = [];
   const agora = Date.now() + 2 * 36e5;
 
   for (const c of ordem) {
     const fx = fixos.get(c.id);
     if (fx) { out.push(fx); continue; }
-    const dur = Number(ck(c).duracaoMin) || durSugeridaCk(c).min;
+    const dur = durDoCupom(c).min;
     let achou: { slot: string; proj: string } | null = null;
 
     const base = new Date(); base.setHours(0, 0, 0, 0);
@@ -406,6 +418,7 @@ export default function ChecklistEmMassa() {
               const l = linhas.find(x => x.c.id === c.id);
               const marcado = sel.has(c.id);
               const sug = durSugeridaCk(c);
+              const dc = durDoCupom(c);
               const v = vb[c.pedido] || {} as any;
               const tv = tipoVenda(v.situacao);
               const ambs = ambientesCk(c);
@@ -433,7 +446,11 @@ export default function ChecklistEmMassa() {
                   {l ? <select value={l.dur} disabled={indo} title="Tempo que o atendimento trava na agenda — mudar aqui muda a disponibilidade"
                     onChange={e => mudarDur(c.id, Number(e.target.value))}>
                     {[...new Set([60, 120, 180, 240, 300, 360, 480, l.dur])].sort((a, b) => a - b).map(m => <option key={m} value={m}>{fmtDur(m)}</option>)}
-                  </select> : <>{fmtDur(Number(ck(c).duracaoMin) || sug.min)}{!ck(c).duracaoMin && sug.cupom ? <span className="hint" style={{ display: "block" }}>pelo cupom</span> : null}</>}</td>
+                  </select> : fmtDur(dc.min)}
+                  {sug.cupom ? <span className="hint" style={{ display: "block" }}>pelo cupom</span> : null}
+                  {dc.diverge ? <span style={{ display: "block", color: "var(--warn)", fontSize: 11.5, fontWeight: 700 }}
+                    title={"No checklist deste cliente está gravado " + fmtDur(dc.gravado!) + ", de quando o valor do cupom ainda não tinha chegado. Quem manda é o cupom."}>
+                    gravado {fmtDur(dc.gravado!)}</span> : null}</td>
                 <td style={{ whiteSpace: "nowrap" }}>{l
                   ? <button className="btn sm" disabled={indo} style={{ minWidth: 148, justifyContent: "flex-start" }}
                       title="Clique para ver todos os horários livres e escolher"
