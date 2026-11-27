@@ -354,6 +354,11 @@ export const A = {
   ckRecupSalvar: (id: string, p: any) => rpc<any>("ck_recuperacao_salvar", { p_chamado: id, p }),
   ckRecupDecidir: (id: string, status: string, p: any = {}) => rpc<any>("ck_recuperacao_decidir", { p_chamado: id, p_status: status, p }),
   ckRecupLista: (de?: string, ate?: string, projetista?: string) => rpc<any>("ck_recuperacao_lista", { p_de: de || null, p_ate: ate || null, p_projetista: projetista || null }),
+  /** Mesmo cliente (CNPJ/CPF), mesma projetista, dentro do ciclo: a faixa sai da SOMA, não de
+   *  cada venda isolada. Quatro apartamentos de R$ 1.600 ficam em 2% separados e em 5% juntos. */
+  ckRecupGrupos: (de?: string, ate?: string) => rpc<any[]>("ck_recup_grupos", { p_de: de || null, p_ate: ate || null }),
+  ckRecupGrupoAplicar: (chamados: string[], obs?: string) => rpc<any>("ck_recup_grupo_aplicar", { p_chamados: chamados, p_obs: obs || null }),
+  ckRecupGrupoDesfazer: (id: number) => rpc<any>("ck_recup_grupo_desfazer", { p_id: id }),
   // vendedores do Exact: o vínculo nome-do-Exact → usuário do 360, e a fila de quem ainda não tem ninguém por trás
   vendedorExactMapa: async () => {
     const { data, error } = await sb.from("vendedor_exact").select("nome,usuario_id");

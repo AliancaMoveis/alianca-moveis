@@ -40,8 +40,26 @@ export default function RecuperacaoCk() {
   const c = ciclo(ym);
   const per = aba === "ciclo" ? { de: c.de, ate: c.ate } : { de: dia, ate: dia };
 
+  // Grupos do mesmo cliente no ciclo: a faixa tem que sair da SOMA. Quatro apartamentos de
+  // R$ 1.600 ficam em 2% cada um, separados; somados passam de R$ 3.000 e vão para 5%.
+  const [grupos, setGrupos] = useState<any[]>([]);
   const carregar = () => A.ckRecupLista(per.de, per.ate, quem || undefined).then(setD).catch((e: any) => { toast(e.message); setD({ linhas: [] }); });
-  useEffect(() => { setD(null); carregar(); }, [per.de, per.ate, quem]);
+  const carregarGrupos = () => A.ckRecupGrupos(per.de, per.ate).then((g: any) => setGrupos(Array.isArray(g) ? g : [])).catch(() => setGrupos([]));
+  useEffect(() => { setD(null); carregar(); carregarGrupos(); }, [per.de, per.ate, quem]);
+  const aplicarGrupo = async (g: any) => {
+    if (!confirm(`Somar os ${g.pedidos} pedidos de ${g.cliente} e pagar pela faixa do total?\n\n`
+      + `Recuperado somado: ${brl(g.recuperado_total)}\n`
+      + `Comissão hoje, separada: ${brl(g.comissao_individual)}\n`
+      + `Comissão pela soma (${(Number(g.faixa_grupo) * 100).toFixed(0)}%): ${brl(g.comissao_grupo)}\n`
+      + `Diferença a mais: ${brl(g.complemento)}`)) return;
+    setOcupado("grupo:" + g.chave);
+    try {
+      const r: any = await A.ckRecupGrupoAplicar(g.chamados, `${g.cliente} — ${g.pedidos} vendas do mesmo cliente no ciclo, somadas para a faixa de ${(Number(g.faixa_grupo) * 100).toFixed(0)}%`);
+      toast(`Agrupado: ${brl(r?.comissao_antes)} → ${brl(r?.comissao_agora)}`);
+      carregar(); carregarGrupos();
+    } catch (e: any) { toast(e.message || "não deu para agrupar"); }
+    finally { setOcupado(""); }
+  };
 
   const todas: Linha[] = d?.linhas || [];
   const linhas: Linha[] = sit ? todas.filter(x => x.status === sit) : todas;
@@ -145,6 +163,34 @@ ${sub ? `<div class="sub">${sub}</div>` : ""}
             <table className="ng-tab"><thead><tr><th>Projetista</th><th>Clientes</th><th>Diferença</th><th>Recuperado</th><th>Comissão</th><th>Pendentes</th></tr></thead>
               <tbody>{porPessoa.map(([n, x]) => <tr key={n}><td><b>{n}</b></td><td>{x.n}</td><td>{brl(x.dif)}</td><td>{brl(x.rec)}</td>
                 <td><b style={{ color: "var(--st-concluida)" }}>{brl(x.com)}</b></td><td>{x.pend || "—"}</td></tr>)}</tbody></table></div></>}
+
+        {aba === "ciclo" && grupos.length > 0 && <>
+          <div className="sec-label">Mesmo cliente em vendas separadas</div>
+          <div className="card" style={{ padding: "12px 14px", marginBottom: 12, borderLeft: "4px solid var(--warn)" }}>
+            <p className="hint" style={{ margin: "0 0 10px" }}>
+              Estes clientes aparecem em mais de uma venda no ciclo, com a mesma projetista. Separadas, cada
+              venda cai numa faixa menor; <b>somadas, sobem de faixa</b>. Agrupar paga pela faixa do total — e
+              fica registrado em cada checklist, com opção de desfazer.
+            </p>
+            <div style={{ overflowX: "auto" }}>
+              <table className="ng-tab">
+                <thead><tr><th>Cliente</th><th>Projetista</th><th>Vendas</th><th>Casado por</th><th>Recuperado somado</th>
+                  <th>Hoje (separado)</th><th>Pela soma</th><th>A mais</th><th></th></tr></thead>
+                <tbody>{grupos.map((g: any) => <tr key={g.chave}>
+                  <td><b>{g.cliente}</b>{g.tem_pedido_repetido ? <span className="hint" style={{ display: "block", color: "var(--warn)" }}>⚠ há pedido repetido — conferido uma vez só</span> : null}</td>
+                  <td>{g.projetista}</td>
+                  <td>{g.pedidos}<span className="hint" style={{ display: "block" }}>{(g.pedidos_lista || []).join(", ")}</span></td>
+                  <td><span className="hint">{g.casado_por}</span></td>
+                  <td><b>{brl(g.recuperado_total)}</b></td>
+                  <td>{brl(g.comissao_individual)}</td>
+                  <td><b style={{ color: "var(--st-concluida)" }}>{brl(g.comissao_grupo)} <span style={{ fontWeight: 400 }}>({(Number(g.faixa_grupo) * 100).toFixed(0)}%)</span></b></td>
+                  <td><b style={{ color: "var(--st-concluida)" }}>+{brl(g.complemento)}</b></td>
+                  <td><button className="btn sm primary" disabled={!!ocupado} onClick={() => aplicarGrupo(g)}>
+                    {ocupado === "grupo:" + g.chave ? "aplicando…" : "Agrupar"}</button></td>
+                </tr>)}</tbody>
+              </table>
+            </div>
+          </div></>}
 
         <div className="sec-label">{aba === "ciclo" ? "Clientes do ciclo" : "Clientes do dia"}</div>
         <div className="card" style={{ padding: "8px 14px", overflowX: "auto" }}>
