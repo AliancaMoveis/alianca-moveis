@@ -405,19 +405,53 @@ function Quadro({ onMudar }: { onMudar: (png: string) => void }) {
   </div>;
 }
 
-/** selfie pela câmera frontal (o celular abre a câmera direto) */
+/** Selfie pela câmera frontal.
+ *
+ *  Dois defeitos que deixavam o cliente travado aqui, relatados pelo Wagner em 28/11:
+ *
+ *  1) O campo de arquivo estava com display:none. Vários navegadores de celular ignoram um
+ *     clique programático num campo que não está renderizado — o cliente apertava o botão e
+ *     não acontecia NADA, sem erro nenhum. Agora ele fica na página, invisível mas presente.
+ *
+ *  2) Quem usa iPhone manda HEIC, que o <img> não abre (resolvido no blobParaJpeg).
+ *
+ *  E quando mesmo assim a câmera não abrir — aparelho antigo, câmera ocupada por outro app,
+ *  permissão negada no sistema —, aparece a saída pela galeria em vez de silêncio. */
 function Selfie({ valor, onMudar }: { valor: string; onMudar: (s: string) => void }) {
-  const ref = useRef<HTMLInputElement>(null); const [proc, setProc] = useState(false); const [erro, setErro] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+  const refGaleria = useRef<HTMLInputElement>(null);
+  const [proc, setProc] = useState(false); const [erro, setErro] = useState("");
+  const [mostrarGaleria, setMostrarGaleria] = useState(false);
+  // invisível para o olho, mas renderizado: é o que faz o clique funcionar no celular
+  const escondido: React.CSSProperties = { position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" };
+
+  const receber = async (e: any) => {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f) return; setProc(true); setErro("");
+    try { onMudar(await blobParaJpeg(f, 900, 0.8)); setMostrarGaleria(false); }
+    catch { setErro("Não consegui abrir essa foto. Tente tirar de novo, ou escolher uma da galeria."); setMostrarGaleria(true); }
+    finally { setProc(false); }
+  };
+
+  const abrirCamera = () => {
+    setErro("");
+    try { ref.current?.click(); } catch { setMostrarGaleria(true); }
+    // se a câmera não abrir, o cliente fica olhando para a tela sem nada acontecer:
+    // depois de alguns segundos sem foto, oferecemos o outro caminho
+    window.setTimeout(() => { if (!valor) setMostrarGaleria(true); }, 6000);
+  };
+
   return <div>
-    <input ref={ref} type="file" accept="image/*" capture="user" style={{ display: "none" }} onChange={async e => {
-      const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setProc(true); setErro("");
-      try { onMudar(await blobParaJpeg(f, 900, 0.8)); } catch { setErro("Não consegui abrir a foto. Tente de novo."); } finally { setProc(false); }
-    }} />
+    <input ref={ref} type="file" accept="image/*" capture="user" style={escondido} tabIndex={-1} onChange={receber} />
+    <input ref={refGaleria} type="file" accept="image/*" style={escondido} tabIndex={-1} onChange={receber} />
     {valor ? <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
       <img src={valor} alt="" style={{ width: 120, height: 150, objectFit: "cover", borderRadius: 10, border: "1px solid " + COR.l }} />
-      <button type="button" onClick={() => ref.current?.click()} style={{ background: "none", border: "1px solid " + COR.l, borderRadius: 8, padding: "8px 12px", fontSize: 14 }}>📷 Tirar outra</button></div>
-      : <button type="button" onClick={() => ref.current?.click()} disabled={proc}
+      <button type="button" onClick={abrirCamera} style={{ background: "none", border: "1px solid " + COR.l, borderRadius: 8, padding: "8px 12px", fontSize: 14 }}>📷 Tirar outra</button></div>
+      : <button type="button" onClick={abrirCamera} disabled={proc}
         style={{ width: "100%", padding: "14px", fontSize: 16, fontWeight: 700, color: COR.pri, background: "#e8f1ff", border: "1.5px solid #b8cdf0", borderRadius: 12 }}>{proc ? "Preparando a foto…" : "📷 Tirar selfie"}</button>}
+    {!valor && mostrarGaleria && <button type="button" onClick={() => refGaleria.current?.click()} disabled={proc}
+      style={{ width: "100%", marginTop: 8, padding: "12px", fontSize: 15, fontWeight: 600, color: COR.pri, background: "none", border: "1px solid " + COR.l, borderRadius: 12 }}>
+      A câmera não abriu? Escolher uma foto do aparelho</button>}
     {erro && <div style={{ color: COR.r, marginTop: 6 }}>{erro}</div>}
   </div>;
 }

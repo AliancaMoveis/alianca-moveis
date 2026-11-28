@@ -13,8 +13,26 @@ export function qrDataUrl(texto: string, tam = 260): string {
 
 const carregarImg = (src: string) => new Promise<HTMLImageElement>((ok, er) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => er(new Error("imagem não abriu")); i.src = src; });
 
+/** A selfie do iPhone chega em HEIC, que o <img> não abre: sem converter, a conversão
+ *  estourava e o cliente só via "não consegui abrir a foto". Esta é a mesma detecção por
+ *  conteúdo usada no resto do 360 — o nome do arquivo mente, os bytes não. */
+async function ehHeicBytes(b: Blob): Promise<boolean> {
+  try {
+    const c = new Uint8Array(await b.slice(0, 12).arrayBuffer());
+    if (c.length < 12) return false;
+    const txt = (i: number, n: number) => String.fromCharCode(...c.slice(i, i + n));
+    if (txt(4, 4) !== "ftyp") return false;
+    return ["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1"].includes(txt(8, 4).toLowerCase());
+  } catch { return false; }
+}
+
 /** imagem (Blob) → JPEG comprimido em data URL (lado maior até `max` px) */
-export async function blobParaJpeg(b: Blob, max = 1600, q = 0.82): Promise<string> {
+export async function blobParaJpeg(entrada: Blob, max = 1600, q = 0.82): Promise<string> {
+  let b = entrada;
+  if (await ehHeicBytes(b)) {
+    const { heicTo } = await import("heic-to");
+    b = await heicTo({ blob: b as any, type: "image/jpeg", quality: 0.9 }) as Blob;
+  }
   const u = URL.createObjectURL(b);
   try {
     const img = await carregarImg(u);
